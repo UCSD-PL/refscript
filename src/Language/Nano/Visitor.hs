@@ -394,6 +394,7 @@ transRType f                  = go
                                                                     m'  = toType $ trans f as xs (ofType m)
     go as xs (TAll a t)       = f as xs $ TAll a t'           where t'  = go (a:as) xs t 
     go as xs (TRef n ts r)    = f as xs $ TRef n ts' r        where ts' = go  as xs <$> ts
+    go as xs (TSelf m)        = f as xs $ TSelf m'            where m'  = go  as xs m
     go _  _  t                = t
 
 -- RJ: use newtype for AnnR and NanoBareR so we just make the below instances
@@ -492,6 +493,7 @@ ntransRType f g               = go
     go (TAnd ts)        = TAnd ts'            where ts' = go <$> ts
     go (TRef n ts r)    = TRef n' ts' r       where n'  = f n
                                                     ts' = go <$> ts
+    go (TSelf m)        = TSelf m'            where m'  = go m
     go (TClass n)       = TClass n'           where n'  = f n
     go (TModule p)      = TModule p'          where p'  = g p
     go (TEnum n)        = TEnum n'            where n'  = f n

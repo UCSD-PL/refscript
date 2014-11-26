@@ -472,9 +472,12 @@ consClassElt g dfn (MemberMethDef l False x xs body)
       _ -> cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) x
   where
     spec            = M.lookup (F.symbol x, InstanceMember) (t_elts dfn)
-    addSelfB (i,(vs,so,xs,y)) = (i,(vs,mkSelf so,xs,y))
-    mkSelf (Just t)    = Just t
-    mkSelf Nothing     = Just $ mkThis t_readOnly (t_args dfn) 
+    addSelfB (i,(vs,so,xs,y)) 
+                    = (i,(vs,mkSelf so,xs,y))
+    mkSelf (Just (TSelf m)) 
+                    = Just $ mkThis (toType m) (t_args dfn)
+    mkSelf (Just t) = Just t
+    mkSelf Nothing  = Just $ mkThis t_readOnly (t_args dfn) 
     mkThis m (_:αs) = TRef an (ofType m : map tVar αs) fTop
     mkThis _ _      = throw $ bug (srcPos l) "Liquid.Liquid.consClassElt MemberMethDef" 
     an              = QN AK_ (srcPos l) ss (F.symbol $ t_name dfn)

@@ -353,6 +353,7 @@ isTObj (TCons _ _ _)       = True
 isTObj (TModule _)         = True
 isTObj (TClass _ )         = True
 isTObj (TEnum _ )          = True
+isTObj (TSelf _ )          = True
 isTObj _                   = False
  
 isPrimitive v = isUndef v || isNull v || isTString v || isTBool v || isTNum v 
@@ -386,12 +387,14 @@ rTypeR (TApp _ _ r )  = r
 rTypeR (TVar _ r   )  = r
 rTypeR (TFun _ _ _ r) = r
 rTypeR (TCons _ _ r)  = r
+rTypeR (TRef _ _ r)   = r
 rTypeR (TModule _  )  = fTop
 rTypeR (TEnum _  )    = fTop
 rTypeR (TClass _   )  = fTop
 rTypeR (TAll _ _   )  = errorstar "Unimplemented: rTypeR - TAll"
 rTypeR (TAnd _ )      = errorstar "Unimplemented: rTypeR - TAnd"
 rTypeR (TExp _)       = errorstar "Unimplemented: rTypeR - TExp"
+rTypeR (TSelf _)      = errorstar "Unimplemented: rTypeR - TSelf"
 
 rTypeROpt               :: F.Reftable r => RType r -> Maybe r
 rTypeROpt (TApp _ _ r )  = Just r
@@ -399,13 +402,7 @@ rTypeROpt (TVar _ r   )  = Just r
 rTypeROpt (TFun _ _ _ r) = Just r
 rTypeROpt (TCons _ _ r)  = Just r
 rTypeROpt (TRef _ _ r)   = Just r
-rTypeROpt (TModule _  )  = Nothing  
-rTypeROpt (TEnum _  )    = Nothing 
-rTypeROpt (TClass _   )  = Nothing 
-rTypeROpt (TAll _ _   )  = Nothing 
-rTypeROpt (TAnd _ )      = Nothing 
-rTypeROpt (TExp _)       = Nothing 
-
+rTypeROpt _              = Nothing
 
 -- Set the top-level refinement (wherever applies)
 setRTypeR :: RType r -> r -> RType r
@@ -568,6 +565,7 @@ instance (PP r, F.Reftable r) => PP (RTypeQ q r) where
   pp (TRef x (m:ts) r) 
     | Just m <- mutSym m      = F.ppTy r $ pp x <> pp m <> ppArgs brackets comma ts 
   pp (TRef x ts r)            = F.ppTy r $ pp x <>         ppArgs brackets comma ts
+  pp (TSelf m)                = text "TSelf" <> ppMut m
   pp (TApp c [] r)            = F.ppTy r $ pp c 
   pp (TApp c ts r)            = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
   pp (TCons m bs r)           | M.size bs < 3

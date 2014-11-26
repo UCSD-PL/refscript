@@ -77,6 +77,9 @@ unify l γ θ (TCons m1 e1s _) (TCons m2 e2s _)
                  $ M.elems 
                  $ M.intersectionWith (,) e1s e2s
 
+unify l γ θ t1@(TSelf m1) t2@(TSelf m2) 
+  = unify l γ θ m1 m2
+
 unify l γ θ t1@(TRef x1 t1s _) t2@(TRef x2 t2s _) 
   | x1 == x2
   = unifys l γ θ t1s t2s

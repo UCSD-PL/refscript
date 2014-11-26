@@ -81,7 +81,7 @@ getProp γ _ s t@(TEnum e     ) = do e'         <- resolveEnumInEnv γ e
                                       Just i   -> return (t, tInt `strengthen` exprReft i `bitVector` i, t_immutable)
                                       Nothing  -> return (t, tInt, t_immutable)
 
-getProp _ _ _ _ = Nothing
+getProp _ _ _ _                = Nothing
 
 
 -------------------------------------------------------------------------------

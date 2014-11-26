@@ -314,6 +314,7 @@ rTypeSort (TApp c ts _)            = rTypeSortApp c ts
 rTypeSort (TAnd (t:_))             = rTypeSort t
 rTypeSort (TRef (QN _ _ _ s) ts _) = F.FApp (rawStringFTycon $ F.symbolString s) (rTypeSort <$> ts)
 rTypeSort (TCons _ _ _ )           = F.FApp (rawStringFTycon $ F.symbol "Object") []
+rTypeSort (TSelf m)                = F.FApp (rawStringFTycon $ F.symbol "Self"  ) [rTypeSort m]
 rTypeSort (TClass _)               = F.FApp (rawStringFTycon $ F.symbol "class" ) []
 rTypeSort (TModule _)              = F.FApp (rawStringFTycon $ F.symbol "module") []
 rTypeSort (TEnum _)                = F.FApp (rawStringFTycon $ F.symbol "enum"  ) []
@@ -380,6 +381,7 @@ emapReft  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> RTypeQ q a -> RTyp
 emapReft f γ (TVar α r)        = TVar α (f γ r)
 emapReft f γ (TApp c ts r)     = TApp c (emapReft f γ <$> ts) (f γ r)
 emapReft f γ (TRef c ts r)     = TRef c (emapReft f γ <$> ts) (f γ r)
+emapReft f γ (TSelf m )        = TSelf  (emapReft f γ m)
 emapReft f γ (TAll α t)        = TAll α (emapReft f γ t)
 emapReft f γ (TFun s xts t r)  = TFun (emapReft f γ' <$> s) (emapReftBind f γ' <$> xts) 
                                       (emapReft f γ' t) (f γ r) where γ' = (b_sym <$> xts) ++ γ
@@ -398,6 +400,7 @@ emapReftElt f γ e              = fmap (f γ) e
 mapReftM f (TVar α r)          = TVar α  <$> f r
 mapReftM f (TApp c ts r)       = TApp c  <$> mapM (mapReftM f) ts <*> f r
 mapReftM f (TRef c ts r)       = TRef c  <$> mapM (mapReftM f) ts <*> f r
+mapReftM f (TSelf m)           = TSelf   <$> mapReftM f m
 mapReftM f (TFun s xts t r)    = TFun    <$> T.mapM (mapReftM f) s 
                                          <*> mapM (mapReftBindM f) xts 
                                          <*> mapReftM f t 
@@ -436,6 +439,7 @@ efoldReft g f = go
     go γ z (TVar _ r)       = f γ r z
     go γ z t@(TApp _ ts r)  = f γ r $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
     go γ z t@(TRef _ ts r)  = f γ r $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
+    go γ z t@(TSelf m)      = go γ z m
     go γ z (TAll _ t)       = go γ z t
     go γ z (TFun s xts t r) = f γ r $ go γ' (gos γ' z (maybeToList s ++ map b_type xts)) t  where γ' = foldr (efoldExt g) γ xts
     go γ z (TAnd ts)        = gos γ z ts 
@@ -458,6 +462,7 @@ efoldRType g f                 = go
     go γ z t@(TVar _ _ )       = f γ t z
     go γ z t@(TApp _ ts _)     = f γ t $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
     go γ z t@(TRef _ ts _)     = f γ t $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
+    go γ z t@(TSelf m)         = f γ t $ go γ z m
     go γ z t@(TAll _ t1)       = f γ t $ go γ z t1
     go γ z t@(TFun s xts t1 _) = f γ t $ go γ' (gos γ' z (maybeToList s ++ map b_type xts)) t1  where γ' = foldr (efoldExt g) γ xts
     go γ z   (TAnd ts)         = gos γ z ts 
@@ -539,6 +544,8 @@ zipType l γ (TApp TUn t1s r1) t2 =  L.find (related γ t2) t1s `relate` t2
   where
     relate (Just t1) t2        =  zipType l γ (t1 `strengthen` noKVars r1) t2
     relate Nothing   t2        =  return (setRTypeR t, fromMaybe fTop $ rTypeROpt t) where t = fmap F.bot t2
+
+zipType l γ (TSelf _) (TSelf m2) = return (\r -> TSelf m2, fTop)
 --
 -- No unions below this point
 --

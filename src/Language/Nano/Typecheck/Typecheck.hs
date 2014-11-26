@@ -398,6 +398,8 @@ tcClassElt γ dfn (MemberMethDef l False x xs bd)
     spec               = M.lookup (F.symbol x, InstanceMember) (t_elts dfn)
     (QP AK_ _ ss)      = tce_path γ 
     addSelfB (i,(vs,so,xs,y)) = (i,(vs,mkSelf so,xs,y))
+    mkSelf (Just (TSelf m)) 
+                       = Just $ mkThis m (t_args dfn)
     mkSelf (Just t)    = Just t
     mkSelf Nothing     = Just $ mkThis t_readOnly (t_args dfn) 
     rn                 = QN AK_ (srcPos l) ss (F.symbol $ t_name dfn)

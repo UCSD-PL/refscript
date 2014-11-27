@@ -177,7 +177,7 @@ qenvFromList        = L.foldl' step qenvEmpty
 
 
 qenvEmpty           = QE M.empty
-qenvFindLoc i γ     = fmap loc $ qenvFind i γ 
+-- qenvFindLoc i γ     = fmap loc $ qenvFind i γ 
 qenvFind q (QE γ)   = M.lookup q γ
 
 qenvFindTy  i γ     = fmap val $ qenvFind i γ

@@ -15,12 +15,9 @@ import           Control.Applicative                ((<$>), (<*>))
 import           Control.Exception                  (throw)
 
 import qualified Data.Traversable                   as T
-
-import qualified Data.Foldable                      as FO
 import qualified Data.HashMap.Strict                as HM
 import qualified Data.Map.Strict                    as M
 import           Data.Maybe                         (maybeToList, fromMaybe, catMaybes)
-import           Data.Monoid                        (mappend)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -32,7 +29,7 @@ import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Interface        (solve)
 
-import           Language.Nano.Misc                 (mseq, withSingleton, withSingleton')
+import           Language.Nano.Misc                 (mseq, withSingleton)
 import           Language.Nano.Annots
 import           Language.Nano.CmdLine              (Config)
 import           Language.Nano.Errors
@@ -55,8 +52,8 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
-import           Text.PrettyPrint.HughesPJ 
+-- import           Debug.Trace                        (trace)
+-- import           Text.PrettyPrint.HughesPJ 
 
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
 
@@ -93,9 +90,9 @@ refTc cfg f p
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
   
-ppCasts (Nano { code = Src fs }) = 
-  fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
-                                , TCast _ c <- ann_fact a ] 
+-- ppCasts (Nano { code = Src fs }) = 
+--   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+--                                 , TCast _ c <- ann_fact a ] 
          
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
@@ -384,9 +381,6 @@ consVarDecl g v@(VarDecl l x (Just e))
                   Just   <$> envAdds "consVarDecl" [(x, (fta, WriteGlobal,Initialized))] g
 
       _       -> cgError $ errorVarDeclAnnot (srcPos l) x
-  where
-
-    inst i = envGetContextTypArgs i g l . fst . bkAll
  
 consVarDecl g v@(VarDecl l x Nothing)
   = case scrapeVarDecl v of
@@ -523,7 +517,7 @@ consExpr g (Cast_ l e) _ =
 
 -- | < t > e
 consExpr g ex@(Cast l e) _ =
-  withSingleton (consCast g l e) 
+  withSingleton (consCast g l e)
                 (die $  bugNoCasts (srcPos l) ex) 
                 [ ct | UserCast ct <- ann_fact l ]
 
@@ -719,8 +713,7 @@ consCast g l e tc
         tc'     <- freshTyFun g l (rType tc)
         (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tc', WriteLocal, Initialized) g
         consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e, Just tc')]) opTy >>= \case
-          Just (o,g'') -> do (to,ao,io) <- safeEnvFindTyWithAsgn o g''
-                             return      $ (Just (o, g''))
+          Just (o,g'') -> return  $ (Just (o, g''))
           Nothing      -> cgError $ errorUserCast (srcPos l) tc e 
                       
 -- | Dead code 
@@ -736,7 +729,6 @@ consUpCast g l x _ t2
   = do (tx,a,i)  <- safeEnvFindTyWithAsgn x g
        ztx       <- zipTypeUpM l g x tx t2
        (z,g')    <- envAddFresh l (ztx,a,i) g
-       t'        <- safeEnvFindTy z g'
        return     $ (z,g') 
 
 -- | DownCast(x, t1 => t2)
@@ -1024,12 +1016,12 @@ envJoin' l g g1 g2
 
         -- GLOBALS: 
         
-        let (xgs, gl1s, gl2s) = unzip3 $ globals (zip3 xs t1s t2s)
+        let (xgs, gl1s, _) = unzip3 $ globals (zip3 xs t1s t2s)
         (g'',gls) <- freshTyPhis' l g' xgs $ mapFst3 toType <$> gl1s
         gl1s'     <- mapM (`safeEnvFindTy` g1') xgs
         gl2s'     <- mapM (`safeEnvFindTy` g2') xgs
         _         <- zipWithM_ (subType l err g1') gl1s' gls
-        _         <- zipWithM_ (subType l err g2') gl2s' gls      
+        _         <- zipWithM_ (subType l err g2') gl2s' gls
 
         -- PARTIALLY UNINITIALIZED
         
@@ -1044,18 +1036,18 @@ envJoin' l g g1 g2
         err   = errorLiquid' l 
 
 
-getPhiTypes l g1 g2 x = 
+getPhiTypes _ g1 g2 x = 
   case (envFindTyWithAsgn x g1, envFindTyWithAsgn x g2) of
     (Just t1, Just t2) -> Just (t1,t2) 
     (_      , _      ) -> Nothing 
   
 
-locals  ts = [(x,s1,s2) | (x, s1@(t1, WriteLocal, i1), s2@(t2, WriteLocal, i2)) <- ts]
+locals  ts = [(x,s1,s2) | (x, s1@(_, WriteLocal, _), s2@(_, WriteLocal, _)) <- ts]
 
-globals ts = [(x,s1,s2) | (x, s1@(t1, WriteGlobal, Initialized), s2@(t2, WriteGlobal, Initialized)) <- ts]
+globals ts = [(x,s1,s2) | (x, s1@(_, WriteGlobal, Initialized), s2@(_, WriteGlobal, Initialized)) <- ts]
 
-partial ts = [(x,s2)    | (x, s1@(t1, WriteGlobal, Initialized), s2@(t2, WriteGlobal, Uninitialized)) <- ts]
-          ++ [(x,s1)    | (x, s1@(t1, WriteGlobal, Uninitialized), s2@(t2, WriteGlobal, Initialized)) <- ts]
+-- partial ts = [(x,s2)    | (x, s2@(_, WriteGlobal, Uninitialized)) <- ts]
+--           ++ [(x,s1)    | (x, s1@(_, WriteGlobal, Uninitialized)) <- ts]
 
 
 errorLiquid' = errorLiquid . srcPos

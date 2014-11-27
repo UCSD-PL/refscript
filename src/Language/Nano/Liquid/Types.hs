@@ -91,12 +91,6 @@ import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Errors
   
 -- import           Debug.Trace                        (trace)
---
-
--- Got these from Resolve.hs
-isAncestor        = error "Liquid.Type.isAncestor"
-absolutePathInEnv = error "Liquid.Type.absolutePathInEnv"
-
 
 -------------------------------------------------------------------------------------
 -- | Refinement Types and Annotations
@@ -187,8 +181,8 @@ instance F.Expression (Expression a) where
   expr (VarRef _ x)                 = F.expr x
   expr (InfixExpr _ o e1 e2)        = F.EBin (bop o) (F.expr e1) (F.expr e2)
   expr (PrefixExpr _ PrefixMinus e) = F.EBin F.Minus (F.expr (0 :: Int)) (F.expr e)  
-  expr (Cast_ l e)                  = F.expr e
-  expr (Cast  l e)                  = F.expr e
+  expr (Cast_ _ e)                  = F.expr e
+  expr (Cast  _ e)                  = F.expr e
   expr e                            = convertError "F.Expr" e
 
 instance F.Predicate  (Expression a) where 
@@ -439,7 +433,7 @@ efoldReft g f = go
     go γ z (TVar _ r)       = f γ r z
     go γ z t@(TApp _ ts r)  = f γ r $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
     go γ z t@(TRef _ ts r)  = f γ r $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
-    go γ z t@(TSelf m)      = go γ z m
+    go γ z (TSelf m)        = go γ z m
     go γ z (TAll _ t)       = go γ z t
     go γ z (TFun s xts t r) = f γ r $ go γ' (gos γ' z (maybeToList s ++ map b_type xts)) t  where γ' = foldr (efoldExt g) γ xts
     go γ z (TAnd ts)        = gos γ z ts 
@@ -531,11 +525,11 @@ zipType :: IsLocated l => l -> CGEnv -> RefType -> RefType -> Maybe (F.Reft -> R
 -- 
 -- Unions
 --
-zipType l γ (TApp TUn t1s r1) (TApp TUn t2s _)
+zipType _ γ (TApp TUn t1s r1) (TApp TUn t2s _)
                                = (,r1) <$> mkUnionR <$> mapM rr t2s
   where
     rr               t2        = L.find (related γ t2) t1s `relate` t2
-    relate (Just t1) t2        = return $ t1 `strengthen` noKVars r1
+    relate (Just t1) _         = return $ t1 `strengthen` noKVars r1
     relate Nothing   t2        = return $ fmap F.bot t2
 
 zipType l γ t1 t2@(TApp TUn _ _) =  zipType l γ (TApp TUn [t1] fTop) t2
@@ -545,7 +539,7 @@ zipType l γ (TApp TUn t1s r1) t2 =  L.find (related γ t2) t1s `relate` t2
     relate (Just t1) t2        =  zipType l γ (t1 `strengthen` noKVars r1) t2
     relate Nothing   t2        =  return (setRTypeR t, fromMaybe fTop $ rTypeROpt t) where t = fmap F.bot t2
 
-zipType l γ (TSelf _) (TSelf m2) = return (\r -> TSelf m2, fTop)
+zipType _ _ (TSelf _) (TSelf m2) = return (\_ -> TSelf m2, fTop)
 --
 -- No unions below this point
 --
@@ -571,7 +565,7 @@ zipType l γ t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _)
   = case weaken γ (x1,m1:t1s) x2 of
       -- Try to move along the class hierarchy
       Just (_, m1':t1s') -> zipType l γ (TRef x2 (m1':t1s') r1 `strengthen` reftIO t1 (F.symbol x1)) t2
-
+      Just _             -> Nothing
       -- Unfold structures
       Nothing        -> do  t1' <- flattenType γ t1 
                             t2' <- flattenType γ t2
@@ -582,8 +576,8 @@ zipType l γ t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _)
     vv         = rTypeValueVar
     sym        = F.dummyLoc $ F.symbol "instanceof"
 
-zipType l _ t1@(TRef _ [] _) _ = error $ "zipType l on " ++ ppshow t1   -- Invalid type
-zipType l _ _ t2@(TRef _ [] _) = error $ "zipType l on " ++ ppshow t2  -- Invalid type
+zipType _ _ t1@(TRef _ [] _) _ = error $ "zipType l on " ++ ppshow t1   -- Invalid type
+zipType _ _ _ t2@(TRef _ [] _) = error $ "zipType l on " ++ ppshow t2  -- Invalid type
 
 zipType l γ t1@(TRef _ _ _) t2 = do t1' <- flattenType γ t1
                                     zipType l γ t1' t2
@@ -605,11 +599,11 @@ zipType l γ t1@(TClass _) t2 = do t1' <- flattenType γ t1
 zipType l γ t1 t2@(TClass _) = do t2' <- flattenType γ t2
                                   zipType l γ t1 t2'
 
-zipType l _ (TApp c [] r) (TApp c' [] _) | c == c'  = return (TApp c [], r)
+zipType _ _ (TApp c [] r) (TApp c' [] _) | c == c'  = return (TApp c [], r)
 
-zipType l _ _ t2                         | isTop t2 = return (setRTypeR t2, fTop)
+zipType _ _ _ t2                         | isTop t2 = return (setRTypeR t2, fTop)
 
-zipType l _ (TVar v r) (TVar v' _)       | v == v'  = return (TVar v, r)
+zipType _ _ (TVar v r) (TVar v' _)       | v == v'  = return (TVar v, r)
 -- 
 -- Function types
 --
@@ -626,7 +620,7 @@ zipType l γ (TFun Nothing x1s t1 r1) (TFun Nothing x2s t2 _) = do
   t   <- appZ <$> zipType l γ t1 t2 
   return (TFun Nothing xs t, r1)
 
-zipType l _ (TFun _ _ _ _ ) (TFun _ _ _ _) = Nothing
+zipType _ _ (TFun _ _ _ _ ) (TFun _ _ _ _) = Nothing
 
 -- Object types
 --
@@ -681,7 +675,7 @@ zipElts l γ (ConsSig t1)        (ConsSig t2)           = ConsSig           <$> 
 zipElts l γ (IndexSig _ _ t1)   (IndexSig x2 b2 t2)    = IndexSig x2 b2    <$> appZ <$> zipType l γ t1 t2 
 zipElts l γ (FieldSig _ _ _ t1) (FieldSig x2 o2 m2 t2) = FieldSig x2 o2 m2 <$> appZ <$> zipType l γ t1 t2
 zipElts l γ (MethSig _  t1)     (MethSig x2 t2)        = MethSig  x2       <$> appZ <$> zipType l γ t1 t2
-zipElts l _ _                   _                      = Nothing
+zipElts _ _ _                   _                      = Nothing
 
 appZ (f,r) = f r
 

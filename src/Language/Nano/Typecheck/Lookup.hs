@@ -18,11 +18,9 @@ import qualified Data.Map.Strict as M
 import           Language.ECMAScript3.PrettyPrint
 
 import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.Misc
 
 import           Language.Nano.Names
 import           Language.Nano.Types
-import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
@@ -186,7 +184,7 @@ accessMember :: (PPR r, F.Symbolic f)
 -- Get member for a call
 accessMember True sk s es =    
   case M.lookup (F.symbol s, sk) es of
-    Just f@(FieldSig _ o m t) | optionalField f -> Just (orUndef t,m)
+    Just f@(FieldSig _ _ m t) | optionalField f -> Just (orUndef t,m)
                               | otherwise       -> Just (t,m)
     Just (MethSig _ t) -> Just (t,t_immutable)    -- Methods are immutable
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
@@ -196,7 +194,7 @@ accessMember True sk s es =
 -- Extract member: cannot extract methods
 accessMember False sk s es =
   case M.lookup (F.symbol s, sk) es of
-    Just f@(FieldSig _ o m t) | optionalField f -> Just (orUndef t,m)
+    Just f@(FieldSig _ _ m t) | optionalField f -> Just (orUndef t,m)
                               | otherwise       -> Just (t,m)
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
            Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)

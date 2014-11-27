@@ -197,7 +197,7 @@ updSsaEnvLocal l x
 -------------------------------------------------------------------------------------
 updSsaEnvGlobal :: AnnSSA r -> Var r -> SSAM r (Var r)
 -------------------------------------------------------------------------------------
-updSsaEnvGlobal l x 
+updSsaEnvGlobal _ x 
   = do modify $ \st -> st {glob_names = envAdds [(x, SI x)] (glob_names st)}
        return x
 

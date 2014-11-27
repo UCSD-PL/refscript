@@ -89,7 +89,7 @@ import           Language.Fixpoint.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -280,7 +280,7 @@ envAdds :: (IsLocated l, F.Symbolic l)
         -> CGEnv 
         -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAdds msg xts' g
+envAdds _ xts' g
   = do ts         <- zipWithM inv ts' is
        let xtas    = zip xs $ zip3 ts as is
        is         <- catMaybes    <$> forM xtas addFixpointBind
@@ -320,7 +320,7 @@ addInvariant g t
   where
     -- | typeof 
     typeof t@(TApp tc _ o)  i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup tc i
-    typeof t@(TRef c _ _) _   = t `strengthen` F.Reft ((vv t,) [F.RConc $ typeofExpr $ F.symbol "object" ])
+    typeof t@(TRef _ _ _) _   = t `strengthen` F.Reft ((vv t,) [F.RConc $ typeofExpr $ F.symbol "object" ])
     typeof   (TFun a b c _) _ = TFun a b c typeofReft
     typeof t                _ = t
     strengthenOp t o r        | L.elem r (ofRef o) = t
@@ -419,15 +419,11 @@ envFindTyWithAsgnNoSngl :: (IsLocated x, F.Symbolic x, F.Expression x)
 ---------------------------------------------------------------------------------------
 envFindTyWithAsgnNoSngl x = findT x
   where
-    eSngl (t, WriteGlobal,i) = adjustInit (t, WriteGlobal,i)
-    eSngl (t, a,i)           = (t `eSingleton` x, a,i)
     findT x g = case E.envFindTy x $ cge_names g of 
                   Just t   -> Just t
                   Nothing  -> case cge_parent g of 
                                 Just g' -> findT x g'
                                 Nothing -> Nothing
-    adjustInit s@(_, _, Initialized) = s
-    adjustInit (t, a, _ ) = (orUndef t, a, Uninitialized)
 
 ---------------------------------------------------------------------------------------
 envFindTyForAsgn :: (IsLocated x, F.Symbolic x, F.Expression x) 
@@ -847,7 +843,7 @@ splitE g i _ _   (IndexSig _ _ t1) (IndexSig _ _ t2)
 splitE g i μ1 μ2 (FieldSig _ _ μf1 t1) (FieldSig _ _ μf2 t2)
   = splitWithMut g i μ1 μ2 (μf1,t1) (μf2,t2)
 
-splitE g i μ1 μ2 (MethSig _ t1) (MethSig _ t2)
+splitE g i _ _ (MethSig _ t1) (MethSig _ t2)
   = splitC (Sub g i t1 t2)
 
 splitE _ _ _ _ _ _ = return []
@@ -984,13 +980,13 @@ cgCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 
 --------------------------------------------------------------------------------
 -- | zipType wrapper
-
+--
 zipTypeUpM l g x t1 t2 = 
   -- case zipType l g (ltracePP l ("Will need to replace " ++ ppshow (rTypeValueVar t1) ++ " with " ++ ppshow x ++ " in " ++ ppshow t2) t1) t2 of
   case zipType l g t1 t2 of
-    Just (f, r@(F.Reft (s,ras))) -> let su  = F.mkSubst [(s, F.expr x)] in 
-                                    let rs  = F.simplify $ F.Reft (s, F.subst su ras) `F.meet` F.uexprReft x in
-                                    return  $ f rs
+    Just (f, (F.Reft (s,ras))) -> let su  = F.mkSubst [(s, F.expr x)] in 
+                                  let rs  = F.simplify $ F.Reft (s, F.subst su ras) `F.meet` F.uexprReft x in
+                                  return  $ f rs
                                     -- return $ ltracePP l ("\nUPCAST SUBST IN " ++ ppshow x ++ 
                                     --                      "\nT1      " ++ ppshow t1 ++ 
                                     --                      "\nT2      " ++ ppshow t2 ++ 
@@ -998,7 +994,7 @@ zipTypeUpM l g x t1 t2 =
                                     --                      "\nIN      " ++ ppshow r) $ f rs
     Nothing -> cgError $ bugZipType (srcPos l) t1 t2
 
-zipTypeDownM l g x t1 t2 = 
+zipTypeDownM l g _ t1 t2 = 
   case zipType l g t1 t2 of
     Just (f, r) -> return $ f r
 --     Just (f, r@(F.Reft (s,ras))) -> let su  = F.mkSubst [(s, F.expr x)] in 
@@ -1011,10 +1007,6 @@ zipTypeDownM l g x t1 t2 =
 --                                     --                      "\nIN      " ++ ppshow r ++ 
 --                                     --                      "\nRESULT  " ++ ppshow rs) $ f rs
     Nothing     -> cgError $ bugZipType (srcPos l) t1 t2
-  where
-    subK _  c@(F.RConc _)   = c
-    subK su k@(F.RKvar _ _) = F.subst su k
-
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

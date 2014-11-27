@@ -18,7 +18,7 @@ import           Control.Arrow                      ((***))
 
 import qualified Data.IntMap.Strict                 as I
 import qualified Data.Map.Strict                    as M
-import           Data.Maybe                         (catMaybes, listToMaybe, maybeToList, fromMaybe)
+import           Data.Maybe                         (catMaybes, maybeToList, fromMaybe)
 import           Data.List                          (nub, find)
 import           Data.Monoid                        (mappend)
 import           Data.Function                      (on)
@@ -33,7 +33,7 @@ import           Language.Nano.Names
 import           Language.Nano.Program
 import           Language.Nano.Types
 import           Language.Nano.Env
-import           Language.Nano.Misc                 (convertError, zipWith3M, withSingleton, withSingleton', dup)
+import           Language.Nano.Misc                 (convertError, zipWith3M, dup)
 import           Language.Nano.SystemUtils
 import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Typecheck.Environment
@@ -43,7 +43,6 @@ import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Lookup
-import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.Types
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Visitor
@@ -55,7 +54,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
 
-import           Debug.Trace                        hiding (traceShow)
+-- import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -151,8 +150,6 @@ patch fs =
     accepted (PhiVarTC _     ) = True
     accepted (PhiVar _       ) = True
     accepted _                 = False
-    vs                         = undefined
-
 
 -------------------------------------------------------------------------------
 -- | Initialize environment
@@ -455,7 +452,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
        return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
 -- e1.f = e2
-tcStmt γ ex@(ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
+tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do z               <- runFailM ( tcExpr γ e1 Nothing )
        case z of 
          Right (_,te1) -> tcSetProp $ fmap snd3 $ getProp γ False f te1
@@ -498,9 +495,6 @@ tcStmt γ (IfStmt l e s1 s2)
                           Nothing -> 
                             return (IfStmt l e' s1' s2', Nothing)
          _       -> return (IfStmt l e' s1 s2, Nothing)
-  where
-    -- These need to be added to each branch 
-    (xs, vs', vs'') = unzip3 $ concat [ vs | PhiPost vs <- ann_fact l ]
 
 -- while c { b } 
 tcStmt γ (WhileStmt l c b) 
@@ -583,7 +577,7 @@ tcAsgn l γ x e
        return       $ (e', tcEnvAddo γ x $ (,asgn,init) <$> to)
     where
        (rhsT, asgn, init) = case tcEnvFindTyForAsgn x γ of
-                              Just (t,a,i) -> (Just t, a, Initialized)
+                              Just (t,a,_) -> (Just t, a, Initialized)
                               Nothing      -> (Nothing, WriteLocal, Initialized)
 
 tcEnvAddo _ _ Nothing  = Nothing
@@ -918,7 +912,7 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
                           return $ (CallExpr l (DotRef l1 e' f) (v':vs'), t')
          Right (_, t) | otherwise -> 
             case getProp γ True f t of
-              Just (tRcvr,tMeth,mut) -> 
+              Just (tRcvr,tMeth,_) -> 
                   do e' <- castM γ e t tRcvr
                      (FI (Just e'') es', t') <- tcNormalCall γ l  ex (FI (Just (e', Nothing)) (nth es)) tMeth
                      return $ (CallExpr l (DotRef l1 e'' f) es', t')
@@ -926,7 +920,6 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
          Left err     -> tcError err
   where
     -- Check the receiver of the call
-    mkTy s t         = mkFun ([],Nothing,[B (F.symbol "this") s],t) 
     isVariadicCall f = F.symbol f == F.symbol "call"
     nth = ((,Nothing) <$>)
 
@@ -990,7 +983,7 @@ resolveOverload :: (PPRSF r, PP a)
 --
 --   * If the function requires a 'self' argument, the parameters provide one.
 --
-resolveOverload γ l fn ets@(FI e es) ft 
+resolveOverload γ l fn ets@(FI _ es) ft 
   = case [ mkFun (vs,s,bs,τ) | (vs,s,bs,τ) <- catMaybes $ bkFun <$> extractCall γ ft
                              , length bs == length es
                              , and $ zipWith (\b e -> matchTypes (b_type b) (snd e)) bs es ] of
@@ -1025,7 +1018,7 @@ tcCallCaseTry :: (PPRSF r, PP a)
               -> [RType r]
               -> TCM r (Maybe (RSubst r, RType r))
 ----------------------------------------------------------------------------------
-tcCallCaseTry γ l fn ts [] = return Nothing
+tcCallCaseTry _ _ _ _ [] = return Nothing
 tcCallCaseTry γ l fn ts (ft:fts)
   = do  z <- runMaybeM $ 
                do  (_,its1,_)      <- instantiateFTy l (tce_ctx γ) fn ft
@@ -1206,7 +1199,6 @@ unifyPhiTypes l γ x t1 t2 θ =
     isMaybeUndef            = any isUndef . bkUnion
     isMaybeNull             = any isNull  . bkUnion
     clear ts                = [ t | t <- ts, not (isNull t) && not (isUndef t) ]
-    extNullTys ts           = [ t | t <- ts,      isNull t  ||      isUndef t  ]
 
 -------------------------------------------------------------------------------------
 postfixStmt :: a -> [Statement a] -> Statement a -> Statement a 

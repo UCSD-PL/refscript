@@ -39,6 +39,7 @@ module Language.Nano.Names (
 
 import qualified Data.HashSet                   as H
 import           Data.List                      (find)
+import           Data.Default
 import           Control.Applicative            ((<$>))
 import           Data.Hashable          
 import           Data.Data
@@ -95,6 +96,12 @@ instance IsLocated (QN l) where
 
 instance IsLocated (QP l) where
   srcPos (QP _ a _) = a
+
+instance Default l => Default (QP l) where
+  def = QP def (srcPos dummySpan) []
+
+instance Default AK where
+  def = AK_
 
 instance F.Symbolic (Id a) where
   symbol (Id _ x)   = F.symbol x 

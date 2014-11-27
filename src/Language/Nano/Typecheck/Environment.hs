@@ -7,8 +7,6 @@
 
 module Language.Nano.Typecheck.Environment where
 
-import           Data.Data                          (Data)
-import           Data.Typeable                      (Typeable)
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types()
 import           Language.Nano.Env

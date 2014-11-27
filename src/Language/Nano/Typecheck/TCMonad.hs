@@ -419,7 +419,7 @@ checkTypes γ  = mapM_ (\(a,ts) -> mapM_ (safeExtends $ setAP a γ) ts) types
 --------------------------------------------------------------------------------
 safeExtends :: (IsLocated l, PPR r) => TCEnv r -> (l, IfaceDef r) -> TCM r ()
 --------------------------------------------------------------------------------
-safeExtends γ (l, t@(ID c _ _ (es,is) ms)) = 
+safeExtends γ (l, t@(ID c _ _ (es,_) _)) = 
     case flatten' Nothing InstanceMember γ t of
       Just ms -> forM_ es $ safeExtends1 γ l c ms 
       Nothing -> tcError $ bugFlattenType (srcPos l) c

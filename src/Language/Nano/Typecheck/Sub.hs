@@ -21,7 +21,7 @@ import           Data.Tuple                         (swap)
 import           Data.Monoid
 import qualified Data.HashSet                       as S
 import qualified Data.Map.Strict                    as M
-import           Data.Maybe                         (fromMaybe, isJust)
+import           Data.Maybe                         (fromMaybe)
 import           Control.Monad.State
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
@@ -231,7 +231,7 @@ invariantConvertObj l γ (μ1,e1s) (μ2,e2s)
 convertElt l γ _ (CallSig t1) (CallSig t2) 
   = convert' l γ t1 t2 
 
-convertElt l γ False f1@(FieldSig _ o1 m1 t1) f2@(FieldSig _ o2 m2 t2)          -- mutable container
+convertElt l γ False f1@(FieldSig _ _ m1 t1) f2@(FieldSig _ _ m2 t2)          -- mutable container
   -- | o1 /= o2
   -- = Left $ errorOptionalElt (srcPos l) f1 f2 
   | isSubtype γ t1 t2 && isSubtype γ m2 m1 
@@ -239,7 +239,7 @@ convertElt l γ False f1@(FieldSig _ o1 m1 t1) f2@(FieldSig _ o2 m2 t2)         
   | otherwise                           
   = Left $ errorIncompMutElt (srcPos l) f1 f2
 
-convertElt l γ True f1@(FieldSig _ o1 m1 t1) f2@(FieldSig _ o2 m2 t2)   -- immutable container
+convertElt l γ True f1@(FieldSig _ _ m1 t1) f2@(FieldSig _ _ m2 t2)   -- immutable container
   -- | o1 == Optional && o2 == Mandatory 
   -- = Left $ errorIncompatOptional (srcPos l) f1 f2 
   | isSubtype γ m1 m2 && isImmutable m2 
@@ -337,23 +337,15 @@ convertSimple _ _ t1 t2 | t1 == t2  = Right CDNo
 convertUnion :: (Functor g, EnvLike () g)
              => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertUnion l γ t1 t2  
+convertUnion _ γ t1 t2  
   | upcast    = Right CDUp 
   | downcast  = Right CDDn
-  -- | deadcast  = Right $ ltracePP l (ppshow t1 ++ " VS " ++ ppshow t2) CDDead
   | otherwise = Right CDDead
   where 
-
-
     upcast        =  -- ltracePP l ("UPCAST " ++ ppshow t1 ++ " VS " ++ ppshow t2) $ 
                     all (\t1 -> any (\t2 -> isSubtype γ t1 t2) t2s) t1s
-
     downcast      = -- ltracePP l ("DOWNCAST " ++ ppshow t1 ++ " VS " ++ ppshow t2) $ 
                     any (\t1 -> any (\t2 -> isConvertible γ t1 t2) t2s) t1s 
-
-
-
-    -- deadcast      = all (\t1 -> not $ any (\t2 -> isSubtype γ t1 t2) t2s) t1s
     (t1s, t2s)    = chk $ mapPair bkUnion (t1, t2)
     chk ([ ],[ ]) = errorstar "unionParts', called on too small input"
     chk ([_],[ ]) = errorstar "unionParts', called on too small input"
@@ -371,16 +363,16 @@ class Related t where
           => g r -> t r -> t r -> Bool
 
 instance Related RType where
-  related γ (TSelf _)    (TSelf _)              = True
+  related _ (TSelf _)    (TSelf _)              = True
 
   related γ (TRef x _ _) (TRef y _ _)           = isAncestor γ x y || isAncestor γ y x
 
-  related γ TRef{}       TCons{}                = True
+  related _ TRef{}       TCons{}                = True
   related _ TCons{}      TRef{}                 = True
 
-  related γ TCons{}      TCons{}                = True
+  related _ TCons{}      TCons{}                = True
 
-  related γ t t' | all isPrimitive [t,t']       = toType t == toType t'
+  related _ t t' | all isPrimitive [t,t']       = toType t == toType t'
                  | all isTFun      [t,t']       = True
                  | toType t == toType t'        = True
                  | otherwise                    = False

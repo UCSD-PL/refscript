@@ -11,6 +11,7 @@ module Language.Nano.Types where
 
 import           Control.Applicative                ((<$>))
 import           Data.Hashable
+import           Data.Default
 import           Data.Monoid
 import qualified Data.IntMap                     as I
 import           Data.Function                      (on)
@@ -328,6 +329,7 @@ deriving instance Functor (ModuleDefQ q)
 type ModuleDef = ModuleDefQ AK
 
 instance Monoid (ModuleDefQ q r) where
+  mempty = ModuleDef mempty mempty mempty def
   ModuleDef v t e p `mappend` ModuleDef v' t' e' _ = ModuleDef (v `mappend` v') 
                                                                (t `mappend` t')
                                                                (e `mappend` e')

@@ -38,16 +38,12 @@ import           Control.Applicative     hiding (empty)
 import           Control.Exception              (throw)
 import           Data.Monoid             hiding ((<>))            
 import           Data.Default
-import           Data.Maybe                     (maybeToList, listToMaybe, catMaybes)
-import           Data.List                      (stripPrefix, partition, reverse, find)
-import           Data.Tuple                     (swap)
+import           Data.List                      (stripPrefix)
 import qualified Data.HashMap.Strict              as HM
 import           Data.Graph.Inductive.Graph
 import           Data.Graph.Inductive.PatriciaTree
-import           Data.Graph.Inductive.Query.BFS
 import qualified Data.HashSet                   as H
 import           Data.Generics                   
-import qualified Data.Map.Strict                as M
 import qualified Data.IntMap                    as I
 import           Text.PrettyPrint.HughesPJ 
 
@@ -57,8 +53,6 @@ import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Types
-import           Language.Nano.Typecheck.Types
-import           Language.Nano.Typecheck.Subst
 
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.PrettyPrint
@@ -465,6 +459,7 @@ instance PP SyntaxKind where
   pp ClassDefKind     = text "ClassDefKind"
   pp ModuleDefKind    = text "ModuleDefKind"
   pp EnumDefKind      = text "EnumDefKind"
+  pp AmbVarDeclKind   = text "AmbVarDeclKind" 
 
 
 data MemberKind = MemDefinition | MemDeclaration deriving ( Eq )

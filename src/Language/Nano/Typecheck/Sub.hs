@@ -119,9 +119,9 @@ convertObj l γ t1@(TCons μ1 e1s _) t2@(TCons μ2 e2s _)
   where
       mutabilitySub = isSubtype γ μ1 μ2
 
-convertObj l γ t1@(TSelf m1) t2@(TSelf m2) 
-  | not (isSubtype γ m1 m2) 
-  = Left $ errorIncompMutTy l t1 t2
+convertObj l γ (TSelf m1) (TSelf m2) 
+  = convertObj l γ m1 m2
+
 
 convertObj l γ t1@(TRef x1 (m1:t1s) _) t2@(TRef x2 (m2:t2s) _)
   --
@@ -130,16 +130,20 @@ convertObj l γ t1@(TRef x1 (m1:t1s) _) t2@(TRef x2 (m2:t2s) _)
   | not (isSubtype γ m1 m2) 
   = Left $ errorIncompMutTy l t1 t2
   --  
-  -- * Both immutable, same name, non arrays: Co-variant subtyping
+  -- * Both immutable, same name, non arrays: co-variant subtyping on arguments
   --
   | x1 == x2 && isImmutable m2 && not (isArr t1) 
-  = mconcat <$> zipWithM (convert' l γ) t1s t2s
+  = do c1    <- convert' l γ m1 m2
+       c2    <- zipWithM (convert' l γ) t1s t2s
+       return $ mconcat $ c1 : c2
   -- 
-  -- * Non-immutable, same name: invariance
+  -- * Non-immutable, same name: co- and contra-variant subtyping on arguments
   --
   | x1 == x2 
-  = mconcat <$> liftM2 (++) (zipWithM (convert' l γ) t1s t2s) 
-                            (zipWithM (convert' l γ) t2s t1s)
+  = do c1    <- convert' l γ m1 m2
+       c2    <- zipWithM (convert' l γ) t1s t2s
+       c3    <- zipWithM (convert' l γ) t2s t1s
+       return $ mconcat $ [c1] ++ c2 ++ c3
   -- 
   -- * Compatible mutabilities, differenet names:
   --

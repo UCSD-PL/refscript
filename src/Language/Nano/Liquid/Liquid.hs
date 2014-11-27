@@ -54,6 +54,7 @@ import           System.Console.CmdArgs.Default
 
 -- import           Debug.Trace                        (trace)
 -- import           Text.PrettyPrint.HughesPJ 
+-- import qualified Data.Foldable                      as FO
 
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
 
@@ -607,14 +608,15 @@ consExpr g (CallExpr l em@(DotRef _ e f) es) _
         t | isVariadicCall f -> 
             case es of
               []   -> cgError $ errorVariadicNoArgs (srcPos l) em
-              v:vs -> consCall g l em (FI (Just (v, Nothing)) (nth vs)) t
+              v:vs -> consCall g' l em (FI (Just (v, Nothing)) (nth vs)) t
 
-          | otherwise -> case getProp g True f t of
-                           Just (_,tf,_) -> consCall g l em (FI (Just (e, Nothing)) ((,Nothing) <$> es)) tf
+          | otherwise -> case getProp g' True f t of
+                           Just (_,tf,_) -> consCall g' l em (FI (Just (vr x, Nothing)) ((,Nothing) <$> es)) tf
                            Nothing       -> cgError $ errorCallNotFound (srcPos l) e f
   where
     isVariadicCall f = F.symbol f == F.symbol "call"
     nth              = ((,Nothing) <$>)
+    vr               = VarRef $ getAnnotation e
 
 -- | e(es)
 consExpr g (CallExpr l e es) _
@@ -623,9 +625,7 @@ consExpr g (CallExpr l e es) _
 
 -- | e.f
 --
---
 -- Return type: { v: _ | v ~~ keyVal(this, "f") }
---
 --
 consExpr g ef@(DotRef l e f) _
   = mseq (consExpr g e Nothing) $ \(x,g') -> do

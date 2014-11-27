@@ -55,11 +55,17 @@ getProp γ b s t@(TApp _ _ _  ) =                  getPropApp γ b s t
 getProp _ b s t@(TCons m es _) = do (t',m')    <- accessMember b InstanceMember s es                                      
                                     return      $ (t,t',combMut m m')
     
-getProp γ b s t@(TRef x ts@(m:_) _)  
+getProp γ b s t@(TRef x ts@(m:ts') r)  
                                = do d          <- resolveTypeInEnv γ x
                                     es         <- flatten Nothing InstanceMember γ (d,ts)
                                     (t',m')    <- accessMember b InstanceMember s es
-                                    return      $ (t,t',combMut (toType m) m')
+                                    t''        <- fixMethType t'
+                                    return      $ (t, t'',combMut (toType m) m')
+  where
+    fixMethType ft | isTFun ft                  = mkAnd . (replaceSelf <$>) <$> bkFuns ft
+                   | otherwise                  = Just $ ft
+    replaceSelf (vs, Just (TSelf m'), bs, ot)   = mkFun (vs, Just (TRef x (m':ts') r), bs, ot)
+    replaceSelf a                               = mkFun a
 
 getProp γ b s t@(TClass c    ) = do d          <- resolveTypeInEnv γ c
                                     es         <- flatten Nothing StaticMember γ (d,[])

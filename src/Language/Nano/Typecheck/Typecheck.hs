@@ -299,16 +299,6 @@ addReturnStmt l t body | isTVoid t
                        | otherwise 
                        = return body
        
-
--- FIXME: Check for mutability (the second part in the triplet)
---        If this argument is "immutable" We will have to check
---        statements/expressions that operate on "this" and make
---        sure that they do not mutate it.
---
---        For the moment it just does a regular function check
---        
--- tcMeth1 γ l f xs body (i, _,ft) = tcFun1 γ l f xs body (i, ft)
-
 tcFunBody γ l body t 
   = do  z                          <- tcStmts γ body
         case z of 

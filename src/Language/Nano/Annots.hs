@@ -60,7 +60,6 @@ data CastQ q r = CNo                                            -- .
                | CDn   { org :: RTypeQ q r, tgt :: RTypeQ q r } -- <t1 DN t2>
                deriving (Eq, Show, Data, Typeable, Functor)
 
-type CastR = CastQ RK   -- Version with relative types
 type Cast  = CastQ AK   -- Version with absolute types
 
 castType CNo = tNull
@@ -147,7 +146,6 @@ data FactQ q r
   | EnumAnn     !(F.Symbol)
     deriving (Eq, Show, Data, Typeable)
 
-type FactR     = FactQ RK
 type Fact      = FactQ AK
 type UFact     = Fact ()
 
@@ -205,7 +203,8 @@ instance IsLocated (Annot a SourceSpan) where
 instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)       = text "phi"                    <+> pp x
   pp (PhiVarTy x)     = text "phi-ty"                 <+> pp x
-  pp (PhiPost x)      = text "phi-post"
+  pp (PhiVarTC x)     = text "phi-tc"                 <+> pp x
+  pp (PhiPost _)      = text "phi-post"
   pp (TypInst i ξ ts) = text "inst"                   <+> pp i <+> pp ξ <+> pp ts 
   pp (Overload ξ i)   = text "overload"               <+> pp ξ <+> pp i
   pp (EltOverload ξ i)= text "elt_overload"           <+> pp ξ <+> pp i

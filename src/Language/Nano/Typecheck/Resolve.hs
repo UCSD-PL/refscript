@@ -29,26 +29,19 @@ module Language.Nano.Typecheck.Resolve (
 
   ) where 
 
-import           Control.Applicative                 ((<$>), (<*>), (<|>))
+import           Control.Applicative                 ((<$>), (<|>))
 import           Data.Generics
-import           Data.Tuple
-
-import qualified Data.IntMap.Strict               as I
 import qualified Data.HashMap.Strict              as HM
-import           Data.Maybe                          (catMaybes, maybeToList, listToMaybe)
+import           Data.Maybe                          (maybeToList)
 import           Data.Foldable                       (foldlM)
-import           Data.List                           (nub, find)
+import           Data.List                           (find)
 import           Data.Graph.Inductive.Graph
 import           Data.Graph.Inductive.Query.DFS
-import           Data.Graph.Inductive.PatriciaTree
 import           Data.Graph.Inductive.Query.BFS
-import qualified Data.HashSet                     as S 
 import           Data.Function                       (on)
 import qualified Data.Map.Strict                  as M
 import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Env
-import           Language.Nano.Errors
-import           Language.Fixpoint.Misc              (mapPair, snd3, fst3, thd3, mapFst)
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Types
@@ -56,7 +49,6 @@ import           Language.Nano.Program
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 
-import           Control.Applicative ((<$>))
 
 -- import           Debug.Trace
 
@@ -185,15 +177,15 @@ flattenType γ (TEnum x)
     mkField (k, Just i ) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) f_required t_immutable $ tInt `strengthen` exprReft i)
     mkField (k, Nothing) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) f_required t_immutable $ tInt)
 
-flattenType γ (TApp TInt _ r) 
+flattenType γ (TApp TInt _ _)
   = do  es      <- t_elts <$> resolveTypeInEnv γ (mkAbsName [] $ F.symbol "Number")
         return   $ TCons t_immutable es fTop
 
-flattenType γ (TApp TString _ r) 
+flattenType γ (TApp TString _ _)
   = do  es      <- t_elts <$> resolveTypeInEnv γ (mkAbsName [] $ F.symbol "String")
         return   $ TCons t_immutable es fTop
 
-flattenType γ (TApp TBool _ r) 
+flattenType γ (TApp TBool _ _) 
   = do  es      <- t_elts <$> resolveTypeInEnv γ (mkAbsName [] $ F.symbol "Boolean")
         return   $ TCons t_immutable es fTop
 
@@ -210,7 +202,7 @@ flattenType _ t  = Just t
 ---------------------------------------------------------------------------
 weaken :: (PPR r, EnvLike r g) => g r -> TypeReference r -> AbsName -> Maybe (TypeReference r)
 ---------------------------------------------------------------------------
-weaken γ tr@(s,ts) t
+weaken γ tr@(s,_) t
   | s == t                    = Just tr
   | otherwise 
   = do n1                    <- HM.lookup s m
@@ -229,7 +221,7 @@ weaken γ tr@(s,ts) t
 ---------------------------------------------------------------------------
 doEdge :: PPR r => ClassHierarchy r -> TypeReference r -> Edge -> Maybe (TypeReference r)
 ---------------------------------------------------------------------------
-doEdge cha@(ClassHierarchy g m) (_, t1) (n1, n2)
+doEdge (ClassHierarchy g _) (_, t1) (n1, n2)
   = do  ID _  _ v1 (e1,i1) _  <-  lab g n1 
         ID c2 _ _  _       _  <-  lab g n2
         let θ                  =  fromList $ zip v1 t1

@@ -31,13 +31,10 @@ import qualified Data.IntMap.Strict               as I
 import qualified Data.HashMap.Strict              as HM
 import           Data.Tuple
 
-import           Text.PrettyPrint.HughesPJ               (text, vcat)
+import           Text.PrettyPrint.HughesPJ               (text)
 import qualified Data.Foldable                    as     FO
 import           Data.Vector                             ((!))
-
 import           Data.Graph.Inductive.Graph
-import           Data.Graph.Inductive.PatriciaTree
-import           Data.Graph.Inductive.Query.BFS
 
 import           Control.Monad
 import           Control.Monad.Trans                     (MonadIO,liftIO)
@@ -46,7 +43,7 @@ import           Control.Applicative                     ((<$>), (<*>) , (<*) , 
 import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc                  (mapEither, mapSnd, mapPair, snd3, fst3, thd3, mapFst)
+import           Language.Fixpoint.Misc                  (mapEither, mapSnd, fst3, mapFst)
 
 import           Language.Nano.Annots
 import           Language.Nano.Errors
@@ -307,8 +304,8 @@ objLitP
   where
     typeMembersP = mkTypeMembers . ((InstanceMember, MemDeclaration,) <$>) 
                                 <$> braces propBindP
-    addMVar l t r = TCons defaultMutability t r
-    defaultMutability = TRef (QN RK_ (srcPos dummySpan) [] (symbol "Immutable")) [] fTop
+    addMVar _    = TCons defMut
+    defMut       = TRef (QN RK_ (srcPos dummySpan) [] (symbol "Immutable")) [] fTop
     -- addMVar l t r = TAll v (TCons (TVar v fTop) t r) where v = tvar l ms
     -- ms            = symbol "_M_"  -- A hard-to-guess symbol
 
@@ -317,7 +314,7 @@ selfP :: Parser (Reft -> RTypeQ RK Reft)
 ----------------------------------------------------------------------------------
 selfP = do reserved "Self"
            m <- angles bareTypeP
-           return $ \r -> TSelf m
+           return $ \_ -> TSelf m
  
 ----------------------------------------------------------------------------------
 mutP :: Parser (MutabilityQ RK)
@@ -807,8 +804,8 @@ instance PP (RawSpec) where
 convertTvar    :: (PP r, Reftable r, Transformable t, Show q) => [TVar] -> t q r -> t q r
 convertTvar as = trans tx as []  
   where
-    tx αs _ t@(TRef c [] r) | Just α <- mkTvar αs c = TVar α r 
-    tx αs _ t = t 
+    tx αs _ (TRef c [] r) | Just α <- mkTvar αs c = TVar α r 
+    tx _  _ t             = t 
 
 mkTvar αs r = listToMaybe [ α { tv_loc = srcPos r }  | α <- αs, symbol α == symbol r]
 

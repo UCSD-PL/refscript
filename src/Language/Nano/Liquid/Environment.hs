@@ -9,8 +9,6 @@
 
 module Language.Nano.Liquid.Environment where
 
-import           Data.Data                          (Data)
-import           Data.Typeable                      (Typeable)
 import           Text.PrettyPrint.HughesPJ
 
 import           Language.ECMAScript3.PrettyPrint

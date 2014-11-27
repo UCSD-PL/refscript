@@ -65,7 +65,6 @@ import           Language.Nano.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.Nano.Env
-import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Names
@@ -73,7 +72,7 @@ import           Language.Nano.Locations
 import           Language.Nano.Annots
 import           Language.Nano.Program
 import           Language.Nano.Typecheck.Resolve
-import           Language.Fixpoint.Misc hiding ((<$$>))
+import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types        as F
 
 --------------------------------------------------------------------------------
@@ -449,6 +448,10 @@ ntransBase1 f g (n,ts) = (f n, ntrans f g <$> ts)
 
 ntransFact f g = go
   where
+    go (PhiVar v)        = PhiVar        $ v
+    go (PhiVarTC v)      = PhiVarTC      $ v
+    go (PhiPost v)       = PhiPost       $ v
+    go (PhiVarTy (v,t))  = PhiVarTy      $ (v, ntrans f g t)
     go (VarAnn   t)      = VarAnn        $ ntrans f g t  
     go (AmbVarAnn t)     = AmbVarAnn     $ ntrans f g t  
     go (ExportedElt)     = ExportedElt
@@ -558,14 +561,10 @@ hoistBindings = everythingBut (++) myQ
 
     fVd :: VarDecl (AnnType r) -> ([(Id (AnnType r), AnnType r, SyntaxKind, 
                                     Assignability, Initialization)], Bool)
-    fVd (VarDecl l n eo)       = ([(n, l, VarDeclKind, WriteGlobal, Uninitialized) 
+    fVd (VarDecl l n Nothing)  = ([(n, l, VarDeclKind, WriteGlobal, Uninitialized) 
                                     | VarAnn _    <- ann_fact l], True)
-    fVd (VarDecl l n eo)       = ([(n, l, VarDeclKind, WriteGlobal, Initialized)   
+    fVd (VarDecl l n (Just _)) = ([(n, l, VarDeclKind, WriteGlobal, Initialized)   
                                     | AmbVarAnn _ <- ann_fact l], True)
-
-initStatus (Just _ ) = Initialized
-initStatus _         = Uninitialized
-
 
 -- | Find classes / interfaces in scope
 -------------------------------------------------------------------------------
@@ -589,8 +588,6 @@ hoistTypes = everythingBut (++) myQ
     fSt _                      = ([ ], False)
     fExp :: Expression a -> ([Statement a], Bool)
     fExp _                     = ([ ], True)
-
-
 
 -------------------------------------------------------------------------------
 hoistGlobals :: Data r => [Statement (AnnType r)] -> [Id (AnnType r)]
@@ -618,9 +615,6 @@ hoistGlobals = everythingBut (++) myQ
     fVd                 :: VarDecl (AnnType r) -> ([Id (AnnType r)], Bool)
     fVd (VarDecl l x _)  = ([ x | VarAnn _ <- ann_fact l ] 
                          ++ [ x | AmbVarAnn _ <- ann_fact l ], True)
-
-
-
 
 -- | Summarise all nodes in top-down, left-to-right order, carrying some state
 --   down the tree during the computation, but not left-to-right to siblings,
@@ -704,7 +698,7 @@ replaceAbsolute pgm@(Nano { code = Src ss, fullNames = ns, fullPaths = ps })
                                      { accExpr = acc   }
                                      { accCElt = acc   }
                                      { accVDec = acc   }
-    cStmt q@(QP AK_ l p) (ModuleStmt _ x _) 
+    cStmt (QP AK_ l p) (ModuleStmt _ x _) 
                     = QP AK_ l $ p ++ [F.symbol x] 
     cStmt q _       = q
     acc c s         = I.singleton (ann_id a) c where a = getAnnotation s
@@ -713,7 +707,7 @@ replaceAbsolute pgm@(Nano { code = Src ss, fullNames = ns, fullPaths = ps })
 ---------------------------------------------------------------------------------------
 fixEnums :: PPR r => NanoBareR r -> NanoBareR r 
 ---------------------------------------------------------------------------------------
-fixEnums p@(Nano { code = Src ss, tAlias = ta, pModules = m }) 
+fixEnums p@(Nano { code = Src ss, pModules = m }) 
                = p { code = Src $ (tr <$>) <$> ss
                    , pModules = qenvMap (fixEnumsInModule p) m}
   where

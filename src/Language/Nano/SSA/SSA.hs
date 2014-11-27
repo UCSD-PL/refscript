@@ -11,7 +11,7 @@ import           Control.Monad
 import           Data.Default
 import           Data.Function                           (on)
 import           Data.Data
-import           Data.Maybe                              (catMaybes, maybeToList) 
+import           Data.Maybe                              (catMaybes)
 import qualified Data.List                               as L
 import qualified Data.IntSet                             as I
 import qualified Data.IntMap.Strict                      as IM
@@ -39,7 +39,7 @@ import           Language.Nano.SSA.Types
 import           Language.Nano.SSA.SSAMonad
 import           Language.Nano.Visitor     
 
-import           Debug.Trace                        hiding (traceShow)
+-- import           Debug.Trace                        hiding (traceShow)
 
 -- FIXME : SSA needs a proper environment like TC an Liquid
 

@@ -147,7 +147,7 @@ combMut _         element | otherwise                     = element
 combMutInField _ f@(CallSig _)        = f
 combMutInField _ f@(ConsSig _)        = f
 combMutInField _ f@(IndexSig _ _ _ )  = f
-combMutInField μ f@(FieldSig x o m t) = FieldSig x o (combMut μ m) t
+combMutInField μ   (FieldSig x o m t) = FieldSig x o (combMut μ m) t
 combMutInField _ f@(MethSig  _ _ )    = f 
 
 
@@ -266,7 +266,7 @@ mkUnion ts     = mkUnionR ts fTop
 ----------------------------------------------------------------------------------------
 mkUnionR :: (F.Reftable r) => [RType r] -> r -> RType r
 ----------------------------------------------------------------------------------------
-mkUnionR [ ] r = tVoid
+mkUnionR [ ] _ = tVoid
 mkUnionR [t] r = t `strengthen` r
 mkUnionR ts  r = flattenUnions $ TApp TUn ts r
 
@@ -642,7 +642,7 @@ instance (PP r, F.Reftable r) => PP (IfaceDef r) where
 
 ppHeritage (es,is) = ppHeritage1 "extends" es <+> ppHeritage1 "implements" is
 
-ppHeritage1 c []   = text""
+ppHeritage1 _ []   = text""
 ppHeritage1 c ts   = text c <+> intersperse comma (ppBase <$> ts)
 
 ppBase (n,[]) = pp n
@@ -669,6 +669,7 @@ ppMeth mt =
     [t] ->  case bkFun t of
               Just ([],s,ts,t) -> ppfun s ts t
               Just (αs,s,ts,t) -> angles (ppArgs id comma αs) <> ppfun s ts t
+              _                -> text "ERROR TYPE"
     ts  ->  vcat [text "/\\" <+> ppMeth t | t <- ts]
   where
     ppfun (Just s) ts t = ppArgs parens comma (B (F.symbol "this") s : ts) <> text ":" <+> pp t
@@ -887,7 +888,6 @@ enumTy (EnumDef _ ps _) = TAll a $ TFun Nothing [a',b] ot fTop
     a'       = B x0 (tVar a)
     x0       = F.symbol "x0"
     x1       = F.symbol "x1"
-    sz       = I.size ps
     pi       = F.POr $ (F.PAtom F.Eq (F.eVar v) . F.expr) <$> I.keys ps 
     v        = F.vv Nothing
     b        = B x1 $ tInt `strengthen` F.predReft pi
@@ -961,7 +961,6 @@ infixOpId OpIn         = builtinId "OpIn"
 infixOpId OpLShift     = builtinId "OpLShift"
 infixOpId OpSpRShift   = builtinId "OpSpRShift"
 infixOpId OpZfRShift   = builtinId "OpZfRShift"
-infixOpId o            = errorstar $ "infixOpId: Cannot handle: " ++ ppshow o
 
 prefixOpId PrefixMinus  = builtinId "PrefixMinus"
 prefixOpId PrefixPlus   = builtinId "PrefixPlus"

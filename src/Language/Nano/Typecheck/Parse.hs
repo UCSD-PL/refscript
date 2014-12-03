@@ -96,12 +96,9 @@ anonFuncP = funcSigP
 identifierP :: Parser (Id SourceSpan)
 identifierP = withSpan Id identifier 
 
--- identifierP =  try (withSpan Id uIdP)
---            <|>     (withSpan Id lIdP)
---   where
---     uIdP    = symbolString <$> upperIdP
---     lIdP    = symbolString <$> lowerIdP
-  
+binderP     = withSpan Id $  try identifier
+                         <|> try (show <$> integer)
+                          
 pAliasP :: Parser (Id SourceSpan, PAlias) 
 pAliasP = do name <- identifierP
              πs   <- pAliasVarsP 
@@ -289,7 +286,7 @@ bareAtomP p
 bbaseP :: Parser (Reft -> RTypeQ RK Reft)
 ----------------------------------------------------------------------------------
 bbaseP 
-  =  try objLitP                              -- {f1: T1; ... ; fn: Tn} 
+  =  try objLitP                               -- {f1: T1; ... ; fn: Tn} 
  <|> try (TApp  <$> tConP  <*> bareTyArgsP)    -- number, boolean, etc...
  <|> try selfP
  <|>     (TRef  <$> qnameP <*> bareTyArgsP)    -- List[A], Tree[A,B] etc...
@@ -389,7 +386,7 @@ indexP = xyP id colon sn
 
 -- | <[mut]> f: t
 fieldEltP       = do 
-    x          <- symbol <$> identifierP
+    x          <- symbol <$> binderP
     o          <- maybe f_requiredR (\_ -> f_optionalR) 
               <$> optionMaybe (withinSpacesP $ char '?')
     _          <- colon

@@ -721,6 +721,14 @@ tcExpr γ (Cast_ l e) to
 tcExpr γ e@(DotRef _ _ _) _
   = tcCall γ e
  
+-- -- | e1["s"]
+-- tcExpr γ (BracketRef l1 e1 (StringLit l2 s)) to
+--   = tcExpr γ (DotRef l1 e1 (Id l2 s)) to
+-- 
+-- -- | e1[1]
+-- tcExpr γ (BracketRef l1 e1 (IntLit l2 i)) to
+--   = tcExpr γ (DotRef l1 e1 (Id l2 $ show i)) to
+-- 
 -- | e1[e2]
 tcExpr γ e@(BracketRef _ _ _) _
   = tcCall γ e
@@ -807,18 +815,29 @@ tcCall γ (InfixExpr l o e1 e2)
 
 -- | `e1[e2]`
 --
---   Special case for Enumeration. might be able to do something better with the 
---   overload for BIBracketRef
+--   Special case for Enumeration, and object literals with numeric or 
+--   string arguments. 
 --
 tcCall γ (BracketRef l e1 e2)
-  = do  opTy <- runFailM (tcExpr γ e1 Nothing) >>= \case
-                  Right (_, TEnum n)   -> case resolveEnumInEnv γ n of
-                                            Just ed -> return $ ofType $ toType $ enumTy ed
-                                            _       -> safeTcEnvFindTy l γ $ builtinOpId BIBracketRef
-                  _ -> safeTcEnvFindTy l γ $ builtinOpId BIBracketRef
-        tcNormalCall γ l BIBracketRef (FI Nothing [(e1, Nothing), (e2, Nothing)]) opTy >>= \case
+  = runFailM (tcExpr γ e1 Nothing) >>= \case
+      -- Enumeration
+      Right (_, TEnum n) -> 
+          case resolveEnumInEnv γ n of
+            Just ed -> call (rTop $ enumTy ed)
+            _       -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
+      -- Object literal
+      Right (_, TCons _ _ _) -> 
+          case e2 of
+            StringLit l2 s -> tcExpr γ (DotRef l e1 (Id l2 s)) Nothing
+            IntLit l2 n -> tcExpr γ (DotRef l e1 (Id l2 $ show n)) Nothing
+            _ -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
+      -- Default
+      _ -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
+  where 
+    call ty = tcNormalCall γ l BIBracketRef 
+                (FI Nothing [(e1, Nothing), (e2, Nothing)]) ty >>= \case
           (FI _ [e1', e2'], t) -> return (BracketRef l e1' e2', t)
-          _                    -> tcError $ impossible (srcPos l) "tcCall BracketRef"
+          _ -> tcError $ impossible (srcPos l) "tcCall BracketRef"
    
 -- | `e1[e2] = e3`
 tcCall γ (AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
@@ -864,12 +883,13 @@ tcCall γ (NewExpr l e es)
 --
 tcCall γ ef@(DotRef l e f)
   = runFailM (tcExpr γ e Nothing) >>= \case 
-      Right (_, te) -> case getProp γ False f te of
-                         Just (te', t, _) ->
-                           do (FI _ [e'],τ) <- tcNormalCall γ l ef (FI Nothing [(e, Nothing)]) $ mkTy te' t
-                              return         $ (DotRef l e' f, τ)
-                         Nothing         -> tcError $ errorMissingFld (srcPos l) f te
-      Left err      -> tcError err
+      Right (_, te) -> 
+          case getProp γ False f te of
+            Just (te', t, _) ->
+                do (FI _ [e'],τ) <- tcNormalCall γ l ef (FI Nothing [(e, Nothing)]) $ mkTy te' t
+                   return         $ (DotRef l e' f, τ)
+            Nothing -> tcError $ errorMissingFld (srcPos l) f te
+      Left err -> tcError err
   where
     mkTy s t         = mkFun ([],Nothing,[B (F.symbol "this") s],t) 
 

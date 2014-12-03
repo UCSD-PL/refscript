@@ -11,7 +11,7 @@ class MovablePoint implements Point {
     this.x = x;
     this.y = y
   }
-  /*@ move : [Mutable] (dx: number, dy: number): void */
+  /*@ move : (this: MovablePoint<Mutable>, dx: number, dy: number): void */
   public move(dx:number, dy:number) { this.x += dx; this.y += dy; }
 }
 /*@ mustBeTrue :: (x: MovablePoint<Mutable> + null) => { v: boolean | Prop(v) } */ 

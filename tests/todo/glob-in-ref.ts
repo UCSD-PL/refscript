@@ -1,3 +1,9 @@
+//
+// FIXME: THIS SHOULD FAIL !!!
+//
+
+
+
 /*@ DATA_SIZE :: number */
 var DATA_SIZE = 3;
 

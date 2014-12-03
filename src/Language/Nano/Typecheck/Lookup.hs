@@ -52,13 +52,19 @@ getProp :: (PPRD r, EnvLike r g, F.Symbolic f)
 -------------------------------------------------------------------------------
 getProp γ b s t@(TApp _ _ _  ) =                  getPropApp γ b s t
 
-getProp _ b s t@(TCons m es _) = do (t',m')    <- accessMember b InstanceMember s es                                      
+getProp γ b s t@(TCons m es _) = do (t',m')    <- accessMember γ b InstanceMember s 
+                                                $ M.union es objProto
                                     return      $ (t,t',combMut m m')
+  where 
+  -- Add Object as the prototype type
+    objProto = M.singleton (protoSym, InstanceMember) 
+             $ FieldSig protoSym f_required t_immutable t_object
+    protoSym = F.symbol "prototype"
     
 getProp γ b s t@(TRef x ts@(m:ts') r)  
                                = do d          <- resolveTypeInEnv γ x
                                     es         <- flatten Nothing InstanceMember γ (d,ts)
-                                    (t',m')    <- accessMember b InstanceMember s es
+                                    (t',m')    <- accessMember γ b InstanceMember s es
                                     t''        <- fixMethType t'
                                     return      $ (t, t'',combMut (toType m) m')
   where
@@ -69,13 +75,12 @@ getProp γ b s t@(TRef x ts@(m:ts') r)
 
 getProp γ b s t@(TClass c    ) = do d          <- resolveTypeInEnv γ c
                                     es         <- flatten Nothing StaticMember γ (d,[])
-                                    (t', m)    <- accessMember b StaticMember s es
+                                    (t', m)    <- accessMember γ b StaticMember s es
                                     return      $ (t,t',m)
 
 getProp γ _ s t@(TModule m   ) = do m'         <- resolveModuleInEnv γ m
                                     (_,_,t',_) <- envFindTy s $ m_variables m'
                                     return      $ (t,t', t_readOnly) 
-                                    -- FIXME: perhaps something else here as mutability
 
 -- FIXME: Instead of the actual integer value, assign unique symbolic values: 
 --        E.g. A_B_C_1 ... 
@@ -180,38 +185,47 @@ extractCall γ t             = uncurry mkAll <$> foo [] t
 --   True then this means that the extracted field is for a call, in which case
 --   we allow extraction of methods, otherwise extracting methods is disallowed.
 -------------------------------------------------------------------------------
-accessMember :: (PPR r, F.Symbolic f)
-             => Bool 
+accessMember :: (PPRD r, EnvLike r g, F.Symbolic f)
+             => g r
+             -> Bool 
              -> StaticKind 
-             -> f 
+             -> f
              -> TypeMembers r 
              -> Maybe (RType r, Mutability)
 -------------------------------------------------------------------------------
 -- Get member for a call
-accessMember True sk s es =    
-  case M.lookup (F.symbol s, sk) es of
+accessMember γ True sk f es =    
+  case M.lookup (F.symbol f, sk) es of
     Just f@(FieldSig _ _ m t) | optionalField f -> Just (orUndef t,m)
                               | otherwise       -> Just (t,m)
     Just (MethSig _ t) -> Just (t,t_immutable)    -- Methods are immutable
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
            Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
-           _ -> Nothing
+           -- Lookup prototype
+           _ -> case M.lookup (F.symbol "prototype", sk) es of
+                  Just (FieldSig _ _ _ pt) -> 
+                      (\(_,t,m) -> (t,m)) <$> getProp γ True f pt
+                  _ -> Nothing
 
 -- Extract member: cannot extract methods
-accessMember False sk s es =
-  case M.lookup (F.symbol s, sk) es of
+accessMember γ False sk f es =
+  case M.lookup (F.symbol f, sk) es of
     Just f@(FieldSig _ _ m t) | optionalField f -> Just (orUndef t,m)
                               | otherwise       -> Just (t,m)
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
            Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
-           _ -> Nothing
+           -- Lookup prototype
+           _ -> case M.lookup (F.symbol "prototype", sk) es of
+                  Just (FieldSig _ _ _ pt) -> 
+                      (\(_,t,m) -> (t,m)) <$> getProp γ False f pt
+                  _ -> Nothing
 
 -------------------------------------------------------------------------------
 lookupAmbientType :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s) 
                   => g r -> Bool -> f -> s -> Maybe (RType r, Mutability)
 -------------------------------------------------------------------------------
 lookupAmbientType γ b fld amb
-  = t_elts <$> resolveTypeInEnv γ nm >>= accessMember b InstanceMember fld
+  = t_elts <$> resolveTypeInEnv γ nm >>= accessMember γ b InstanceMember fld
   where
     nm = mkAbsName [] (F.symbol amb)
 

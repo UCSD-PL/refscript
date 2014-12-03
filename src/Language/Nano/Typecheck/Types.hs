@@ -26,6 +26,9 @@ module Language.Nano.Typecheck.Types (
   -- * Predicates on Types 
   , isTop, isNull, isVoid, isTNum, isUndef, isUnion
 
+  -- * Primitive Types
+  , t_object
+
   -- * Constructing Types
   , mkUnion, mkUnionR, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy, flattenUnions, mkTCons
 
@@ -102,6 +105,14 @@ import           Control.Exception              (throw)
 
 
 type PPR  r = (ExprReftable Int r, PP r, F.Reftable r, Data r)
+
+---------------------------------------------------------------------
+-- | Primitive Types
+---------------------------------------------------------------------
+
+mkPrimTy s m = TRef (QN AK_ (srcPos dummySpan) [] (F.symbol s)) [m] fTop
+
+t_object = mkPrimTy "Object" t_immutable
 
 
 ---------------------------------------------------------------------

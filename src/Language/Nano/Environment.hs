@@ -11,6 +11,7 @@ import           Language.Nano.Types
 import           Language.Nano.Env
 import           Language.Nano.Names
 import           Language.Nano.Program
+import           Language.Fixpoint.Names
 
 -------------------------------------------------------------------------------
 -- | Typecheck Environment
@@ -45,8 +46,12 @@ class EnvLike r t where
   parent          :: t r -> Maybe (t r)
 
 -------------------------------------------------------------------------------
-currentModule :: EnvLike r t => t r -> Maybe (ModuleDef r)
+envLikeFindTy :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-currentModule g = 
-  qenvFindTy (absPath g) (modules g)
+envLikeFindTy x γ = 
+  case envFindTy x $ names γ of 
+    Just (t,_,_) -> Just t
+    Nothing -> case parent γ of 
+                 Just γ' -> envLikeFindTy x γ'
+                 Nothing -> Nothing
 

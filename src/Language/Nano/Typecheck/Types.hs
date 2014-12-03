@@ -24,7 +24,7 @@ module Language.Nano.Typecheck.Types (
   , PPR, ExprReftable(..) 
 
   -- * Predicates on Types 
-  , isTop, isNull, isVoid, isTNum, isUndef, isUnion
+  , isTop, isNull, isVoid, isTNum, isUndef, isUnion, isTString, isTBool
 
   -- * Primitive Types
   , t_object

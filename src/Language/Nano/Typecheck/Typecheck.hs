@@ -23,7 +23,7 @@ import           Data.List                          (nub, find)
 import           Data.Monoid                        (mappend)
 import           Data.Function                      (on)
 import           Data.Generics                   
-import qualified Data.Traversable                   as T
+import qualified Data.Traversable                   as T              
 
 import           Language.Nano.Annots
 import           Language.Nano.CmdLine              (noFailCasts, Config)

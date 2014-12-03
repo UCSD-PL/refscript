@@ -315,16 +315,21 @@ addInvariant :: CGEnv -> RefType -> CGM RefType
 ---------------------------------------------------------------------------------------
 addInvariant g t             
   = do  extraInvariants <- extraInvs <$> cg_opts <$> get
-        if extraInvariants then (keyIn . instanceof . typeof t . invs) <$> get
-                           else (        instanceof . typeof t . invs) <$> get
+        if extraInvariants then (keyIn . instanceof . truthy . typeof t . invs) <$> get
+                           else (        instanceof . truthy . typeof t . invs) <$> get
   where
     -- | typeof 
     typeof t@(TApp tc _ o)  i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup tc i
-    typeof t@(TRef _ _ _) _   = t `strengthen` F.Reft ((vv t,) [F.RConc $ typeofExpr $ F.symbol "object" ])
+    typeof t@(TRef _ _ _) _   = t `strengthen` F.Reft ((vv t,) [ F.RConc $ typeofExpr $ F.symbol "object" ])
     typeof   (TFun a b c _) _ = TFun a b c typeofReft
     typeof t                _ = t
+    -- | Truthy
+    truthy t                  | isTObj t
+                              = t `strengthen` F.Reft ((vv t,) [ F.RConc $ F.eProp $ vv t ])
+                              | otherwise          = t
+
     strengthenOp t o r        | L.elem r (ofRef o) = t
-    strengthenOp t _ r        | otherwise          = strengthen t r
+    strengthenOp t _ r        | otherwise          = t `strengthen` r
     typeofReft                = F.Reft $ (vv t,) [ F.RConc $ typeofExpr $ F.symbol "function"
                                                  , F.RConc $ F.eProp    $ vv t                ]
     typeofExpr s              = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t]) (F.expr $ F.symbolText s)

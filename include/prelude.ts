@@ -837,7 +837,6 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 /*@ qualif CmpZ(v:number): v < 0 */
 /*@ qualif CmpZ(v:number): v <= 0 */
 /*@ qualif CmpZ(v:number): v >  0 */
-/*@ qualif CmpO(v:number): v >  1 */
 /*@ qualif CmpZ(v:number): v >= 0 */
 /*@ qualif CmpZ(v:number): v =  0 */
 /*@ qualif CmpZ(v:number): v != 0 */
@@ -849,7 +848,6 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 
 /*@ qualif Cmp(v:a,x:a): v =  x */
 /*@ qualif Cmp(v:a,x:a): v != x */
-/*@ qualif One(v:number): v = 1 */
 /*  qualif True(v:boolean): (v) */
 /*  qualif False(v:boolean): (not v) */
 /*@ qualif True1(v:boolean): (Prop v) */

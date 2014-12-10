@@ -344,13 +344,15 @@ addInvariant g t
 
     -- | instanceof(v,"C")
     --   
-    --   Only strengthen classes -- not interfaces
+    --   * Only strengthen classes -- not interfaces
+    --
+    --   * Strengthen with parent class constructors as well.
     --
     instanceof t@(TRef c _ _) | isClassType g t 
-                              = t `strengthen` reftIO t (name c)
+                              = t `strengthen` reftIO t (name <$> classAncestors g c)
     instanceof t              = t 
     name (QN AK_ _ _ s)       = s
-    reftIO t c                = F.Reft (vv t, [refaIO t c])
+    reftIO t cs               = F.Reft (vv t, refaIO t <$> cs)
     refaIO t c                = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr $ F.symbolText c]
     vv                        = rTypeValueVar
     sym                       = F.dummyLoc $ F.symbol "instanceof"

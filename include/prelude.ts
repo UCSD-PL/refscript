@@ -526,7 +526,7 @@ interface Boolean { }
  */
  
 
-/*@ measure len :: forall A . (A) => number */
+/*@ measure len :: forall A . (A) => { number | v >= 0 } */
 
 
 /*@ interface Array<M, T> */

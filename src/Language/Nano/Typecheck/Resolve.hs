@@ -16,7 +16,7 @@ module Language.Nano.Typecheck.Resolve (
   , flatten, flatten', flatten'', flattenType
 
   -- * Ancestors
-  , weaken, ancestors, isAncestor
+  , weaken, ancestors, classAncestors, isAncestor
 
   -- * Keys
   , boundKeys
@@ -237,6 +237,17 @@ ancestors γ s = [ t_name l     | cur <- maybeToList (HM.lookup s m)
                                , l   <- maybeToList (lab g anc)]
   where
     ClassHierarchy g m         = cha γ
+
+---------------------------------------------------------------------------
+classAncestors :: (PPR r, EnvLike r g) => g r -> AbsName -> [AbsName]
+---------------------------------------------------------------------------
+classAncestors γ s = [ t_name l | cur <- maybeToList (HM.lookup s m)
+                                , anc <- reachable cur g
+                                , l   <- maybeToList (lab g anc) 
+                                , t_class l == ClassKind ]
+  where
+    ClassHierarchy g m          = cha γ
+
 
 ---------------------------------------------------------------------------
 isAncestor :: (PPR r, EnvLike r g) => g r -> AbsName -> AbsName -> Bool

@@ -36,6 +36,7 @@ declare function isNaN(x:any) : boolean;
     /\ forall A. (arr: #Array[#Immutable,A], {idx: number | (0 <= idx && idx < (len arr))}) => A
     /\ forall A. (arr: #Array[#Mutable, A ], idx: number) => A + undefined
     /\ forall A. (o: {[y: string]: A }, x: { string | keyIn(x,o) }) => A
+    /\ (o: { }, x: { string | keyIn(x,o) }) => top
  */
 declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
 
@@ -107,9 +108,7 @@ declare function builtin_OpSub(a: number, b: number): number;
 declare function builtin_OpMul(a: number, b: number): number;
 
 /*@ builtin_OpDiv :: 
-    (x: number, y: { v: number | v != 0 }) => { v:number | (((x>0 && y>0) => v>0) 
-                                                        && (x=0 <=> v=0) 
-                                                        && ((x>0 && y>1) => v<x) )} 
+    (x: number, y: { v: number | v != 0 }) => {v:number | true}
  */
 declare function builtin_OpDiv(a: number, b: number): number;
 // FIXME: This is not correct. Add definition for: >>
@@ -220,6 +219,7 @@ declare function builtin_OpZfRShift(a: number, b: number): number;
 /*@ builtin_BIForInKeys :: 
     /\ forall A . (a: #Array[#Immutable, A]) => #Array[#Immutable, { v: number | (0 <= v && v < (len a)) }]
     /\ (o: [#Immutable]{ }) => #Array[#Immutable, { v: string | (keyIn(v,o) && enumProp(v,o)) }]
+    /\ forall A . (o: [#Immutable]{[s:string]:A}) => #Array[#Immutable, { v: string | (keyIn(v,o) && enumProp(v,o)) }] //TODO: remove this once {[s:string]:A} extends { }
  */
 declare function builtin_BIForInKeys(obj: Object): string[];
 
@@ -526,6 +526,7 @@ interface Boolean { }
  */
  
 
+//TODO: the refinement is ignored?
 /*@ measure len :: forall A . (A) => { number | v >= 0 } */
 
 
@@ -606,6 +607,7 @@ interface Array<T> {
     reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
     // reduceRight<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
+    // TODO: "&& v >= 0" shouldn't be needed (see measure len)
     /*@ length: { v: number | (v = (len this) && v >= 0) } */
     length: number;
 

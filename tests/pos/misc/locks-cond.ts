@@ -1,5 +1,7 @@
 /*@ qualif Locked(v:number): v != 0   */    
 /*@ qualif Unlocked(v:number): v = 0  */    
+/*@ qualif CmpO(v:number): v >  1 */
+/*@ qualif One(v:number): v = 1 */
 
 // Only one of the two below is needed...
 

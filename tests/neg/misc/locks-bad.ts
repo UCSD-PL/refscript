@@ -1,49 +1,38 @@
-/*@ qualif Locked(v:number): v != 0    */    
-/*@ qualif Unlocked(v:number): v = 0  */    
+/*@ qualif CondLock1(v:number,x:number): v = (if (0 < x) then 1 else 0)  */    
 
-/*@ create :: () => number */
-function create(){
+/*@ create :: () => {number | v = 0} */
+function create():number{
   return 0;
 }
 
-/*@ acquire :: (number) => number */
-function acquire(l){
-  assert(l === 0);
+/*@ acquire :: ({number | v = 0}) => {number | v = 1} */
+function acquire(l:number):number{
   return 1;
 }
 
-/*@ release :: (number) => number */
-function release(l){
-  assert(l != 0);
+/*@ release :: ({number | v != 0}) => {number | v = 0} */
+function release(l:number):number{
   return 0;
 }
 
-/*@ work :: () => void */
-function work(){
-  return;
-}
-
-/*@ loop :: (number, number) => number */
-function loop(n, l) {
-  var flag = random();
-
-  if (n <= 0) {
-    return l;
+/*@ loop :: (n:number, l:{number | v = 0}) => {number | v = 0} */
+function loop(n:number, l:number):number {
+  var flag :number= random();
+  if (0 < n){
+    if (0 < flag){ 
+      l = acquire(l); 
+    }
+    if (0 < flag){ 
+      //l = release(l);
+    }
+    loop(n-1, l);
   }
-
-  l = acquire(l); 
-  work();
- 
-  // l = release(l);
-    
-  return loop(n-1, l);
+  return l;
 }
 
-
-/*@ main :: ({n:number|n > 0}) => void */
-function main(n){
-  var l = create();
-  l = loop(n, l);
-  assert(l === 0);
+/*@ main :: ({n:number|n > 0}) => {void | true} */
+function main(n:number):void{
+  var l:number= create();
+  loop(n, l);
 }
 

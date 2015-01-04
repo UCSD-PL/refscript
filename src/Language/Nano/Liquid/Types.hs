@@ -522,6 +522,11 @@ getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
 --------------------------------------------------------------------------------
 zipType :: IsLocated l => l -> CGEnv -> RefType -> RefType -> Maybe (F.Reft -> RefType, F.Reft)
 --------------------------------------------------------------------------------
+--
+-- Top type in LHS
+--
+zipType _ _ _ t2                | isTop t2 = return (setRTypeR t2, fTop)
+
 -- 
 -- Unions
 --
@@ -600,8 +605,6 @@ zipType l γ t1 t2@(TClass _) = do t2' <- flattenType γ t2
                                   zipType l γ t1 t2'
 
 zipType _ _ (TApp c [] r) (TApp c' [] _) | c == c'  = return (TApp c [], r)
-
-zipType _ _ _ t2                         | isTop t2 = return (setRTypeR t2, fTop)
 
 zipType _ _ (TVar v r) (TVar v' _)       | v == v'  = return (TVar v, r)
 -- 

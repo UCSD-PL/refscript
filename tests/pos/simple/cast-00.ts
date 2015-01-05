@@ -1,15 +1,7 @@
 
 class HTMLElt { }
 
-class HTMLDivElt extends HTMLElt {
-  /*@ new()=>void */
-  constructor() {
-    super();
-  }
-
-  /*@ htmlDivElt__ : number */
-  public htmlDivElt__: number = 0;
-}
+class HTMLDivElt extends HTMLElt { }
 
 /*@ foo :: (elt: { HTMLElt<Immutable> | true } ) => HTMLDivElt<Immutable> */
 function foo(elt: HTMLElt): HTMLDivElt {

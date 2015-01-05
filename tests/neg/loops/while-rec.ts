@@ -1,5 +1,5 @@
 /*@ loop :: (number) => number */
-function loop(x){
+function loop(x : number) : number {
   if (x <= 4) {
     var r = loop(x + 1);
     return r;
@@ -8,7 +8,7 @@ function loop(x){
 }
 
 /*@ main :: () => void */
-function main(){
+function main() : void {
   var x = loop(0);
   assert(x === 6);
 }

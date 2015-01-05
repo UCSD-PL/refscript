@@ -1,8 +1,6 @@
-
-/*@ qualif Length(v:number, x: a): v = (len x) */
-
-/*@ bar :: forall M T. (this: { #Array[M,T] | (len v) = 4 }) => { number | v = (len this) } */
+/*@ bar :: forall M T. (this: { Array<M,T> | (len v) = 4 }) => { number | v = (len this) } */
 function bar () {
+
   return this.length;
 }
 

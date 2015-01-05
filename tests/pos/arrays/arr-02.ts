@@ -1,4 +1,4 @@
-/*@ index :: (a: #Array[#Immutable,number], i: { number| (0 <= v && v < (len a)) }) => number */
-function index(a : number [], i  : number) : number {
+/*@ index :: (a: IArray<number>, i: {number|(0 <= v && v < (len a))}) => number */
+function index(a:number[], i:number) : number {
   return a[i];
 }

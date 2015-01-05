@@ -1,7 +1,4 @@
-
-/*@ qualif One(v:number)             : (len v) > 0    */
-
-/*@ foo :: (#Array[#Immutable,number]) => number */
+/*@ foo :: (IArray<number>) => number */
 function foo(a) {  
   return a[0];
 }

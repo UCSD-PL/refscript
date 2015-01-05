@@ -1,9 +1,9 @@
-/*@ foo :: ({ #Array[#Immutable,number] | (len v) >= 1 } ) => number */
+/*@ foo :: ({ IArray<number> | (len v) >= 10 } ) => number */
 function foo(a:number []) : number {
-  return a[0];
+  return a[9];
 }
 
-/*@ bar :: (a:#Array[#Immutable,number], i:{number | 0 <= i && i+1 < len a}) => number */
+/*@ bar :: (a:IArray<number>, i:{number | 0 <= i && i+1 < len a}) => number */
 function bar(a:number [], i:number) : number {
   return a[i+1];
 }

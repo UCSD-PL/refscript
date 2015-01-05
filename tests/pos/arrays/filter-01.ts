@@ -1,5 +1,5 @@
 
-/*@ is_num :: (x:number + undefined) => boolean */
+/*@ is_num :: (x:number + undefined) => {boolean | true} */
 function is_num(x:any) {
     return !isNaN(x);
 }

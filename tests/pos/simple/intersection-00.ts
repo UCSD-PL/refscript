@@ -1,10 +1,10 @@
 
-/*@ foo :: ([#Immutable]{ f: ({ string | v = "aaa"})=>string })=>void */
+/*@ foo :: ([Immutable]{ f: ({ string | v = "aaa"})=>string })=>void */
 function foo(f: { f: any }) {
 
 }
 
-/*@ x :: [#Immutable]
+/*@ x :: [Immutable]
          {  f: /\ ({ string | v = "aaa"})=>string
                /\ ({ number | v > 0    })=>number 
          } */

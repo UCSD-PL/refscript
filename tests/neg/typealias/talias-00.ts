@@ -1,5 +1,5 @@
-/*@ alias nat = {number | 1000 <= v } */
+/*@ alias Nat = {v: number | 1000 <= v } */
 
-/*@ z :: #nat */
+/*@ z :: #Nat */
 var z = 12;
 

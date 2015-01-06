@@ -1,8 +1,3 @@
-/*@ qualif Add(v:number): v = 0 */
-/*@ qualif Add(v:number): v = 1 */
-/*@ qualif Add(v:number): v = 2 */
-/*@ qualif Add(v:number,x:number,y:number): v = x + y */
-/*@ qualif Sub(v:number,x:number,y:number): v = x - y */
 
 enum Operator {
   ADD,

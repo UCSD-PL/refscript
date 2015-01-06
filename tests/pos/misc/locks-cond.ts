@@ -1,21 +1,29 @@
-/*@ qualif CondLock1(v:number,x:number): v = (if (0 < x) then 1 else 0)  */    
+/*@ qualif Locked(v:number): v != 0   */    
+/*@ qualif Unlocked(v:number): v = 0  */    
 
-/*@ create :: () => {number | v = 0} */
+// Only one of the two below is needed...
+
+/*@ qualif CondLock1(v:number,x:number): v = (if (0 < x) then 1 else 0)  */    
+/*@ qualif CondLock2(v:number,x:number): ((0 < x) <=> (v = 0))  */    
+
+/*@ create :: () => number */
 function create():number{
   return 0;
 }
 
-/*@ acquire :: ({number | v = 0}) => {number | v = 1} */
+/*@ acquire :: (number) => number */
 function acquire(l:number):number{
+  assert(l === 0);
   return 1;
 }
 
-/*@ release :: ({number | v != 0}) => {number | v = 0} */
+/*@ release :: (number) => number */
 function release(l:number):number{
+  assert(l != 0);
   return 0;
 }
 
-/*@ loop :: (n:number, l:{number | v = 0}) => {number | v = 0} */
+/*@ loop :: (number, number) => number */
 function loop(n:number, l:number):number {
 	var flag :number= random();
 	if (0 < n){
@@ -30,9 +38,11 @@ function loop(n:number, l:number):number {
 	return l;
 }
 
-/*@ main :: ({n:number|n > 0}) => {void | true} */
+/*@ main :: ({n:number|n > 0}) => void */
 function main(n:number):void{
+	var flag :number= random();
 	var l:number= create();
 	loop(n, l);
+	assert(l === 0);
 }
 

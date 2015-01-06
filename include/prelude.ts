@@ -4,13 +4,13 @@
  *
  ************************************************************************/
 
-/*@ crash :: forall A. () => {A | true} */
+/*@ crash :: forall A. () => A */
 declare function crash(): any; 
 
 /*@ assume :: (x:boolean) => {v:void | Prop x} */
 declare function assume(x: boolean): void;
 
-/*@ assert :: forall A . ({x:A|(Prop x)}) => {void | true} */
+/*@ assert :: forall A . ({x:A|(Prop x)}) => void */
 declare function assert<A>(x: A): void;
 
 /*@ random :: () => {v:number | true} */

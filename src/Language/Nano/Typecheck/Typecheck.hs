@@ -775,7 +775,8 @@ tcCast γ l e tc
   = do  opTy                <- safeTcEnvFindTy l γ (builtinOpId BICastExpr)
         cid                 <- freshId l
         let γ'               = tcEnvAdd (F.symbol cid) (tc, WriteLocal, Initialized) γ
-        (FI _ [_, e'], t')  <- tcNormalCall γ' l "user-cast" (FI Nothing [(VarRef l cid, Nothing),(e, Just tc)]) opTy
+        (FI _ [_, e'], t')  <- tcNormalCall γ' l "user-cast" 
+                               (FI Nothing [(VarRef l cid, Nothing),(e, Just tc)]) opTy
         return               $ (e', t')
 
 

@@ -29,7 +29,7 @@ import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Interface        (solve)
 
-import           Language.Nano.Misc                 (mseq, withSingleton)
+import           Language.Nano.Misc                 (mseq)
 import           Language.Nano.Annots
 import           Language.Nano.CmdLine              (Config)
 import           Language.Nano.Errors
@@ -518,9 +518,9 @@ consExpr g (Cast_ l e) _ =
 
 -- | < t > e
 consExpr g ex@(Cast l e) _ =
-  withSingleton (consCast g l e)
-                (die $  bugNoCasts (srcPos l) ex) 
-                [ ct | UserCast ct <- ann_fact l ]
+  case [ ct | UserCast ct <- ann_fact l ] of 
+    [t] -> consCast g l e t
+    _   -> die $ bugNoCasts (srcPos l) ex
 
 consExpr g (IntLit l i) _
   = Just <$> envAddFresh l (tInt `eSingleton` i `bitVector` i, WriteLocal, Initialized) g
@@ -712,9 +712,10 @@ consCast g l e tc
   = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
         tc'     <- freshTyFun g l (rType tc)
         (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tc', WriteLocal, Initialized) g
-        consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e, Just tc')]) opTy >>= \case
-          Just (o,g'') -> return  $ (Just (o, g''))
-          Nothing      -> cgError $ errorUserCast (srcPos l) tc e 
+--         consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e, Just tc')]) opTy >>= \case
+--           Just (o,g'') -> return  $ (Just (o, g''))
+--           Nothing      -> cgError $ errorUserCast (srcPos l) tc e 
+        consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e, Just tc')]) opTy 
                       
 -- | Dead code 
 --   Only prove the top-level false.
@@ -832,8 +833,9 @@ instantiateTy l g i t = freshTyInst l g αs ts t'
       ts              = envGetContextTypArgs i g l αs
 
 ---------------------------------------------------------------------------------
-instantiateFTy :: (PP a, PPRS F.Reft) => 
-  AnnTypeR -> CGEnv -> a -> RefType -> CGM  ([TVar], FuncInputs (Bind F.Reft), RefType)
+instantiateFTy :: (PP a, PPRS F.Reft) 
+               => AnnTypeR -> CGEnv -> a -> RefType 
+               -> CGM  ([TVar], FuncInputs (Bind F.Reft), RefType)
 ---------------------------------------------------------------------------------
 instantiateFTy l g fn ft 
   = do  t'   <- freshTyInst l g αs ts t
@@ -845,16 +847,17 @@ instantiateFTy l g fn ft
 
 -----------------------------------------------------------------------------------
 consScan :: (CGEnv -> a -> b -> CGM (Maybe (c, CGEnv))) -> CGEnv -> FuncInputs (a,b) 
-            -> CGM (Maybe (FuncInputs c, CGEnv))
+         -> CGM (Maybe (FuncInputs c, CGEnv))
 -----------------------------------------------------------------------------------
 consScan f g (FI (Just x) xs)
   = do  z  <- (uncurry $ f g) x 
         case z of
-          Just (x', g') -> do zs  <- fmap (mapFst reverse) <$> consFold step ([], g') xs
-                              case zs of
-                                Just (xs', g'') -> return $ Just (FI (Just x') xs', g'')
-                                _               -> return $ Nothing
-          _             -> return Nothing
+          Just (x', g') -> 
+              do zs  <- fmap (mapFst reverse) <$> consFold step ([], g') xs
+                 case zs of
+                   Just (xs', g'') -> return $ Just (FI (Just x') xs', g'')
+                   _               -> return $ Nothing
+          _ -> return Nothing
   where
     step (ys, g) (x,y) = fmap (mapFst (:ys))   <$> f g x y
 

@@ -52,7 +52,8 @@ module Language.Nano.Typecheck.Types (
 
   -- * Element ops 
   , sameBinder, eltType, allEltType, nonConstrElt, {- mutability,-} baseType
-  , isMethodSig, isFieldSig, setThisBinding, remThisBinding, mapElt, mapElt', mapEltM
+  , isMethodSig, isFieldSig, fieldSigs, isStringIndexer, hasStringIndexer, getStringIndexer
+  , setThisBinding, remThisBinding, mapElt, mapElt', mapEltM
   , requiredField, optionalField, f_optional, f_required, optionalFieldType, requiredFieldType
   , f_requiredR, f_optionalR
 
@@ -79,7 +80,7 @@ import           Data.Hashable
 import qualified Data.IntMap                     as I
 import           Data.Either                    (partitionEithers)
 import qualified Data.List                      as L
-import           Data.Maybe                     (fromMaybe, maybeToList)
+import           Data.Maybe                     (fromMaybe, maybeToList, isJust, fromJust)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.Map.Strict                as M
 import           Data.Typeable                  ()
@@ -453,6 +454,14 @@ isMethodSig _         = False
 
 isFieldSig FieldSig{} = True
 isFieldSig _          = False
+
+fieldSigs es          = [ e | e@FieldSig{} <- es ]
+
+hasStringIndexer      = isJust   . L.find isStringIndexer
+getStringIndexer      = fromJust . L.find isStringIndexer
+
+isStringIndexer (IndexSig _ i _) = i == StringIndex
+isStringIndexer _                = False
 
 optionalFieldType (TRef (QN _ _ [] s) _ _) = s == F.symbol "OptionalField"
 optionalFieldType _                        = False

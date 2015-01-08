@@ -712,9 +712,6 @@ consCast g l e tc
   = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
         tc'     <- freshTyFun g l (rType tc)
         (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tc', WriteLocal, Initialized) g
---         consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e, Just tc')]) opTy >>= \case
---           Just (o,g'') -> return  $ (Just (o, g''))
---           Nothing      -> cgError $ errorUserCast (srcPos l) tc e 
         consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e, Just tc')]) opTy 
                       
 -- | Dead code 

@@ -40,13 +40,8 @@ import           Language.Nano.Errors
 
 -- import           Debug.Trace                      (trace)
 
-
--- Got these from Resolve.hs
-absolutePathInEnv = error "Typecgeck.Sub.absolutePathInEnv"
-
 instance PP a => PP (S.HashSet a) where
   pp = pp . S.toList 
-
 
 --------------------------------------------------------------------------------
 isSubtype :: (PPR r, Functor g, EnvLike () g) => g r -> RType r -> RType r -> Bool
@@ -113,9 +108,9 @@ convertObj l γ t1 t2
   = Left $ errorObjectType l t1 t2
 
 convertObj l γ t1@(TCons μ1 e1s _) t2@(TCons μ2 e2s _)
-  | mutabilitySub && isImmutable μ2         = covariantConvertObj l γ (μ1,e1s) (μ2,e2s)
-  | mutabilitySub                           = invariantConvertObj l γ (μ1,e1s) (μ2,e2s)
-  | otherwise                               = Left $ errorIncompMutTy l t1 t2
+  | mutabilitySub && isImmutable μ2 = covariantConvertObj l γ (μ1,e1s) (μ2,e2s)
+  | mutabilitySub                   = invariantConvertObj l γ (μ1,e1s) (μ2,e2s)
+  | otherwise                       = Left $ errorIncompMutTy l t1 t2
   where
       mutabilitySub = isSubtype γ μ1 μ2
 
@@ -182,13 +177,14 @@ convertObj l γ t1 t2 =
     (_       , Nothing ) -> Left $ errorUnresolvedType l t2
 
 
-
 covariantConvertObj l γ (μ1,e1s) (μ2,e2s)
   | M.null uq1s && M.null uq2s = mconcat           <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn'}
   |                M.null uq2s = mconcat . (CDUp:) <$> subEs  -- {x1:t1,..,xn:tn,..,xm:tm} ?? {x1:t1',..,xn:tn'}
   | M.null uq1s                = mconcat . (CDDn:) <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn',..,xm:tm'}
-  | otherwise                  = Left $ errorIncompatFields l e1s e2s
+  | hasStringIndexer l2s       = mconcat . (CDUp:) <$> subStringIndexer
+  | otherwise                  = Left $ errorIncompatCovFields l e1s e2s
   where
+    l2s                        = M.elems e2s
     e1s'                       = (M.map (combMutInField μ1) . M.filter subtypeable) e1s
     e2s'                       = (M.map (combMutInField μ2) . M.filter subtypeable) e2s
     -- Optional fields should not take part in width subtyping
@@ -201,6 +197,9 @@ covariantConvertObj l γ (μ1,e1s) (μ2,e2s)
     uq2s                       = e2s'' `M.difference` e1s'' 
     -- Pairs of equivalent type-members in `e1s` and `e2s`
     es                         = M.elems $ M.intersectionWith (,) e1s' e2s'
+    -- String Indexer -- checks all field elements 
+    subStringIndexer           = mapM convStrIdx (fieldSigs $ M.elems e1s)
+    convStrIdx e1              = convertStringIndexer l γ True e1 (getStringIndexer l2s)
 
 -- | `invariantConvertObj l γ e1s e2s` determines if an object type containing
 --   members @e1s@ can be converted (used as) an object type with members @e2s@. 
@@ -208,9 +207,12 @@ covariantConvertObj l γ (μ1,e1s) (μ2,e2s)
 invariantConvertObj l γ (μ1,e1s) (μ2,e2s)
   | M.null uq1s && M.null uq2s = mconcat           <$> subEs  -- {x1:t1,..,xn:tn}          == {x1:t1',..,xn:tn'}
   |                M.null uq2s = mconcat . (CDUp:) <$> subEs  -- {x1:t1,..,xn:tn,..,xm:tm} UP {x1:t1',..,xn:tn'}
+  -- FIXME: Add case for string indexer
+  | hasStringIndexer l2s       = mconcat . (CDUp:) <$> subStringIndexer
   -- {x1:t1,..,xn:tn, y1:...} DD {x1:t1',..,xn:tn',..,xm:tm'} 
-  | otherwise                  = Left $ errorIncompatFields l e1s e2s
+  | otherwise                  = Left $ errorIncompatInvFields l e1s e2s
   where
+    l2s                        = M.elems e2s
     e1s'                       = (M.map (combMutInField μ1) . M.filter subtypeable) e1s
     e2s'                       = (M.map (combMutInField μ2) . M.filter subtypeable) e2s
     -- Optional fields should not take part in width subtyping
@@ -224,6 +226,9 @@ invariantConvertObj l γ (μ1,e1s) (μ2,e2s)
     uq2s                       = e2s'' `M.difference` e1s'' 
     -- Pairs of equivalent type-members in `e1s` and `e2s`
     es                         = M.elems $ M.intersectionWith (,) e1s' e2s'
+    -- String Indexer -- checks all field elements 
+    subStringIndexer           = mapM convStrIdx (fieldSigs $ M.elems e1s)
+    convStrIdx e1              = convertStringIndexer l γ False e1 (getStringIndexer l2s)
 
 
 -- | `convertElt l γ mut e1 e2` performs a subtyping check between elements @e1@ and
@@ -264,6 +269,14 @@ convertElt l γ _ (IndexSig _ _ t1) (IndexSig _ _ t2)
 
 -- | otherwise fail
 convertElt l _ _ f1 f2 = Left $ bugEltSubt (srcPos l) f1 f2
+
+
+convertStringIndexer l γ True e1 e2 
+  = convert' l γ (eltType e1) (eltType e2) 
+convertStringIndexer l γ False e1 e2 
+  = liftM2 mappend (convert' l γ (eltType e1) (eltType e2)) 
+                   (convert' l γ (eltType e2) (eltType e1))
+
 
 -- | `convertFun`
 --  
@@ -315,10 +328,8 @@ convertTClass l _ c1 c2 | c1 == c2  = Right CDNo
 convertTModule :: (Functor g, EnvLike () g)
               => SourceSpan -> g () -> AbsPath -> AbsPath -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertTModule l γ c1 c2 = 
-  case (absolutePathInEnv γ c1, absolutePathInEnv γ c2) of
-    (Just _, Just _) -> Right CDNo
-    _                -> Left $ errorTModule l c1 c2
+convertTModule l _ c1 c2 | c1 == c2  = Right CDNo
+                         | otherwise = Left $ errorTModule l c1 c2
 
 -- | `convertTEnum`
 --------------------------------------------------------------------------------
@@ -346,10 +357,8 @@ convertUnion _ γ t1 t2
   | downcast  = Right CDDn
   | otherwise = Right CDDead
   where 
-    upcast        =  -- ltracePP l ("UPCAST " ++ ppshow t1 ++ " VS " ++ ppshow t2) $ 
-                    all (\t1 -> any (\t2 -> isSubtype γ t1 t2) t2s) t1s
-    downcast      = -- ltracePP l ("DOWNCAST " ++ ppshow t1 ++ " VS " ++ ppshow t2) $ 
-                    any (\t1 -> any (\t2 -> isConvertible γ t1 t2) t2s) t1s 
+    upcast        = all (\t1 -> any (\t2 -> isSubtype     γ t1 t2) t2s) t1s
+    downcast      = any (\t1 -> any (\t2 -> isConvertible γ t1 t2) t2s) t1s 
     (t1s, t2s)    = chk $ mapPair bkUnion (t1, t2)
     chk ([ ],[ ]) = errorstar "unionParts', called on too small input"
     chk ([_],[ ]) = errorstar "unionParts', called on too small input"

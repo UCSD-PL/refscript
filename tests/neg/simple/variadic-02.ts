@@ -1,7 +1,4 @@
-
-/*@ qualif Length(v:number, x: a): v = (len x) */
-
-/*@ bar :: (this: #Array[#Mutable,number]) => number */
+/*@ bar :: (this: Array<Mutable,number>) => number */
 function bar () {
   this.push(1);
   return this.length;

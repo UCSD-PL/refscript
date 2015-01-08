@@ -1,12 +1,10 @@
 
-/*@ foo :: (x:number) => #Array[#Immutable,{number|v=x}]  */
-function foo(x) {
+/*@ foo :: (x:number) => IArray<{ number | v = x }>  */
+function foo(x : number) : number[] {
   return [x];
 }
 
-/*@ bar :: (cat:number) => #Array[#Immutable,{number|v>cat}]  */
-function bar(y) {
+/*@ bar :: (y:number) => IArray<{ number | v > y }>  */
+function bar(y : number) : number[] {
   return foo(y);
 }
-
-bar(10);

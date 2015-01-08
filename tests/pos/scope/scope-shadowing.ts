@@ -1,6 +1,4 @@
-
-
-/*@ foo :: () => {number | v = 4 } */
+/*@ foo :: () => { number | v = 4 } */
 function foo() {
 
   var u = 1;

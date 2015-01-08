@@ -33,26 +33,27 @@ declare function isNaN(x:any) : boolean;
  ************************************************************************/
 
 /*@ builtin_BIBracketRef ::
-    /\ forall A. (arr: #Array[#Immutable,A], {idx: number | (0 <= idx && idx < (len arr))}) => A
-    /\ forall A. (arr: #Array[#Mutable, A ], idx: number) => A + undefined
-    /\ forall A. (o: {[y: string]: A }, x: { string | keyIn(x,o) }) => A
+    /\ forall A. (arr: Array<Immutable,A>, {idx: number | (0 <= idx && idx < (len arr))}) => {A | true}
+    /\ forall A. (arr: Array<Mutable, A >, idx: number) => {A + undefined | true}
+    /\ forall A. (o: {[y: string]: A }, x: { string | keyIn(x,o) }) => {A | true}
+    /\ (o: { }, x: { string | keyIn(x,o) }) => {top | true}
  */
 declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
 
 /*@ builtin_BIBracketAssign :: 
-    /\ forall A. (arr: #Array[#Immutable, A], {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
-    /\ forall A. (arr: #Array[#ReadOnly , A], idx:number, val: A) => void
-    /\ forall A M. ([#Mutable]{[y: string]: A }, x:string, val: A) => void
+    /\ forall A. (arr: Array<Immutable, A>, {idx:number | (0 <= idx && idx < (len arr))}, val: A) => {void | true}
+    /\ forall A. (arr: Array<ReadOnly , A>, idx:number, val: A) => {void | true}
+    /\ forall A M. ([Mutable]{[y: string]: A }, x:string, val: A) => {void | true}
  */
 declare function builtin_BIBracketAssign<A>(arr: A[], n: number, v: A): void;
 
 /*@ builtin_BISetProp :: 
-    forall A M. ([M] { f ? : [#Mutable] A }, A) => A 
+    forall A M. ([M] { f ? : [Mutable] A }, A) => {A | true}
  */
 declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
 /*@ builtin_BIArrayLit :: 
-    forall M A. (A) => {v: #Array[M,A] | [ (len v) = builtin_BINumArgs; not (null v) ] } 
+    forall M A. (A) => {v: Array<M,A> | [ (len v) = builtin_BINumArgs; not (null v) ] }
  */
 declare function builtin_BIArrayLit<A>(a: A): A[];
 
@@ -68,51 +69,49 @@ declare function builtin_BICastExpr<T>(c: T, x: T): T;
 
 /*@ builtin_OpLT :: 
     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
-    /\ forall T. (x:T, y:T) => boolean
+    /\ forall T. (x:T, y:T) => {boolean | true}
  */
 declare function builtin_OpLT(a: any, b: any): boolean;
 
 /*@ builtin_OpLEq :: 
     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <= y)) }
-    /\ forall T. (x:T, y:T) => boolean
+    /\ forall T. (x:T, y:T) => {boolean | true}
  */
 declare function builtin_OpLEq(a: any, b: any): boolean;
 
 /*@ builtin_OpGT :: 
     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >  y)) }
-    /\ forall T. (x:T, y:T) => boolean
+    /\ forall T. (x:T, y:T) => {boolean | true}
  */
 declare function builtin_OpGT(a: any, b: any): boolean;
 
 /*@ builtin_OpGEq ::
     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >= y)) }
-    /\ forall T. (x:T, y:T) => boolean
+    /\ forall T. (x:T, y:T) => {boolean | true}
  */
 declare function builtin_OpGEq(a: any, b: any): boolean;
 
 /*@ builtin_OpAdd :: 
     /\ (x:number, y:number) => {number | v = x + y}
-    /\ (x:number, y:string) => string
-    /\ (x:string, y:number) => string
-    /\ (x:string, y:string) => string
-    /\ (x:string, y:boolean) => string
-    /\ (x:boolean, y:string) => string
-    /\ (x:{top|false}, y:{top|false}) => number + string
+    /\ (x:number, y:string) => {string | true}
+    /\ (x:string, y:number) => {string | true}
+    /\ (x:string, y:string) => {string | true}
+    /\ (x:string, y:boolean) => {string | true}
+    /\ (x:boolean, y:string) => {string | true}
+    /\ (x:{top|false}, y:{top|false}) => {number + string | true}
  */
 declare function builtin_OpAdd(a: any, b: any): any;
 // FIXME: what is the last line useful for?
 
 /*@ builtin_OpSub :: 
-    ({x:number | true}, {y:number | true})  => {v:number | v ~~ x - y} 
+    (x:number, y:number)  => {v:number | v ~~ x - y}
 */
 declare function builtin_OpSub(a: number, b: number): number;
 
 declare function builtin_OpMul(a: number, b: number): number;
 
 /*@ builtin_OpDiv :: 
-    (x: number, y: { v: number | v != 0 }) => { v:number | (((x>0 && y>0) => v>0) 
-                                                        && (x=0 <=> v=0) 
-                                                        && ((x>0 && y>1) => v<x) )} 
+    (x: number, {y: number | y != 0}) => {v:number | (x > 0 && y > 1) => (0 <= v && v < x)}
  */
 declare function builtin_OpDiv(a: number, b: number): number;
 // FIXME: This is not correct. Add definition for: >>
@@ -120,12 +119,12 @@ declare function builtin_OpDiv(a: number, b: number): number;
 declare function builtin_OpMod(a: number, b: number): number;
 
 /*@ builtin_PrefixPlus ::
-    ({x:number  | true}) => {v:number  | v ~~ x}
+    (x:number) => {v:number  | v ~~ x}
  */
 declare function builtin_PrefixPlus(a: number): number;
 
 /*@ builtin_PrefixMinus :: 
-    ({x:number  | true}) => {v:number  | v ~~ (0 - x)} 
+    (x:number) => {v:number  | v ~~ (0 - x)}
  */
 declare function builtin_PrefixMinus(a: number): number;
 
@@ -161,8 +160,8 @@ declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
 declare function builtin_OpLAnd(x: any, y: any): any;
       
 /*@ builtin_OpLOr :: 
-    /\ forall A. (x: undefined, y:A) => A
-    /\ forall A. (x: null, y:A) => A
+    /\ forall A. (x: undefined, y:A) => {A | true}
+    /\ forall A. (x: null, y:A) => {A | true}
     /\ forall A. (x:A, y:A) => { v:A | ((Prop v) => (v ~~ y) && (not (Prop v) => (v ~~ x))) } 
     /\ forall A B. (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) || Prop(y))) }
  */
@@ -221,9 +220,11 @@ declare function builtin_OpZfRShift(a: number, b: number): number;
  */
 
 /*@ builtin_BIForInKeys :: 
-    /\ forall A . (a: #Array[#Immutable, A]) => #Array[#Immutable, { v: number | (0 <= v && v < (len a)) }]
-    /\ (o: [#Immutable]{ }) => #Array[#Immutable, { v: string | (keyIn(v,o) && enumProp(v,o)) }]
+    /\ forall A . (a: IArray<A>) => {IArray<{ v: number | (0 <= v && v < (len a)) }> | true}
+    /\ (o: [Immutable]{ }) => {IArray<{ v: string | (keyIn(v,o) && enumProp(v,o)) }> | true}
+    /\ forall A . (o: [Immutable]{[s:string]:A}) => {IArray<{ v: string | (keyIn(v,o) && enumProp(v,o)) }> | true}
  */
+//TODO: remove the last overload once {[s:string]:A} extends { }
 declare function builtin_BIForInKeys(obj: Object): string[];
 
 
@@ -529,6 +530,7 @@ interface Boolean { }
  */
  
 
+//TODO: the refinement is ignored?
 /*@ measure len :: forall A . (A) => { number | v >= 0 } */
 
 
@@ -540,8 +542,8 @@ interface Array<T> {
     toLocaleString(): string;
 
     /*@ concat: 
-        /\ forall M0 . (this: #Array[#Immutable,T], items: #Array[#Immutable,T]): { #Array[M0,T] | (len v) = (len this) + (len items) }
-        /\ forall M0 M1 M2 . (this: M0, items: #Array[M1,T]): #Array[M2,T]
+        /\ forall M0 . (this: Array<Immutable,T>, items: Array<Immutable,T>): { Array<M0,T> | (len v) = (len this) + (len items) }
+        /\ forall M0 M1 M2 . (this: M0, items: Array<M1,T>): {Array<M2,T> | true}
     */
     concat<U extends T[]>(...items: U[]): T[];
 
@@ -549,18 +551,18 @@ interface Array<T> {
   
     join(separator?: string): string;
 
-    /*@ pop: (this: #Array[#Mutable, T]): T */
+    /*@ pop: (this: Array<Mutable, T>): {T | true} */
     pop(): T;
 
-    /*@ push: (this: #Array[#Mutable,T], items: T): number */
+    /*@ push: (this: Array<Mutable,T>, items: T): {number | true} */
     push(T): number;								// push(...items: T[]): number;
 
-    /*@ reverse: (this: #Array[M,T]): #Array[M,T] */
+    /*@ reverse: (): {Array<M,T> | true} */
     reverse(): T[];
 
     shift(): T;
 
-    /*@ slice: forall N . (this: #Array[M,T], start: number, start: number): #Array[N,T] */
+    /*@ slice: forall N . (start: number, start: number): {Array<N,T> | true} */
     slice(start/*?*/: number, end/*?*/: number): T[];
 
     /*@ sort : 
@@ -585,30 +587,32 @@ interface Array<T> {
 
     forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void;
 
-    /*@ map : forall U. (callbackfn: (value: T) => U) => { IArray<U> | true} */
+    /*@ map : forall U. (callbackfn: (value: T) => U) => {IArray<U> | true} */
     map<U>(callbackfn: (value: T) => U): U[];
     
-    /*@ map : forall U. (callbackfn:(value: T, index: number) => U)=> { IArray<U> | true} */
+    /*@ map : forall U. (callbackfn:(value: T, index: number) => U)=> {IArray<U> | true} */
     map<U>(callbackfn: (value: T, index: number) => U): U[];
     
-    /*@ map : forall U. (callbackfn:(value: T, index: number, array: IArray<T>) => U) => { IArray<U> | true } */
+    /*@ map : forall U. (callbackfn:(value: T, index: number, array: IArray<T>) => U) => {IArray<U> | true} */
     map<U>(callbackfn: (value: T, index: number, array: T[]) => U): U[];
 
     /*@ filter : 
-        /\ forall N . (callbackfn: (value: T) => boolean) => { Array[N, T] | true }
-        /\ forall N . (callbackfn: (value: T, index: number) => boolean) => { Array[N, T] | true }
-        /\ forall N . (callbackfn: (value: T, index: number, array: IArray<T>) => boolean) => { Array[N, T] | true } */
+        /\ forall N . (callbackfn: (value: T) => boolean) => {Array<N, T> | true}
+        /\ forall N . (callbackfn: (value: T, index: number) => boolean) => {Array<N, T> | true}
+        /\ forall N . (callbackfn: (value: T, index: number, array: IArray<T>) => boolean) => {Array<N, T> | true} */
     filter(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): T[];
 
 
     // reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
 
-    /*@ reduce : forall U . (this: Array<Immutable, T>, callback: (x: U, y: T, n: {number | 0 <= v && v < len this}) => U, init: U) => U */
+    //TODO why does callbackfn have 4 args in the typescript annotation but only 3 in the refscript?
+    /*@ reduce : forall U . (this: IArray<T>, callback: (x: U, y: T, n: {number | 0 <= v && v < len this}) => U, init: U) => {U | true} */
     reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
     reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
     // reduceRight<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
+    // TODO: "&& v >= 0" shouldn't be needed (see measure len)
     /*@ length: { v: number | (v = (len this) && v >= 0) } */
     length: number;
 
@@ -617,16 +621,16 @@ interface Array<T> {
 
 declare var Array: {
 
-    /*@ forall M T . () => { v: #Array[M, T] | [ (len v) = 0; (not (null v))] } */
+    /*@ forall M T . () => { v: Array<M, T> | [ (len v) = 0; (not (null v))] } */
     (): any[];
 
-    /*@ forall M T. (arrayLength: number) => { v: #Array[M, T] | [ (len v) = arrayLength; (not (null v))] } */
+    /*@ forall M T. (arrayLength: number) => { v: Array<M, T> | [ (len v) = arrayLength; (not (null v))] } */
     <T>(arrayLength: number): T[];
 
-    /*@ new forall M T . () => { v: #Array[M, T] | [ (len v) = 0; (not (null v))] } */
+    /*@ new forall M T . () => { v: Array<M, T> | [ (len v) = 0; (not (null v))] } */
     new (): any[];
 
-    /*@ new forall M T. (arrayLength: number) => { v: #Array[M, T] | [ (len v) = arrayLength; (not (null v))] } */
+    /*@ new forall M T. (arrayLength: number) => { v: Array<M, T> | [ (len v) = arrayLength; (not (null v))] } */
     new <T>(arrayLength: number): T[];
 
     // new <T>(...items: T[]): T[];
@@ -635,8 +639,8 @@ declare var Array: {
     // <T>(...items: T[]): T[];
 
     /*@ isArray: 
-        /\ forall M T. (arg: #Array[M,T]): { v: boolean | Prop(v) }
-        /\ forall A . (arg: A): boolean
+        /\ forall M T. (arg: Array<M,T>): { v: boolean | Prop(v) }
+        /\ forall A . (arg: A): {boolean | true}
     */
     isArray(arg: any): boolean;
 
@@ -810,7 +814,7 @@ declare function builtin_OpInstanceof<A>(x: A, s: string): boolean;
  */
 
 /*@ builtin_OpIn :: 
-    /\ forall A . (i: number, a: #Array[#Immutable,A]) => { v: boolean | ((Prop v) <=> (0 <= i && i < (len a))) }
+    /\ forall A . (i: number, a: IArray<A>) => { v: boolean | ((Prop v) <=> (0 <= i && i < (len a))) }
     /\ (s: string, o: { }) => { v: boolean | ((Prop v) <=> keyIn(s,o)) } 
  */
 declare function builtin_OpIn(s: string, obj: Object): boolean;

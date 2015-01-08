@@ -1,7 +1,8 @@
-/*@ alias nat = { number | 10 <= v } */
 
-/*@ ab :: (number) => #nat */
-function ab(x){
+/*@ alias Nat = {v: number | 10 <= v } */
+
+/*@ ab :: (number) => #Nat */
+function ab(x:number): number {
   if (x > 0){
     return x;
   }

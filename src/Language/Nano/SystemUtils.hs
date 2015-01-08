@@ -215,7 +215,7 @@ ins r c x (Asc m)   = Asc (M.insert r (Asc (M.insert c x rm)) m)
 
 
 toVim :: AnnMap -> String
-toVim (AnnMap _ ty _) = unwords $ L.intersperse "\n" $ ss <$> lines
+toVim (AnnMap _ ty _) = mconcat $ L.intersperse "\n" $ ss <$> lines
   where
     lines = map binder1 $ M.toList ty 
     ss (l1,c1, l2, c2, _,s) = show l1 ++ ":" 
@@ -223,5 +223,4 @@ toVim (AnnMap _ ty _) = unwords $ L.intersperse "\n" $ ss <$> lines
                            ++ show l2 ++ ":" 
                            ++ show c2 ++ "::" 
                            ++ show s
-
 

@@ -61,6 +61,9 @@ declare function builtin_BIArrayLit<A>(a: A): A[];
  */
 declare function builtin_BICondExpr<C, T>(c: C, t: T, x: T, y: T): T;
 
+/*@ builtin_BICastExpr :: 
+    forall T . (c: T, x: T) => { v: T | v ~~ x }
+ */
 declare function builtin_BICastExpr<T>(c: T, x: T): T;
 
 /*@ builtin_OpLT :: 

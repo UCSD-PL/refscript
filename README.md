@@ -29,7 +29,7 @@ install a newer version from the following PPA:
 
 Suppose you want to work in a directory `$ROOT`. First `cd $ROOT`, and then:
 
-    git clone https://github.com/panagosg7/liquid-fixpoint
+    git clone https://github.com/ucsd-progsys/liquid-fixpoint
     git clone https://github.com/UCSD-PL/language-ecmascript
     cd RefScript && git checkout RefScript && cd ..
     git clone https://github.com/UCSD-PL/RefScript

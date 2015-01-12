@@ -31,7 +31,7 @@ Suppose you want to work in a directory `$ROOT`. First `cd $ROOT`, and then:
 
     git clone https://github.com/ucsd-progsys/liquid-fixpoint
     git clone https://github.com/UCSD-PL/language-ecmascript
-    cd RefScript && git checkout RefScript && cd ..
+    cd language-ecmascript && git checkout RefScript && cd ..
     git clone https://github.com/UCSD-PL/RefScript
     cd RefScript && git checkout develop && cd ..
     cd RefScript

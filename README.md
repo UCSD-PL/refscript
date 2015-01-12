@@ -33,7 +33,6 @@ Suppose you want to work in a directory `$ROOT`. First `cd $ROOT`, and then:
     git clone https://github.com/UCSD-PL/language-ecmascript
     cd language-ecmascript && git checkout RefScript && cd ..
     git clone https://github.com/UCSD-PL/RefScript
-    cd RefScript && git checkout develop && cd ..
     cd RefScript
     cabal sandbox init
     cabal sandbox add-source ../liquid-fixpoint

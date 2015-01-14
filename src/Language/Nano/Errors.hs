@@ -148,6 +148,7 @@ errorClassAnnotMissing l x    = mkErr l $ printf "Cannot find annotation for cla
 errorClassEltAnnot l c s      = mkErr l $ printf "Class '%s' needs to have a single annotation for element '%s'." (ppshow c) (ppshow s)
 errorUnboundIdEnv l x t       = mkErr l $ printf "ZOGBERT Identifier '%s' unbound in %s" (ppshow x) (ppshow t)
 errorUnboundName l x          = mkErr l $ printf "Name '%s' is unbound." (ppshow x)
+errorUnboundPath l x          = mkErr l $ printf "Path '%s' is unbound." (ppshow x)
 errorUnboundId l x            = mkErr l $ printf "Identifier '%s' is unbound." (ppshow x) 
 errorEnvJoin l x t1 t2        = mkErr l $ printf "Variable '%s' has different types ('%s' and '%s') when joining environments." (ppshow x) (ppshow t1) (ppshow t2)
 errorEnvJoinUnif l x t1 t2    = mkErr l $ printf "Error in unifying types '%s' and '%s' for variable '%s' when joining environments." (ppshow t1) (ppshow t2) (ppshow x)

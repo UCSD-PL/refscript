@@ -68,7 +68,7 @@ import           Text.Parsec.Pos                         (newPos)
 import           Text.Parsec.Error                       (errorMessages, showErrorMessages)
 import qualified Text.Parsec.Token                as     T
 import           Text.Parsec.Token                       (identStart, identLetter)
-import           Text.Parsec.Prim                        (stateUser)
+-- import           Text.Parsec.Prim                        (stateUser)
 import           Text.Parsec.Language                    (emptyDef)
 
 import           GHC.Generics
@@ -809,8 +809,10 @@ mkTvar αs r = listToMaybe [ α { tv_loc = srcPos r }  | α <- αs, symbol α ==
 convertTvarVisitor :: (PP r, Reftable r) => Visitor () [TVar] (AnnRel r) 
 convertTvarVisitor = defaultVisitor {
     ctxStmt = ctxStmtTvar
-  , txStmt  = transFmap (\as _ -> convertTvar as) 
-  , txExpr  = transFmap (\as _ -> convertTvar as) 
+  , ctxCElt = ctxCEltTvar
+  , txStmt  = transFmap (const . convertTvar) 
+  , txExpr  = transFmap (const . convertTvar) 
+  , txCElt  = transFmap (const . convertTvar)
   }
 
 ctxStmtTvar as s = go s ++ as
@@ -826,6 +828,17 @@ ctxStmtTvar as s = go s ++ as
 
     grab :: Statement (AnnQ q r) -> [TVar]
     grab = concatMap factTvars . ann_fact . getAnnotation 
+
+ctxCEltTvar as s = go s ++ as
+  where
+    go :: ClassElt (AnnRel r)  -> [TVar]
+    go s@Constructor{}     = grab s
+    go s@MemberMethDef{}   = grab s
+    go _                   = []
+
+    grab :: ClassElt (AnnQ q r) -> [TVar]
+    grab = concatMap factTvars . ann_fact . getAnnotation 
+
 
 factTvars :: FactQ q r -> [TVar]
 factTvars = go

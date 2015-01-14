@@ -51,6 +51,11 @@ Executable rsc
                   , parsec
                   , transformers
                   , fgl
+                  , intern
+                  , deepseq
+                  , text-format
+                  , array
+                  , attoparsec
                   , language-ecmascript-pp
                   , RefScript
 

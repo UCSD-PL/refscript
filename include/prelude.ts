@@ -829,6 +829,7 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
  ************************************************************************/
 
 /*@ alias IArray<T> = Array<Immutable, T> */
+/*@ alias MArray<T> = Array<Mutable, T> */
 
 
 /*************************************************************************

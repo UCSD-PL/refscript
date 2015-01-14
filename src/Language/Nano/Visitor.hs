@@ -402,8 +402,11 @@ transAnnR :: F.Reftable r => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
           -> [TVar] -> AnnQ q r  -> AnnQ q r
 transAnnR f as ann = ann { ann_fact = trans f as [] <$> ann_fact ann}
 
-transFmap ::  (F.Reftable r, Functor thing) => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
-          -> [TVar] -> thing (AnnQ q r)  -> thing (AnnQ q r)
+transFmap ::  (F.Reftable r, Functor thing) 
+          => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
+          -> [TVar] 
+          -> thing (AnnQ q r)  
+          -> thing (AnnQ q r)
 transFmap f as = fmap (transAnnR f as) 
 
 
@@ -483,7 +486,7 @@ ntransClassAnn f g (as,es,is) = (as, ntransClassAnn1 f g <$> es, ntransClassAnn1
 ntransClassAnn1 f g (n,ts) =  (f n, ntrans f g <$> ts)
 
 ntransRType :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> RTypeQ p r -> RTypeQ q r
-ntransRType f g               = go 
+ntransRType f g         = go 
   where
     go (TApp c ts r)    = TApp c ts' r        where ts' = go <$> ts
     go (TVar v r)       = TVar v r
@@ -675,23 +678,25 @@ extractQualifiedNames stmts = (namesSet, modulesSet)
 ---------------------------------------------------------------------------------------
 replaceAbsolute :: PPR r => NanoBareRelR r -> NanoBareR r
 ---------------------------------------------------------------------------------------
-replaceAbsolute pgm@(Nano { code = Src ss, fullNames = ns, fullPaths = ps }) 
+replaceAbsolute pgm@(Nano { code      = Src ss
+                          , fullNames = ns
+                          , fullPaths = ps }) 
                     = pgm { code = Src $ (tr <$>) <$> ss }
   where
     tr l            = ntransAnnR (safeAbsName l) (safeAbsPath l) l
     safeAbsName l a = case absAct (absoluteName ns) l a of
                         Just a' -> a'
                         -- If it's a type alias, don't throw error
-                        Nothing | isInAliases a -> toAbsoluteName a
+                        Nothing | isAlias a -> toAbsoluteName a
                                 | otherwise -> throw $ errorUnboundName (srcPos l) a
     safeAbsPath l a = case absAct (absolutePath ps) l a of
                         Just a' -> a'
-                        Nothing -> throw $ errorUnboundName (srcPos l) a
+                        Nothing -> throw $ errorUnboundPath (srcPos l) a
 
-    isInAliases (QN RK_ _ [] s) = envMem s $ tAlias pgm 
-    isInAliases (QN _   _ _  _) = False
+    isAlias (QN RK_ _ [] s) = envMem s $ tAlias pgm 
+    isAlias (QN _   _ _  _) = False
 
-    absAct f l a    = I.lookup (ann_id l) mm >>= \p -> f p a
+    absAct f l a    = I.lookup (ann_id l) mm >>= (`f` a)
     mm              = snd $ visitStmts vs (QP AK_ def []) ss
     vs              = defaultVisitor { ctxStmt = cStmt } 
                                      { accStmt = acc   }

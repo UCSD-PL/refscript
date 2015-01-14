@@ -102,7 +102,10 @@ castErrors (Ann _ l facts) = downErrors
 
 
 -------------------------------------------------------------------------------
-typeCheck :: PPRSF r => Config -> NanoSSAR r -> IO (Either (F.FixResult Error) (NanoTypeR r))
+typeCheck :: PPRSF r 
+          => Config 
+          -> NanoSSAR r 
+          -> IO (Either (F.FixResult Error) (NanoTypeR r))
 -------------------------------------------------------------------------------
 typeCheck cfg pgm = do 
   v <- V.getVerbosity
@@ -161,8 +164,13 @@ initGlobalEnv :: PPRSF r => NanoSSAR r -> TCEnv r
 initGlobalEnv pgm@(Nano { code = Src ss }) = -- trace (ppshow mod) $ trace (ppshow cha) $ 
                                              TCE nms mod cha ctx pth Nothing
   where
-    nms       = (envAdds extras $ envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv visibleNs) `envUnion`
-                (envMap (\(_,c,d,e) -> (d,c,e)) $ envUnionList $ maybeToList $ m_variables <$> qenvFindTy pth mod)
+    nms       = (envAdds extras 
+              $ envMap (\(_,_,c,d,e) -> (d,c,e)) 
+              $ mkVarEnv visibleNs) `envUnion`
+                (envMap (\(_,c,d,e) -> (d,c,e)) 
+                  $ envUnionList 
+                  $ maybeToList 
+                  $ m_variables <$> qenvFindTy pth mod)
     visibleNs = visibleVars ss
     extras    = [(Id (srcPos dummySpan) "undefined"
                 ,(TApp TUndef [] fTop, ReadOnly, Initialized))]
@@ -374,6 +382,7 @@ tcClassElt γ dfn (MemberMethDef l True x xs body)
     spec               = M.lookup (F.symbol x, StaticMember) (t_elts dfn)
 
 -- | Instance method
+--
 tcClassElt γ dfn (MemberMethDef l False x xs bd) 
   = case spec of 
       Just (MethSig _ t) -> 

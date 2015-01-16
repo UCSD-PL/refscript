@@ -466,7 +466,7 @@ var TypeScript;
         Cannot_translate_type_0_into_RefScript_type: "Cannot translate type '{0}' into RefScript type.",
         Anonymous_function_cannot_have_more_than_one_type_annotations: "Anonymous function cannot have more than one type annotations.",
         Import_library_only_enabled_with_refscript: "Import library (only enabled with 'refscript').",
-        Constructors_should_have_exactly_one_annotation: "Constructors should have exactly one annotation.",
+        Constructors_should_have_at_most_one_annotation: "Constructors should have at most one annotation.",
         Methods_should_have_exactly_one_annotation: "Methods should have exactly one annotation.",
         Cannot_call_toRsExp_on_a_UnaryExpression_with_SyntaxKind_0: "Cannot call 'toRsExp' on a UnaryExpression with SyntaxKind {0}.",
         Cannot_call_toRsLValue_on_BinaryExpression: "Cannot call 'toRsLValue' on BinaryExpression.",
@@ -2625,7 +2625,7 @@ var TypeScript;
         "Cannot translate type '{0}' into RefScript type.": { "code": 8017, "category": 5 /* Unimplemented */ },
         "Anonymous function cannot have more than one type annotations.": { "code": 8018, "category": 1 /* Error */ },
         "Import library (only enabled with 'refscript').": { "code": 8019, "category": 2 /* Message */ },
-        "Constructors should have exactly one annotation.": { "code": 8020, "category": 5 /* Unimplemented */ },
+        "Constructors should have at most one annotation.": { "code": 8020, "category": 5 /* Unimplemented */ },
         "Methods should have exactly one annotation.": { "code": 8021, "category": 5 /* Unimplemented */ },
         "Cannot call 'toRsExp' on a UnaryExpression with SyntaxKind {0}.": { "code": 8022, "category": 5 /* Unimplemented */ },
         "Cannot call 'toRsLValue' on BinaryExpression.": { "code": 8023, "category": 5 /* Unimplemented */ },
@@ -10952,7 +10952,7 @@ var TypeScript;
                     return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), anns, new TypeScript.RsPrefixOp(4 /* PrefixTypeof */), this.operand.toRsExp(helper));
 
                 case 166 /* BitwiseNotExpression */:
-                    return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), tokenAnnots(this.operatorToken), new TypeScript.RsPrefixOp(1 /* PrefixBNot */), this.operand.toRsExp(helper));
+                    return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), anns, new TypeScript.RsPrefixOp(1 /* PrefixBNot */), this.operand.toRsExp(helper));
 
                 case 220 /* CastExpression */:
                     return this.toRsExp(helper);
@@ -14160,7 +14160,7 @@ var TypeScript;
         };
 
         ExpressionStatementSyntax.prototype.toRsStmt = function (helper) {
-            return new TypeScript.RsExprStmt(helper.getSourceSpan(this), tokenAnnots(this), this.expression.toRsExp(helper));
+            return new TypeScript.RsExprStmt(helper.getSourceSpan(this), [], this.expression.toRsExp(helper));
         };
         return ExpressionStatementSyntax;
     })(TypeScript.SyntaxNode);
@@ -14275,10 +14275,18 @@ var TypeScript;
             var bindAnns = anns.filter(function (a) {
                 return a.kind() === 8 /* RawConstr */;
             });
-            if (bindAnns.length !== 1) {
-                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Constructors_should_have_exactly_one_annotation);
+
+            if (bindAnns.length === 0) {
+                var decl = helper.getDeclForAST(this);
+                var type = decl.getSignatureSymbol().toRsTCtor();
+                var typeStr = type.toString();
+                anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 8 /* RawConstr */, "new " + typeStr));
+            }
+            if (bindAnns.length > 1) {
+                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Constructors_should_have_at_most_one_annotation);
                 return null;
             }
+
             return new TypeScript.RsConstructor(helper.getSourceSpan(this), anns, new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (t) {
                 return t.toRsId(helper);
             })), new TypeScript.RsASTList([this.block.toRsStmt(helper)]));
@@ -38363,6 +38371,39 @@ var TypeScript;
             }
         };
 
+        PullSignatureSymbol.prototype.toRsTCtor = function () {
+            var tParams = this.getTypeParameters().map(function (p) {
+                return p.type.toRsTypeParameter();
+            });
+            var tArgs = this.parameters.map(function (p) {
+                return new TypeScript.BoundedRsType(p.name, p.type.toRsType());
+            });
+
+            var nonOptionalPamars = this.parameters.filter(function (p) {
+                return !p.isOptional;
+            });
+            var nonOptionalLength = nonOptionalPamars.length;
+            var totParamsLength = this.parameters.length;
+
+            var sigs = [];
+            for (var i = nonOptionalLength; i <= totParamsLength; i++) {
+                var aaa = tArgs.slice(0, i);
+                sigs.push(aaa);
+            }
+            var retT = TypeScript.TVoid;
+
+            switch (sigs.length) {
+                case 0:
+                    return new TypeScript.RsTFun(tParams, tArgs, retT);
+                case 1:
+                    return new TypeScript.RsTFun(tParams, tArgs, retT);
+                default:
+                    return new TypeScript.RsTAnd(sigs.map(function (s) {
+                        return new TypeScript.RsTFun(tParams, s, retT);
+                    }));
+            }
+        };
+
         PullSignatureSymbol.prototype.toRsTMeth = function () {
             var tParams = this.getTypeParameters().map(function (p) {
                 return p.type.toRsTypeParameter();
@@ -58993,6 +59034,7 @@ var TypeScript;
         AnnotKind[AnnotKind["RawInvt"] = 12] = "RawInvt";
         AnnotKind[AnnotKind["RawCast"] = 13] = "RawCast";
         AnnotKind[AnnotKind["RawExported"] = 14] = "RawExported";
+        AnnotKind[AnnotKind["RawOption"] = 15] = "RawOption";
     })(TypeScript.AnnotKind || (TypeScript.AnnotKind = {}));
     var AnnotKind = TypeScript.AnnotKind;
 
@@ -59099,6 +59141,8 @@ var TypeScript;
                     return 13 /* RawCast */;
                 case "<anonymous>":
                     return 3 /* RawFunc */;
+                case "option":
+                    return 15 /* RawOption */;
                 default:
                     return 1 /* RawBind */;
             }
@@ -60478,6 +60522,29 @@ var TypeScript;
     })(RsStatement);
     TypeScript.RsFunctionStmt = RsFunctionStmt;
 
+    var RsFuncCtorStmt = (function (_super) {
+        __extends(RsFuncCtorStmt, _super);
+        function RsFuncCtorStmt(span, ann, id, args, body) {
+            _super.call(this, ann);
+            this.span = span;
+            this.ann = ann;
+            this.id = id;
+            this.args = args;
+            this.body = body;
+        }
+        RsFuncCtorStmt.prototype.toObject = function () {
+            return {
+                FuncCtorStmt: [
+                    [this.span.toObject(), this.mapAnn(function (a) {
+                            return a.toObject();
+                        })],
+                    this.id.toObject(), this.args.toObject(), this.body.toObject()]
+            };
+        };
+        return RsFuncCtorStmt;
+    })(RsStatement);
+    TypeScript.RsFuncCtorStmt = RsFuncCtorStmt;
+
     var RsFunctionAmbientDecl = (function (_super) {
         __extends(RsFunctionAmbientDecl, _super);
         function RsFunctionAmbientDecl(span, ann, id, args) {
@@ -61044,6 +61111,12 @@ var TypeScript;
                     context.enteringCtor();
                     break;
 
+                case 129 /* FunctionDeclaration */:
+                    var funcName = ast.identifier.text();
+                    if (/^[A-Z]/.test(funcName))
+                        context.enteringCtor();
+                    break;
+
                 case 174 /* AssignmentExpression */:
                     if (context.inCtor()) {
                         var asgnExpr = ast;
@@ -61087,14 +61160,18 @@ var TypeScript;
 var TypeScript;
 (function (TypeScript) {
     var OverloadState = (function () {
-        function OverloadState(semanticInfoChain, funcs, overloadFuncs, normalFuncs) {
+        function OverloadState(semanticInfoChain, funcs, overloadFuncs, optargedFuncs, overloadedIntersectOptargedFuncs, totalFuncs) {
             if (typeof funcs === "undefined") { funcs = new Map(); }
             if (typeof overloadFuncs === "undefined") { overloadFuncs = 0; }
-            if (typeof normalFuncs === "undefined") { normalFuncs = 0; }
+            if (typeof optargedFuncs === "undefined") { optargedFuncs = 0; }
+            if (typeof overloadedIntersectOptargedFuncs === "undefined") { overloadedIntersectOptargedFuncs = 0; }
+            if (typeof totalFuncs === "undefined") { totalFuncs = 0; }
             this.semanticInfoChain = semanticInfoChain;
             this.funcs = funcs;
             this.overloadFuncs = overloadFuncs;
-            this.normalFuncs = normalFuncs;
+            this.optargedFuncs = optargedFuncs;
+            this.overloadedIntersectOptargedFuncs = overloadedIntersectOptargedFuncs;
+            this.totalFuncs = totalFuncs;
         }
         return OverloadState;
     })();
@@ -61132,10 +61209,21 @@ var TypeScript;
         return ans;
     }
 
+    function getFirstCallSigChild(ast) {
+        var numChildren = ast.childCount();
+        for (var i = 0; i < numChildren; i++) {
+            if (ast.childAt(i) && ast.childAt(i).kind() == 142 /* CallSignature */) {
+                return ast.childAt(i);
+            }
+        }
+        throw new Error("Don't call this function if ast has no CallSig childrem");
+    }
+
     var OverloadStatGatherer = (function () {
         function OverloadStatGatherer() {
         }
         OverloadStatGatherer.pre = function (ast, state) {
+            var callSigs;
             switch (ast.kind()) {
                 case 129 /* FunctionDeclaration */:
                 case 135 /* MemberFunctionDeclaration */:
@@ -61148,21 +61236,34 @@ var TypeScript;
                     if (!previouslySeenContainers)
                         previouslySeenContainers = [];
                     if (contains(previouslySeenContainers, container))
-                        break;
+                        return;
                     previouslySeenContainers.push(container);
                     state.funcs.set(name, previouslySeenContainers);
                     var funcTypeSymbol = funcSymbol.type;
-                    var signatures = funcTypeSymbol.getCallSignatures().length;
-                    signatures > 1 ? state.overloadFuncs++ : state.normalFuncs++;
+                    callSigs = funcTypeSymbol.getCallSignatures().length;
                     break;
                 default:
-                    var callSigs = numCallSigChildren(ast);
-                    if (callSigs == 1)
-                        state.normalFuncs++;
-                    if (callSigs > 1)
-                        state.overloadFuncs++;
+                    callSigs = numCallSigChildren(ast);
+                    if (callSigs == 0)
+                        return;
                     break;
             }
+            state.totalFuncs++;
+            var overloaded = callSigs > 1;
+            var optarged = OverloadStatGatherer.hasOptionalArg(ast);
+            if (overloaded && optarged)
+                state.overloadedIntersectOptargedFuncs++;
+            if (overloaded)
+                state.overloadFuncs++;
+            if (optarged)
+                state.optargedFuncs++;
+        };
+
+        OverloadStatGatherer.hasOptionalArg = function (ast) {
+            ast = getFirstCallSigChild(ast);
+            var relStart = ast.start() - ast.fullStart();
+            var funcText = ast.fullText().substring(relStart, relStart + ast.width());
+            return funcText.indexOf("?") >= 0;
         };
 
         OverloadStatGatherer.gather = function (document, semanticInfoChain) {
@@ -61171,8 +61272,10 @@ var TypeScript;
 
             TypeScript.getAstWalkerFactory().simpleWalk(document.sourceUnit(), OverloadStatGatherer.pre, null, state);
 
+            console.log("Total functions: " + state.totalFuncs);
+            console.log("Funcs both Overloaded and OptArg: " + state.overloadedIntersectOptargedFuncs);
             console.log("Overloaded functions: " + state.overloadFuncs);
-            console.log("Other functions: " + state.normalFuncs);
+            console.log("OptArg functions: " + state.optargedFuncs);
         };
         return OverloadStatGatherer;
     })();

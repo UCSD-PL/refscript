@@ -116,6 +116,11 @@ data Nano a r = Nano {
   --
   , pCHA      :: ClassHierarchy r
 
+  --
+  -- ^ Options
+  --
+  , pOptions  :: [String]
+
   } deriving (Functor) -- , Data, Typeable)
 
 

@@ -130,6 +130,12 @@ aliasVarT (l, x)
   | otherwise = Right $ x 
   where
     x'        = symbolString x
+
+-- 
+-- PV: Insert your option parser here
+--
+optionP   = do _ <- many anyToken 
+               return "DEFAULT FLAG"
     
 iFaceP   :: Parser (Id SourceSpan, IfaceDefQ RK Reft)
 iFaceP   = do name   <- identifierP 
@@ -479,6 +485,7 @@ data RawSpec
   | RawTAlias   (SourceSpan, String)   -- Type aliases
   | RawPAlias   (SourceSpan, String)   -- Predicate aliases
   | RawQual     (SourceSpan, String)   -- Qualifiers
+  | RawOption   (SourceSpan, String)   -- Options
   | RawInvt     (SourceSpan, String)   -- Invariants
   | RawCast     (SourceSpan, String)   -- Casts
   | RawExported (SourceSpan, String)   -- Exported
@@ -498,6 +505,7 @@ data PSpec l r
   | TAlias  (Id l, TAlias (RTypeQ RK r))
   | PAlias  (Id l, PAlias) 
   | Qual    Qualifier
+  | Option  String
   | Invt    l (RTypeQ RK r) 
   | CastSp  l (RTypeQ RK r)
   | Exported l
@@ -523,6 +531,7 @@ parseAnnot = go
     go (RawTAlias   (ss, _)) = TAlias  <$> patch2 ss <$> tAliasP
     go (RawPAlias   (ss, _)) = PAlias  <$> patch2 ss <$> pAliasP
     go (RawQual     (_ , _)) = Qual    <$>               qualifierP
+    go (RawOption   (_ , _)) = Option  <$>               optionP
     go (RawInvt     (ss, _)) = Invt               ss <$> bareTypeP
     go (RawCast     (ss, _)) = CastSp             ss <$> bareTypeP
     go (RawExported (ss, _)) = return  $ Exported ss
@@ -545,6 +554,7 @@ getSpecString = go
     go (RawTAlias   (_, s)) = s  
     go (RawPAlias   (_, s)) = s  
     go (RawQual     (_, s)) = s  
+    go (RawOption   (_, s)) = s  
     go (RawInvt     (_, s)) = s  
     go (RawCast     (_, s)) = s  
     go (RawExported (_, s)) = s  
@@ -562,6 +572,7 @@ instance IsLocated RawSpec where
   srcPos (RawTAlias   (s,_)) = s  
   srcPos (RawPAlias   (s,_)) = s  
   srcPos (RawQual     (s,_)) = s  
+  srcPos (RawOption   (s,_)) = s  
   srcPos (RawInvt     (s,_)) = s  
   srcPos (RawCast     (s,_)) = s  
   srcPos (RawExported (s,_)) = s  
@@ -651,7 +662,8 @@ mkCode' ss = Nano {
       , consts        = envFromList [ mapSnd (ntrans f g) t | Meas t <- anns ]
       , tAlias        = envFromList [ t | TAlias t <- anns ]
       , pAlias        = envFromList [ t | PAlias t <- anns ] 
-      , pQuals        = [ t | Qual t <- anns ] 
+      , pQuals        =             [ t | Qual   t <- anns ] 
+      , pOptions      =             [ t | Option t <- anns ]
       , invts         = [Loc (srcPos l) (ntrans f g t) | Invt l t <- anns ]
       , max_id        = ending_id
       , fullNames     = names

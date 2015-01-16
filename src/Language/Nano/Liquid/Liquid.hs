@@ -101,11 +101,17 @@ nextPhase (Right x) next = next x
 solveConstraints :: FilePath -> CGInfo -> IO (A.UAnnSol RefType, F.FixResult Error) 
 --------------------------------------------------------------------------------
 solveConstraints f cgi 
-  = do (r, s)  <- solve (C.withUEqAllSorts def True) f [] $ cgi_finfo cgi
+  = do (r, s)  <- solve fixpointConfig f [] $ cgi_finfo cgi
        let r'   = fmap (ci_info . F.sinfo) r
        let ann  = cgi_annot cgi
        let sol  = applySolution s 
        return (A.SomeAnn ann sol, r') 
+
+fixpointConfig  = cfg2 --  C.withUEqAllSorts def True
+  where
+    cfg0        = def
+    cfg1        = cfg0 { C.real = True }
+    cfg2        = C.withUEqAllSorts cfg1 True
 
 --------------------------------------------------------------------------------
 applySolution :: F.FixSolution -> A.UAnnInfo RefType -> A.UAnnInfo RefType 

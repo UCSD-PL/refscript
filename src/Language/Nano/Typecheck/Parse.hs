@@ -68,7 +68,7 @@ import           Text.Parsec.Pos                         (newPos)
 import           Text.Parsec.Error                       (errorMessages, showErrorMessages)
 import qualified Text.Parsec.Token                as     T
 import           Text.Parsec.Token                       (identStart, identLetter)
--- import           Text.Parsec.Prim                        (stateUser)
+import           Text.Parsec.Prim                        (stateUser)
 import           Text.Parsec.Language                    (emptyDef)
 
 import           GHC.Generics

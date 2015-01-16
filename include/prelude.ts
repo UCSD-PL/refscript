@@ -108,6 +108,9 @@ declare function builtin_OpAdd(a: any, b: any): any;
 */
 declare function builtin_OpSub(a: number, b: number): number;
 
+/*@ builtin_OpMul :: 
+    (x: number, y: number) => { v:number | v = x * y } 
+ */
 declare function builtin_OpMul(a: number, b: number): number;
 
 /*@ builtin_OpDiv :: 

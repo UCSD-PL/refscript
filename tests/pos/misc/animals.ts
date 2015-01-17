@@ -1,6 +1,6 @@
 
 
-/*@ predicate Inst(X, Key, Val, Type) = ((keyVal(X, Key) = Val) => instanceof (X, Type)) */
+/*@ predicate Inst(X, Key, Val, Type) = ((keyVal(X, Key) = Val) => extends_class (X, Type)) */
 
 /*@ predicate InstHorse(V) = Inst(V,"kind","horse","Horse") */
 /*@ predicate InstSnake(V) = Inst(V,"kind","snake","Snake") */

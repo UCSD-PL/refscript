@@ -13,7 +13,7 @@ class RedPoint extends ColorPoint {
   public c : string = "red";
 }
 
-/*@ a :: { v: { x: number; y: number } | instanceof(v, "Point") } */
+/*@ a :: { v: { x: number; y: number } | extends_class(v, "Point") } */
 var a : Point = new Point(); 
 
 assert(a instanceof Point);

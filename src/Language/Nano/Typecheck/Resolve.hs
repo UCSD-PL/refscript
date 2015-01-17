@@ -16,7 +16,7 @@ module Language.Nano.Typecheck.Resolve (
   , flatten, flatten', flatten'', flattenType
 
   -- * Ancestors
-  , weaken, ancestors, classAncestors, isAncestor
+  , weaken, allAncestors, classAncestors, interfaceAncestors, isAncestor
 
   -- * Keys
   , boundKeys
@@ -230,29 +230,28 @@ doEdge (ClassHierarchy g _) (_, t1) (n1, n2)
         return                 $  (n2, apply θ t2)
 
 ---------------------------------------------------------------------------
-ancestors :: (PPR r, EnvLike r g) => g r -> AbsName -> [AbsName]
+ancestors :: EnvLike r t => IfaceKind -> t r -> AbsName -> [AbsName]
 ---------------------------------------------------------------------------
-ancestors γ s = [ t_name l     | cur <- maybeToList (HM.lookup s m)
-                               , anc <- reachable cur g
-                               , l   <- maybeToList (lab g anc)]
-  where
-    ClassHierarchy g m         = cha γ
+ancestors k γ s = [ t_name l | cur <- maybeToList (HM.lookup s m)
+                             , anc <- reachable cur g
+                             , l   <- maybeToList $ lab g anc
+                             , t_class l == k ]
+  where ClassHierarchy g m   = cha γ
 
 ---------------------------------------------------------------------------
-classAncestors :: (PPR r, EnvLike r g) => g r -> AbsName -> [AbsName]
+classAncestors     :: EnvLike r t => t r -> AbsName -> [AbsName]
+interfaceAncestors :: EnvLike r t => t r -> AbsName -> [AbsName]
+allAncestors       :: EnvLike r t => t r -> AbsName -> [AbsName]
 ---------------------------------------------------------------------------
-classAncestors γ s = [ t_name l | cur <- maybeToList (HM.lookup s m)
-                                , anc <- reachable cur g
-                                , l   <- maybeToList (lab g anc) 
-                                , t_class l == ClassKind ]
-  where
-    ClassHierarchy g m          = cha γ
+classAncestors      = ancestors ClassKind
+interfaceAncestors  = ancestors InterfaceKind
+allAncestors γ s    = classAncestors γ s ++ interfaceAncestors γ s 
 
 
 ---------------------------------------------------------------------------
 isAncestor :: (PPR r, EnvLike r g) => g r -> AbsName -> AbsName -> Bool
 ---------------------------------------------------------------------------
-isAncestor γ c p = p `elem` ancestors γ c
+isAncestor γ c p = p `elem` allAncestors γ c
 
 ---------------------------------------------------------------------------
 boundKeys :: (PPR r, EnvLike r g) => g r -> RType r -> [F.Symbol]

@@ -779,26 +779,34 @@ declare function builtin_BIFalsy<A>(x: A): boolean;
 
 /**
  *
- *    Encoding of bitvector behavior
+ *    Handling Bitvectors
+ *    
+ *    bv_idx(n,i): this boolean value is true if the the i-th position of 
+ *                 bitvector n is set (to 1).
  *
  */
 
-/*@ measure bv_idx :: (number, number) => bool */
+/*@ measure bv_idx :: forall A B . (A, B) => bool */
 
-/*@ builtin_bitVector :: (n: number, i: number) => { number | bv_idx(n,i) } */
+/*  builtin_bitVector :: (n: number, i: number) => { v: number | bv_idx(n,i) } */
 declare function builtin_bitVector(n: number, i: number): number;
 
 
 /**
  *
- *    ... `instaneof` ... 
+ *    ... `instanceof` ... 
+ * 
+ *    extends_class(x,s): this boolean value is true if value x has been
+ *    constructed by a constructor named with string s. This should NOT be used
+ *    with all nominal types (e.g. interfaces), but just classes (since they are
+ *    the only ones associated with a constructor).
  *
  */
 
-/*@ measure instanceof :: forall A . (A,string) => bool */
+/*@ measure extends_class :: forall A . (A,string) => bool */
 
 /*@ builtin_OpInstanceof :: 
-    forall A . (x:A, s: string) => { v: boolean | (Prop(v) <=> instanceof(x,s)) }     
+    forall A . (x:A, s: string) => { v: boolean | (Prop(v) <=> extends_class(x,s)) }
 */
 declare function builtin_OpInstanceof<A>(x: A, s: string): boolean; 
 
@@ -819,6 +827,19 @@ declare function builtin_OpInstanceof<A>(x: A, s: string): boolean;
  */
 declare function builtin_OpIn(s: string, obj: Object): boolean;
 
+
+
+/**
+ *        
+ *    Using a field as indicator of an interface type should not be 
+ *    treated the same as the `instanceof` operator, because of the 
+ *    run-time implications of the latter case. We use this measure 
+ *    instead in cases where an object is of a specific (nominal) 
+ *    interface type.
+ * 
+ */
+
+/*@ measure extends_interface :: forall A . (A,string) => bool */
 
 
 

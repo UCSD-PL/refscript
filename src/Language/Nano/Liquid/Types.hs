@@ -569,19 +569,21 @@ zipType l γ t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _)
   | otherwise
   = case weaken γ (x1,m1:t1s) x2 of
       -- Try to move along the class hierarchy
-      Just (_, m1':t1s') -> zipType l γ (TRef x2 (m1':t1s') r1 `strengthen` reftIO t1 (F.symbol x1)) t2
+      Just (_, m1':t1s') -> zipType l γ (TRef x2 (m1':t1s') r1 `strengthen` rtExt t1 (F.symbol x1)) t2
       Just _             -> Nothing
       -- Unfold structures
       Nothing        -> do  t1' <- flattenType γ t1 
                             t2' <- flattenType γ t2
                             zipType l γ t1' t2'
   where
-    reftIO t c = F.Reft (vv t, [refaIO t c])
-    refaIO t c = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr  $ F.symbolText c]
+    rtExt t c  = F.Reft (vv t, [raExt t c])
+    raExt t c  = F.RConc $ F.PBexp $ F.EApp (sym t) 
+               $ [F.expr $ vv t, F.expr $ F.symbolText c]
     vv         = rTypeValueVar
-    sym        = F.dummyLoc $ F.symbol "instanceof"
+    sym t      | isClassType γ t = F.dummyLoc $ F.symbol "extends_class"
+               | otherwise       = F.dummyLoc $ F.symbol "extends_interface"
 
-zipType _ _ t1@(TRef _ [] _) _ = error $ "zipType l on " ++ ppshow t1   -- Invalid type
+zipType _ _ t1@(TRef _ [] _) _ = error $ "zipType l on " ++ ppshow t1  -- Invalid type
 zipType _ _ _ t2@(TRef _ [] _) = error $ "zipType l on " ++ ppshow t2  -- Invalid type
 
 zipType l γ t1@(TRef _ _ _) t2 = do t1' <- flattenType γ t1
@@ -591,7 +593,7 @@ zipType l γ t1 t2@(TRef _ _ _) = do t2' <- flattenType γ t2
                                     zipType l γ t1 t2'
 
 zipType l γ t1@(TClass x1) t2@(TClass x2) 
-  | x2 `elem` ancestors γ x1
+  | x2 `elem` allAncestors γ x1
   = return $ (setRTypeR (TClass x2), fTop)
   | otherwise 
   = do  t1' <- flattenType γ t1 

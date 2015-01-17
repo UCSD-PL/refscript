@@ -22,7 +22,7 @@ class CanvasElt extends HTMLElt {
 // function createElt(tagName: "canvas"): HTMLCanvasElt;
 
 
-/*@ predicate TT x n v t = (x = n => instanceof(v, t)) */
+/*@ predicate TT x n v t = (x = n => extends_class(v, t)) */
 
 /*@ alias HTMLX<x> = {v: HTML | TT(x, "div"   , v, "DivElt") &&
                                 TT(x, "span"  , v, "SpanElt") &&

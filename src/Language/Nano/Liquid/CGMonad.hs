@@ -315,8 +315,8 @@ addInvariant :: CGEnv -> RefType -> CGM RefType
 ---------------------------------------------------------------------------------------
 addInvariant g t             
   = do  extraInvariants <- extraInvs <$> cg_opts <$> get
-        if extraInvariants then (keyIn . instanceof . truthy . typeof t . invs) <$> get
-                           else (        instanceof . truthy . typeof t . invs) <$> get
+        if extraInvariants then (keyIn . hierarchy . truthy . typeof t . invs) <$> get
+                           else (        hierarchy . truthy . typeof t . invs) <$> get
   where
     -- | typeof 
     typeof t@(TApp tc _ o)  i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup tc i
@@ -332,7 +332,8 @@ addInvariant g t
     strengthenOp t _ r        | otherwise          = t `strengthen` r
     typeofReft                = F.Reft $ (vv t,) [ F.RConc $ typeofExpr $ F.symbol "function"
                                                  , F.RConc $ F.eProp    $ vv t                ]
-    typeofExpr s              = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t]) (F.expr $ F.symbolText s)
+    typeofExpr s              = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t]) 
+                                             (F.expr $ F.symbolText s)
 
     ofRef (F.Reft (s, as))    = (F.Reft . (s,) . single) <$> as
 
@@ -342,20 +343,22 @@ addInvariant g t
     keyReft                   = F.Reft . (vv t,) . (F.RConc . F.PBexp . keyInExpr <$>) 
     keyInExpr s               = F.EApp (F.dummyLoc (F.symbol "keyIn")) [F.expr (F.symbolText s), F.eVar $ vv t]
 
-    -- | instanceof(v,"C")
-    --   
-    --   * Only strengthen classes -- not interfaces
-    --
-    --   * Strengthen with parent class constructors as well.
-    --
-    instanceof t@(TRef c _ _) | isClassType g t 
-                              = t `strengthen` reftIO t (name <$> classAncestors g c)
-    instanceof t              = t 
+    -- | extends class / interface
+    hierarchy t@(TRef c _ _)  | isClassType g t 
+                              = t `strengthen` rExtClass t (name <$> classAncestors g c)
+                              | otherwise
+                              = t `strengthen` rExtIface t (name <$> interfaceAncestors g c)
+    hierarchy t               = t
+
     name (QN AK_ _ _ s)       = s
-    reftIO t cs               = F.Reft (vv t, refaIO t <$> cs)
-    refaIO t c                = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr $ F.symbolText c]
+
+    rExtClass t cs            = F.Reft (vv t, refa t "extends_class"     <$> cs)
+    rExtIface t cs            = F.Reft (vv t, refa t "extends_interface" <$> cs)
+
+    refa t s c                = F.RConc $ F.PBexp $ F.EApp (sym s) 
+                              $ [ F.expr $ rTypeValueVar t, F.expr $ F.symbolText c ]
     vv                        = rTypeValueVar
-    sym                       = F.dummyLoc $ F.symbol "instanceof"
+    sym s                     = F.dummyLoc $ F.symbol s
 
 
 ---------------------------------------------------------------------------------------

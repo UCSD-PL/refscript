@@ -27,9 +27,9 @@ class HTMLCanvasElt extends HTMLElt {
 //function createElt(tagName: "span"): HTMLSpanElt;
 //function createElt(tagName: "canvas"): HTMLCanvasElt;
 
-/*@ createElt :: (tagName: string) => { v: #HTMLElt[#Mutable] | (((tagName = "div")    => instanceof(v,"HTMLDivElt"))    && 
-                                                                 ((tagName = "span")   => instanceof(v,"HTMLSpanElt"))   &&
-                                                                 ((tagName = "canvas") => instanceof(v,"HTMLCanvasElt")) 
+/*@ createElt :: (tagName: string) => { v: #HTMLElt[#Mutable] | (((tagName = "div")    => extends_class(v,"HTMLDivElt"))    && 
+                                                                 ((tagName = "span")   => extends_class(v,"HTMLSpanElt"))   &&
+                                                                 ((tagName = "canvas") => extends_class(v,"HTMLCanvasElt")) 
                                                                 ) }  */
 function createElt(tagName: string): HTMLElt {
 

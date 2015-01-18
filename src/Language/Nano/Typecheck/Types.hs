@@ -582,14 +582,13 @@ instance (PP r, F.Reftable r) => PP (RTypeQ q r) where
   pp (TAnd ts)                = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TExp e)                 = pprint e 
   pp (TApp TUn ts r)          = F.ppTy r $ ppArgs id (text " +") ts 
-  pp (TRef x (m:ts) r) 
-    | Just m <- mutSym m      = F.ppTy r $ pp x <> pp m <> ppArgs brackets comma ts 
-  pp (TRef x ts r)            = F.ppTy r $ pp x <>         ppArgs brackets comma ts
-  pp (TSelf m)                = text "TSelf" <> ppMut m
+  pp t@(TRef x [] r)          | Just m <- mutSym t = pp m
+  pp (TRef x ts r)            = F.ppTy r $ pp x <>         ppArgs angles comma ts
+  pp (TSelf m)                = text "TSelf" <> text "_" <> ppMut m
   pp (TApp c [] r)            = F.ppTy r $ pp c 
   pp (TApp c ts r)            = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
   pp (TCons m bs r)           | M.size bs < 3
-                              = F.ppTy r $ ppMut m <> braces (intersperse semi $ ppHMap pp bs)
+                              = F.ppTy r $ ppMut m <+> braces (intersperse semi $ ppHMap pp bs)
                               | otherwise
                               = F.ppTy r $ lbrace $+$ nest 2 (vcat $ ppHMap pp bs) $+$ rbrace
   pp (TModule s  )            = text "module" <+> pp s
@@ -695,25 +694,25 @@ ppMeth mt =
     ppfun (Just s) ts t = ppArgs parens comma (B (F.symbol "this") s : ts) <> text ":" <+> pp t
     ppfun Nothing  ts t = ppArgs parens comma ts <> text ":" <+> pp t
 
-mutSym (TRef (QN _ _ _ s) _ _)
-  | s == F.symbol "Mutable"       = Just "◁"  
-  | s == F.symbol "Immutable"     = Just "◀"
-  | s == F.symbol "AnyMutability" = Just "₌"
-  | s == F.symbol "ReadOnly"      = Just "◆"
-  | s == F.symbol "AssignsFields" = Just "★" 
-  | s == F.symbol "InheritedMut"  = Just "◇"
+mutSym (TRef (QN _ _ _ s) [] _)
+  | s == F.symbol "Mutable"       = Just "_MU_"
+  | s == F.symbol "Immutable"     = Just "_IM_"
+  | s == F.symbol "AnyMutability" = Just "_AM_"
+  | s == F.symbol "ReadOnly"      = Just "_RO_"
+  | s == F.symbol "AssignsFields" = Just "_AF"
+  | s == F.symbol "InheritedMut"  = Just "_IM_"
 mutSym _                          = Nothing
 
 
 ppMut (TRef (QN _ _ _ s) _ _)
-  | s == F.symbol "Mutable"       = pp "◁"
-  | s == F.symbol "Immutable"     = pp "◀"
-  | s == F.symbol "AnyMutability" = pp "₌"
-  | s == F.symbol "ReadOnly"      = pp "◆"
-  | s == F.symbol "AssignsFields" = pp "★" 
-  | s == F.symbol "InheritedMut"  = pp "◇"
+  | s == F.symbol "Mutable"       = pp "_MU_"
+  | s == F.symbol "Immutable"     = pp "_IM_"
+  | s == F.symbol "AnyMutability" = pp "_AM_"
+  | s == F.symbol "ReadOnly"      = pp "_RO_"
+  | s == F.symbol "AssignsFields" = pp "_AF_" 
+  | s == F.symbol "InheritedMut"  = pp "_IM_"
   | otherwise                     = pp "?" <> pp s <> pp "?"
-ppMut t@(TVar{})                  = pp "[" <> pp t <> pp "]" 
+ppMut t@(TVar{})                  = pp t
 ppMut _                           = pp "?"
 
 instance PP EnumDef where

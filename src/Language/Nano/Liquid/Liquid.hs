@@ -770,10 +770,8 @@ consCall g l fn ets ft0
         [ft] -> consInstantiate l g' fn ft ts xes
         _    -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
   where
-    ol = [ lt | Overload cx t <- ann_fact l
-              , cge_ctx g == cx
-              , lt <- callSigs
-              , toType t == toType lt ]
+    ol = [ lt | Overload cx t <- ann_fact l, cge_ctx g == cx
+              , lt <- callSigs, toType t == toType lt ]
     callSigs  = extractCall g ft0
     
 balance (FI (Just to) ts) (FI Nothing fs)  = (FI (Just to) ts, FI (Just $ B (F.symbol "this") to) fs)
@@ -942,6 +940,7 @@ consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> C
 
 -}
 consWhile g l cond body 
+-- XXX: The RHS ty comes from PhiVarTy
   = do  (gI,tIs)            <- freshTyPhis l g xs ts                            -- (a) (b) 
         _                   <- consWhileBase l xs tIs g                         -- (c)
         mseq (consExpr gI cond Nothing) $ \(xc, gI') ->                         -- (d)

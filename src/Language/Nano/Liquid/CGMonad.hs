@@ -513,7 +513,7 @@ freshTyInst l g αs τs tbody
 freshTyPhis :: AnnTypeR -> CGEnv -> [Id AnnTypeR] -> [Type] -> CGM (CGEnv, [RefType])  
 ---------------------------------------------------------------------------------------
 freshTyPhis l g xs τs 
-  = do ts <- mapM (freshTy "freshTyPhis")  τs
+  = do ts <- mapM (freshTy "freshTyPhis") τs
        g' <- envAdds "freshTyPhis" (zip xs ((,WriteLocal,Initialized) <$> ts)) g
        _  <- mapM (wellFormed l g') ts
        return (g', ts)

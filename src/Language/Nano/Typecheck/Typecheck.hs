@@ -1187,10 +1187,11 @@ getLoopNextPhiType :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r
 ----------------------------------------------------------------------------------
 getLoopNextPhiType l γ γl x =
   case (tcEnvFindTyForAsgn x γ, tcEnvFindTyForAsgn (mkNextId x) γl) of
-    (Just (t1,a1,i1), Just (t2,_,i2)) -> do θ     <- getSubst 
-                                            t     <- unifyPhiTypes l γ x t1 t2 θ
-                                            return $ Just (t, a1, i1 `mappend` i2)
-    _                                 -> return Nothing
+    (Just (t1,a1,i1), Just (t2,_,i2)) -> 
+        do  θ <- getSubst
+            t <- unifyPhiTypes l γ x t1 t2 θ
+            return $ Just (t, a1, i1 `mappend` i2)
+    _ -> return Nothing
     -- bindings that are not in both environments are discarded
 
 -- | `unifyPhiTypes` 
@@ -1202,23 +1203,25 @@ unifyPhiTypes :: PPRSF r => AnnSSA r -> TCEnv r -> Var r
 ----------------------------------------------------------------------------------
 unifyPhiTypes l γ x t1 t2 θ = 
   case unifys (srcPos l) γ θ [t1] [t2] of  
-    Left  _ -> tcError $ errorEnvJoinUnif (srcPos l) x t1 t2
-    Right θ' | any isTUndef [t1,t2]       -> setSubst θ' >> return (apply θ' t12) 
-             | any isTNull  [t1,t2]       -> setSubst θ' >> return (apply θ' t12)
-             | on (==) (apply θ') t1 t2   -> setSubst θ' >> return (apply θ' t1)
-             | on (==) (apply θ') t1' t2' -> setSubst θ' 
-                                          >> return (apply θ' $ fillNullOrUndef t1 t2 t1)
-             | otherwise                  -> tcError $ errorEnvJoin (srcPos l) x t1 t2
+    Left  _  -> tcError $ errorEnvJoinUnif (srcPos l) x t1 t2
+    Right θ' |  any isTUndef [t1,t2]     -> setSubst θ' >> return (apply θ' t12) 
+             |  any isTNull  [t1,t2]     -> setSubst θ' >> return (apply θ' t12)
+             |  on (==) (apply θ') t1 t2 -> setSubst θ' >> return (apply θ' t1)
+          -- | on (==) (apply θ') t1' t2' -> setSubst θ' >> apply θ' <$> nullOrUndef t1 t2
+             | otherwise -> tcError $ errorEnvJoin (srcPos l) x (toType t1) (toType t2)
   where
-    t12                     = mkUnion [t1,t2]
-    (t1', t2')              = mapPair (mkUnion . clear . bkUnion) (t1, t2)
-    fillNullOrUndef t1 t2 t | any isMaybeNull  [t1,t2] = fillUndef t1 t2 $ orNull t
-                            | otherwise                = t
-    fillUndef t1 t2 t       | any isMaybeUndef [t1,t2] = orUndef t
-                            | otherwise                = t
-    isMaybeUndef            = any isUndef . bkUnion
-    isMaybeNull             = any isNull  . bkUnion
-    clear ts                = [ t | t <- ts, not (isNull t) && not (isUndef t) ]
+    t12        = mkUnion [t1,t2]
+    (t1', t2') = mapPair (mkUnion . clear . bkUnion) (t1, t2)
+    clear ts   = [ t | t <- ts, not $ isNull t, not $ isUndef t ]
+
+--     nullOrUndef t1 t2 | isMaybeNull t1  =        t1 `fillUndef` orNull t2
+--                       | isMaybeNull t2  = orNull t1 `fillUndef`        t2
+--                       | otherwise       =        t1 `fillUndef`        t2
+--     fillUndef t1 t2   | isMaybeUndef t1 = return $ orUndef t2
+--                       | isMaybeUndef t2 = return $ orUndef t1
+--                       | otherwise       = tcError $ errorEnvJoin (srcPos l) x t1 t2
+--     isMaybeUndef      = any isUndef . bkUnion
+--     isMaybeNull       = any isNull  . bkUnion
 
 -------------------------------------------------------------------------------------
 postfixStmt :: a -> [Statement a] -> Statement a -> Statement a 

@@ -952,7 +952,8 @@ consWhile g l cond body
 
 consWhileBase l xs tIs g    
   = do  xts_base           <- mapM (\x -> (x,) <$> safeEnvFindTy x g) xs 
-        xts_base'          <- zipWithM (\(x,t) t' -> zipTypeUpM (srcPos l) g x t t') xts_base tIs     -- (c)
+        xts_base'          <- zipWithM (\(x,t) t' -> 
+                                zipTypeUpM (srcPos l) g x t t') xts_base tIs    -- (c)
         zipWithM_ (subType l err g) xts_base' tIs         
   where 
     err                      = errorLiquid' l

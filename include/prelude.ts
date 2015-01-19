@@ -33,17 +33,19 @@ declare function isNaN(x:any) : boolean;
  ************************************************************************/
 
 /*@ builtin_BIBracketRef ::
-    /\ forall A. (arr: Array<Immutable,A>, {idx: number | (0 <= idx && idx < (len arr))}) => {A | true}
-    /\ forall A. (arr: Array<Mutable, A >, idx: number) => {A + undefined | true}
-    /\ forall A. (o: {[y: string]: A }, x: { string | keyIn(x,o) }) => {A | true}
-    /\ (o: { }, x: { string | keyIn(x,o) }) => {top | true}
+    /\ forall A. (arr: IArray<A>, {idx: number | (0 <= idx && idx < (len arr))}) => A
+    /\ forall A. (arr: MArray<A>, idx: number) => A + undefined
+    /\ forall M A. (arr: Array<M,A>, idx: number + undefined) => A + undefined
+    /\ forall M A. (arr: Array<M,A>, idx: undefined) => undefined
+    /\ forall A. (o: {[y: string]: A }, x: {string | keyIn(x,o)}) => A
+    /\ (o: { }, x: { string | keyIn(x,o) }) => top
  */
 declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
 
 /*@ builtin_BIBracketAssign :: 
-    /\ forall A. (arr: Array<Immutable, A>, {idx:number | (0 <= idx && idx < (len arr))}, val: A) => {void | true}
-    /\ forall A. (arr: Array<ReadOnly , A>, idx:number, val: A) => {void | true}
-    /\ forall A M. ([Mutable]{[y: string]: A }, x:string, val: A) => {void | true}
+    /\ forall A. (arr: Array<Immutable, A>, {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
+    /\ forall A. (arr: Array<ReadOnly , A>, idx:number, val: A) => void
+    /\ forall A M. ([Mutable]{[y: string]: A }, x:string, val: A) => void
  */
 declare function builtin_BIBracketAssign<A>(arr: A[], n: number, v: A): void;
 
@@ -851,6 +853,7 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 
 /*@ alias IArray<T> = Array<Immutable, T> */
 /*@ alias MArray<T> = Array<Mutable, T> */
+/*@ alias ROArray<T> = Array<ReadOnly, T> */
 
 
 /*************************************************************************

@@ -390,7 +390,7 @@ indexP = xyP id colon sn
     id = symbol <$> (try lowerIdP <|> upperIdP)
     sn = withinSpacesP (string "string" <|> string "number")
 
--- | <[mut]> f: t
+-- | <[mut]> f<?>: t
 fieldEltP       = do 
     x          <- symbol <$> binderP
     o          <- maybe f_requiredR (\_ -> f_optionalR) 

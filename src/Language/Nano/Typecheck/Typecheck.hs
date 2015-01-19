@@ -1204,24 +1204,12 @@ unifyPhiTypes :: PPRSF r => AnnSSA r -> TCEnv r -> Var r
 unifyPhiTypes l γ x t1 t2 θ = 
   case unifys (srcPos l) γ θ [t1] [t2] of  
     Left  _  -> tcError $ errorEnvJoinUnif (srcPos l) x t1 t2
-    Right θ' |  any isTUndef [t1,t2]     -> setSubst θ' >> return (apply θ' t12) 
-             |  any isTNull  [t1,t2]     -> setSubst θ' >> return (apply θ' t12)
+    Right θ' |  isTUndef t1 -> setSubst θ' >> return (apply θ' $ orUndef t2)
+             |  isTUndef t2 -> setSubst θ' >> return (apply θ' $ orUndef t1)
+             |  isTNull  t1 -> setSubst θ' >> return (apply θ' $ orNull  t2)
+             |  isTNull  t2 -> setSubst θ' >> return (apply θ' $ orNull  t1)
              |  on (==) (apply θ') t1 t2 -> setSubst θ' >> return (apply θ' t1)
-          -- | on (==) (apply θ') t1' t2' -> setSubst θ' >> apply θ' <$> nullOrUndef t1 t2
              | otherwise -> tcError $ errorEnvJoin (srcPos l) x (toType t1) (toType t2)
-  where
-    t12        = mkUnion [t1,t2]
-    (t1', t2') = mapPair (mkUnion . clear . bkUnion) (t1, t2)
-    clear ts   = [ t | t <- ts, not $ isNull t, not $ isUndef t ]
-
---     nullOrUndef t1 t2 | isMaybeNull t1  =        t1 `fillUndef` orNull t2
---                       | isMaybeNull t2  = orNull t1 `fillUndef`        t2
---                       | otherwise       =        t1 `fillUndef`        t2
---     fillUndef t1 t2   | isMaybeUndef t1 = return $ orUndef t2
---                       | isMaybeUndef t2 = return $ orUndef t1
---                       | otherwise       = tcError $ errorEnvJoin (srcPos l) x t1 t2
---     isMaybeUndef      = any isUndef . bkUnion
---     isMaybeNull       = any isNull  . bkUnion
 
 -------------------------------------------------------------------------------------
 postfixStmt :: a -> [Statement a] -> Statement a -> Statement a 

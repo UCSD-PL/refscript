@@ -531,18 +531,18 @@ zipType _ _ _ t2                | isTop t2 = return (setRTypeR t2, fTop)
 -- Unions
 --
 zipType _ γ (TApp TUn t1s r1) (TApp TUn t2s _)
-                               = (,r1) <$> mkUnionR <$> mapM rr t2s
+                                 = (,r1) <$> mkUnionR <$> mapM rr t2s
   where
-    rr               t2        = L.find (related γ t2) t1s `relate` t2
-    relate (Just t1) _         = return $ t1 `strengthen` noKVars r1
-    relate Nothing   t2        = return $ fmap F.bot t2
+    rr               t2          = L.find (related γ t2) t1s `relate` t2
+    relate (Just t1) _           = return $ t1 `strengthen` noKVars r1
+    relate Nothing   t2          = return $ fmap F.bot t2
 
-zipType l γ t1 t2@(TApp TUn _ _) =  zipType l γ (TApp TUn [t1] fTop) t2
+zipType l γ t1 t2@(TApp TUn _ _) = zipType l γ (TApp TUn [t1] fTop) t2
 
-zipType l γ (TApp TUn t1s r1) t2 =  L.find (related γ t2) t1s `relate` t2
+zipType l γ (TApp TUn t1s r1) t2 = L.find (related γ t2) t1s `relate` t2
   where
-    relate (Just t1) t2        =  zipType l γ (t1 `strengthen` noKVars r1) t2
-    relate Nothing   t2        =  return (setRTypeR t, fromMaybe fTop $ rTypeROpt t) where t = fmap F.bot t2
+    relate (Just t1) t2          = zipType l γ (t1 `strengthen` noKVars r1) t2
+    relate Nothing   t2          = return (setRTypeR t, fromMaybe fTop $ rTypeROpt t) where t = fmap F.bot t2
 
 zipType _ _ (TSelf _) (TSelf m2) = return (\_ -> TSelf m2, fTop)
 --

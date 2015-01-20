@@ -1204,12 +1204,27 @@ unifyPhiTypes :: PPRSF r => AnnSSA r -> TCEnv r -> Var r
 unifyPhiTypes l γ x t1 t2 θ = 
   case unifys (srcPos l) γ θ [t1] [t2] of  
     Left  _  -> tcError $ errorEnvJoinUnif (srcPos l) x t1 t2
-    Right θ' |  isTUndef t1 -> setSubst θ' >> return (apply θ' $ orUndef t2)
-             |  isTUndef t2 -> setSubst θ' >> return (apply θ' $ orUndef t1)
-             |  isTNull  t1 -> setSubst θ' >> return (apply θ' $ orNull  t2)
-             |  isTNull  t2 -> setSubst θ' >> return (apply θ' $ orNull  t1)
-             |  on (==) (apply θ') t1 t2 -> setSubst θ' >> return (apply θ' t1)
-             | otherwise -> tcError $ errorEnvJoin (srcPos l) x (toType t1) (toType t2)
+    Right θ' | isTUndef t1 -> setSubst θ' >> return (apply θ' $ orUndef t2)
+             | isTUndef t2 -> setSubst θ' >> return (apply θ' $ orUndef t1)
+             | isTNull  t1 -> setSubst θ' >> return (apply θ' $ orNull  t2)
+             | isTNull  t2 -> setSubst θ' >> return (apply θ' $ orNull  t1)
+             -- | isSubtype γ (apply θ' t2) (apply θ' t1) -> setSubst θ' >> return (apply θ' t1)
+             | on (==) (apply θ') t1 t2   -> setSubst θ' >> return (apply θ' t1)
+             | on (==) (apply θ') t1' t2' -> setSubst θ' 
+                                          >> return (apply θ' $ fillNullOrUndef t1 t2 t1)
+             | otherwise   -> tcError $ errorEnvJoin (srcPos l) x (toType t1) (toType t2)
+  where
+
+    t12                     = mkUnion [t1,t2]
+    (t1', t2')              = mapPair (mkUnion . clear . bkUnion) (t1, t2)
+    fillNullOrUndef t1 t2 t | any isMaybeNull  [t1,t2] = fillUndef t1 t2 $ orNull t
+                            | otherwise                = t
+    fillUndef t1 t2 t       | any isMaybeUndef [t1,t2] = orUndef t
+                            | otherwise                = t
+    isMaybeUndef            = any isUndef . bkUnion
+    isMaybeNull             = any isNull  . bkUnion
+    clear ts                = [ t | t <- ts, not (isNull t) && not (isUndef t) ]
+
 
 -------------------------------------------------------------------------------------
 postfixStmt :: a -> [Statement a] -> Statement a -> Statement a 

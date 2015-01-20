@@ -52,9 +52,9 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
--- import           Text.PrettyPrint.HughesPJ 
--- import qualified Data.Foldable                      as FO
+import           Debug.Trace                        (trace)
+import           Text.PrettyPrint.HughesPJ 
+import qualified Data.Foldable                      as FO
 
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
 
@@ -91,9 +91,9 @@ refTc cfg f p
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
   
--- ppCasts (Nano { code = Src fs }) = 
---   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
---                                 , TCast _ c <- ann_fact a ] 
+ppCasts (Nano { code = Src fs }) = 
+  fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+                                 , TCast _ c <- ann_fact a ] 
          
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
@@ -517,7 +517,7 @@ consExpr g (Cast_ l e) _ =
     CDn t t'    -> mseq (consExpr g e Nothing) $ \(x,g') -> Just <$> consDownCast g' l x t t'
 
 -- | < t > e
-consExpr g ex@(Cast l e) _ =
+consExpr g ex@(Cast l e) to =
   case [ ct | UserCast ct <- ann_fact l ] of 
     [t] -> consCast g l e t
     _   -> die $ bugNoCasts (srcPos l) ex
@@ -765,6 +765,7 @@ consCall :: PP a
 
 consCall g l fn ets ft0 
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
+      -- ts <- tracePP l ("CALL TO " ++ ppshow ft0) <$> T.mapM (`safeEnvFindTy` g') xes
       ts <- T.mapM (`safeEnvFindTy` g') xes
       case ol of 
         [ft] -> consInstantiate l g' fn ft ts xes

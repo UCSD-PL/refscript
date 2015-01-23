@@ -1,25 +1,29 @@
 
 
+/* qualif CmpZ(v:number): v = 1 */
 
-class A {
-  
-  public x;
+/*@ predicate EqXY v = keyVal(v,"x") = keyVal(v, "y") */
+/*@ alias Point = {x:number; y: number} */
+/*@ alias EqPoint = {v:Point | EqXY v} */
+/*@ foo :: () => EqPoint */
 
-  public y;
+function foo() {
 
-  /*@ new (a: number) => void */
-  constructor(a: number) {
-    this.x = a;
-    this.y = a;
-  }
+  var a = random();
+
+  /*@ b :: EqPoint */
+  var b = { x: a, y: a } ; 
+
+  return b;
 
 }
 
-/*@ foo :: () => {void | true} */
-function foo(){
-  var r = new A(29);
+/*@ bar :: () => {void | true} */
+function bar() {
+  var r = foo();
   var p = r.x;
   var q = r.y;
   assert (p === q); 
 }
+
 

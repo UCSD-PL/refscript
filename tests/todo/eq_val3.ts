@@ -1,21 +1,25 @@
 
 
-/* qualif CmpZ(v:number): v = 1 */
 
-function foo() {
-  var a = random();
+class A {
   
-  /*@ b :: { vv: { x: number; y: number } | (keyVal(vv,"x") = keyVal(vv, "y")) } */
-  var b = { x: a, y: a } ; 
-  return b;
+  public x;
+
+  public y;
+
+  /*@ new (a: number) => void */
+  constructor(a: number) {
+    this.x = a;
+    this.y = a;
+  }
+
 }
 
-/*@ bar :: () => {void | true} */
-function bar() {
-  var r = foo();
+/*@ foo :: () => {void | true} */
+function foo(){
+  var r = new A(29);
   var p = r.x;
   var q = r.y;
   assert (p === q); 
 }
-
 

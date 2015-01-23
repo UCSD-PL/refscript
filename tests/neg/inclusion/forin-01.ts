@@ -1,5 +1,5 @@
 // Taken from strobe
-/*@ qualif Bot(v:a,s:string): keyIn(v,s) */
+/*@ qualif Bot(v:a,s:string): hasProperty(v,s) */
 
 /*@ foo :: (o: { [x:string]: string + number }) => { number | true } */ 
 function foo(o) {

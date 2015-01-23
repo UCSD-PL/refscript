@@ -454,7 +454,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do z               <- runFailM ( tcExpr γ e1 Nothing )
        case z of 
-         Right (_,te1) -> tcSetProp $ fmap snd3 $ getProp γ False f te1
+         Right (_,te1) -> tcSetProp $ fmap snd3 $ getProp γ FieldAccess f te1
          Left _        -> tcSetProp $ Nothing
   where
     tcSetProp rhsCtx = 
@@ -894,7 +894,7 @@ tcCall γ (NewExpr l e es)
 tcCall γ ef@(DotRef l e f)
   = runFailM (tcExpr γ e Nothing) >>= \case 
       Right (_, te) -> 
-          case getProp γ False f te of
+          case getProp γ FieldAccess f te of
             Just (te', t, _) ->
                 do (FI _ [e'],τ) <- tcNormalCall γ l ef (FI Nothing [(e, Nothing)]) $ mkTy te' t
                    return         $ (DotRef l e' f, τ)
@@ -931,7 +931,7 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
                           (FI (Just v') vs', t') <- tcNormalCall γ l em (FI (Just (v, Nothing)) (nth vs)) t
                           return $ (CallExpr l (DotRef l1 e' f) (v':vs'), t')
          Right (_, t) | otherwise -> 
-            case getProp γ True f t of
+            case getProp γ MethodAccess f t of
               Just (tRcvr,tMeth,_) -> 
                   do e' <- castM γ e t tRcvr
                      (FI (Just e'') es', t') <- tcNormalCall γ l  ex (FI (Just (e', Nothing)) (nth es)) tMeth
@@ -1214,8 +1214,7 @@ unifyPhiTypes l γ x t1 t2 θ =
                                           >> return (apply θ' $ fillNullOrUndef t1 t2 t1)
              | otherwise   -> tcError $ errorEnvJoin (srcPos l) x (toType t1) (toType t2)
   where
-
-    t12                     = mkUnion [t1,t2]
+    -- t12                     = mkUnion [t1,t2]
     (t1', t2')              = mapPair (mkUnion . clear . bkUnion) (t1, t2)
     fillNullOrUndef t1 t2 t | any isMaybeNull  [t1,t2] = fillUndef t1 t2 $ orNull t
                             | otherwise                = t

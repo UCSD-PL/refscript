@@ -10,6 +10,7 @@ module Language.Nano.Typecheck.Lookup (
   , extractCall
   , extractCtor
   , extractParent
+  , AccessKind(..)
   ) where 
 
 import           Data.Generics
@@ -22,6 +23,7 @@ import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Names
 import           Language.Nano.Types
 import           Language.Nano.Env
+-- import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
@@ -31,7 +33,16 @@ import           Control.Applicative ((<$>))
 
 -- import           Debug.Trace
 
+
+-- | Excluded fields from string index lookup
+--
+excludedFieldSymbols = F.symbol <$> [ "hasOwnProperty", "prototype", "__proto__" ]
+
+
 type PPRD r = (BitVectorable r, ExprReftable Int r, PP r, F.Reftable r, Data r)
+
+
+data AccessKind = MethodAccess | FieldAccess
 
 
 -- | `getProp γ b s t`: returns  a triplet containing:
@@ -42,13 +53,11 @@ type PPRD r = (BitVectorable r, ExprReftable Int r, PP r, F.Reftable r, Data r)
 --
 --   * The mutability associcated with the accessed element 
 --
---  If @b@ is True then the access is for a call.
---
 --  FIXME: Fix visibility
 --
 -------------------------------------------------------------------------------
 getProp :: (PPRD r, EnvLike r g, F.Symbolic f) 
-        => g r -> Bool -> f -> RType r -> Maybe (RType r, RType r, Mutability)
+        => g r -> AccessKind -> f -> RType r -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
 getProp γ b s t@(TApp _ _ _  ) =                  getPropApp γ b s t
 
@@ -96,7 +105,7 @@ getProp _ _ _ _                = Nothing
 -------------------------------------------------------------------------------
 getPropApp :: (PPRD r, EnvLike r g, F.Symbolic f) 
            => g r 
-           -> Bool 
+           -> AccessKind
            -> f 
            -> RType r 
            -> Maybe (RType r, RType r, Mutability)
@@ -180,49 +189,53 @@ extractCall γ t             = uncurry mkAll <$> foo [] t
                                 Just (CallSig t) -> foo αs t
                                 _                -> []
 
-
 -- | `accessMember b s es` extracts field @s@ from type members @es@. If @b@ is
 --   True then this means that the extracted field is for a call, in which case
 --   we allow extraction of methods, otherwise extracting methods is disallowed.
 -------------------------------------------------------------------------------
 accessMember :: (PPRD r, EnvLike r g, F.Symbolic f)
              => g r
-             -> Bool 
+             -> AccessKind 
              -> StaticKind 
              -> f
              -> TypeMembers r 
              -> Maybe (RType r, Mutability)
 -------------------------------------------------------------------------------
 -- Get member for a call
-accessMember γ True sk f es =    
+accessMember γ b@MethodAccess sk f es =    
   case M.lookup (F.symbol f, sk) es of
     Just f@(FieldSig _ _ m t) | optionalField f -> Just (orUndef t,m)
                               | otherwise       -> Just (t,m)
     Just (MethSig _ t) -> Just (t,t_immutable)    -- Methods are immutable
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
-           Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
-           -- Lookup prototype
-           _ -> case M.lookup (F.symbol "prototype", sk) es of
-                  Just (FieldSig _ _ _ pt) -> 
-                      (\(_,t,m) -> (t,m)) <$> getProp γ True f pt
-                  _ -> Nothing
+           Just (IndexSig _ StringIndex t) | validFieldName f -> Just (t, t_mutable)
+           _ -> accessMemberProto γ b sk f es
 
 -- Extract member: cannot extract methods
-accessMember γ False sk f es =
+accessMember γ b@FieldAccess sk f es =
   case M.lookup (F.symbol f, sk) es of
     Just f@(FieldSig _ _ m t) | optionalField f -> Just (orUndef t,m)
                               | otherwise       -> Just (t,m)
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
-           Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
-           -- Lookup prototype
-           _ -> case M.lookup (F.symbol "prototype", sk) es of
-                  Just (FieldSig _ _ _ pt) -> 
-                      (\(_,t,m) -> (t,m)) <$> getProp γ False f pt
-                  _ -> Nothing
+           Just (IndexSig _ StringIndex t) | validFieldName f -> Just (t, t_mutable)
+           _ -> accessMemberProto γ b sk f es
+
+accessMemberProto γ b sk f es 
+  = case M.lookup (F.symbol "prototype", sk) es of
+      Just (FieldSig _ _ _ pt) -> (\(_,t,m) -> (t,m)) <$> getProp γ b f pt
+      -- Everybody inherits Object
+      _ ->  case envLikeFindTy "Object" γ of 
+              Just t -> (\(_,t,m) -> (t,m)) <$> getProp γ b f t 
+              _      -> Nothing
+
+-------------------------------------------------------------------------------
+validFieldName  :: F.Symbolic f => f -> Bool
+-------------------------------------------------------------------------------
+validFieldName f = not $ F.symbol f `elem` excludedFieldSymbols
 
 -------------------------------------------------------------------------------
 lookupAmbientType :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s) 
-                  => g r -> Bool -> f -> s -> Maybe (RType r, Mutability)
+                  => g r -> AccessKind -> f -> s -> Maybe (RType r, Mutability)
 -------------------------------------------------------------------------------
 lookupAmbientType γ b fld amb
   = t_elts <$> resolveTypeInEnv γ nm >>= accessMember γ b InstanceMember fld
@@ -234,7 +247,11 @@ lookupAmbientType γ b fld amb
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
 getPropUnion :: (PPRD r, EnvLike r g, F.Symbolic f) 
-             => g r -> Bool -> f -> [RType r] -> Maybe (RType r, RType r, Mutability)
+             => g r 
+             -> AccessKind 
+             -> f 
+             -> [RType r] 
+             -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
 getPropUnion γ b f ts = 
   case unzip3 [ttm | Just ttm <- getProp γ b f <$> ts] of

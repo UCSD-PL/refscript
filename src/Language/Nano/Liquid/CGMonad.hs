@@ -315,8 +315,8 @@ addInvariant :: CGEnv -> RefType -> CGM RefType
 ---------------------------------------------------------------------------------------
 addInvariant g t             
   = do  extraInvariants <- extraInvs <$> cg_opts <$> get
-        if extraInvariants then (keyIn . hierarchy . truthy . typeof t . invs) <$> get
-                           else (        hierarchy . truthy . typeof t . invs) <$> get
+        if extraInvariants then (hasProp . hierarchy . truthy . typeof t . invs) <$> get
+                           else (          hierarchy . truthy . typeof t . invs) <$> get
   where
     -- | typeof 
     typeof t@(TApp tc _ o)  i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup tc i
@@ -337,11 +337,11 @@ addInvariant g t
 
     ofRef (F.Reft (s, as))    = (F.Reft . (s,) . single) <$> as
 
-    -- | { f: T } --> keyIn("f", v)
-    keyIn t                   = t `strengthen` keyReft (boundKeys g t) 
+    -- | { f: T } --> hasProperty("f", v)
+    hasProp t                   = t `strengthen` keyReft (boundKeys g t) 
 
-    keyReft                   = F.Reft . (vv t,) . (F.RConc . F.PBexp . keyInExpr <$>) 
-    keyInExpr s               = F.EApp (F.dummyLoc (F.symbol "keyIn")) [F.expr (F.symbolText s), F.eVar $ vv t]
+    keyReft                   = F.Reft . (vv t,) . (F.RConc . F.PBexp . hasPropExpr <$>) 
+    hasPropExpr s             = F.EApp (F.dummyLoc (F.symbol "hasProperty")) [F.expr (F.symbolText s), F.eVar $ vv t]
 
     -- | extends class / interface
     hierarchy t@(TRef c _ _)  | isClassType g t 
@@ -437,7 +437,7 @@ envFindTyWithAsgnNoSngl x = findT x
 
 ---------------------------------------------------------------------------------------
 envFindTyForAsgn :: (IsLocated x, F.Symbolic x, F.Expression x) 
-                  => x -> CGEnv -> Maybe (RefType, Assignability, Initialization)
+                 => x -> CGEnv -> Maybe (RefType, Assignability, Initialization)
 ---------------------------------------------------------------------------------------
 envFindTyForAsgn x = (eSngl <$>) . findT x
   where

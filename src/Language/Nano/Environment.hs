@@ -20,8 +20,7 @@ import           Language.Fixpoint.Names
 class EnvLike r t where
   -- 
   -- ^ Bindings in scope
-  --   (values of the source language:
-  --   variables, functions, classes)
+  --   Includes : variables, functions, classes, interfaces
   --
   names           :: t r -> Env (RType r, Assignability, Initialization)
   -- 

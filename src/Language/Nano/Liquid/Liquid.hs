@@ -52,7 +52,7 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 import           Text.PrettyPrint.HughesPJ 
 import qualified Data.Foldable                      as FO
 
@@ -273,7 +273,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
       t         <- safeEnvFindTy x1 g' 
-      let rhsCtx = fmap snd3 $ getProp g' False f t
+      let rhsCtx = fmap snd3 $ getProp g' FieldAccess f t
       opTy      <- setPropTy l (F.symbol f) <$> safeEnvFindTy (builtinOpId BISetProp) g'
       fmap snd <$> consCall g' l BISetProp (FI Nothing [(vr x1, Nothing),(e2, rhsCtx)]) opTy
   where
@@ -613,16 +613,16 @@ consExpr g (CallExpr l em@(DotRef _ e f) es) _
       case t of 
         t | isVariadicCall f -> 
             case es of
-              []   -> cgError $ errorVariadicNoArgs (srcPos l) em
-              v:vs -> consCall g' l em (FI (Just (v, Nothing)) (nth vs)) t
+              []      -> cgError $ errorVariadicNoArgs (srcPos l) em
+              v:vs    -> consCall g' l em (FI (Just (v, Nothing)) (nth vs)) t
 
-          | otherwise -> case getProp g' True f t of
+          | otherwise -> case getProp g' MethodAccess f t of
                            Just (_,tf,_) -> consCall g' l em (FI (Just (vr x, Nothing)) ((,Nothing) <$> es)) tf
                            Nothing       -> cgError $ errorCallNotFound (srcPos l) e f
   where
-    isVariadicCall f = F.symbol f == F.symbol "call"
-    nth              = ((,Nothing) <$>)
-    vr               = VarRef $ getAnnotation e
+    isVariadicCall f   = F.symbol f == F.symbol "call"
+    nth                = ((,Nothing) <$>)
+    vr                 = VarRef $ getAnnotation e
 
 -- | e(es)
 consExpr g (CallExpr l e es) _
@@ -636,7 +636,7 @@ consExpr g (CallExpr l e es) _
 consExpr g ef@(DotRef l e f) _
   = mseq (consExpr g e Nothing) $ \(x,g') -> do
       te            <- safeEnvFindTy x g'
-      case getProp g' False f te of
+      case getProp g' FieldAccess f te of
         Just (_,t,m) -> consCall g' l ef (FI Nothing ((,Nothing) <$> [vr x])) $ mkTy m te t
         Nothing      -> cgError $ errorMissingFld (srcPos l) f te
   where
@@ -771,7 +771,7 @@ consCall :: PP a
 
 consCall g l fn ets ft0 
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      -- ts <- tracePP l ("CALL TO " ++ ppshow ft0) <$> T.mapM (`safeEnvFindTy` g') xes
+      -- ts <- ltracePP l ("CALL TO " ++ ppshow ft0) <$> T.mapM (`safeEnvFindTy` g') xes
       ts <- T.mapM (`safeEnvFindTy` g') xes
       case ol of 
         [ft] -> consInstantiate l g' fn ft ts xes

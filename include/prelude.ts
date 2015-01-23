@@ -37,8 +37,8 @@ declare function isNaN(x:any) : boolean;
     /\ forall A. (arr: MArray<A>, idx: number) => A + undefined
     /\ forall M A. (arr: Array<M,A>, idx: number + undefined) => A + undefined
     /\ forall M A. (arr: Array<M,A>, idx: undefined) => undefined
-    /\ forall A. (o: {[y: string]: A }, x: {string | keyIn(x,o)}) => A
-    /\ (o: { }, x: { string | keyIn(x,o) }) => top
+    /\ forall A. (o: {[y: string]: A }, x: {string | hasProperty(x,o)}) => A
+    /\ (o: { }, x: { string | hasProperty(x,o) }) => top
  */
 declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
 
@@ -225,9 +225,9 @@ declare function builtin_OpZfRShift(a: number, b: number): number;
  */
 
 /*@ builtin_BIForInKeys :: 
-    /\ forall A . (a: IArray<A>) => {IArray<{ v: number | (0 <= v && v < (len a)) }> | true}
-    /\ (o: [Immutable]{ }) => {IArray<{ v: string | (keyIn(v,o) && enumProp(v,o)) }> | true}
-    /\ forall A . (o: [Immutable]{[s:string]:A}) => {IArray<{ v: string | (keyIn(v,o) && enumProp(v,o)) }> | true}
+    /\ forall A . (a: IArray<A>     )            => IArray<{ number | (0 <= v && v < (len a)) }>
+    /\            (o: [Immutable]{ })            => IArray<{ string | (hasProperty(v,o) && enumProp(v,o)) }>
+    /\ forall A . (o: [Immutable]{[s:string]:A}) => IArray<{ string | (hasProperty(v,o) && enumProp(v,o)) }>
  */
 //TODO: remove the last overload once {[s:string]:A} extends { }
 declare function builtin_BIForInKeys(obj: Object): string[];
@@ -242,7 +242,7 @@ declare function builtin_BIForInKeys(obj: Object): string[];
 
 /**
  *
- *    keyIn 
+ *    hasProperty
  *
  *    This property is true if the first string argument is an existing field 
  *    of either the object referenced in the second or the objects it inherits 
@@ -250,11 +250,36 @@ declare function builtin_BIForInKeys(obj: Object): string[];
  *
  */
 
-/*@ measure keyIn      :: forall A . (string, A) => bool */
+/*@ measure hasProperty :: forall A . (string, A) => bool */ 
 
-/*@ measure enumProp   :: forall A . (string, A) => bool */
 
-/*@ measure keyVal     :: forall A B . (A,string) => B */
+/**
+ *
+ *    hasDirectProperty 
+ *
+ *    This property is true if the first string argument is an existing field 
+ *    of the object referenced by the second.
+ *
+ */
+
+/*@ measure hasDirectProperty :: forall A . (string, A) => bool */
+
+/**
+ *
+ *    hasInheritedProperty 
+ *
+ *    This property is true if the first string argument is a field inherited by
+ *    the object's prototype chain.
+ *
+ */
+
+/*@ measure hasInheritedProperty :: forall A . (string, A) => bool */
+
+
+
+/*@ measure enumProp    :: forall A . (string, A) => bool */
+
+/*@ measure keyVal      :: forall A B . (A,string) => B */
 
 
 
@@ -295,7 +320,10 @@ interface Object {
       * Determines whether an object has a property with the specified name. 
       * @param v A property name.
       */
-    hasOwnProperty(v: string): boolean;
+    /*@ hasOwnProperty : forall A . (this: A, p: string) 
+                      => { boolean | Prop(v) <=> hasDirectProperty(p, this) }
+     */
+    hasOwnProperty(p: string): boolean;
 
     /**
       * Determines whether an object exists in another object's prototype chain. 
@@ -828,7 +856,7 @@ declare function builtin_OpInstanceof<A>(x: A, s: string): boolean;
 
 /*@ builtin_OpIn :: 
     /\ forall A . (i: number, a: IArray<A>) => { v: boolean | ((Prop v) <=> (0 <= i && i < (len a))) }
-    /\ (s: string, o: { }) => { v: boolean | ((Prop v) <=> keyIn(s,o)) } 
+    /\            (s: string, o: { }      ) => { v: boolean | ((Prop v) <=> hasProperty(s,o)) } 
  */
 declare function builtin_OpIn(s: string, obj: Object): boolean;
 

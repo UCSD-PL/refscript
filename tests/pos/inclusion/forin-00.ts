@@ -1,5 +1,5 @@
 
-/*@ qualif Bot(v:a,s:string): keyIn(v,s) */
+/*@ qualif Bot(v:a,s:string): hasProperty(v,s) */
 /*@ qualif Bot(v:a,s:string): enumProp(v,s) */
 
 /*@  values :: forall T . (map: [#Immutable]{ [k:string]: T }) =>  { #Array[#Mutable, T] | true } */

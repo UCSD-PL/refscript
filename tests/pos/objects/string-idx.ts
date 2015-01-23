@@ -1,14 +1,17 @@
 
-/*@ qualif Bot(v:a, s:string): keyIn(v,s) */
+/*@ qualif HDP(v:a, s:string): hasDirectProperty(v,s) */
+/*@ qualif HIP(v:a, s:string): hasProperty(v,s) */
+
 /*@ qualif Bot(v:a, s:string): enumProp(v,s) */
 
-/*@ extend :: (
-    src:[Immutable]{[s:string]:top}
-  , dest:[Mutable]{[s:string]:top}
-  ) => {[Mutable]{[s:string]:top} | true} */
+/*@ extend :: ( src:  [Immutable]{[s:string]: top }, dest: [Mutable]{[s:string]: top}) 
+           => { [Mutable] {[s:string]: top } | true }
+ */
 function extend(src, dest) {
   for (var p in src) {
     dest[p] = src[p];
+
+
   }
   return dest;
 }

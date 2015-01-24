@@ -1,20 +1,12 @@
 
-
-/* qualif CmpZ(v:number): v = 1 */
-
-/*@ predicate EqXY v = keyVal(v,"x") = keyVal(v, "y") */
+/*@ predicate EqXY v = keyVal(v,"x") ~~ keyVal(v, "y") */
 /*@ alias Point = {x:number; y: number} */
 /*@ alias EqPoint = {v:Point | EqXY v} */
-/*@ foo :: () => EqPoint */
 
+/*@ foo :: () => EqPoint */
 function foo() {
 
-  var a = random();
-
-  /*@ b :: EqPoint */
-  var b = { x: a, y: a } ; 
-
-  return b;
+  return { x: random(), y: random() }; 
 
 }
 

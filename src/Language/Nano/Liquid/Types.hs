@@ -31,6 +31,8 @@ module Language.Nano.Liquid.Types (
   -- * Conversions
   , RefTypable (..), eSingleton, pSingleton, BitVectorable(..), fixBAnd
 
+  , strengthenKeyVal
+
   -- * Manipulating RefType
   , rTypeReft, rTypeSort, rTypeSortedReft, rTypeValueVar
 
@@ -278,6 +280,22 @@ fixBAnd x y = F.Reft (v, cc <$> ([1..32] :: [Int]))
     bi n i  = F.PBexp $ F.EApp sym [F.expr n, F.expr i]
     sym     = F.dummyLoc $ F.symbol "bv_idx"
     v       = F.vv Nothing
+
+
+strengthenKeyVal t =
+    case bkFuns t of
+      Just [(vs ,s ,bs, tc@(TCons mt es _))] -> 
+          mkFun (vs, s, bs, foldl strengthen tc (keyVal . b_sym <$> bs))
+      _ -> t
+  where
+    -- keyVal(v,"x") = x
+    keyVal k      = F.Reft (vv, [F.RConc $ F.PAtom F.Ueq (F.EApp kvSym [F.eVar vv, str k]) 
+                                                         (F.eVar k)
+                                ])
+    ff            = ((keyVal . F.symbol) <$>)
+    vv            = F.vv Nothing
+    kvSym         = F.dummyLoc $ F.symbol "keyVal"
+    str           = F.expr . F.symbolText
 
 
 

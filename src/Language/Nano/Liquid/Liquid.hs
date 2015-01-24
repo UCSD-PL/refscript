@@ -53,8 +53,8 @@ import qualified Data.Text                          as T
 import           System.Console.CmdArgs.Default
 
 -- import           Debug.Trace                        (trace)
-import           Text.PrettyPrint.HughesPJ 
-import qualified Data.Foldable                      as FO
+-- import           Text.PrettyPrint.HughesPJ 
+-- import qualified Data.Foldable                      as FO
 
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
 
@@ -91,9 +91,9 @@ refTc cfg f p
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
   
-ppCasts (Nano { code = Src fs }) = 
-  fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
-                                 , TCast _ c <- ann_fact a ] 
+-- ppCasts (Nano { code = Src fs }) = 
+--   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+--                                 , TCast _ c <- ann_fact a ] 
          
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
@@ -670,7 +670,7 @@ consExpr g (ArrayLit l es) _
 
 -- | {f1:e1,...,fn:en}
 consExpr g (ObjectLit l bs) _
-  = consCall g l "ObjectLit" (FI Nothing ((,Nothing) <$> es)) $ objLitTy l ps
+  = consCall g l "ObjectLit" (FI Nothing ((,Nothing) <$> es)) $ strengthenKeyVal $ objLitTy l ps
   where
     (ps, es) = unzip bs
 

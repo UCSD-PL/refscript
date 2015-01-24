@@ -848,13 +848,22 @@ objLitTy l ps     = mkFun (vs, Nothing, bs, rt)
     vs            = [mv] ++ mvs ++ avs
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
     rt            = TCons mt elts fTop
-    elts          = M.fromList [((s, InstanceMember), FieldSig s f_required m $ ofType a) | (s,m,a) <- zip3 ss mts ats ]
+    elts          = M.fromList [ ((s, InstanceMember), FieldSig s f_required m $ ofType a) 
+                               | (s,m,a) <- zip3 ss mts ats ]
     (mv, mt)      = freshTV l mSym (0::Int)                             -- obj mutability
     (mvs, mts)    = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
     (avs, ats)    = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
     ss            = [F.symbol p | p <- ps]
     mSym          = F.symbol "M"
     aSym          = F.symbol "A"
+--     -- keyVal(v,"x") = x
+--     keyVal k      = F.Reft (vv, [F.RConc $ F.PAtom F.Ueq (F.EApp kvSym [F.eVar vv, str k]) 
+--                                                          (F.eVar k)
+--                                 ])
+--     ff            = ((keyVal . F.symbol) <$>)
+--     vv            = F.vv Nothing
+--     kvSym         = F.dummyLoc $ F.symbol "keyVal"
+--     str           = F.expr . F.symbolText
 
 lenId l           = Id l "length" 
 argId l           = Id l "arguments"

@@ -341,7 +341,8 @@ addInvariant g t
     hasProp t                   = t `strengthen` keyReft (boundKeys g t) 
 
     keyReft                   = F.Reft . (vv t,) . (F.RConc . F.PBexp . hasPropExpr <$>) 
-    hasPropExpr s             = F.EApp (F.dummyLoc (F.symbol "hasProperty")) [F.expr (F.symbolText s), F.eVar $ vv t]
+    hasPropExpr s             = F.EApp (F.dummyLoc (F.symbol "hasProperty")) 
+                                [F.expr (F.symbolText s), F.eVar $ vv t]
 
     -- | extends class / interface
     hierarchy t@(TRef c _ _)  | isClassType g t 

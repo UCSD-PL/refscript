@@ -63,10 +63,10 @@ ssaNano p@(Nano { code = Src fs })
        withAssignability ReadOnly ros         $ 
          withAssignability WriteLocal wls     $ 
            withAssignability WriteGlobal wgs  $ 
-            do  (_,fs')  <- ssaStmts fs
+            do  (_,fs')  <- ssaStmts $ tracePP "PRE SSA" fs
                 ssaAnns  <- getAnns
                 ast_cnt  <- getAstCount
-                return    $ p { code   = Src $ (patch ssaAnns <$>) <$> fs' 
+                return    $ p { code   = Src $ (patch ssaAnns <$>) <$> tracePP "AFTER SSA" fs' 
                               , max_id = ast_cnt }
     where
       allGlobs              = I.fromList  $ getAnnotation  <$> fmap ann_id <$> writeGlobalVars fs
@@ -267,7 +267,6 @@ ssaStmt (ForInStmt l (ForInVar v) e b) =
         for_   <- forStmt
         ssaStmt $ BlockStmt l [init_, for_]
   where
-    fr_         = freshenAnn
     fr          = fr_ l 
     biForInKeys = return $ builtinId "BIForInKeys"
 
@@ -366,13 +365,9 @@ ssaStmt (SwitchStmt l e xs)
 --  FIXME: fix env here.
 --
 ssaStmt (ClassStmt l n e is bd)
-  = do  bd' <- mapM (ssaClassElt fields) $ ctor ++ bd
-        return (True, ClassStmt l n e is bd')
+  = (True,) <$> (ClassStmt l n e is <$> mapM (ssaClassElt fields) bd)
   where
-    -- Only gather non-static fields
-    fields = [(i,eo)  | MemberVarDecl _ False i eo <- bd] 
-    ctor   | null [() | Constructor{} <- bd ] = [Constructor l [] []]
-           | otherwise                        = []
+    fields = [ f | MemberVarDecl _ False f _ <- bd] 
 
 --
 --  FIXME: fix env here.
@@ -400,6 +395,10 @@ ssaAsgnStmt l1 l2 x@(Id l3 v) x' e'
   | x == x'   = ExprStmt l1    (AssignExpr l2 OpAssign (LVar l3 v) e')
   | otherwise = VarDeclStmt l1 [VarDecl l2 x' (Just e')]
 
+-- | Freshen annotation shortcut
+--
+fr_                   = freshenAnn
+
 -------------------------------------------------------------------------------------
 ctorVisitor :: Data r => AnnSSA r -> [Id (AnnSSA r)] -> VisitorM (SSAM r) () () (AnnSSA r)
 -------------------------------------------------------------------------------------
@@ -410,80 +409,78 @@ ctorVisitor l ms          = defaultVisitor { endStmt = es } { endExpr = ee }
     es _                  = False
     ee FuncExpr{}         = True
     ee _                  = False
-    ss                    = S.fromList $ F.symbol <$> ms
+    -- ss                    = S.fromList $ F.symbol <$> ms
     te ae@(AssignExpr la OpAssign (LDot ld (ThisRef _) s) e)
-      | F.symbol s `S.member` ss
+    --  | F.symbol s `S.member` ss
                           = AssignExpr <$> fr_ la 
                                        <*> return OpAssign 
                                        <*> (LVar <$> fr_ ld <*> return (mkCtorStr s))
                                        <*> return e
-      | otherwise         = return ae
+    --  | otherwise         = return ae
     te lv                 = return lv
-    ts r@(ReturnStmt l _) = BlockStmt <$> fr <*> ((++ [r]) <$> mapM (ctorExit l) ms)
+
+    ts r@(ReturnStmt l _) = BlockStmt <$> fr_ l <*> ((:[r]) <$> ctorExit l ms)
     ts r                  = return $ r
-    fr_                   = freshenAnn
-    fr                    = fr_ l 
 
-ctorExit l s = ExprStmt <$> fr <*> 
-                 (AssignExpr <$> fr 
-                             <*> return OpAssign
-                             <*> (LDot   <$> fr 
-                                         <*> (ThisRef <$> fr) 
-                                         <*> return (F.symbolString $ F.symbol s))
-                             <*> (VarRef <$> fr 
-                                         <*> ((`mkCtorId` s) <$> fr)))
+ctorExit l ms =  ExprStmt 
+             <$> fr 
+             <*> (CallExpr <$> fr
+                           <*> (VarRef <$> fr <*> freshenIdSSA (builtinOpId BICtorExit))
+                           <*> mapM ((VarRef <$> fr <*>) . return . mkCtorId l) ms)
   where
-    fr                    = freshenAnn l 
+    fr = fr_ l
 
+
+-- | Constructor Transformation
+--
+--  constructor() {
+--   
+--    this.x = 1;
+--    this.y = "sting";
+--    if () {  this.x = 2; }
+--
+--  }
+--
+--          ||
+--          vv
+--
+--  constructor() {
+--
+--    var _ctor_x_0 = 1;
+--    var _ctor_y_1 = "string" 
+--
+--    if () { _ctor_x_2 = 2; }
+--    // _ctor_x_3 = φ(_ctor_x_2,_ctor_x_0);
+--    
+--    _ctor_exit(_ctor_x_3,_ctor_y_1);
+--
+--  }
+--
 -------------------------------------------------------------------------------------
-ssaClassElt :: Data r 
-            => [(Id (AnnSSA r), Maybe (Expression (AnnSSA r)))] 
-            -> ClassElt (AnnSSA r) 
-            -> SSAM r (ClassElt (AnnSSA r))
+ssaClassElt :: Data r => [Var r] -> ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
 -------------------------------------------------------------------------------------
-ssaClassElt flds (Constructor l xs bd0)
+ssaClassElt fs (Constructor l xs bd)
   = do θ <- getSsaEnv
-       (ros, wgs, wls) <- (`variablesInScope` bd0) <$> getGlobs
+       (ros, wgs, wls) <- (`variablesInScope` bd) <$> getGlobs
        withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $    -- Variables from OUTER scope are NON-ASSIGNABLE
           withAssignability ReadOnly (unshadow ros)        $    -- ReadOnly in scope
             withAssignability WriteGlobal (unshadow wgs)   $    -- Globals in scope
               withAssignability WriteLocal wls             $    -- Locals in scope
                 withAssignability WriteLocal xs            $    -- Also add parameters as SSAed vars 
-         do setSsaEnv     $ extSsaEnv xs θ                      -- Extend SsaEnv with formal binders
-            initStmts    <- mapM initStmt fldNms
-            bd1          <- visitStmtsT (ctorVisitor l fldNms) () bd0
-            exitStmts    <- mapM (ctorExit l) fldNms
-            (_, bd2)     <- ssaStmts $ initStmts 
-                                    ++ bd1 
-                                    ++ exitStmts                -- Transform function
+         do setSsaEnv  $ extSsaEnv xs θ                         -- Extend SsaEnv with formal binders
+            (_, bd')  <- ssaStmts =<< (++) <$> bdM <*> exitM 
             setSsaEnv θ                                         -- Restore Outer SsaEnv
-            return        $ Constructor l xs bd2
+            return     $ Constructor l xs bd'
   where
-    unshadow gs = L.deleteFirstsBy (on (==) unId) (fmap srcPos <$> gs) (fmap srcPos <$> xs)
-    fldNms      = fst <$> flds
-    initStmt s  = VarDeclStmt <$> fr <*> (single <$> initVd s)
-    initVd i    = case [ eo | (v, eo) <- flds, i == v ] of
-                    [Just e] -> VarDecl <$> fr
-                                        <*> return (mkCtorId l i) 
-                                        <*> return (Just e)
-                    [_]      -> VarDecl <$> fr
-                                        <*> return (mkCtorId l i) 
-                                        <*> (Just <$> (VarRef <$> fr_ l 
-                                                              <*> (Id <$> fr_ l 
-                                                              <*> return "undefined")))
-                    _        -> ssaError $ bugSSAConstructorInit (srcPos l) 
-    fr_         = freshenAnn
-    fr          = fr_ l 
+    bdM         = visitStmtsT (ctorVisitor l fs) () bd
+    exitM       = single <$> ctorExit l fs
+    unshadow gs = L.deleteFirstsBy (on (==) unId) 
+                                   (fmap srcPos <$> gs) 
+                                   (fmap srcPos <$> xs)
 
 -- | Initilization expression for instance variables is moved to the beginning 
 --   of the constructor.
 ssaClassElt _ (MemberVarDecl l False x _) = return $ MemberVarDecl l False x Nothing
--- ssaClassElt _ (MemberVarDecl l False x Nothing) = return $ MemberVarDecl l False x Nothing
--- ssaClassElt _ (MemberVarDecl l False x (Just e))
---   = do z <- ssaExpr e
---        case z of 
---          ([], e') -> return $ MemberVarDecl l False x (Just e')
---          _        -> ssaError $ errorEffectInFieldDef (srcPos l)
 
 ssaClassElt _ (MemberVarDecl l True x (Just e))
   = do z <- ssaExpr e
@@ -498,13 +495,13 @@ ssaClassElt _ (MemberMethDef l s e xs body) = do
     θ <- getSsaEnv
     (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
     withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $    -- Variables from OUTER scope are NON-ASSIGNABLE
-      withAssignability ReadOnly (unshadow ros)        $    -- ReadOnly in scope
-        withAssignability WriteGlobal (unshadow wgs)   $    -- Globals in scope
-          withAssignability WriteLocal wls             $    -- Locals in scope
-            withAssignability WriteLocal xs             $   -- Also add parameters as SSAed vars 
-      do  setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ     -- Extend SsaEnv with formal binders
-          (_, body')   <- ssaStmts body                       -- Transform function
-          setSsaEnv θ                                         -- Restore Outer SsaEnv
+      withAssignability ReadOnly (unshadow ros)         $    -- ReadOnly in scope
+        withAssignability WriteGlobal (unshadow wgs)    $    -- Globals in scope
+          withAssignability WriteLocal wls              $    -- Locals in scope
+            withAssignability WriteLocal xs             $    -- Also add parameters as SSAed vars 
+      do  setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ    -- Extend SsaEnv with formal binders
+          (_, body')   <- ssaStmts body                      -- Transform function
+          setSsaEnv θ                                        -- Restore Outer SsaEnv
           return        $ MemberMethDef l s e xs body'
   where
     unshadow gs = L.deleteFirstsBy (on (==) unId) (fmap srcPos <$> gs) (fmap srcPos <$> xs)
@@ -709,9 +706,9 @@ ssaLval (LBracket ll e1 e2)
  
 ssaExprs f es       = (concat *** f) . unzip <$> mapM ssaExpr es
 
-ssaExpr1 = case1 ssaExprs -- (\case [e'] -> f e') [e]
-ssaExpr2 = case2 ssaExprs -- (\case [e1', e2'] -> f e1' e2') [e1, e2]
-ssaExpr3 = case3 ssaExprs -- (\case [e1', e2', e3'] -> f e1' e2' e3') [e1, e2, e3]
+ssaExpr1 = case1 ssaExprs 
+ssaExpr2 = case2 ssaExprs 
+ssaExpr3 = case3 ssaExprs 
 ssaPureExprWith θ φ e = snd <$> ssaWith θ φ (fmap (True,) . ssaPureExpr) e
 
 ssaPureExpr e = do
@@ -757,7 +754,9 @@ unaryId x _ _            = x
 
 
 -------------------------------------------------------------------------------------
-ssaVarDecl :: Data r => VarDecl (AnnSSA r) -> SSAM r ([Statement (AnnSSA r)], VarDecl (AnnSSA r))
+ssaVarDecl :: Data r 
+           => VarDecl (AnnSSA r) 
+           -> SSAM r ([Statement (AnnSSA r)], VarDecl (AnnSSA r))
 -------------------------------------------------------------------------------------
 ssaVarDecl (VarDecl l x (Just e)) = do
     (s, x', e') <- ssaAsgn l x e
@@ -785,8 +784,11 @@ ssaVarRef l x
  
 
 ------------------------------------------------------------------------------------
-ssaAsgn :: Data r => AnnSSA r -> Id (AnnSSA r) -> Expression (AnnSSA r) ->
-           SSAM r ([Statement (AnnSSA r)], Id (AnnSSA r), Expression (AnnSSA r))
+ssaAsgn :: Data r 
+        => AnnSSA r 
+        -> Id (AnnSSA r) 
+        -> Expression (AnnSSA r) 
+        -> SSAM r ([Statement (AnnSSA r)], Id (AnnSSA r), Expression (AnnSSA r))
 ------------------------------------------------------------------------------------
 ssaAsgn l x e  = do
     (s, e') <- ssaExpr e
@@ -844,8 +846,13 @@ getLoopPhis b = do
 
 
 -------------------------------------------------------------------------------------
-ssaForLoop :: Data r => (AnnSSA r) -> [VarDecl (AnnSSA r)] -> Maybe (Expression (AnnSSA r)) 
-  -> Maybe (Statement (AnnSSA r)) -> Statement (AnnSSA r) -> SSAM r (Bool, Statement (AnnSSA r))
+ssaForLoop :: Data r 
+           => AnnSSA r
+           -> [VarDecl (AnnSSA r)] 
+           -> Maybe (Expression (AnnSSA r)) 
+           -> Maybe (Statement (AnnSSA r)) 
+           -> Statement (AnnSSA r) 
+           -> SSAM r (Bool, Statement (AnnSSA r))
 -------------------------------------------------------------------------------------
 ssaForLoop l vds cOpt incExpOpt b =
   do
@@ -858,21 +865,24 @@ ssaForLoop l vds cOpt incExpOpt b =
     c          = maybe (BoolLit l True) id cOpt
 
 -------------------------------------------------------------------------------------
-ssaForLoopExpr :: Data r => (AnnSSA r) -> Expression (AnnSSA r) -> Maybe (Expression (AnnSSA r)) 
-  -> Maybe (Statement (AnnSSA r)) -> Statement (AnnSSA r) -> SSAM r (Bool, Statement (AnnSSA r))
+ssaForLoopExpr :: Data r 
+               => AnnSSA r 
+               -> Expression (AnnSSA r) 
+               -> Maybe (Expression (AnnSSA r)) 
+               -> Maybe (Statement (AnnSSA r)) 
+               -> Statement (AnnSSA r) 
+               -> SSAM r (Bool, Statement (AnnSSA r))
 -------------------------------------------------------------------------------------
 ssaForLoopExpr l exp cOpt incExpOpt b =
   do
-    l1        <- fr
+    l1        <- fr_ l 
     (b, sts') <- ssaStmts [ExprStmt l1 exp, WhileStmt l c bd]
-    l2        <- fr
+    l2        <- fr_ l
     return     $ (b, BlockStmt l2 sts')
   where
     bd         = BlockStmt bl $ [b] ++ catMaybes [incExpOpt]
     bl         = getAnnotation b
     c          = maybe (BoolLit l True) id cOpt
-    fr_        = freshenAnn
-    fr         = fr_ l 
 
 
 -- Local Variables:

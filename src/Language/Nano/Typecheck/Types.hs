@@ -248,7 +248,7 @@ mkFun (αs, s, bs, rt) = mkAll αs (TFun s bs rt fTop)
 bkArr (TFun s xts t _) = Just (s, xts, t)
 bkArr _                = Nothing
 
-mkAll αs t           = go (reverse αs) t
+mkAll αs t           = mkAnd $ go (reverse αs) <$> bkAnd t
   where
     go (α:αs) t      = go αs (TAll α t)
     go []     t      = t
@@ -783,28 +783,6 @@ orNull t                    | isNull t      = t
 orNull t                    | otherwise     = TApp TUn [tNull,t] fTop
 
 
-
--- -----------------------------------------------------------------------
--- builtinOpTy       :: (IsLocated l) => l -> BuiltinOp -> Env t -> t
--- -----------------------------------------------------------------------
--- builtinOpTy l o g = fromMaybe err $ envFindTy ox g
---   where 
---     err           = die $ bugUnknown (srcPos l) "builtinOp" o
---     ox            = builtinOpId o
- 
-builtinOpId BIUndefined     = builtinId "BIUndefined"
-builtinOpId BIBracketRef    = builtinId "BIBracketRef"
-builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
-builtinOpId BIArrayLit      = builtinId "BIArrayLit"
-builtinOpId BIObjectLit     = builtinId "BIObjectLit"
-builtinOpId BISetProp       = builtinId "BISetProp"
-builtinOpId BIForInKeys     = builtinId "BIForInKeys"
-builtinOpId BINumArgs       = builtinId "BINumArgs"
-builtinOpId BITruthy        = builtinId "BITruthy"
-builtinOpId BICondExpr      = builtinId "BICondExpr"
-builtinOpId BICastExpr      = builtinId "BICastExpr"
-
-
 ---------------------------------------------------------------------------------
 -- | Array literal types
 ---------------------------------------------------------------------------------
@@ -965,37 +943,50 @@ mkEltFromType = fmap (mkAnd . fmap (mkFun . squash)) . sequence . map bkFun . bk
 
 mkInitFldTy t = mkFun ([], Nothing, [B (F.symbol "f") t], tVoid)
 
+ 
+builtinOpId BIUndefined     = builtinId "BIUndefined"
+builtinOpId BIBracketRef    = builtinId "BIBracketRef"
+builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
+builtinOpId BIArrayLit      = builtinId "BIArrayLit"
+builtinOpId BIObjectLit     = builtinId "BIObjectLit"
+builtinOpId BISetProp       = builtinId "BISetProp"
+builtinOpId BIForInKeys     = builtinId "BIForInKeys"
+builtinOpId BICtorExit      = builtinId "BICtorExit"
+builtinOpId BINumArgs       = builtinId "BINumArgs"
+builtinOpId BITruthy        = builtinId "BITruthy"
+builtinOpId BICondExpr      = builtinId "BICondExpr"
+builtinOpId BICastExpr      = builtinId "BICastExpr"
 
-infixOpId OpLT         = builtinId "OpLT"
-infixOpId OpLEq        = builtinId "OpLEq"
-infixOpId OpGT         = builtinId "OpGT"
-infixOpId OpGEq        = builtinId "OpGEq"
-infixOpId OpEq         = builtinId "OpEq"
-infixOpId OpStrictEq   = builtinId "OpSEq"
-infixOpId OpNEq        = builtinId "OpNEq"
-infixOpId OpStrictNEq  = builtinId "OpSNEq"
-infixOpId OpLAnd       = builtinId "OpLAnd"
-infixOpId OpLOr        = builtinId "OpLOr"
-infixOpId OpSub        = builtinId "OpSub"
-infixOpId OpAdd        = builtinId "OpAdd"
-infixOpId OpMul        = builtinId "OpMul"
-infixOpId OpDiv        = builtinId "OpDiv"
-infixOpId OpMod        = builtinId "OpMod"
-infixOpId OpInstanceof = builtinId "OpInstanceof"
-infixOpId OpBOr        = builtinId "OpBOr"
-infixOpId OpBXor       = builtinId "OpBXor"
-infixOpId OpBAnd       = builtinId "OpBAnd"
-infixOpId OpIn         = builtinId "OpIn"
-infixOpId OpLShift     = builtinId "OpLShift"
-infixOpId OpSpRShift   = builtinId "OpSpRShift"
-infixOpId OpZfRShift   = builtinId "OpZfRShift"
+infixOpId OpLT              = builtinId "OpLT"
+infixOpId OpLEq             = builtinId "OpLEq"
+infixOpId OpGT              = builtinId "OpGT"
+infixOpId OpGEq             = builtinId "OpGEq"
+infixOpId OpEq              = builtinId "OpEq"
+infixOpId OpStrictEq        = builtinId "OpSEq"
+infixOpId OpNEq             = builtinId "OpNEq"
+infixOpId OpStrictNEq       = builtinId "OpSNEq"
+infixOpId OpLAnd            = builtinId "OpLAnd"
+infixOpId OpLOr             = builtinId "OpLOr"
+infixOpId OpSub             = builtinId "OpSub"
+infixOpId OpAdd             = builtinId "OpAdd"
+infixOpId OpMul             = builtinId "OpMul"
+infixOpId OpDiv             = builtinId "OpDiv"
+infixOpId OpMod             = builtinId "OpMod"
+infixOpId OpInstanceof      = builtinId "OpInstanceof"
+infixOpId OpBOr             = builtinId "OpBOr"
+infixOpId OpBXor            = builtinId "OpBXor"
+infixOpId OpBAnd            = builtinId "OpBAnd"
+infixOpId OpIn              = builtinId "OpIn"
+infixOpId OpLShift          = builtinId "OpLShift"
+infixOpId OpSpRShift        = builtinId "OpSpRShift"
+infixOpId OpZfRShift        = builtinId "OpZfRShift"
 
-prefixOpId PrefixMinus  = builtinId "PrefixMinus"
-prefixOpId PrefixPlus   = builtinId "PrefixPlus"
-prefixOpId PrefixLNot   = builtinId "PrefixLNot"
-prefixOpId PrefixTypeof = builtinId "PrefixTypeof"
-prefixOpId PrefixBNot   = builtinId "PrefixBNot"
-prefixOpId o            = errorstar $ "prefixOpId: Cannot handle: " ++ ppshow o
+prefixOpId PrefixMinus      = builtinId "PrefixMinus"
+prefixOpId PrefixPlus       = builtinId "PrefixPlus"
+prefixOpId PrefixLNot       = builtinId "PrefixLNot"
+prefixOpId PrefixTypeof     = builtinId "PrefixTypeof"
+prefixOpId PrefixBNot       = builtinId "PrefixBNot"
+prefixOpId o                = errorstar $ "prefixOpId: Cannot handle: " ++ ppshow o
 
 
 mkId            = Id (initialPos "") 

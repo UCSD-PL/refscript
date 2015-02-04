@@ -1,0 +1,25 @@
+
+
+class AA { 
+  /*@ k : [Immutable] string */
+  public k = "VALUE";  
+
+  /*@ new () => { AA<M> | Map_select(v,"k") ~~ "VALUE" } */
+  constructor() {}
+
+}
+
+class BB extends AA {
+  
+  /*@ l : [Immutable] string */
+  public l: string;
+  
+  /*@ new () => { BB<M> | Map_select(v,"k") ~~ Map_select(v,"l") } */
+  constructor() {
+    super();
+    this.l = "NEW_VALUE";
+  }
+    
+}
+
+var n = new BB();

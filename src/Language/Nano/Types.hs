@@ -512,8 +512,10 @@ data BuiltinOp = BIUndefined
                | BISetProp
                | BICondExpr
                | BICastExpr
+               | BISuper
                | BIForInKeys
                | BICtorExit
+               | BICtor
                  deriving (Eq, Ord, Show)
 
 instance PP BuiltinOp where

@@ -590,7 +590,7 @@ instance (PP r, F.Reftable r) => PP (RTypeQ q r) where
   pp (TCons m bs r)           | M.size bs < 3
                               = F.ppTy r $ ppMut m <+> braces (intersperse semi $ ppHMap pp bs)
                               | otherwise
-                              = F.ppTy r $ lbrace $+$ nest 2 (vcat $ ppHMap pp bs) $+$ rbrace
+                              = F.ppTy r $ ppMut m <+> lbrace $+$ nest 2 (vcat $ ppHMap pp bs) $+$ rbrace
   pp (TModule s  )            = text "module" <+> pp s
   pp (TClass c   )            = text "typeof" <+> pp c
   pp (TEnum c   )             = text "enum" <+> pp c
@@ -700,20 +700,14 @@ mutSym (TRef (QN _ _ _ s) [] _)
   | s == F.symbol "AnyMutability" = Just "_AM_"
   | s == F.symbol "ReadOnly"      = Just "_RO_"
   | s == F.symbol "AssignsFields" = Just "_AF"
-  | s == F.symbol "InheritedMut"  = Just "_IM_"
+  | s == F.symbol "InheritedMut"  = Just "_IN_"
 mutSym _                          = Nothing
 
-
-ppMut (TRef (QN _ _ _ s) _ _)
-  | s == F.symbol "Mutable"       = pp "_MU_"
-  | s == F.symbol "Immutable"     = pp "_IM_"
-  | s == F.symbol "AnyMutability" = pp "_AM_"
-  | s == F.symbol "ReadOnly"      = pp "_RO_"
-  | s == F.symbol "AssignsFields" = pp "_AF_" 
-  | s == F.symbol "InheritedMut"  = pp "_IM_"
-  | otherwise                     = pp "?" <> pp s <> pp "?"
-ppMut t@(TVar{})                  = pp t
-ppMut _                           = pp "?"
+ppMut t@TVar{} = pp t
+ppMut t@TRef{} | Just s <- mutSym t
+               = pp s
+               | otherwise 
+               = pp "_??_"
 
 instance PP EnumDef where
   pp (EnumDef n ss _) = pp n <+> braces (intersperse comma $ pp <$> I.elems ss)
@@ -956,6 +950,8 @@ builtinOpId BINumArgs       = builtinId "BINumArgs"
 builtinOpId BITruthy        = builtinId "BITruthy"
 builtinOpId BICondExpr      = builtinId "BICondExpr"
 builtinOpId BICastExpr      = builtinId "BICastExpr"
+builtinOpId BISuper         = builtinId "BISuper"
+builtinOpId BICtor          = builtinId "BICtor"
 
 infixOpId OpLT              = builtinId "OpLT"
 infixOpId OpLEq             = builtinId "OpLEq"

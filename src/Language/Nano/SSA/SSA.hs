@@ -63,10 +63,10 @@ ssaNano p@(Nano { code = Src fs })
        withAssignability ReadOnly ros         $ 
          withAssignability WriteLocal wls     $ 
            withAssignability WriteGlobal wgs  $ 
-            do  (_,fs')  <- ssaStmts $ tracePP "PRE SSA" fs
+            do  (_,fs')  <- ssaStmts fs
                 ssaAnns  <- getAnns
                 ast_cnt  <- getAstCount
-                return    $ p { code   = Src $ (patch ssaAnns <$>) <$> tracePP "AFTER SSA" fs' 
+                return    $ p { code   = Src $ (patch ssaAnns <$>) <$> fs' 
                               , max_id = ast_cnt }
     where
       allGlobs              = I.fromList  $ getAnnotation  <$> fmap ann_id <$> writeGlobalVars fs
@@ -409,24 +409,23 @@ ctorVisitor l ms          = defaultVisitor { endStmt = es } { endExpr = ee }
     es _                  = False
     ee FuncExpr{}         = True
     ee _                  = False
-    -- ss                    = S.fromList $ F.symbol <$> ms
+
     te ae@(AssignExpr la OpAssign (LDot ld (ThisRef _) s) e)
-    --  | F.symbol s `S.member` ss
                           = AssignExpr <$> fr_ la 
                                        <*> return OpAssign 
                                        <*> (LVar <$> fr_ ld <*> return (mkCtorStr s))
                                        <*> return e
-    --  | otherwise         = return ae
     te lv                 = return lv
 
     ts r@(ReturnStmt l _) = BlockStmt <$> fr_ l <*> ((:[r]) <$> ctorExit l ms)
     ts r                  = return $ r
 
-ctorExit l ms =  ExprStmt 
-             <$> fr 
-             <*> (CallExpr <$> fr
-                           <*> (VarRef <$> fr <*> freshenIdSSA (builtinOpId BICtorExit))
-                           <*> mapM ((VarRef <$> fr <*>) . return . mkCtorId l) ms)
+ctorExit l ms 
+  = ReturnStmt
+ <$> fr 
+ <*> (Just <$> (CallExpr <$> fr
+                         <*> (VarRef <$> fr <*> freshenIdSSA (builtinOpId BICtorExit))
+                         <*> mapM ((VarRef <$> fr <*>) . return . mkCtorId l) ms))
   where
     fr = fr_ l
 
@@ -494,17 +493,19 @@ ssaClassElt _ (MemberVarDecl l True x Nothing)
 ssaClassElt _ (MemberMethDef l s e xs body) = do 
     θ <- getSsaEnv
     (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
-    withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $    -- Variables from OUTER scope are NON-ASSIGNABLE
-      withAssignability ReadOnly (unshadow ros)         $    -- ReadOnly in scope
-        withAssignability WriteGlobal (unshadow wgs)    $    -- Globals in scope
-          withAssignability WriteLocal wls              $    -- Locals in scope
-            withAssignability WriteLocal xs             $    -- Also add parameters as SSAed vars 
-      do  setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ    -- Extend SsaEnv with formal binders
-          (_, body')   <- ssaStmts body                      -- Transform function
-          setSsaEnv θ                                        -- Restore Outer SsaEnv
+    withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $       -- Variables from OUTER scope are NON-ASSIGNABLE
+      withAssignability ReadOnly (unshadow ros)         $       -- ReadOnly in scope
+        withAssignability WriteGlobal (unshadow wgs)    $       -- Globals in scope
+          withAssignability WriteLocal wls              $       -- Locals in scope
+            withAssignability WriteLocal xs             $       -- Also add parameters as SSAed vars 
+      do  setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ       -- Extend SsaEnv with formal binders
+          (_, body')   <- ssaStmts body                         -- Transform function
+          setSsaEnv θ                                           -- Restore Outer SsaEnv
           return        $ MemberMethDef l s e xs body'
   where
-    unshadow gs = L.deleteFirstsBy (on (==) unId) (fmap srcPos <$> gs) (fmap srcPos <$> xs)
+    unshadow gs = L.deleteFirstsBy (on (==) unId) 
+                                   (fmap srcPos <$> gs) 
+                                   (fmap srcPos <$> xs)
 
 ssaClassElt _ m@(MemberMethDecl _ _ _ _ ) = return m
 

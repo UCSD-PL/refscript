@@ -9,7 +9,7 @@ module Language.Nano.Typecheck.Lookup (
     getProp
   , extractCall
   , extractCtor
-  , extractParent
+  , extractParent, extractParent', extractParent''
   , AccessKind(..)
   ) where 
 
@@ -159,16 +159,18 @@ defCtor x vs = mkAll vs $ TFun Nothing [] (retT x vs) fTop
 
 
 -------------------------------------------------------------------------------
-extractParent :: (PPR r, PP r, EnvLike r g, Substitutable r (RType r)) 
-              => g r -> RType r -> Maybe (RType r)
+extractParent   :: (PPR r, EnvLike r g) => g r -> RType r -> Maybe (RType r)
+extractParent'  :: (PPR r, EnvLike r g) => g r -> [RType r] -> IfaceDef r -> Maybe (RType r)
+extractParent'' :: (PPR r, EnvLike r g) => g r -> IfaceDef r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-extractParent γ (TRef x ts _) 
-  = do  ID _ k vs (es,_) _ <- resolveTypeInEnv γ x
-        case (k,es) of 
-          (ClassKind, [(p,ps)]) -> 
-              Just $ TRef p (apply (fromList $ zip vs ts) ps) fTop
-          _  -> Nothing
+extractParent γ (TRef x ts _) = extractParent' γ ts =<< resolveTypeInEnv γ x
 extractParent _ _ = Nothing
+
+extractParent' _ ts (ID _ ClassKind vs ([(p,ps)],_) _) = 
+  Just $ TRef p (apply (fromList $ zip vs ts) ps) fTop
+extractParent' _ _ _ = Nothing
+
+extractParent'' γ i = extractParent' γ ((`TVar` fTop) <$> t_args i) i
 
 
 -------------------------------------------------------------------------------

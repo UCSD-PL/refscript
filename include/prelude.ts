@@ -34,18 +34,18 @@ declare function isNaN(x:any) : boolean;
 
 /*@ builtin_BIBracketRef ::
     /\ forall A. (arr: IArray<A>, {idx: number | (0 <= idx && idx < (len arr))}) => A
-    /\ forall A. (arr: MArray<A>, idx: number) => A + undefined
-    /\ forall M A. (arr: Array<M,A>, idx: number + undefined) => A + undefined
-    /\ forall M A. (arr: Array<M,A>, idx: undefined) => undefined
+    /\ forall A. (arr: MArray<A>, idx: number) => {A + undefined | true}
+    /\ forall M A. (arr: Array<M,A>, idx: number + undefined) => {A + undefined | true}
+    /\ forall M A. (arr: Array<M,A>, idx: undefined) => {undefined | true}
     /\ forall A. (o: {[y: string]: A }, x: {string | hasProperty(x,o)}) => A
     /\ (o: { }, x: { string | hasProperty(x,o) }) => top
  */
 declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
 
 /*@ builtin_BIBracketAssign :: 
-    /\ forall A. (arr: Array<Immutable, A>, {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
-    /\ forall A. (arr: Array<ReadOnly , A>, idx:number, val: A) => void
-    /\ forall A M. ([Mutable]{[y: string]: A }, x:string, val: A) => void
+    /\ forall A. (arr: IArray<A>, {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
+    /\ forall A. (arr: ROArray<A>, idx:number, val: A) => {void | true}
+    /\ forall A M. ([Mutable]{[y: string]: A }, x:string, val: A) => {void | true}
  */
 declare function builtin_BIBracketAssign<A>(arr: A[], n: number, v: A): void;
 
@@ -100,10 +100,8 @@ declare function builtin_OpGEq(a: any, b: any): boolean;
     /\ (x:string, y:string) => {string | true}
     /\ (x:string, y:boolean) => {string | true}
     /\ (x:boolean, y:string) => {string | true}
-    /\ (x:{top|false}, y:{top|false}) => {number + string | true}
  */
 declare function builtin_OpAdd(a: any, b: any): any;
-// FIXME: what is the last line useful for?
 
 /*@ builtin_OpSub :: 
     (x:number, y:number)  => {v:number | v ~~ x - y}
@@ -575,7 +573,7 @@ interface Array<T> {
     toLocaleString(): string;
 
     /*@ concat: 
-        /\ forall M0 . (this: Array<Immutable,T>, items: Array<Immutable,T>): { Array<M0,T> | (len v) = (len this) + (len items) }
+        /\ forall M0 . (this: IArray<T>, items: IArray<T>): { Array<M0,T> | (len v) = (len this) + (len items) }
         /\ forall M0 M1 M2 . (this: M0, items: Array<M1,T>): {Array<M2,T> | true}
     */
     concat<U extends T[]>(...items: U[]): T[];
@@ -584,10 +582,10 @@ interface Array<T> {
   
     join(separator?: string): string;
 
-    /*@ pop: (this: Array<Mutable, T>): {T | true} */
+    /*@ pop: (this: MArray<T>): {T | true} */
     pop(): T;
 
-    /*@ push: (this: Array<Mutable,T>, items: T): {number | true} */
+    /*@ push: (this: MArray<T>, items: T): {number | true} */
     push(T): number;								// push(...items: T[]): number;
 
     /*@ reverse: (): {Array<M,T> | true} */

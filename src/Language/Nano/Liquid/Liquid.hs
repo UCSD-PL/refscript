@@ -665,6 +665,10 @@ consExpr g (CallExpr l e es) _
 --   Returns type: { v: _ | v = field_x_f }, if `f` is an immutable field
 --                 { v: _ | _             }, otherwise  
 --
+--   The TC phase should have resolved whether we need to restrict the range of
+--   the type of `e` (possibly adding a relevant cast). So no need to repeat the
+--   call here. 
+--
 consExpr g ef@(DotRef l e f) _
   = mseq (consExpr g e Nothing) $ \(x,g') -> do
       te <- safeEnvFindTy x g'

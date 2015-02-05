@@ -343,11 +343,12 @@ tcClassElt γ dfn (Constructor l xs body)
     γ''           = tcEnvAdd ctorExit (mkCtorExitTy,ReadOnly,Initialized) γ'
 
     -- XXX        : keep the right order of fields
-    mkCtorExitTy  = mkFun (vs,Nothing,bs,TCons t_immutable ms fTop)   
+    mkCtorExitTy  = mkFun (vs,Nothing,bs,tVoid)
       where 
-        ms        = M.fromList es
-        (bs,es)   = unzip [ (B s t,(k,FieldSig s o t_immutable t)) 
-                          | (k,(FieldSig s o _ t)) <- M.toList $ t_elts dfn ]
+        bs        = [ B s t | (_,(FieldSig s _ _ t)) <- M.toList $ t_elts dfn ]
+        -- ms     = M.fromList es
+        -- (bs,es)= unzip [ (B s t,(k,FieldSig s o t_immutable t)) 
+        --                | (k,(FieldSig s o _ t)) <- M.toList $ t_elts dfn ]
 
     -- FIXME      : Do case of mutliple overloads 
     mkCtorTy      | [ConsAnn (ConsSig t)] <- ann_fact l,
@@ -361,14 +362,18 @@ tcClassElt γ dfn (Constructor l xs body)
     vs            = t_args dfn
                               
     -- FIXME      : Do case of mutliple overloads 
-    fixRet t      | Just (vs,Nothing,bs,t)  <- bkFun t,
-                    Just (TCons m es r)     <- flattenType γ t
-                  = Just $ mkFun (vs, Nothing, bs, TCons t_immutable (ee es) r)
+    fixRet t      | Just (vs,Nothing,bs,t)  <- bkFun t
+                  = Just $ mkFun (vs, Nothing , bs, tVoid)
                   | otherwise 
                   = Nothing
-      where
-        ee es     = M.fromList [ (k,FieldSig s o t_immutable t) 
-                               | (k,FieldSig s o _ t) <- M.toList es ]
+--     fixRet t      | Just (vs,Nothing,bs,t)  <- bkFun t,
+--                     Just (TCons m es r)     <- flattenType γ t
+--                   = Just $ mkFun (vs, Nothing, bs, TCons t_immutable (ee es) r)
+--                   | otherwise 
+--                   = Nothing
+--       where
+--         ee es     = M.fromList [ (k,FieldSig s o t_immutable t) 
+--                                | (k,FieldSig s o _ t) <- M.toList es ]
 
 
 -- | Static field

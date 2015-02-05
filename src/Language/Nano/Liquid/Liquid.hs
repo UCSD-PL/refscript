@@ -431,17 +431,16 @@ consClassElt g dfn (Constructor l xs body)
     -- XXX        : keep the right order of fields
     --              Make the return object immutable to avoid contra-variance
     --              checks at the return from the constructor.
-    mkCtorExitTy  = mkFun (vs,Nothing,bs,TCons t_immutable ms fTop)
+    mkCtorExitTy  = mkFun (vs,Nothing,bs,tVoid)
       where 
-        ms        = M.fromList es
-        (bs,es)   = unzip [ (B s t,(k,FieldSig s o t_immutable $ rr s t)) 
-                          | (k,(FieldSig s o _ t)) <- M.toList $ t_elts dfn ]
-        rr s t    = fmap (const $ F.symbolReft s) t 
+        -- ms     = M.fromList es
+        bs        = [ B s t | (_,(FieldSig s _ _ t)) <- M.toList $ t_elts dfn ]
+        -- rr s t = fmap (const $ F.symbolReft s) t 
 
     -- FIXME      : Do case of mutliple overloads 
     mkCtorTy      | [ConsAnn (ConsSig t)] <- ann_fact l,
                     Just t'               <- fixRet $ mkAll (t_args dfn) t
-                  = return $ ltracePP l "mkCtorTy" t'
+                  = return t'
                   | otherwise 
                   = die $ unsupportedNonSingleConsTy (srcPos l)
 
@@ -452,14 +451,18 @@ consClassElt g dfn (Constructor l xs body)
 
     -- FIXME      : Do case of mutliple overloads 
     --              Making the return type immutable.
-    fixRet t      | Just (vs,Nothing,bs,t)  <- bkFun t,
-                    Just (TCons m es r)     <- flattenType g t
-                  = Just $ mkFun (vs, Nothing, bs, TCons t_immutable (ee es) r)
+    fixRet t      | Just (vs,Nothing,bs,t)  <- bkFun t
+                  = Just $ mkFun (vs, Nothing , bs, tVoid)
                   | otherwise 
                   = Nothing
-      where
-        ee es     = M.fromList [ (k,FieldSig s o t_immutable t) 
-                               | (k,FieldSig s o _ t) <- M.toList es ]
+--     fixRet t      | Just (vs,Nothing,bs,t)  <- bkFun t,
+--                     Just (TCons m es r)     <- flattenType g t
+--                   = Just $ mkFun (vs, Nothing, bs, TCons t_immutable (ee es) r)
+--                   | otherwise 
+--                   = Nothing
+--       where
+--         ee es     = M.fromList [ (k,FieldSig s o t_immutable t) 
+--                                | (k,FieldSig s o _ t) <- M.toList es ]
 
 
 -- Static field
@@ -657,20 +660,20 @@ consExpr g (CallExpr l e es) _
 
 -- | e.f
 --
--- Return type: { v: _ | v ~~ keyVal(this, "f") }
+--   If `e` gets translated to `x`
+--
+--   Returns type: { v: _ | v = field_x_f }, if `f` is an immutable field
+--                 { v: _ | _             }, otherwise  
 --
 consExpr g ef@(DotRef l e f) _
   = mseq (consExpr g e Nothing) $ \(x,g') -> do
-      te            <- safeEnvFindTy x g'
+      te <- safeEnvFindTy x g'
       case getProp g' FieldAccess f te of
-        Just (_,t,m) -> consCall g' l ef (FI Nothing ((,Nothing) <$> [vr x])) $ mkTy m te t
-        Nothing      -> cgError $ errorMissingFld (srcPos l) f te
+        Just (_,t,m) -> Just   <$> envAddFresh l (mkTy m x t,WriteLocal,Initialized) g'
+        Nothing      -> cgError $  errorMissingFld (srcPos l) f te
   where
-    mkTy m s t | isImmutable m = mkFun ([],Nothing,[B (F.symbol "this") s],t `eSingleton` kv )
-               | otherwise     = mkFun ([],Nothing,[B (F.symbol "this") s],t) 
-    kv         = F.EApp (F.dummyLoc (F.symbol "keyVal")) [F.eVar (F.symbol "this"), 
-                                                          F.expr $ F.symbolText $ F.symbol f]
-    vr         = VarRef $ getAnnotation e
+    mkTy m x t | isImmutable m = fmap F.top t `strengthen` F.symbolReft (mkFieldB x f)
+               | otherwise     = t  
 
 -- | e1[e2]
 consExpr g (BracketRef l e1 e2) _
@@ -797,7 +800,6 @@ consCall :: PP a
 
 consCall g l fn ets ft0 
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      -- ts <- ltracePP l ("CALL TO " ++ ppshow ft0) <$> T.mapM (`safeEnvFindTy` g') xes
       ts <- T.mapM (`safeEnvFindTy` g') xes
       case ol of 
         [ft] -> consInstantiate l g' fn ft ts xes

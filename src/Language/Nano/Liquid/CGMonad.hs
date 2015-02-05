@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE ViewPatterns              #-}
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE TupleSections             #-}
@@ -39,6 +40,8 @@ module Language.Nano.Liquid.CGMonad (
   , envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
 
+  , mkFieldB
+
   -- * Add Subtyping Constraints
   , subType, wellFormed -- , safeExtends
   
@@ -60,11 +63,12 @@ import           Control.Monad.State
 import           Control.Monad.Trans.Except
 
 import           Data.Maybe                     (catMaybes, maybeToList, isNothing)
-import           Data.Monoid                    (mempty)
+import           Data.Monoid                    (mempty, mconcat)
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map.Strict                as M
 import qualified Data.List                      as L
 import           Data.Function                  (on)
+import           Data.Text                      (pack)
 import           Text.PrettyPrint.HughesPJ
 import           Language.Nano.Types
 import           Language.Nano.Errors
@@ -274,25 +278,62 @@ freshenAnn l
 --   refinements.
 --
 ---------------------------------------------------------------------------------------
-envAdds :: (IsLocated l, F.Symbolic l) 
+envAdds :: (IsLocated x, F.Symbolic x, PP [x]) 
         => String 
-        -> [(l, (RefType, Assignability, Initialization))] 
+        -> [(x, (RefType,Assignability,Initialization))] 
         -> CGEnv 
         -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAdds _ xts' g
-  = do ts         <- zipWithM inv ts' is
-       let xtas    = zip xs $ zip3 ts as is
-       is         <- catMaybes    <$> forM xtas addFixpointBind
-       _          <- forM xtas     $  \(x,(t,_,_)) -> addAnnot x x t
-       return      $ g { cge_names = E.envAdds xtas       $ cge_names g
-                       , cge_fenv  = F.insertsIBindEnv is $ cge_fenv  g }
-    where
-       (xs,(ts',as,is))  = mapSnd unzip3 $ unzip xts'
-       inv t Initialized = addInvariant g t
-       inv t _           = return t
+envAdds _ xts g
+  = do ts'            <- zipWithM inv ts is
+       let xtas        = zip xs $ zip3 ts' as is
+
+       g'             <- foldM addObjectFields g $ zip xs ts'
+       
+       is             <- catMaybes    <$> forM xtas addFixpointBind
+       _              <- forM xtas     $  \(x,(t,_,_)) -> addAnnot x x t
+
+       return          $ g' { cge_names = E.envAdds xtas       $ cge_names g'
+                            , cge_fenv  = F.insertsIBindEnv is $ cge_fenv  g' }
+  where
+     (xs,(ts,as,is))   = mapSnd unzip3 $ unzip xts
+     inv t Initialized = addInvariant g t
+     inv t _           = return t
+
+
+-- | `addObjectFields g (x,t)` when introducing an object @x@ in environment @g@
+--   also introduce bindings for all its IMMUTABLE fields. 
+---------------------------------------------------------------------------------------
+addObjectFields :: (IsLocated x, F.Symbolic x, PP [x]) 
+                => CGEnv -> (x,RefType) -> CGM CGEnv
+---------------------------------------------------------------------------------------
+addObjectFields g (x,t)  =  
+  envAdds "addObjectFields" 
+      [(mkFieldB x f, (F.subst sbt tf, ReadOnly, Initialized)) 
+        | FieldSig f _ m tf <- ms, isImmutable m ] g
+  where
+    ms  | Just (TCons _ ms _) <- flattenType g t = M.elems ms
+        | otherwise                              = []
+
+    sbt = F.mkSubst [ (f, F.expr $ mkFieldB x f) | FieldSig f _ m tf <- ms
+                                                 , isImmutable m ]
 
 envAdd x t g = envAdds "envAdd" [(x,t)] g
+
+-- envAdd x (t,a,i) g
+--   = do t'       <- inv
+--        io       <- addFixpointBind (x,(t',a,i))
+--        case io of
+--         Just b  -> do addAnnot x x t'
+--                       return $ g { cge_names = E.envAdd x (t',a,i) $ cge_names g
+--                                  , cge_fenv  = F.insertsIBindEnv [b] $ cge_fenv  g }
+--         Nothing -> return g
+--   where
+--     inv | i == Initialized = addInvariant g t
+--         | otherwise        = return t
+
+
+mkFieldB x f = mconcat [s "field_",s x,s "_",s f] where s = F.symbol
 
 
 instance PP F.IBindEnv where
@@ -493,12 +534,16 @@ envFindReturn = fst3 . E.envFindReturn . cge_names
 ---------------------------------------------------------------------------------------
 
 -- | Instantiate Fresh Type (at Function-site)
+--
+-- XXX: Removing addInvariant
+--
+--
 ---------------------------------------------------------------------------------------
 freshTyFun :: (IsLocated l) => CGEnv -> l -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
 freshTyFun g l t
   | not (isTFun t)     = return t
-  | isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= addInvariant g >>= wellFormed l g
+  | isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= {- addInvariant g >>= -} wellFormed l g
   | otherwise          = return t
 
 freshTyVar g l t 
@@ -611,8 +656,13 @@ freshenModuleDefM g (a, m)
 subType :: AnnTypeR -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l err g t1 t2 =
-  do  t1'        <- addInvariant g t1  -- enhance LHS with invariants
-
+-- 
+--
+-- XXX: Removing addInvariant
+--
+-- 
+  do  -- t1'        <- addInvariant g t1  -- enhance LHS with invariants
+      t1'        <- return t1
       g'         <- envAdds "subtype" (goT HM.empty [t1',t2] ++ 
                                        goP HM.empty (cge_guards g)) g
 

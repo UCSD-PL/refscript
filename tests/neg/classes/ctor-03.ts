@@ -1,21 +1,16 @@
 
-
 class AA { 
-  public a = "OLD"; 
-}
-
-/*@ class BB<M> extends AA<M> */
-class BB extends AA {
+  /*@ x : [Immutable] number */
+  public x = 0; 
   
-  public b: number;
+  /*@ y : [Immutable] { number | v = x } */
+  public y = 0;
     
-  /*@ new () => { v: BB<M> | Map_select(v,"a") ~~ "NEW" } */
-  constructor() {
-    super();
-    this.a = "NEW";
-    super();
-  }
+  constructor() { }
     
 }
 
-var n = new BB();
+var aa = new AA();
+
+assert(aa.x === aa.y + 1);
+

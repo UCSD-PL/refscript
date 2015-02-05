@@ -426,17 +426,17 @@ setRTypeR (TRef x y _)      r = TRef x y r
 setRTypeR t                 _ = t
 
 
-mapElt f (CallSig t)         = CallSig        $ f t
-mapElt f (ConsSig t)         = ConsSig        $ f t
-mapElt f (IndexSig x b t)    = IndexSig x b   $ f t
-mapElt f (FieldSig x o m t)  = FieldSig x o m $ f t
-mapElt f (MethSig  x t)      = MethSig  x     $ f t
+mapElt f (CallSig t)         = CallSig         $ f t
+mapElt f (ConsSig t)         = ConsSig         $ f t
+mapElt f (IndexSig x b t)    = IndexSig x b    $ f t
+mapElt f (FieldSig x o m t)  = FieldSig x o m  $ f t
+mapElt f (MethSig  x t)      = MethSig  x      $ f t
 
-mapElt' f (CallSig t)         = CallSig      $ f t
-mapElt' f (ConsSig t)         = ConsSig      $ f t
-mapElt' f (IndexSig x b t)    = IndexSig x b $ f t
-mapElt' f (FieldSig x o m t)  = FieldSig x (toType $ f $ ofType o) (toType $ f $ ofType m) (f t)
-mapElt' f (MethSig  x t)      = MethSig  x   $ f t
+mapElt' f (CallSig t)        = CallSig         $ f t
+mapElt' f (ConsSig t)        = ConsSig         $ f t
+mapElt' f (IndexSig x b t)   = IndexSig x b    $ f t
+mapElt' f (FieldSig x o m t) = FieldSig x (toType $ f $ ofType o) (toType $ f $ ofType m) (f t)
+mapElt' f (MethSig  x t)     = MethSig  x      $ f t
 
 mapEltM f (CallSig t)        = CallSig        <$> f t
 mapEltM f (ConsSig t)        = ConsSig        <$> f t

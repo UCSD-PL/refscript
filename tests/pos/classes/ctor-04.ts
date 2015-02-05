@@ -1,5 +1,4 @@
 
-
 class AA {
   
   /*@ k : [Immutable] number */

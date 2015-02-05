@@ -420,12 +420,11 @@ ctorVisitor l ms          = defaultVisitor { endStmt = es } { endExpr = ee }
     ts r@(ReturnStmt l _) = BlockStmt <$> fr_ l <*> ((:[r]) <$> ctorExit l ms)
     ts r                  = return $ r
 
-ctorExit l ms 
-  = ReturnStmt
- <$> fr 
- <*> (Just <$> (CallExpr <$> fr
-                         <*> (VarRef <$> fr <*> freshenIdSSA (builtinOpId BICtorExit))
-                         <*> mapM ((VarRef <$> fr <*>) . return . mkCtorId l) ms))
+ctorExit l ms =  ExprStmt 
+             <$> fr 
+             <*> (CallExpr <$> fr
+                           <*> (VarRef <$> fr <*> freshenIdSSA (builtinOpId BICtorExit))
+                           <*> mapM ((VarRef <$> fr <*>) . return . mkCtorId l) ms)
   where
     fr = fr_ l
 

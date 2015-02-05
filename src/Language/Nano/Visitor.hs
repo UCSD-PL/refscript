@@ -776,7 +776,7 @@ scrapeModules pgm@(Nano { code = Src stmts })
     tStmts                         = concatMap . tStmt 
 
     -- tStmt                         :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, IfaceDef r)]
-    tStmt ap c@(ClassStmt{})       = maybeToList $ tracePP "RESOLVED CLASS" $ resolveType ap c
+    tStmt ap c@(ClassStmt{})       = maybeToList $ resolveType ap c
     tStmt ap c@(IfaceStmt{})       = maybeToList $ resolveType ap c
     tStmt _ _                      = [ ]
 

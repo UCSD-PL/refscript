@@ -923,13 +923,13 @@ tcCall γ ef@(DotRef l e f)
       Right (_, te) -> 
           case getProp γ FieldAccess f te of
             Just (te', t, _) ->
-                do (FI _ [e'],τ) <- tcNormalCall γ l ef (FI Nothing [(e, Nothing)]) $ mkTy te' t
+                do (FI _ [e'],τ) <- tcNormalCall γ l ef args $ mkTy te' t
                    return         $ (DotRef l e' f, τ)
             Nothing -> tcError $ errorMissingFld (srcPos l) f te
       Left err -> tcError err
   where
-    mkTy s t         = mkFun ([],Nothing,[B (F.symbol "this") s],t) 
-
+    args     = FI Nothing [(e,Nothing)]
+    mkTy s t = mkFun ([],Nothing,[B (F.symbol "this") s],t) 
          
 -- | `super(e1,...,en)`
 tcCall γ (CallExpr l e@(SuperRef _)  es) 

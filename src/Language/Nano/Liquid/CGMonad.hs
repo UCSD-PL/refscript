@@ -33,7 +33,7 @@ module Language.Nano.Liquid.CGMonad (
   , Freshable (..)
 
   -- * Environment API
-  , envAddFresh, envAdds, envAddReturn, envAddGuard, envPopGuard, envFindTy
+  , envAddFresh, envAdds, envAdd, envAddReturn, envAddGuard, envPopGuard, envFindTy
   , envFindTyWithAsgn, envFindTyForAsgn
   , safeEnvFindTy, safeEnvFindTyWithAsgn, safeEnvFindTyNoSngl
   , envFindReturn, envPushContext
@@ -46,7 +46,7 @@ module Language.Nano.Liquid.CGMonad (
   , addAnnot
 
   -- * Function Types
-  , cgFunTys, cgMethTys, cgCtorTys
+  , cgFunTys, cgMethTys, splitCtorTys
 
   -- * Zip type wrapper
   , zipTypeUpM, zipTypeDownM
@@ -59,7 +59,7 @@ import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
 
-import           Data.Maybe                     (catMaybes, maybeToList)
+import           Data.Maybe                     (catMaybes, maybeToList, isNothing)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map.Strict                as M
@@ -291,6 +291,8 @@ envAdds _ xts' g
        (xs,(ts',as,is))  = mapSnd unzip3 $ unzip xts'
        inv t Initialized = addInvariant g t
        inv t _           = return t
+
+envAdd x t g = envAdds "envAdd" [(x,t)] g
 
 
 instance PP F.IBindEnv where
@@ -577,32 +579,59 @@ freshenModuleDefM g (a, m)
 -- | Adding Subtyping Constraints
 ---------------------------------------------------------------------------------------
 
+-- OLD ---------------------------------------------------------------------------------------
+-- OLD subType :: AnnTypeR -> Error -> CGEnv -> RefType -> RefType -> CGM ()
+-- OLD ---------------------------------------------------------------------------------------
+-- OLD subType l err g t1 t2 =
+-- OLD   do  t1'    <- addInvariant g t1  -- enhance LHS with invariants
+-- OLD       let xs  = [(symbolId l x,(t,a,i)) | (x, Just (t,a,i)) <- rNms t1' ++ rNms t2 ]
+-- OLD       let ys  = [(symbolId l x,(t,a,i)) | (x,      (t,a,i)) <- E.envToList $ cgeAllNames g ]
+-- OLD       ----  when (toType t1 /= toType t2) (errorstar (ppshow t1 ++ " VS " ++ ppshow t2))
+-- OLD       -- g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++
+-- OLD       --                                     ppshow "(" ++ ppshow t1 ++ " vs " ++ ppshow t2 ++ ppshow ")"
+-- OLD       --                                     -- " Adding XS: " ++ ppshow (fst <$> xs) ++ 
+-- OLD       --                                     -- " Adding YS: " ++ ppshow (fst <$> ys) ++
+-- OLD       --                                     -- " FQ Binds : " ++ ppshow (cge_fenv g)
+-- OLD       --                                    ) $ xs ++ ys) g
+-- OLD       g'     <- envAdds "subtype" (xs ++ ys) g
+-- OLD       modify  $ \st -> st {cs = c g' (t1', t2) : (cs st)}
+-- OLD   where
+-- OLD     c g      = uncurry $ Sub g (ci err l)
+-- OLD     rNms t   = mapSnd (`envFindTyWithAsgn` g) . dup <$> names t
+-- OLD     dup a    = (a,a)
+-- OLD     names    = foldReft rr []
+-- OLD     rr r xs  = F.syms r ++ xs
+-- OLD 
+-- OLD 
+-- OLD cgeAllNames g@(CGE { cge_parent = Just g' }) = cgeAllNames g' `E.envUnion` cge_names g 
+-- OLD cgeAllNames g@(CGE { cge_parent = Nothing }) = cge_names g
+
+
 ---------------------------------------------------------------------------------------
 subType :: AnnTypeR -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l err g t1 t2 =
-  do  t1'    <- addInvariant g t1  -- enhance LHS with invariants
-      let xs  = [(symbolId l x,(t,a,i)) | (x, Just (t,a,i)) <- rNms t1' ++ rNms t2 ]
-      let ys  = [(symbolId l x,(t,a,i)) | (x,      (t,a,i)) <- E.envToList $ cgeAllNames g ]
-      ----  when (toType t1 /= toType t2) (errorstar (ppshow t1 ++ " VS " ++ ppshow t2))
-      -- g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++
-      --                                     ppshow "(" ++ ppshow t1 ++ " vs " ++ ppshow t2 ++ ppshow ")"
-      --                                     -- " Adding XS: " ++ ppshow (fst <$> xs) ++ 
-      --                                     -- " Adding YS: " ++ ppshow (fst <$> ys) ++
-      --                                     -- " FQ Binds : " ++ ppshow (cge_fenv g)
-      --                                    ) $ xs ++ ys) g
-      g'     <- envAdds "subtype" (xs ++ ys) g
-      modify  $ \st -> st {cs = c g' (t1', t2) : (cs st)}
+  do  t1'        <- addInvariant g t1  -- enhance LHS with invariants
+
+      g'         <- envAdds "subtype" (goT HM.empty [t1',t2] ++ 
+                                       goP HM.empty (cge_guards g)) g
+
+      modify      $ \st -> st { cs = Sub g' (ci err l) t1' t2 : cs st }
   where
-    c g      = uncurry $ Sub g (ci err l)
-    rNms t   = mapSnd (`envFindTyWithAsgn` g) . dup <$> names t
-    dup a    = (a,a)
-    names    = foldReft rr []
-    rr r xs  = F.syms r ++ xs
+    goP m         = goT m . catMaybes . map (`envFindTy` g) . concatMap F.syms
 
+    goT m []      = [(symbolId l x,t) | (x,t) <- HM.toList m ]
+    goT m ts      = goT (m `HM.union` HM.fromList ps) ts'
+      where
+        (ps, ts') = unzip [ (p,t') | t              <- ts
+                                   , p@(x,(t',_,_)) <- foldT t 
+                                   , isNothing       $ HM.lookup x m ]
 
-cgeAllNames g@(CGE { cge_parent = Just g' }) = cgeAllNames g' `E.envUnion` cge_names g 
-cgeAllNames g@(CGE { cge_parent = Nothing }) = cge_names g
+    foldT t       = [ (n,s) | n <- foldReft rr [] t
+                            , s <- maybeToList $ envFindTyWithAsgn n g ]
+
+    rr r xs       = F.syms r ++ xs
+
 
 
 -- FIXME: Restore this check !!!
@@ -983,10 +1012,10 @@ methTys l f ft0
       Just (vs,s,bs,t) -> return  $ (vs,s,b_type <$> bs,t)
 
 ------------------------------------------------------------------------------
-cgCtorTys :: (PP a) => AnnTypeR -> a -> RefType
+splitCtorTys :: (PP a) => AnnTypeR -> a -> RefType
                     -> CGM [(Int, ([TVar], Maybe RefType, [RefType], RefType))]
 ------------------------------------------------------------------------------
-cgCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
+splitCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 
 
 --------------------------------------------------------------------------------

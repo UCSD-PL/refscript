@@ -320,10 +320,13 @@ tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
 
 ---------------------------------------------------------------------------------------
 tcClassElt :: PPRSF r
-          => TCEnv r -> IfaceDef r -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
+           => TCEnv r 
+           -> IfaceDef r 
+           -> ClassElt (AnnSSA r) 
+           -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
 tcClassElt γ dfn (Constructor l xs body) 
-  = do  cTy      <- ltracePP l "CTOR TY" <$> mkCtorTy
+  = do  cTy      <- mkCtorTy
         its      <- tcFunTys l ctor xs cTy
         body'    <- foldM (tcFun1 γ'' l ctor xs) body its
         return    $ Constructor l xs body'
@@ -339,30 +342,33 @@ tcClassElt γ dfn (Constructor l xs body)
 
     γ''           = tcEnvAdd ctorExit (mkCtorExitTy,ReadOnly,Initialized) γ'
 
+    -- XXX        : keep the right order of fields
+    mkCtorExitTy  = mkFun (vs,Nothing,bs,TCons t_immutable ms fTop)   
+      where 
+        ms        = M.fromList es
+        (bs,es)   = unzip [ (B s t,(k,FieldSig s o t_immutable t)) 
+                          | (k,(FieldSig s o _ t)) <- M.toList $ t_elts dfn ]
+
+    -- FIXME      : Do case of mutliple overloads 
     mkCtorTy      | [ConsAnn (ConsSig t)] <- ann_fact l,
                     Just t'               <- fixRet $ mkAll (t_args dfn) t
                   = return t'
                   | otherwise 
                   = die $ unsupportedNonSingleConsTy (srcPos l)
 
-    m_t           = TVar m_v fTop
-    m_v           = TV (F.symbol "Mout") (srcPos dummySpan)
+    -- m_t           = TVar m_v fTop
+    -- m_v           = TV (F.symbol "Mout") (srcPos dummySpan)
     vs            = t_args dfn
-
-    -- XXX        : keep the right order of fields
-    mkCtorExitTy  = ltracePP l "CTOR EXIT TY" $ mkFun (m_v:vs,Nothing,bs,TCons m_t ms fTop)   
-      where 
-        ms        = M.fromList es
-        (bs,es)   = unzip [ (B s t,(k,f)) | (k,f@(FieldSig s _ _ t)) <- M.toList $ t_elts dfn ]
                               
     -- FIXME      : Do case of mutliple overloads 
     fixRet t      | Just (vs,Nothing,bs,t)  <- bkFun t,
-                    Just (TCons m es r)     <- tracePP "FLATTENED" $ flattenType γ t
-                  = Just $ mkFun (vs, Nothing, bs, TCons m (ee es) r)
+                    Just (TCons m es r)     <- flattenType γ t
+                  = Just $ mkFun (vs, Nothing, bs, TCons t_immutable (ee es) r)
                   | otherwise 
                   = Nothing
       where
-        ee es     = M.fromList [ p | p@(_,FieldSig{})  <- M.toList es ]
+        ee es     = M.fromList [ (k,FieldSig s o t_immutable t) 
+                               | (k,FieldSig s o _ t) <- M.toList es ]
 
 
 -- | Static field
@@ -546,7 +552,7 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 
 -- | class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 tcStmt γ (ClassStmt l x e is ce) 
-  = do  dfn      <- tracePP "CLASS DFN" <$> tcEnvFindTypeDefM l γ rn
+  = do  dfn      <- tcEnvFindTypeDefM l γ rn
         ms       <- mapM (tcClassElt γ dfn) ce
         return    $ (ClassStmt l x e is ms, Just γ)
   where
@@ -985,7 +991,7 @@ tcNormalCall γ l fn etos ft0
        case z of 
          Just (θ, ft) -> do addAnn (ann_id l) $ Overload (tce_ctx γ) ft
                             addSubst l θ
-                            ltracePP l (ppshow fn) <$> tcCallCase γ l fn ets ft
+                            tcCallCase γ l fn ets ft
          Nothing      -> tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) $ toLists ets
                          -- do tcWrap $ tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) $ toLists ets
                          --    return (fst <$> ets, tNull)

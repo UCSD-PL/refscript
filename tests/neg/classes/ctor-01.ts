@@ -4,7 +4,7 @@ class A {
   /*@ x: [Mutable] { number | v > 0 } */
   public x: number;
 
-  /*@ y: [Mutable] { string | (v = "a") || (v = "b") } */
+  /*@ y: [Mutable] { string | (v = "a") || (v = "c") } */
   public y: string; 
 
   public c = "aaa"; 

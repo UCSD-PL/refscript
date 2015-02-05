@@ -157,21 +157,23 @@ declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
 // FIXME: the two version of inequality should not be the same...
 
 /*@ builtin_OpLAnd :: 
+    /\ forall B. (x: undefined, y:B) => {undefined | true}
+    /\ forall B. (x: null     , y:B) => {null | true}
     /\ forall A. (x:A, y:A) => { v:A | (if (Prop(x)) then (v = y) else (v = x)) }
     /\ forall A B. (x:A, y:B) => { v:top | (Prop(v) <=> (Prop(x) && Prop(y))) }
  */
 declare function builtin_OpLAnd(x: any, y: any): any;
       
 /*@ builtin_OpLOr :: 
-    /\ forall A. (x: undefined, y:A) => {A | true}
-    /\ forall A. (x: null, y:A) => {A | true}
-    /\ forall A. (x:A, y:A) => { v:A | ((Prop v) => (v ~~ y) && (not (Prop v) => (v ~~ x))) } 
+    /\ forall A. (x: undefined, y:A) => { v:A | v ~~ y }
+    /\ forall A. (x: null, y:A) => { v:A | v ~~ y }
+    /\ forall A. (x:A, y:A) => { v:A | if (not (Prop x)) then (v = y) else (v = x) } 
     /\ forall A B. (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) || Prop(y))) }
  */
 declare function builtin_OpLOr(x: any, y: any): any;
 
 /*@ builtin_PrefixLNot :: 
-    forall A. (x: A) => {v:boolean | (((Prop v) <=> not Prop(x)) && ((Prop v) <=> FLS(x)))} 
+    forall A. (x: A) => {v:boolean | (Prop v) <=> (not (Prop x))} 
  */
 declare function builtin_PrefixLNot<A>(x: A): boolean;
 
@@ -774,8 +776,6 @@ declare var console: Console;
 
 /*@ measure ttag :: forall A . (A) => string */
 
-/*@ measure FLS  :: forall A . (A) => bool */
-
 /*@ measure Prop :: forall A . (A) => bool */
 
 /*@ measure null :: forall A . (A) => bool */
@@ -791,7 +791,7 @@ declare function builtin_PrefixTypeof<A>(x: A): string;
 declare function builtin_BITruthy<A>(x: A): boolean; 
 
 /*@ builtin_BIFalsy :: 
-    forall A. (x:A) => { v:boolean | ((Prop v) <=> FLS(x)) }          
+    forall A. (x:A) => { v:boolean | ((Prop v) <=> (not Prop(x))) }          
 */
 declare function builtin_BIFalsy<A>(x: A): boolean; 
 
@@ -804,8 +804,7 @@ declare function builtin_BIFalsy<A>(x: A): boolean;
 /*@ invariant {v:string | [(ttag(v) = "string"); (Prop(v) <=> v /= "" )]} */
 
 /*@ invariant {v:number | [(ttag(v)  =  "number");
-                           (Prop(v) <=> v /= 0  ); 
-                           (FLS(v)  <=> v  = 0  )]}	*/
+                           (Prop(v) <=> v /= 0  )]}	*/
 
 
 /**

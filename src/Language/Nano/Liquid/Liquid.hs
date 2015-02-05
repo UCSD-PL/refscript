@@ -418,23 +418,49 @@ consClassElts g dfn ce
 consClassElt :: CGEnv -> IfaceDef F.Reft -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElt g dfn (Constructor l xs body) 
-  = case findAnnot of
-      Just ft -> do its <- cgCtorTys l i ft
-                    g' <- envAdds "consClassElt-1"
-                            [(Loc (ann l) "this", 
-                              (mkThis $ t_args dfn, WriteGlobal, Initialized))] g
-                    mapM_ (consFun1 l g' i xs body) its
-      _       -> cgError $ unsupportedNonSingleConsTy $ srcPos l
+  = do  g'       <- envAdd ctorExit (mkCtorExitTy,ReadOnly,Initialized) g
+        cTy      <- mkCtorTy
+        ts       <- splitCtorTys l ctor cTy
+        forM_ ts  $ consFun1 l g' ctor xs body
   where 
-    i             = Id l "constructor"
-    findAnnot     = case [ t | ConsAnn (ConsSig t)  <- ann_fact l ] of
-                      [t] -> Just t
-                      [ ] -> Just $ TFun Nothing [] tVoid fTop
-                      _   -> Nothing
-    mkThis (_:αs) = TRef an (t_mutable : map tVar αs) fTop
-    mkThis _      = throw $ bug (srcPos l) "Liquid.Liquid.consClassElt Constructor" 
-    an            = QN AK_ (srcPos l) ss (F.symbol $ t_name dfn)
-    QP AK_ _ ss   = cge_path g 
+
+    ctor          = builtinOpId BICtor
+    ctorExit      = builtinOpId BICtorExit
+    super         = builtinOpId BISuper
+
+    -- XXX        : keep the right order of fields
+    --              Make the return object immutable to avoid contra-variance
+    --              checks at the return from the constructor.
+    mkCtorExitTy  = mkFun (vs,Nothing,bs,TCons t_immutable ms fTop)
+      where 
+        ms        = M.fromList es
+        (bs,es)   = unzip [ (B s t,(k,FieldSig s o t_immutable $ rr s t)) 
+                          | (k,(FieldSig s o _ t)) <- M.toList $ t_elts dfn ]
+        rr s t    = fmap (const $ F.symbolReft s) t 
+
+    -- FIXME      : Do case of mutliple overloads 
+    mkCtorTy      | [ConsAnn (ConsSig t)] <- ann_fact l,
+                    Just t'               <- fixRet $ mkAll (t_args dfn) t
+                  = return $ ltracePP l "mkCtorTy" t'
+                  | otherwise 
+                  = die $ unsupportedNonSingleConsTy (srcPos l)
+
+    -- m_t           = TVar m_v fTop
+    -- m_v           = TV (F.symbol "Mout") (srcPos dummySpan)
+    vs            = t_args dfn
+                              
+
+    -- FIXME      : Do case of mutliple overloads 
+    --              Making the return type immutable.
+    fixRet t      | Just (vs,Nothing,bs,t)  <- bkFun t,
+                    Just (TCons m es r)     <- flattenType g t
+                  = Just $ mkFun (vs, Nothing, bs, TCons t_immutable (ee es) r)
+                  | otherwise 
+                  = Nothing
+      where
+        ee es     = M.fromList [ (k,FieldSig s o t_immutable t) 
+                               | (k,FieldSig s o _ t) <- M.toList es ]
+
 
 -- Static field
 consClassElt g dfn (MemberVarDecl l True x (Just e))

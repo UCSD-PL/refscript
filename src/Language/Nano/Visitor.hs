@@ -776,7 +776,7 @@ scrapeModules pgm@(Nano { code = Src stmts })
     tStmts                         = concatMap . tStmt 
 
     -- tStmt                         :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, IfaceDef r)]
-    tStmt ap c@(ClassStmt{})       = maybeToList $ resolveType ap c
+    tStmt ap c@(ClassStmt{})       = maybeToList $ tracePP "RESOLVED CLASS" $ resolveType ap c
     tStmt ap c@(IfaceStmt{})       = maybeToList $ resolveType ap c
     tStmt _ _                      = [ ]
 
@@ -835,11 +835,15 @@ mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
 resolveType :: AbsPath -> Statement (AnnR r) -> Maybe (Id SourceSpan, IfaceDef r)
 ---------------------------------------------------------------------------------------
 resolveType (QP AK_ _ ss) (ClassStmt l c _ _ cs) 
-                  = go [ t | ClassAnn t <- ann_fact l ] 
+                      = go [ t | ClassAnn t <- ann_fact l ] 
   where
-    go [(vs,e,i)] = Just (cc, ID (QN AK_ (srcPos l) ss (F.symbol c)) ClassKind vs (e,i) (typeMembers cs))
-    go _          = Nothing
-    cc            = fmap ann c
+    go [(m:vs,e,i)]   = Just (cc, ID (QN AK_ (srcPos l) ss (F.symbol c)) 
+                                     ClassKind 
+                                     (m:vs) 
+                                     (e,i) 
+                                     (typeMembers (tVar m) cs))
+    go _              = Nothing
+    cc                = fmap ann c
 
 resolveType _ (IfaceStmt l c) 
                   = listToMaybe [ (cc, t) | IfaceAnn t <- ann_fact l ]
@@ -849,16 +853,19 @@ resolveType _ (IfaceStmt l c)
 resolveType _ _   = Nothing 
 
 ---------------------------------------------------------------------------------------
-typeMembers :: [ClassElt (AnnR r)] -> TypeMembers r
+typeMembers :: Mutability -> [ClassElt (AnnR r)] -> TypeMembers r
 ---------------------------------------------------------------------------------------
-typeMembers                       =  mkTypeMembers . concatMap go
+typeMembers dm                =  mkTypeMembers . concatMap go
   where
-    go (MemberVarDecl l s _ _)    = [(sk s    , MemDefinition , f) | FieldAnn f  <- ann_fact l]
-    go (MemberMethDef l s _ _ _ ) = [(sk s    , MemDefinition , f) | MethAnn  f  <- ann_fact l]
-    go (MemberMethDecl l s _ _ )  = [(sk s    , MemDeclaration, f) | MethAnn  f  <- ann_fact l]
-    go (Constructor l _ _)        = [(sk False, MemDefinition , a) | ConsAnn  a  <- ann_fact l]
-    sk True                       = StaticMember 
-    sk False                      = InstanceMember 
+    go (MemberVarDecl l s _ _)     = [(sk s, MemDefinition , fixFieldMut f) | FieldAnn f <- ann_fact l]
+    go (MemberMethDef l s _ _ _ )  = [(sk s, MemDefinition , f)             | MethAnn  f <- ann_fact l]
+    go (MemberMethDecl l s _ _ )   = [(sk s, MemDeclaration, f)             | MethAnn  f <- ann_fact l]
+    go (Constructor l _ _)         = [(sk False, MemDefinition , a)         | ConsAnn  a <- ann_fact l]
+    sk True                        = StaticMember 
+    sk False                       = InstanceMember 
+    fixFieldMut (FieldSig s o m t) | isInheritedMutability m 
+                                   = FieldSig s o dm t
+    fixFieldMut f                  = f
 
 ---------------------------------------------------------------------------------------
 mkTypeMembers :: Eq q => [(StaticKind, MemberKind, TypeMemberQ q r)] -> TypeMembersQ q r

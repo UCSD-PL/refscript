@@ -8,9 +8,8 @@ class AA {
   public l: number;
   
   constructor() {
-    var n = random();
-    this.k = n;
-    this.l = n;
+    this.k = random();
+    this.l = random();
   }
     
 }

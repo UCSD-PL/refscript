@@ -303,6 +303,9 @@ envAdds _ xts g
      inv t _           = return t
 
 
+-- | `reftCheck g x t` checks that no glaobal symbols (as reported in @g@) 
+--   appear in the refinement of type @t@.
+--
 reftCheck g x t        | null forbiddenSyms 
                        = return ()
                        | otherwise

@@ -11,6 +11,7 @@ import Text.PrettyPrint.HughesPJ
 import Language.Nano.Locations
 import Language.ECMAScript3.PrettyPrint
 import Language.Fixpoint.Errors
+import Language.Fixpoint.Misc
 import Language.Fixpoint.PrettyPrint
 
 
@@ -180,6 +181,8 @@ errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for '%
 errorMultipleCasts l cs       = mkErr l $ printf "Multiple Casts: %s" (ppshow cs) 
 errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"
 errorWellFormed l             = mkErr l $ printf "Well-formedness Error" 
+errorForbiddenSyms l t xs     = mkErr l $ printf "Symbol(s): %s, is (are) not readonly or local, so should not be appearing in the refinement of type '%s'." 
+                                (show $ intersperse comma $ map pp xs) (ppshow t)
  
 ---------------------------------------------------------------------------
 -- | Pervasive (typechecking TC and Liquid)

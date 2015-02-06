@@ -5,6 +5,8 @@ module K {
 
       export class A {
         public x0 = "";
+
+        /*@ y0 : [Immutable] { string | v = "" } */
         public y0 = "";
         constructor() {}
       }
@@ -31,10 +33,11 @@ module N {
     public l: string;
     /*@ k : [Immutable] { string | v = "KK" } */
     public k: string;
+
     constructor() {
       super();
-      this.k = "KK";
       this.l = "L";
+      this.y0 = "000"
     }
   }
 }

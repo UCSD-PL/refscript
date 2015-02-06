@@ -17,7 +17,7 @@ module K {
 module Mod {
   export class AA extends K.L.Z.A { 
     /*@ k : [Immutable] { string | v = "K" } */
-    public k = "K";  
+    public k = "";  
 
     constructor() {
       super();

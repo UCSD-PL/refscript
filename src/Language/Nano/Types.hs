@@ -517,6 +517,7 @@ data BuiltinOp = BIUndefined
                | BICondExpr
                | BICastExpr
                | BISuper
+               | BISuperVar
                | BIForInKeys
                | BICtorExit
                | BICtor

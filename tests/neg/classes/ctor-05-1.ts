@@ -33,7 +33,6 @@ module N {
     public k: string;
     constructor() {
       super();
-      this.k = "KK";
       this.l = "L";
     }
   }

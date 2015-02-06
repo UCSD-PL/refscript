@@ -16,8 +16,10 @@ import           Control.Exception                  (throw)
 
 import qualified Data.Traversable                   as T
 import qualified Data.HashMap.Strict                as HM
+import           Data.Function                      (on)
 import qualified Data.Map.Strict                    as M
 import           Data.Maybe                         (maybeToList, fromMaybe, catMaybes)
+import           Data.List                          (sortBy)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -72,7 +74,7 @@ parse fs next
         nextPhase r next
 
 ssa next p
-  = do  r <- ssaTransform p              
+  = do  r <- ssaTransform p
         donePhase Loud "SSA Transform"
         nextPhase r next
 
@@ -148,16 +150,22 @@ initGlobalEnv pgm@(Nano { code = Src s })
     >>= \g  -> envAdds "initGlobalEnv" extras g
     >>= \g' -> return $ g'
   where
-    nms       = (E.envAdds extras $ E.envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv $ visibleVars s) `E.envUnion`
-                (E.envMap (\(_,c,d,e) -> (d,c,e)) $ E.envUnionList $ maybeToList $ m_variables <$> E.qenvFindTy pth mod)
-    extras    = [(Id (srcPos dummySpan) "undefined", 
-                  (TApp TUndef [] $ F.Reft (F.vv Nothing, [F.trueRefa]), ReadOnly, Initialized))]
-    bds       = F.emptyIBindEnv
-    cha       = pCHA pgm
-    grd       = []
-    mod       = pModules pgm
-    ctx       = emptyContext
-    pth       = mkAbsPath []
+    reshuffle1 = \(_,_,c,d,e) -> (d,c,e)
+    reshuffle2 = \(_,c,d,e)   -> (d,c,e)
+    nms        = E.envUnion
+                 (E.envAdds extras    $ E.envMap reshuffle1 
+                                      $ mkVarEnv $ visibleVars s) 
+                 (E.envMap reshuffle2 $ E.envUnionList $ maybeToList 
+                                      $ m_variables <$> E.qenvFindTy pth mod)
+
+    extras     = [(Id (srcPos dummySpan) "undefined", undefInfo)]
+    undefInfo  = (TApp TUndef [] F.trueReft, ReadOnly, Initialized)
+    bds        = F.emptyIBindEnv
+    cha        = pCHA pgm
+    grd        = []
+    mod        = pModules pgm
+    ctx        = emptyContext
+    pth        = mkAbsPath []
 
 -------------------------------------------------------------------------------
 initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> CGM CGEnv
@@ -165,14 +173,17 @@ initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> C
 initModuleEnv g n s 
   = freshenCGEnvM $ CGE nms bds grd ctx mod cha pth (Just g)
   where
-    nms       = (E.envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv $ visibleVars s) `E.envUnion`
-                (E.envMap (\(_,c,d,e) -> (d,c,e)) $ E.envUnionList $ maybeToList $ m_variables <$> E.qenvFindTy pth mod)
-    bds       = cge_fenv g
-    grd       = []
-    mod       = cge_mod g
-    cha       = cge_cha g
-    ctx       = emptyContext
-    pth       = extendAbsPath (cge_path g) n
+    reshuffle1 = \(_,_,c,d,e) -> (d,c,e)
+    reshuffle2 = \(_,c,d,e)   -> (d,c,e)
+    nms        = (E.envMap reshuffle1 $ mkVarEnv $ visibleVars s) `E.envUnion`
+                 (E.envMap reshuffle2 $ E.envUnionList $ maybeToList 
+                                      $ m_variables <$> E.qenvFindTy pth mod)
+    bds        = cge_fenv g
+    grd        = []
+    mod        = cge_mod g
+    cha        = cge_cha g
+    ctx        = emptyContext
+    pth        = extendAbsPath (cge_path g) n
 
 -- | `initFuncEnv l f i xs (αs, ts, t) g` 
 --
@@ -419,37 +430,41 @@ consClassElts g dfn ce
 ------------------------------------------------------------------------------------
 consClassElt :: CGEnv -> IfaceDef F.Reft -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
-consClassElt g dfn (Constructor l xs body) 
+consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body) 
   = do  g'       <- envAdd ctorExit (mkCtorExitTy,ReadOnly,Initialized) g
+        g''      <- envAdds "ctor-super" superInfo g'
         cTy      <- mkCtorTy
         ts       <- splitCtorTys l ctor cTy
-        forM_ ts  $ consFun1 l g' ctor xs body
+        forM_ ts  $ consFun1 l g'' ctor xs body
   where 
 
     ctor          = builtinOpId BICtor
     ctorExit      = builtinOpId BICtorExit
     super         = builtinOpId BISuper
 
+    superInfo     | Just t <- extractParent'' g d 
+                  = [(super,(t,ReadOnly,Initialized))]
+                  | otherwise
+                  = []
+
     -- XXX        : keep the right order of fields
     --              Make the return object immutable to avoid contra-variance
     --              checks at the return from the constructor.
     mkCtorExitTy  = mkFun (vs,Nothing,bs,tVoid)
       where 
-        -- ms     = M.fromList es
-        bs        = [ B s t | (_,(FieldSig s _ _ t)) <- M.toList $ t_elts dfn ]
-        -- rr s t = fmap (const $ F.symbolReft s) t 
+        bs        | Just (TCons _ ms _) <- flattenType g (TRef nm (tVar <$> vs) fTop)
+                  = sortBy c_sym [ B s t | (_,(FieldSig s _ _ t)) <- M.toList ms ]
+                  | otherwise
+                  = []
+    
+    c_sym         = on compare b_sym
 
     -- FIXME      : Do case of mutliple overloads 
     mkCtorTy      | [ConsAnn (ConsSig t)] <- ann_fact l,
-                    Just t'               <- fixRet $ mkAll (t_args dfn) t
+                    Just t'               <- fixRet $ mkAll vs t
                   = return t'
                   | otherwise 
                   = die $ unsupportedNonSingleConsTy (srcPos l)
-
-    -- m_t           = TVar m_v fTop
-    -- m_v           = TV (F.symbol "Mout") (srcPos dummySpan)
-    vs            = t_args dfn
-                              
 
     -- FIXME      : Do case of mutliple overloads 
     --              Making the return type immutable.
@@ -457,15 +472,6 @@ consClassElt g dfn (Constructor l xs body)
                   = Just $ mkFun (vs, Nothing , bs, tVoid)
                   | otherwise 
                   = Nothing
---     fixRet t      | Just (vs,Nothing,bs,t)  <- bkFun t,
---                     Just (TCons m es r)     <- flattenType g t
---                   = Just $ mkFun (vs, Nothing, bs, TCons t_immutable (ee es) r)
---                   | otherwise 
---                   = Nothing
---       where
---         ee es     = M.fromList [ (k,FieldSig s o t_immutable t) 
---                                | (k,FieldSig s o _ t) <- M.toList es ]
-
 
 -- Static field
 consClassElt g dfn (MemberVarDecl l True x (Just e))
@@ -669,8 +675,8 @@ consExpr g (CallExpr l e es) _
 --
 --   If `e` gets translated to `x`
 --
---   Returns type: { v: _ | v = field_x_f }, if `f` is an immutable field
---                 { v: _ | _             }, otherwise  
+--   Returns type: { v: _ | v = f }, if `f` is an immutable field
+--                 { v: _ | _     }, otherwise  
 --
 --   The TC phase should have resolved whether we need to restrict the range of
 --   the type of `e` (possibly adding a relevant cast). So no need to repeat the

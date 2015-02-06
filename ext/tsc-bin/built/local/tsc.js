@@ -479,6 +479,7 @@ var TypeScript;
         No_support_for_value_assigned_enumeration_element_0: "No support for value assigned enumeration element '{0}'.",
         Initialization_of_parameter_0_at_the_signature_site_is_not_supported: "Initialization of parameter '{0}' at the signature site is not supported.",
         Cannot_infer_mutability_parameter_for_class_constructor: "Cannot infer mutability parameter for class constructor.",
+        Class_0_needs_to_have_an_explicit_constructor: "Class '{0}' needs to have an explicit constructor.",
         Class_0_extends_other_classes_so_needs_to_have_an_explicit_constructor: "Class '{0}' extends other classes so needs to have an explicit constructor.",
         Constructor_parent_has_not_been_set: "Constructor parent has not been set."
     };
@@ -2641,8 +2642,9 @@ var TypeScript;
         "No support for value assigned enumeration element '{0}'.": { "code": 8030, "category": 5 /* Unimplemented */ },
         "Initialization of parameter '{0}' at the signature site is not supported.": { "code": 8031, "category": 5 /* Unimplemented */ },
         "Cannot infer mutability parameter for class constructor.": { "code": 8032, "category": 5 /* Unimplemented */ },
-        "Class '{0}' extends other classes so needs to have an explicit constructor.": { "code": 8033, "category": 5 /* Unimplemented */ },
-        "Constructor parent has not been set.": { "code": 8034, "category": 4 /* Bug */ }
+        "Class '{0}' needs to have an explicit constructor.": { "code": 8033, "category": 5 /* Unimplemented */ },
+        "Class '{0}' extends other classes so needs to have an explicit constructor.": { "code": 8034, "category": 5 /* Unimplemented */ },
+        "Constructor parent has not been set.": { "code": 8035, "category": 4 /* Bug */ }
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -9792,30 +9794,7 @@ var TypeScript;
             })) {
                 var classElts = this.classElements.toRsClassElt(helper, mutabilityVar);
             } else {
-                var heritage = this.heritageClauses.toArray();
-
-                var extendsClass = heritage.some(function (h) {
-                    for (var i = 0; i < h.childCount(); i++) {
-                        if (h.childAt(i).kind() === 48 /* ExtendsKeyword */)
-                            return true;
-                    }
-                    return false;
-                });
-
-                if (extendsClass) {
-                    helper.postDiagnostic(this, TypeScript.DiagnosticCode.Class_0_extends_other_classes_so_needs_to_have_an_explicit_constructor, [this.identifier.text()]);
-                }
-
-                if (mutabilityVar) {
-                    var consTy = new TypeScript.RsTFun([], [], new TypeScript.TTypeReference(this.identifier.text(), [mutabilityVar]));
-                } else {
-                    helper.postDiagnostic(this, TypeScript.DiagnosticCode.Cannot_infer_mutability_parameter_for_class_constructor);
-                }
-                var typeStr = consTy.toString();
-                var anns = [new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 8 /* RawConstr */, "new " + typeStr)];
-                var ctor = new TypeScript.RsConstructor(helper.getSourceSpan(this), anns, new TypeScript.RsASTList([]), new TypeScript.RsASTList([]));
-
-                var classElts = new TypeScript.RsASTList(this.classElements.toRsClassElt(helper, mutabilityVar).members.concat(ctor));
+                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Class_0_needs_to_have_an_explicit_constructor, [this.identifier.text()]);
             }
 
             helper.popParentNode();

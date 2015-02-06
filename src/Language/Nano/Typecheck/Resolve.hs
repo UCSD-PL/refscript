@@ -17,6 +17,8 @@ module Language.Nano.Typecheck.Resolve (
 
   -- * Ancestors
   , weaken, allAncestors, classAncestors, interfaceAncestors, isAncestor
+  , onlyInheritedFields
+  , allFields
 
   -- * Keys
   , boundKeys
@@ -35,6 +37,7 @@ import qualified Data.HashMap.Strict              as HM
 import           Data.Maybe                          (maybeToList)
 import           Data.Foldable                       (foldlM)
 import           Data.List                           (find)
+import qualified Data.HashSet                    as  HS
 import           Data.Graph.Inductive.Graph
 import           Data.Graph.Inductive.Query.DFS
 import           Data.Graph.Inductive.Query.BFS
@@ -237,6 +240,47 @@ ancestors k γ s = [ t_name l | cur <- maybeToList (HM.lookup s m)
                              , l   <- maybeToList $ lab g anc
                              , t_class l == k ]
   where ClassHierarchy g m   = cha γ
+
+
+-- XXX : only strict parents 
+---------------------------------------------------------------------------
+strictAncestorsFromPgm :: Nano a r -> AbsName -> [AbsName]
+---------------------------------------------------------------------------
+strictAncestorsFromPgm p s = [ t_name l | cur <- maybeToList (HM.lookup s m)
+                                        , anc <- reachable cur g
+                                        , cur /= anc      -- only gather parents
+                                        , l   <- maybeToList $ lab g anc
+                                        , t_class l == ClassKind ]
+  where ClassHierarchy g m              = pCHA p
+
+-- XXX : includes search in all parent classes (including the current one)
+---------------------------------------------------------------------------
+classAncestorsFromPgm :: Nano a r -> AbsName -> [AbsName]
+---------------------------------------------------------------------------
+classAncestorsFromPgm p s = [ t_name l | cur <- maybeToList (HM.lookup s m)
+                                  , anc <- reachable cur g
+                                  , l   <- maybeToList $ lab g anc
+                                  , t_class l == ClassKind ]
+  where ClassHierarchy g m        = pCHA p
+
+---------------------------------------------------------------------------
+allFields :: NanoBareR r -> AbsName -> [F.Symbol]
+---------------------------------------------------------------------------
+allFields p a = HS.toList . HS.unions 
+              $ HS.fromList . flds <$> classAncestorsFromPgm p a 
+  where
+    flds a = [ s | ID _ _ _ _ es    <- maybeToList $ resolveTypeInPgm p a
+                 , FieldSig s _ _ _ <- M.elems es ] 
+
+
+---------------------------------------------------------------------------
+onlyInheritedFields :: NanoBareR r -> AbsName -> [F.Symbol]
+---------------------------------------------------------------------------
+onlyInheritedFields p a = HS.toList . HS.unions 
+                        $ HS.fromList . flds <$> strictAncestorsFromPgm p a 
+  where
+    flds a = [ s | ID _ _ _ _ es    <- maybeToList $ resolveTypeInPgm p a
+                 , FieldSig s _ _ _ <- M.elems es ] 
 
 ---------------------------------------------------------------------------
 classAncestors     :: EnvLike r t => t r -> AbsName -> [AbsName]

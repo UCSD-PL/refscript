@@ -288,6 +288,8 @@ envAdds _ xts g
   = do ts'            <- zipWithM inv ts is
        let xtas        = zip xs $ zip3 ts' as is
 
+       zipWithM_         (reftCheck g) xs ts'
+
        g'             <- foldM addObjectFields g $ zip xs ts'
        
        is             <- catMaybes    <$> forM xtas addFixpointBind
@@ -299,6 +301,19 @@ envAdds _ xts g
      (xs,(ts,as,is))   = mapSnd unzip3 $ unzip xts
      inv t Initialized = addInvariant g t
      inv t _           = return t
+
+
+reftCheck g x t        | null forbiddenSyms 
+                       = return ()
+                       | otherwise
+                       = cgError $ errorForbiddenSyms (srcPos x) t forbiddenSyms
+  where
+    forbiddenSyms      = [ s | s <- foldReft rr [] t
+                             , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g
+                             , not $ refinementReady a 
+                         ]
+    rr r xs            = F.syms r ++ xs
+    refinementReady    = (`elem` [ReadOnly, ImportDecl, WriteLocal])
 
 
 -- | `addObjectFields g (x,t)` when introducing an object @x@ in environment @g@
@@ -339,12 +354,17 @@ mkFieldB x f = mconcat [s "field_",s x,s "_",s f] where s = F.symbol
 instance PP F.IBindEnv where
   pp e = F.toFix e 
 
--- ReturnVar definitely does not need to be in the bindings
+
 ---------------------------------------------------------------------------------------
 addFixpointBind :: (F.Symbolic x) 
                 => (x, (RefType, Assignability, Initialization)) -> CGM (Maybe F.BindId)
 ---------------------------------------------------------------------------------------
+-- No binding for globals: they shouldn't appear in refinements
+addFixpointBind (_, (_, WriteGlobal,_)) = return Nothing    
+
+-- No binding for return-val: it shouldn't appear in refinements
 addFixpointBind (_, (_, ReturnVar,_)) = return Nothing 
+
 addFixpointBind (x, (t, _, _))
   = do (i, bs') <- F.insertBindEnv s r . binds <$> get 
        modify    $ \st -> st { binds = bs' }
@@ -652,20 +672,17 @@ freshenModuleDefM g (a, m)
 -- OLD cgeAllNames g@(CGE { cge_parent = Nothing }) = cge_names g
 
 
+-- 
+-- XXX: Removing addInvariant
+-- 
 ---------------------------------------------------------------------------------------
 subType :: AnnTypeR -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l err g t1 t2 =
--- 
---
--- XXX: Removing addInvariant
---
--- 
   do  -- t1'        <- addInvariant g t1  -- enhance LHS with invariants
       t1'        <- return t1
       g'         <- envAdds "subtype" (goT HM.empty [t1',t2] ++ 
                                        goP HM.empty (cge_guards g)) g
-
       modify      $ \st -> st { cs = Sub g' (ci err l) t1' t2 : cs st }
   where
     goP m         = goT m . catMaybes . map (`envFindTy` g) . concatMap F.syms

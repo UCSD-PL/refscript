@@ -342,20 +342,24 @@ instance Monoid (ModuleDefQ q r) where
 
 data Assignability 
   -- 
-  -- ^ import,  cannot be modified, can appear in refinements
-  -- ^ contains: FunctionStmts, Measures, Classes, Modules.
+  -- ^ Import,  cannot be modified
+  -- ^ Contains: FunctionStmts, Measures, Classes, Modules.
+  -- ^ Can appear in refinements
   --
   = ReadOnly    
   -- 
   -- ^ Like ReadOnly but for function declarations with no body
+  -- ^ Can appear in refinements.
   --
   | ImportDecl
   -- 
-  -- ^ written in local-scope, can be SSA-ed, can appear in refinements
+  -- ^ written in local-scope, can be SSA-ed
+  -- ^ Can appear in refinements
   --
   | WriteLocal  
   -- 
-  -- ^ written in non-local-scope, cannot do SSA, cannot appear in refinements
+  -- ^ Written in non-local-scope, cannot do SSA
+  -- ^ CANNOT appear in refinements
   --
   | WriteGlobal 
   -- 

@@ -376,10 +376,12 @@ consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv)
 ------------------------------------------------------------------------------------
 consVarDecl g v@(VarDecl l x (Just e))
   = case  scrapeVarDecl v of
+      -- WriteLocal 
       [ ]     ->  mseq (consExpr g e Nothing) $ \(y,gy) -> do
                     t       <- safeEnvFindTy y gy
                     Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal,Initialized))] gy
 
+      -- WriteGlobal
       [(_,t)] -> mseq (consExpr g e $ Just t) $ \(y, gy) -> do
                   ty      <- safeEnvFindTy y gy
                   fta     <- freshTyVar gy l t
@@ -575,9 +577,14 @@ consExpr g (ThisRef l) _
       Nothing -> cgError $ errorUnboundId (ann l) "this" 
 
 consExpr g (VarRef l x) _
-  = case envFindTy x g of
-      Just t  -> addAnnot (srcPos l) x t >> return (Just (x, g))
-      Nothing -> cgError $ errorUnboundId (ann l) x
+  | Just (t,a@WriteGlobal,i) <- tInfo
+  = addAnnot (srcPos l) x t >> Just <$> envAddFresh l (t,WriteLocal,i) g
+  | Just (t,_,_) <- tInfo
+  = addAnnot (srcPos l) x t >> return (Just (x, g))
+  | otherwise
+  = cgError $ errorUnboundId (ann l) x
+  where 
+    tInfo = envFindTyWithAsgn x g
 
 consExpr g (PrefixExpr l o e) _
   = do opTy         <- safeEnvFindTy (prefixOpId o) g
@@ -804,7 +811,7 @@ consCall :: PP a
 
 consCall g l fn ets ft0 
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      ts <- T.mapM (`safeEnvFindTy` g') xes
+      ts <- T.mapM (`safeEnvFindTy` g') (ltracePP l ("CONS CALL ARGS " ++ ppshow ets) xes) 
       case ol of 
         [ft] -> consInstantiate l g' fn ft ts xes
         _    -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
@@ -831,7 +838,7 @@ consInstantiate l g fn ft ts xes
   = do  (_,its1,ot)     <- instantiateFTy l g fn ft
         ts1             <- idxMapFI (instantiateTy l g) 1 ts
         let (ts2, its2)  = balance ts1 its1
-        let (su, ts3)    = renameBinds (toList its2) (toList xes)
+        let (su, ts3)    = renameBinds (ltracePP l "SU-FROM" $ toList its2) (ltracePP l "SU-TO" $ toList xes)
         -- _               <- zipWithM_ (subType l err g) (ltracePP l "LQ:LHS" $ toList ts2) 
         --                                                (ltracePP l "LQ:RHS" ts3)
         _               <- zipWithM_ (subType l err g) (toList ts2) ts3

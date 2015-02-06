@@ -4,7 +4,6 @@ class AA {
   /*@ k : [Immutable] string */
   public k = "VALUE";  
 
-  /*@ new () => { AA<M> | Map_select(v,"k") ~~ "VALUE" } */
   constructor() {}
 
 }

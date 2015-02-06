@@ -34,6 +34,7 @@ import           Language.Nano.Names
 import           Language.Nano.Misc
 import           Language.Nano.Program
 import           Language.Nano.Types
+import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.SSA.Types
 import           Language.Nano.SSA.SSAMonad
@@ -365,9 +366,7 @@ ssaStmt (SwitchStmt l e xs)
 --  FIXME: fix env here.
 --
 ssaStmt (ClassStmt l n e is bd)
-  = (True,) <$> (ClassStmt l n e is <$> mapM (ssaClassElt fields) bd)
-  where
-    fields = [ f | MemberVarDecl _ False f _ <- bd] 
+  = (True,) <$> (ClassStmt l n e is <$> withinClass n (mapM ssaClassElt bd))
 
 --
 --  FIXME: fix env here.
@@ -375,12 +374,12 @@ ssaStmt (ClassStmt l n e is bd)
 ssaStmt (ModuleStmt l n body)
   = do  θ <- getSsaEnv
         (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
-        withAssignability ReadOnly (ssaEnvIds θ)   $           -- Variables from OUTER scope are UNASSIGNABLE
+        withAssignability ReadOnly (ssaEnvIds θ)   $            -- Variables from OUTER scope are UNASSIGNABLE
           withAssignability ReadOnly ros        $ 
             withAssignability WriteGlobal wgs   $ 
               withAssignability WriteLocal wls  $ 
-            do  (_, body')   <- ssaStmts body               -- Transform function
-                setSsaEnv θ                                 -- Restore Outer SsaEnv
+            do  (_, body')   <- withinModule n (ssaStmts body)  -- Transform function
+                setSsaEnv θ                                     -- Restore Outer SsaEnv
                 return        $ (True, ModuleStmt l n body')
 
 ssaStmt (EnumStmt l n es) 
@@ -400,28 +399,61 @@ ssaAsgnStmt l1 l2 x@(Id l3 v) x' e'
 fr_                   = freshenAnn
 
 -------------------------------------------------------------------------------------
-ctorVisitor :: Data r => AnnSSA r -> [Id (AnnSSA r)] -> VisitorM (SSAM r) () () (AnnSSA r)
+ctorVisitor :: Data r => [Id (AnnSSA r)] -> VisitorM (SSAM r) () () (AnnSSA r)
 -------------------------------------------------------------------------------------
-ctorVisitor l ms          = defaultVisitor { endStmt = es } { endExpr = ee }
+ctorVisitor ms            = defaultVisitor { endStmt = es } { endExpr = ee }
                                            { mStmt   = ts } { mExpr   = te }
   where
     es FunctionStmt{}     = True
     es _                  = False
     ee FuncExpr{}         = True
     ee _                  = False
+        
+    -- flds p n  = allFields p n  
 
-    te ae@(AssignExpr la OpAssign (LDot ld (ThisRef _) s) e)
+    te (AssignExpr la OpAssign (LDot ld (ThisRef _) s) e)
                           = AssignExpr <$> fr_ la 
                                        <*> return OpAssign 
                                        <*> (LVar <$> fr_ ld <*> return (mkCtorStr s))
                                        <*> return e
     te lv                 = return lv
 
+    ts (ExprStmt _ (CallExpr l (SuperRef _) es)) 
+      = do  parent  <- par      <$> getProgram <*> getCurrentClass 
+            flds    <- maybe [] <$> (onlyInheritedFields <$> getProgram) 
+                                <*> getCurrentClass
+            BlockStmt <$> fr_ l 
+                      <*>  ((:) <$> superVS parent <*> mapM asgnS flds)
+      where
+        fr      = fr_ l
+        par p c   | Just n                    <- c, 
+                    Just (ID _ _ _ ([(QN _ _ path name ,_)],_) _ ) <- resolveTypeInPgm p n
+                  = case path of 
+                      []     -> VarRef <$> fr <*> (Id <$> fr <*> return (F.symbolString name))
+                      (y:ys) -> do  init <- VarRef <$> fr <*> (Id <$> fr <*> return (F.symbolString y))
+                                    foldM (\e p -> DotRef <$> fr <*> return e 
+                                                          <*> (Id <$> fr <*> return (F.symbolString p))) init (ys ++ [name])
+                  | otherwise = ssaError $ bugSuperWithNoParent (srcPos l)
+        superVS n = VarDeclStmt <$> fr <*> (single <$> superVD n) 
+        superVD n = VarDecl  <$> fr 
+                             <*> freshenIdSSA (builtinOpId BISuperVar)
+                             <*> (Just <$> (NewExpr <$> fr <*> n <*> return es))
+        asgnS x = ExprStmt   <$> fr <*> asgnE x 
+        asgnE x = AssignExpr <$> fr 
+                             <*> return OpAssign
+                             <*> (LDot <$> fr 
+                                       <*> (ThisRef <$> fr)
+                                       <*> return (F.symbolString x))
+                             <*> (DotRef <$> fr 
+                                         <*> (VarRef <$> fr 
+                                                     <*> freshenIdSSA (builtinOpId BISuperVar)) 
+                                         <*> (Id <$> fr 
+                                                 <*> return (F.symbolString x)))
+
     ts r@(ReturnStmt l _) = BlockStmt <$> fr_ l <*> ((:[r]) <$> ctorExit l ms)
     ts r                  = return $ r
 
-ctorExit l ms =  ExprStmt 
-             <$> fr 
+ctorExit l ms =  ExprStmt  <$> fr 
              <*> (CallExpr <$> fr
                            <*> (VarRef <$> fr <*> freshenIdSSA (builtinOpId BICtorExit))
                            <*> mapM ((VarRef <$> fr <*>) . return . mkCtorId l) ms)
@@ -455,9 +487,9 @@ ctorExit l ms =  ExprStmt
 --  }
 --
 -------------------------------------------------------------------------------------
-ssaClassElt :: Data r => [Var r] -> ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
+ssaClassElt :: Data r => ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
 -------------------------------------------------------------------------------------
-ssaClassElt fs (Constructor l xs bd)
+ssaClassElt (Constructor l xs bd)
   = do θ <- getSsaEnv
        (ros, wgs, wls) <- (`variablesInScope` bd) <$> getGlobs
        withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $    -- Variables from OUTER scope are NON-ASSIGNABLE
@@ -466,30 +498,35 @@ ssaClassElt fs (Constructor l xs bd)
               withAssignability WriteLocal wls             $    -- Locals in scope
                 withAssignability WriteLocal xs            $    -- Also add parameters as SSAed vars 
          do setSsaEnv  $ extSsaEnv xs θ                         -- Extend SsaEnv with formal binders
-            (_, bd')  <- ssaStmts =<< (++) <$> bdM <*> exitM 
+            fs        <- mapM symToVar =<< allFlds
+            (_, bd')  <- ssaStmts =<< (++) <$> bdM fs 
+                                           <*> exitM fs
             setSsaEnv θ                                         -- Restore Outer SsaEnv
             return     $ Constructor l xs bd'
   where
-    bdM         = visitStmtsT (ctorVisitor l fs) () bd
-    exitM       = single <$> ctorExit l fs
+    symToVar    = freshenIdSSA . mkId . F.symbolString
+    allFlds     = L.sort <$> (maybe [] <$> (allFields <$> getProgram)
+                                       <*> getCurrentClass)
+    bdM fs      = visitStmtsT (ctorVisitor fs) () bd
+    exitM  fs   = single <$> ctorExit l fs
     unshadow gs = L.deleteFirstsBy (on (==) unId) 
                                    (fmap srcPos <$> gs) 
                                    (fmap srcPos <$> xs)
 
 -- | Initilization expression for instance variables is moved to the beginning 
 --   of the constructor.
-ssaClassElt _ (MemberVarDecl l False x _) = return $ MemberVarDecl l False x Nothing
+ssaClassElt (MemberVarDecl l False x _) = return $ MemberVarDecl l False x Nothing
 
-ssaClassElt _ (MemberVarDecl l True x (Just e))
+ssaClassElt (MemberVarDecl l True x (Just e))
   = do z <- ssaExpr e
        case z of 
          ([], e') -> return $ MemberVarDecl l True x (Just e')
          _        -> ssaError $ errorEffectInFieldDef (srcPos l)
 
-ssaClassElt _ (MemberVarDecl l True x Nothing)
+ssaClassElt (MemberVarDecl l True x Nothing)
   = ssaError $ errorUninitStatFld (srcPos l) x
 
-ssaClassElt _ (MemberMethDef l s e xs body) = do 
+ssaClassElt (MemberMethDef l s e xs body) = do 
     θ <- getSsaEnv
     (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
     withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $       -- Variables from OUTER scope are NON-ASSIGNABLE
@@ -506,7 +543,7 @@ ssaClassElt _ (MemberMethDef l s e xs body) = do
                                    (fmap srcPos <$> gs) 
                                    (fmap srcPos <$> xs)
 
-ssaClassElt _ m@(MemberMethDecl _ _ _ _ ) = return m
+ssaClassElt m@(MemberMethDecl _ _ _ _ ) = return m
 
 infOp OpAssign         _ _  = id
 infOp OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalExp lv)
@@ -623,6 +660,9 @@ ssaExpr (InfixExpr l OpLOr e1 e2)
  
 ssaExpr (InfixExpr l o e1 e2)
   = ssaExpr2 (InfixExpr l o) e1 e2
+
+ssaExpr e@(CallExpr _ (SuperRef _) _)
+  = ssaError $ bugSuperNotHandled (srcPos e) e
 
 ssaExpr (CallExpr l e es)
   = ssaExprs (\es' -> CallExpr l (head es') (tail es')) (e : es)

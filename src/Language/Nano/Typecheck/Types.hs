@@ -951,6 +951,7 @@ builtinOpId BITruthy        = builtinId "BITruthy"
 builtinOpId BICondExpr      = builtinId "BICondExpr"
 builtinOpId BICastExpr      = builtinId "BICastExpr"
 builtinOpId BISuper         = builtinId "BISuper"
+builtinOpId BISuperVar      = builtinId "BISuperVar"
 builtinOpId BICtor          = builtinId "BICtor"
 
 infixOpId OpLT              = builtinId "OpLT"

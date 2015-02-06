@@ -36,6 +36,12 @@ module Language.Nano.SSA.SSAMonad (
    , addAnn, getAnns
    , setGlobs, getGlobs
    , setMeas, getMeas
+   , getProgram
+
+   -- Classes / Modules
+   , withinClass
+   , getCurrentClass
+   , withinModule
 
    -- * Tracking Assignability
    , getAssignability
@@ -55,6 +61,7 @@ import qualified Language.Fixpoint.Types            as F
 import           Language.Nano.Annots
 import           Language.Nano.Errors
 import           Language.Nano.Env
+import           Language.Nano.Names
 import           Language.Nano.Locations
 import           Language.Nano.Program
 import           Language.Nano.Types
@@ -67,10 +74,15 @@ import           Language.Fixpoint.Errors
 type SSAM r     = ExceptT Error (State (SsaState r))
 
 data SsaState r = SsaST { 
+  
+  -- 
+  -- ^ Program
+  --
+    ssa_pgm       :: NanoBareR r
   -- 
   -- ^ Assignability status 
   --
-    assign        :: Env Assignability
+  , assign        :: Env Assignability
   -- 
   -- ^ Current SSA names 
   --
@@ -99,6 +111,14 @@ data SsaState r = SsaST {
   -- ^ Fresh AST index
   --
   , ssa_ast_cnt   :: !NodeId
+  --
+  -- ^ Class
+  --
+  , ssa_class     :: Maybe AbsName
+  -- 
+  -- ^ Module path
+  --
+  , ssa_path      :: AbsPath
   }
 
 type SsaEnv r     = Env (SsaInfo r)
@@ -161,6 +181,31 @@ withAssignabilities l act
 withAssignability :: IsLocated l => Assignability -> [Id l] -> SSAM r a -> SSAM r a 
 -------------------------------------------------------------------------------------
 withAssignability m xs = withAssignabilities [(m,xs)]
+
+-------------------------------------------------------------------------------------
+withinClass :: F.Symbolic x => x -> SSAM r a -> SSAM r a 
+-------------------------------------------------------------------------------------
+withinClass c act
+  = do  cOld    <- ssa_class <$> get
+        path    <- ssa_path  <$> get
+        modify   $ \st -> st { ssa_class = Just $ nameInPath (srcPos dummySpan) path c }
+        ret     <- act 
+        modify   $ \st -> st { ssa_class = cOld }
+        return   $ ret
+
+getCurrentClass 
+  = ssa_class <$> get
+
+-------------------------------------------------------------------------------------
+withinModule :: F.Symbolic x => x -> SSAM r a -> SSAM r a 
+-------------------------------------------------------------------------------------
+withinModule m act
+  = do  pOld    <- ssa_path <$> get
+        modify   $ \st -> st { ssa_path = extendAbsPath pOld m }
+        ret     <- act 
+        modify   $ \st -> st { ssa_path = pOld }
+        return   $ ret
+
 
 -------------------------------------------------------------------------------------
 getAssignability :: Var r -> SSAM r Assignability 
@@ -234,6 +279,8 @@ getGlobs   = ssa_globs <$> get
 setMeas m =  modify $ \st -> st { ssa_meas= m } 
 getMeas   = ssa_meas <$> get
 
+getProgram = ssa_pgm <$> get
+
 
 -------------------------------------------------------------------------------------
 ssaError :: Error -> SSAM r a
@@ -254,5 +301,16 @@ execute p act
 tryAction act = get >>= return . runState (runExceptT act)
 
 initState :: NanoBareR r -> SsaState r
-initState p = SsaST envEmpty envEmpty envEmpty 0 IM.empty I.empty S.empty (max_id p)
+initState p = SsaST p 
+                    envEmpty 
+                    envEmpty 
+                    envEmpty 
+                    0
+                    IM.empty 
+                    I.empty 
+                    S.empty 
+                    (max_id p) 
+                    Nothing
+                    (mkAbsPath [])
+
 

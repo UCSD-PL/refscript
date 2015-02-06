@@ -19,7 +19,7 @@ import           Control.Arrow                      ((***))
 import qualified Data.IntMap.Strict                 as I
 import qualified Data.Map.Strict                    as M
 import           Data.Maybe                         (catMaybes, maybeToList, fromMaybe)
-import           Data.List                          (nub, find)
+import           Data.List                          (nub, find, sortBy)
 import           Data.Monoid                        (mappend)
 import           Data.Function                      (on)
 import           Data.Generics                   
@@ -164,20 +164,19 @@ initGlobalEnv :: PPRSF r => NanoSSAR r -> TCEnv r
 initGlobalEnv pgm@(Nano { code = Src ss }) = -- trace (ppshow mod) $ trace (ppshow cha) $ 
                                              TCE nms mod cha ctx pth Nothing
   where
-    nms       = (envAdds extras 
-              $ envMap (\(_,_,c,d,e) -> (d,c,e)) 
-              $ mkVarEnv visibleNs) `envUnion`
-                (envMap (\(_,c,d,e) -> (d,c,e)) 
-                  $ envUnionList 
-                  $ maybeToList 
-                  $ m_variables <$> qenvFindTy pth mod)
-    visibleNs = visibleVars ss
-    extras    = [(Id (srcPos dummySpan) "undefined"
-                ,(TApp TUndef [] fTop, ReadOnly, Initialized))]
-    cha       = pCHA pgm 
-    mod       = pModules pgm 
-    ctx       = emptyContext
-    pth       = mkAbsPath []
+    reshuffle1 = \(_,_,c,d,e) -> (d,c,e)
+    reshuffle2 = \(_,c,d,e)   -> (d,c,e)
+    nms        = envUnion
+                 (envAdds extras    $ envMap reshuffle1 $ mkVarEnv visibleNs)
+                 (envMap reshuffle2 $ envUnionList $ maybeToList 
+                                    $ m_variables <$> qenvFindTy pth mod)
+    visibleNs  = visibleVars ss
+    extras     = [(Id (srcPos dummySpan) "undefined", undefInfo)]
+    undefInfo  = (TApp TUndef [] fTop, ReadOnly, Initialized)
+    cha        = pCHA pgm 
+    mod        = pModules pgm 
+    ctx        = emptyContext
+    pth        = mkAbsPath []
 
 
 initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod cha ctx pth parent
@@ -204,13 +203,16 @@ initModuleEnv :: (PPRSF r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (An
 ---------------------------------------------------------------------------------------
 initModuleEnv γ n s = TCE nms mod cha ctx pth parent
   where
-    nms       = (envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv $ visibleVars s) `envUnion`
-                (envMap (\(_,c,d,e) -> (d,c,e)) $ envUnionList $ maybeToList $ m_variables <$> qenvFindTy pth mod)
-    mod       = tce_mod γ
-    ctx       = emptyContext
-    cha       = tce_cha γ
-    pth       = extendAbsPath (tce_path γ) n
-    parent    = Just γ
+    reshuffle1 = \(_,_,c,d,e) -> (d,c,e)
+    reshuffle2 = \(_,c,d,e)   -> (d,c,e)
+    nms        = (envMap reshuffle1 $ mkVarEnv $ visibleVars s) `envUnion`
+                 (envMap reshuffle2 $ envUnionList $ maybeToList 
+                                    $ m_variables <$> qenvFindTy pth mod)
+    mod        = tce_mod γ
+    ctx        = emptyContext
+    cha        = tce_cha γ
+    pth        = extendAbsPath (tce_path γ) n
+    parent     = Just γ
 
 
 -------------------------------------------------------------------------------
@@ -325,7 +327,7 @@ tcClassElt :: PPRSF r
            -> ClassElt (AnnSSA r) 
            -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
-tcClassElt γ dfn (Constructor l xs body) 
+tcClassElt γ d@(ID nm _ vs _ _ ) (Constructor l xs body) 
   = do  cTy      <- mkCtorTy
         its      <- tcFunTys l ctor xs cTy
         body'    <- foldM (tcFun1 γ'' l ctor xs) body its
@@ -335,7 +337,7 @@ tcClassElt γ dfn (Constructor l xs body)
     ctorExit      = builtinOpId BICtorExit
     super         = builtinOpId BISuper
 
-    γ'            | Just t <- extractParent'' γ dfn 
+    γ'            | Just t <- extractParent'' γ d 
                   = tcEnvAdd super (t,ReadOnly,Initialized) γ
                   | otherwise
                   = γ
@@ -345,36 +347,25 @@ tcClassElt γ dfn (Constructor l xs body)
     -- XXX        : keep the right order of fields
     mkCtorExitTy  = mkFun (vs,Nothing,bs,tVoid)
       where 
-        bs        = [ B s t | (_,(FieldSig s _ _ t)) <- M.toList $ t_elts dfn ]
-        -- ms     = M.fromList es
-        -- (bs,es)= unzip [ (B s t,(k,FieldSig s o t_immutable t)) 
-        --                | (k,(FieldSig s o _ t)) <- M.toList $ t_elts dfn ]
+        bs        | Just (TCons _ ms _) <- flattenType γ (TRef nm (tVar <$> vs) fTop)
+                  = sortBy c_sym [ B s t | (_,(FieldSig s _ _ t)) <- M.toList ms ]
+                  | otherwise
+                  = []
+    
+    c_sym         = on compare b_sym
 
     -- FIXME      : Do case of mutliple overloads 
     mkCtorTy      | [ConsAnn (ConsSig t)] <- ann_fact l,
-                    Just t'               <- fixRet $ mkAll (t_args dfn) t
+                    Just t'               <- fixRet $ mkAll vs t
                   = return t'
                   | otherwise 
                   = die $ unsupportedNonSingleConsTy (srcPos l)
-
-    -- m_t           = TVar m_v fTop
-    -- m_v           = TV (F.symbol "Mout") (srcPos dummySpan)
-    vs            = t_args dfn
                               
     -- FIXME      : Do case of mutliple overloads 
     fixRet t      | Just (vs,Nothing,bs,t)  <- bkFun t
                   = Just $ mkFun (vs, Nothing , bs, tVoid)
                   | otherwise 
                   = Nothing
---     fixRet t      | Just (vs,Nothing,bs,t)  <- bkFun t,
---                     Just (TCons m es r)     <- flattenType γ t
---                   = Just $ mkFun (vs, Nothing, bs, TCons t_immutable (ee es) r)
---                   | otherwise 
---                   = Nothing
---       where
---         ee es     = M.fromList [ (k,FieldSig s o t_immutable t) 
---                                | (k,FieldSig s o _ t) <- M.toList es ]
-
 
 -- | Static field
 --
@@ -932,18 +923,11 @@ tcCall γ ef@(DotRef l e f)
     mkTy s t = mkFun ([],Nothing,[B (F.symbol "this") s],t) 
          
 -- | `super(e1,...,en)`
+--
+--   XXX: there shouldn't be any `super(..)` calls after SSA ... 
+--
 tcCall γ (CallExpr l e@(SuperRef _)  es) 
   = error "UNIMPLEMENTED TC-SUPER-CALL" 
---   = case tcEnvFindTy (F.symbol "this") γ of 
---       Just t -> 
---           case extractParent γ t of 
---             Just (TRef x _ _) -> 
---                 case extractCtor γ (TClass x) of
---                   Just ct -> do (FI _ es',t') <- tcNormalCall γ l "constructor" (FI Nothing ((,Nothing) <$> es)) ct
---                                 return         $ (CallExpr l e es', t')
---                   _       -> tcError $ errorUnboundId (ann l) "super"
---             _ -> tcError $ errorUnboundId (ann l) "super"
---       Nothing -> tcError $ errorUnboundId (ann l) "this"
 
 -- | `e.f(es)`
 --

@@ -103,6 +103,8 @@ errorSSAUnboundId l x         = mkErr l $ printf "SSA: Identifier '%s' unbound" 
 errorUpdateInExpr l e         = mkErr l $ printf "Unsupported: assignment in If-then-else expression %s" (ppshow e)
 errorEffectInFieldDef l       = mkErr l $ printf "Cannot have effects in field initialization."
 errorUninitStatFld l x        = mkErr l $ printf "Uninitialized static member '%s' is not allowed." (ppshow x)
+bugSuperNotHandled l e        = mkErr l $ printf "BUG: Expression '%s' should have been taken care of." (ppshow e)
+bugSuperWithNoParent l        = mkErr l $ printf "BUG: Calling 'super()' in constructor of class with no parent."
 
 
 ---------------------------------------------------------------------------

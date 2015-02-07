@@ -647,60 +647,60 @@ freshenModuleDefM g (a, m)
 -- | Adding Subtyping Constraints
 ---------------------------------------------------------------------------------------
 
--- OLD ---------------------------------------------------------------------------------------
--- OLD subType :: AnnTypeR -> Error -> CGEnv -> RefType -> RefType -> CGM ()
--- OLD ---------------------------------------------------------------------------------------
--- OLD subType l err g t1 t2 =
--- OLD   do  t1'    <- addInvariant g t1  -- enhance LHS with invariants
--- OLD       let xs  = [(symbolId l x,(t,a,i)) | (x, Just (t,a,i)) <- rNms t1' ++ rNms t2 ]
--- OLD       let ys  = [(symbolId l x,(t,a,i)) | (x,      (t,a,i)) <- E.envToList $ cgeAllNames g ]
--- OLD       ----  when (toType t1 /= toType t2) (errorstar (ppshow t1 ++ " VS " ++ ppshow t2))
--- OLD       -- g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++
--- OLD       --                                     ppshow "(" ++ ppshow t1 ++ " vs " ++ ppshow t2 ++ ppshow ")"
--- OLD       --                                     -- " Adding XS: " ++ ppshow (fst <$> xs) ++ 
--- OLD       --                                     -- " Adding YS: " ++ ppshow (fst <$> ys) ++
--- OLD       --                                     -- " FQ Binds : " ++ ppshow (cge_fenv g)
--- OLD       --                                    ) $ xs ++ ys) g
--- OLD       g'     <- envAdds "subtype" (xs ++ ys) g
--- OLD       modify  $ \st -> st {cs = c g' (t1', t2) : (cs st)}
--- OLD   where
--- OLD     c g      = uncurry $ Sub g (ci err l)
--- OLD     rNms t   = mapSnd (`envFindTyWithAsgn` g) . dup <$> names t
--- OLD     dup a    = (a,a)
--- OLD     names    = foldReft rr []
--- OLD     rr r xs  = F.syms r ++ xs
--- OLD 
--- OLD 
--- OLD cgeAllNames g@(CGE { cge_parent = Just g' }) = cgeAllNames g' `E.envUnion` cge_names g 
--- OLD cgeAllNames g@(CGE { cge_parent = Nothing }) = cge_names g
-
-
--- 
--- XXX: Removing addInvariant
--- 
 ---------------------------------------------------------------------------------------
 subType :: AnnTypeR -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l err g t1 t2 =
-  do  -- t1'        <- addInvariant g t1  -- enhance LHS with invariants
-      t1'        <- return t1
-      g'         <- envAdds "subtype" (goT HM.empty [t1',t2] ++ 
-                                       goP HM.empty (cge_guards g)) g
-      modify      $ \st -> st { cs = Sub g' (ci err l) t1' t2 : cs st }
+  do  t1'    <- addInvariant g t1  -- enhance LHS with invariants
+      let xs  = [(symbolId l x,(t,a,i)) | (x, Just (t,a,i)) <- rNms t1' ++ rNms t2 ]
+      let ys  = [(symbolId l x,(t,a,i)) | (x,      (t,a,i)) <- E.envToList $ cgeAllNames g ]
+      ----  when (toType t1 /= toType t2) (errorstar (ppshow t1 ++ " VS " ++ ppshow t2))
+      -- g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++
+      --                                     ppshow "(" ++ ppshow t1 ++ " vs " ++ ppshow t2 ++ ppshow ")"
+      --                                     -- " Adding XS: " ++ ppshow (fst <$> xs) ++ 
+      --                                     -- " Adding YS: " ++ ppshow (fst <$> ys) ++
+      --                                     -- " FQ Binds : " ++ ppshow (cge_fenv g)
+      --                                    ) $ xs ++ ys) g
+      g'     <- envAdds "subtype" (xs ++ ys) g
+      modify  $ \st -> st {cs = c g' (t1', t2) : (cs st)}
   where
-    goP m         = goT m . catMaybes . map (`envFindTy` g) . concatMap F.syms
+    c g      = uncurry $ Sub g (ci err l)
+    rNms t   = mapSnd (`envFindTyWithAsgn` g) . dup <$> names t
+    dup a    = (a,a)
+    names    = foldReft rr []
+    rr r xs  = F.syms r ++ xs
 
-    goT m []      = [(symbolId l x,t) | (x,t) <- HM.toList m ]
-    goT m ts      = goT (m `HM.union` HM.fromList ps) ts'
-      where
-        (ps, ts') = unzip [ (p,t') | t              <- ts
-                                   , p@(x,(t',_,_)) <- foldT t 
-                                   , isNothing       $ HM.lookup x m ]
 
-    foldT t       = [ (n,s) | n <- foldReft rr [] t
-                            , s <- maybeToList $ envFindTyWithAsgn n g ]
+cgeAllNames g@(CGE { cge_parent = Just g' }) = cgeAllNames g' `E.envUnion` cge_names g 
+cgeAllNames g@(CGE { cge_parent = Nothing }) = cge_names g
 
-    rr r xs       = F.syms r ++ xs
+
+-- BUGGY !! -- 
+-- BUGGY !! -- XXX: Removing addInvariant
+-- BUGGY !! -- 
+-- BUGGY !! ---------------------------------------------------------------------------------------
+-- BUGGY !! subType :: AnnTypeR -> Error -> CGEnv -> RefType -> RefType -> CGM ()
+-- BUGGY !! ---------------------------------------------------------------------------------------
+-- BUGGY !! subType l err g t1 t2 =
+-- BUGGY !!   do  -- t1'        <- addInvariant g t1  -- enhance LHS with invariants
+-- BUGGY !!       t1'        <- return t1
+-- BUGGY !!       g'         <- envAdds "subtype" (goT HM.empty [t1',t2] ++ 
+-- BUGGY !!                                        goP HM.empty (cge_guards g)) g
+-- BUGGY !!       modify      $ \st -> st { cs = Sub g' (ci err l) t1' t2 : cs st }
+-- BUGGY !!   where
+-- BUGGY !!     goP m         = goT m . catMaybes . map (`envFindTy` g) . concatMap F.syms
+-- BUGGY !! 
+-- BUGGY !!     goT m []      = [(symbolId l x,t) | (x,t) <- HM.toList m ]
+-- BUGGY !!     goT m ts      = goT (m `HM.union` HM.fromList ps) ts'
+-- BUGGY !!       where
+-- BUGGY !!         (ps, ts') = unzip [ (p,t') | t              <- ts
+-- BUGGY !!                                    , p@(x,(t',_,_)) <- foldT t 
+-- BUGGY !!                                    , isNothing       $ HM.lookup x m ]
+-- BUGGY !! 
+-- BUGGY !!     foldT t       = [ (n,s) | n <- foldReft rr [] t
+-- BUGGY !!                             , s <- maybeToList $ envFindTyWithAsgn n g ]
+-- BUGGY !! 
+-- BUGGY !!     rr r xs       = F.syms r ++ xs
 
 
 

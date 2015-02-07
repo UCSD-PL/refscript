@@ -55,6 +55,7 @@ import           Control.Monad.Trans.Except
 import           Control.Monad.Except               (catchError)
 import           Data.Function                      (on)
 import qualified Data.HashMap.Strict                as M
+import qualified Data.Map.Strict                    as MM
 import           Data.Maybe                         (catMaybes, isJust, maybeToList)
 import           Data.Monoid                  
 import qualified Data.IntMap.Strict                 as I
@@ -432,6 +433,8 @@ safeExtends1 γ l c ms (p,ps)
               -> tcError $ errorClassExtends (srcPos l) c p (mkTCons t_immutable ms) 
                                                             (mkTCons t_immutable ns)
       Nothing -> tcError $ bugFlattenType (srcPos l) p
+  where
+    mkTCons m es = TCons m (MM.filter (not . isConstr) es) fTop
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

@@ -1,7 +1,7 @@
 
 
 class AA { 
-  /*@ a : [Immutable] string */
+  /*@ a : [Immutable] { string | v = "OLD" } */
   public a = "OLD"; 
 
   constructor () {}
@@ -10,9 +10,6 @@ class AA {
 /*@ class BB<M> extends AA<M> */
 class BB extends AA {
   
-  /*@ a : [Immutable] { string | v = "NEW" } */
-  public a: string;
-
   public b = 0;
     
   /*@ new () => BB<M> */

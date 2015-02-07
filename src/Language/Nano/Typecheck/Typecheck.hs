@@ -929,31 +929,53 @@ tcCall γ ef@(DotRef l e f)
 tcCall γ (CallExpr l e@(SuperRef _)  es) 
   = error "UNIMPLEMENTED TC-SUPER-CALL" 
 
--- | `e.f(es)`
+-- | `e.m(es)`
 --
 --  FIXME: cast @e@ to the subtype for which @f@ is an existing field.
 --
 tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
-  = do z              <- runFailM (tcExpr γ e Nothing)
-       case z of 
-         Right (_, t) | isVariadicCall f -> 
-            case es of
-              []   -> tcError $ errorVariadicNoArgs (srcPos l) em
-              v:vs -> do  (e', _) <- tcExpr γ e Nothing
-                          (FI (Just v') vs', t') <- tcNormalCall γ l em (FI (Just (v, Nothing)) (nth vs)) t
-                          return $ (CallExpr l (DotRef l1 e' f) (v':vs'), t')
-         Right (_, t) | otherwise -> 
-            case getProp γ MethodAccess f t of
-              Just (tRcvr,tMeth,_) -> 
-                  do e' <- castM γ e t tRcvr
-                     (FI (Just e'') es', t') <- tcNormalCall γ l  ex (FI (Just (e', Nothing)) (nth es)) tMeth
-                     return $ (CallExpr l (DotRef l1 e'' f) es', t')
-              Nothing      -> tcError $ errorCallNotFound (srcPos l) e f
-         Left err     -> tcError err
+  = runFailM (tcExpr γ e Nothing) >>= go
   where
-    -- Check the receiver of the call
+         -- Variadic call error
+    go z 
+--       | Right (_, t) <- z, isVariadicCall f, [] <- es
+--       = tcError $ errorVariadicNoArgs (srcPos l) em
+
+      -- Variadic call
+      | Right (_, t) <- z, isVariadicCall f, v:vs <- es
+      = do (e', _)                 <- tcExpr γ e Nothing
+           (FI (Just v') vs', t')  <- tcNormalCall γ l em (argsThis v vs) t
+           return                   $ (CallExpr l (DotRef l1 e' f) (v':vs'), t')
+
+      -- Accessing and calling a function field
+      | Right (_, t) <- z, Just (o,ft,_) <- getProp γ FieldAccess f t, isTFun ft
+      = do e'                      <- castM γ e t o
+           (FI _ es',t')           <- tcNormalCall γ l ex (args es) ft
+           return                   $ (CallExpr l (DotRef l1 e' f) es', t')
+
+      -- Invoking a method 
+      | Right (_, t) <- z, Just (o,ft,_) <- getProp γ MethodAccess f t, isTFun ft
+      = do e'                      <- castM γ e t o
+           (FI (Just e'') es', t') <- tcNormalCall γ l  ex (argsThis e' es) ft
+           return                   $ (CallExpr l (DotRef l1 e'' f) es', t')
+
+      | Right (_,t) <- z
+      = tcError $ errorCallNotFound (srcPos l) e f
+
+      | Left err <- z
+      = tcError err
+
     isVariadicCall f = F.symbol f == F.symbol "call"
-    nth = ((,Nothing) <$>)
+    args vs          = FI Nothing            ((,Nothing) <$> vs)
+    argsThis v vs    = FI (Just (v,Nothing)) ((,Nothing) <$> vs)
+
+--     fixThis' thisT tFun 
+--       | Just ts <- bkFuns tFun = mkAnd $ mkFun . fixThis thisT <$> ts
+--       | otherwise              = tFun
+-- 
+--     fixThis thisT (vs,Nothing,ts,t) = (vs,Just thisT,ts,t)
+--     fixThis _     t                 = t
+
 
 -- | `e(es)`
 tcCall γ (CallExpr l e es)

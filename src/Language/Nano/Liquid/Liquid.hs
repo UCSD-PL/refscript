@@ -649,22 +649,32 @@ consExpr g (CallExpr l (SuperRef _) es) _
       Nothing -> cgError $ errorUnboundId (ann l) "this"
 
 -- | e.m(es)
-consExpr g (CallExpr l em@(DotRef _ e f) es) _
-  = mseq (consExpr g e Nothing) $ \(x,g') -> do 
-      t      <- safeEnvFindTy x g'
-      case t of 
-        t | isVariadicCall f -> 
-            case es of
-              []      -> cgError $ errorVariadicNoArgs (srcPos l) em
-              v:vs    -> consCall g' l em (FI (Just (v, Nothing)) (nth vs)) t
-
-          | otherwise -> case getProp g' MethodAccess f t of
-                           Just (_,tf,_) -> consCall g' l em (FI (Just (vr x, Nothing)) ((,Nothing) <$> es)) tf
-                           Nothing       -> cgError $ errorCallNotFound (srcPos l) e f
+consExpr g c@(CallExpr l em@(DotRef _ e f) es) _
+  = mseq (consExpr g e Nothing) $ \(x,g') -> safeEnvFindTy x g' >>= go g' x
   where
-    isVariadicCall f   = F.symbol f == F.symbol "call"
-    nth                = ((,Nothing) <$>)
-    vr                 = VarRef $ getAnnotation e
+             -- Variadic call error
+    go g x t | isVariadicCall f, [] <- es 
+             = cgError $ errorVariadicNoArgs (srcPos l) em
+
+             -- Variadic call
+             | isVariadicCall f, v:vs <- es
+             = consCall g l em (argsThis v vs) t
+
+             -- Accessing and calling a function field
+             | Just (_,ft,_) <- getProp g FieldAccess f t, isTFun ft
+             = consCall g l c (args es) ft
+
+             -- Invoking a method
+             | Just (_,tf,_) <- getProp g MethodAccess f t
+             = consCall g l c (argsThis (vr x) es) tf
+                                
+             | otherwise 
+             = cgError $ errorCallNotFound (srcPos l) e f
+
+    isVariadicCall f = F.symbol f == F.symbol "call"
+    args vs          = FI Nothing            ((,Nothing) <$> vs)
+    argsThis v vs    = FI (Just (v,Nothing)) ((,Nothing) <$> vs)
+    vr               = VarRef $ getAnnotation e
 
 -- | e(es)
 consExpr g (CallExpr l e es) _
@@ -689,7 +699,8 @@ consExpr g ef@(DotRef l e f) _
         Just (_,t,m) -> Just   <$> envAddFresh l (mkTy m x t,WriteLocal,Initialized) g'
         Nothing      -> cgError $  errorMissingFld (srcPos l) f te
   where
-    mkTy m x t | isImmutable m = fmap F.top t `strengthen` F.symbolReft (mkFieldB x f)
+    mkTy m x t | isTFun t      = t  
+               | isImmutable m = fmap F.top t `strengthen` F.symbolReft (mkFieldB x f)
                | otherwise     = t  
 
 -- | e1[e2]

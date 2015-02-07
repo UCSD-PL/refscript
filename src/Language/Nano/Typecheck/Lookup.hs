@@ -44,6 +44,10 @@ type PPRD r = (BitVectorable r, ExprReftable Int r, PP r, F.Reftable r, Data r)
 
 data AccessKind = MethodAccess | FieldAccess
 
+instance PP AccessKind where
+  pp MethodAccess = pp "MethodAccess"
+  pp FieldAccess  = pp "FieldAccess"
+
 
 -- | `getProp γ b s t`: returns  a triplet containing:
 --
@@ -56,12 +60,12 @@ data AccessKind = MethodAccess | FieldAccess
 --  FIXME: Fix visibility
 --
 -------------------------------------------------------------------------------
-getProp :: (PPRD r, EnvLike r g, F.Symbolic f) 
+getProp :: (PPRD r, EnvLike r g, F.Symbolic f, PP f) 
         => g r -> AccessKind -> f -> RType r -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
 getProp γ b s t@(TApp _ _ _  ) =                  getPropApp γ b s t
 
-getProp γ b s t@(TCons m es _) = do (t',m')    <- accessMember γ b InstanceMember s 
+getProp γ b s t@(TCons m es _) = do (t',m')    <- accessMember True γ b InstanceMember s 
                                                 $ M.union es objProto
                                     return      $ (t,t',combMut m m')
   where 
@@ -73,7 +77,7 @@ getProp γ b s t@(TCons m es _) = do (t',m')    <- accessMember γ b InstanceMem
 getProp γ b s t@(TRef x ts@(m:ts') r)  
                                = do d          <- resolveTypeInEnv γ x
                                     es         <- flatten Nothing InstanceMember γ (d,ts)
-                                    (t',m')    <- accessMember γ b InstanceMember s es
+                                    (t',m')    <- accessMember True γ b InstanceMember s es
                                     t''        <- fixMethType t'
                                     return      $ (t, t'',combMut (toType m) m')
   where
@@ -84,7 +88,7 @@ getProp γ b s t@(TRef x ts@(m:ts') r)
 
 getProp γ b s t@(TClass c    ) = do d          <- resolveTypeInEnv γ c
                                     es         <- flatten Nothing StaticMember γ (d,[])
-                                    (t', m)    <- accessMember γ b StaticMember s es
+                                    (t', m)    <- accessMember True γ b StaticMember s es
                                     return      $ (t,t',m)
 
 getProp γ _ s t@(TModule m   ) = do m'         <- resolveModuleInEnv γ m
@@ -103,7 +107,7 @@ getProp _ _ _ _                = Nothing
 
 
 -------------------------------------------------------------------------------
-getPropApp :: (PPRD r, EnvLike r g, F.Symbolic f) 
+getPropApp :: (PPRD r, EnvLike r g, F.Symbolic f, PP f) 
            => g r 
            -> AccessKind
            -> f 
@@ -181,54 +185,66 @@ extractCall γ t             = uncurry mkAll <$> foo [] t
     foo αs t@(TFun _ _ _ _) = [(αs, t)]
     foo αs   (TAnd ts)      = concatMap (foo αs) ts 
     foo αs   (TAll α t)     = foo (αs ++ [α]) t
-    foo αs   (TRef s _ _  ) = case resolveTypeInEnv γ s of 
-                                Just d  -> getCallSig αs $ t_elts d
-                                Nothing -> []
+    foo αs   (TRef s _ _  ) | Just d <- resolveTypeInEnv γ s
+                            = getCallSig αs $ t_elts d
+                            | otherwise = []
     foo αs   (TCons _ es _) = getCallSig αs es
     foo _  _                = []
-
-    getCallSig αs es        = case M.lookup (callSymbol, InstanceMember) es of
-                                Just (CallSig t) -> foo αs t
-                                _                -> []
+    getCallSig αs es        | Just (CallSig t) <- M.lookup (callSymbol, InstanceMember) es
+                            = foo αs t
+                            | otherwise = []
 
 -- | `accessMember b s es` extracts field @s@ from type members @es@. If @b@ is
 --   True then this means that the extracted field is for a call, in which case
 --   we allow extraction of methods, otherwise extracting methods is disallowed.
 -------------------------------------------------------------------------------
-accessMember :: (PPRD r, EnvLike r g, F.Symbolic f)
-             => g r
+accessMember :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
+             => Bool
+             -> g r
              -> AccessKind 
              -> StaticKind 
              -> f
              -> TypeMembers r 
              -> Maybe (RType r, Mutability)
 -------------------------------------------------------------------------------
--- Get member for a call
-accessMember γ b@MethodAccess sk f es =    
-  case M.lookup (F.symbol f, sk) es of
-    Just f@(FieldSig _ _ m t) | optionalField f -> Just (orUndef t,m)
-                              | otherwise       -> Just (t,m)
-    Just (MethSig _ t) -> Just (t,t_immutable)    -- Methods are immutable
-    _ -> case M.lookup (stringIndexSymbol, sk) es of 
-           Just (IndexSig _ StringIndex t) | validFieldName f -> Just (t, t_mutable)
-           _ -> accessMemberProto γ b sk f es
+-- 
+-- Only consider methods with `MethodAccess`
+--
+accessMember proto γ b@MethodAccess sk f es 
+  | Just (MethSig _ t)              <- M.lookup (F.symbol f, sk) es
+  = Just (t,t_immutable)
+  | Just (IndexSig _ StringIndex t) <- M.lookup (stringIndexSymbol, sk) es
+  , validFieldName f 
+  = Just (t, t_mutable) 
+  | proto
+  = accessMemberProto γ b sk f es
+  | otherwise 
+  = Nothing
+-- 
+-- DO NOT consider methods with `FieldAccess`
+--
+accessMember proto γ b@FieldAccess sk f es
+  | Just f@(FieldSig _ _ m t) <- M.lookup (F.symbol f, sk) es
+  = if optionalField f then Just (orUndef t,m) else Just (t,m)  
+  | Just (IndexSig _ StringIndex t) <- M.lookup (stringIndexSymbol, sk) es 
+  , validFieldName f 
+  = Just (t, t_mutable) 
+  | proto
+  = accessMemberProto γ b sk f es
+  | otherwise 
+  = Nothing
 
--- Extract member: cannot extract methods
-accessMember γ b@FieldAccess sk f es =
-  case M.lookup (F.symbol f, sk) es of
-    Just f@(FieldSig _ _ m t) | optionalField f -> Just (orUndef t,m)
-                              | otherwise       -> Just (t,m)
-    _ -> case M.lookup (stringIndexSymbol, sk) es of 
-           Just (IndexSig _ StringIndex t) | validFieldName f -> Just (t, t_mutable)
-           _ -> accessMemberProto γ b sk f es
+accessMemberProto γ b sk f es
+  | Just (FieldSig _ _ _ pt) <- M.lookup (F.symbol "prototype", sk) es
+  = (\(_,t,m) -> (t,m)) <$> getProp γ b f pt
 
-accessMemberProto γ b sk f es 
-  = case M.lookup (F.symbol "prototype", sk) es of
-      Just (FieldSig _ _ _ pt) -> (\(_,t,m) -> (t,m)) <$> getProp γ b f pt
-      -- Everybody inherits Object
-      _ ->  case envLikeFindTy "Object" γ of 
-              Just t -> (\(_,t,m) -> (t,m)) <$> getProp γ b f t 
-              _      -> Nothing
+  -- Everybody inherits Object
+  | Just t               <- envLikeFindTy "Object" γ
+  , Just (TCons _ es' _) <- flattenType γ t
+  = accessMember False γ b sk f es'
+
+  | otherwise 
+  = Nothing
 
 -------------------------------------------------------------------------------
 validFieldName  :: F.Symbolic f => f -> Bool
@@ -236,11 +252,11 @@ validFieldName  :: F.Symbolic f => f -> Bool
 validFieldName f = not $ F.symbol f `elem` excludedFieldSymbols
 
 -------------------------------------------------------------------------------
-lookupAmbientType :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s) 
+lookupAmbientType :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s, PP f) 
                   => g r -> AccessKind -> f -> s -> Maybe (RType r, Mutability)
 -------------------------------------------------------------------------------
 lookupAmbientType γ b fld amb
-  = t_elts <$> resolveTypeInEnv γ nm >>= accessMember γ b InstanceMember fld
+  = t_elts <$> resolveTypeInEnv γ nm >>= accessMember True γ b InstanceMember fld
   where
     nm = mkAbsName [] (F.symbol amb)
 
@@ -248,7 +264,7 @@ lookupAmbientType γ b fld amb
 -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
-getPropUnion :: (PPRD r, EnvLike r g, F.Symbolic f) 
+getPropUnion :: (PPRD r, EnvLike r g, F.Symbolic f, PP f) 
              => g r 
              -> AccessKind 
              -> f 

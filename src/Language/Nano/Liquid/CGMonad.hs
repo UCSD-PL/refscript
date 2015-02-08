@@ -93,7 +93,7 @@ import           Language.Fixpoint.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -290,7 +290,7 @@ envAdds _ xts g
 
        zipWithM_         (reftCheck g HS.empty) xs ts'
 
-       g'             <- foldM addObjectFields g $ zip xs ts'
+       g'             <- foldM addObjectFields g $ zip3 xs as ts'
        
        is             <- catMaybes    <$> forM xtas addFixpointBind
        _              <- forM xtas     $  \(x,(t,_,_)) -> addAnnot x x t
@@ -329,19 +329,22 @@ reftCheckNoFun g x t ok | HS.null $ forbiddenSyms `HS.difference` ok
 -- | `addObjectFields g (x,t)` when introducing an object @x@ in environment @g@
 --   also introduce bindings for all its IMMUTABLE fields. 
 ---------------------------------------------------------------------------------------
-addObjectFields :: (IsLocated x, F.Symbolic x, PP [x]) 
-                => CGEnv -> (x,RefType) -> CGM CGEnv
+addObjectFields :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
+                => CGEnv -> (x,Assignability,RefType) -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-addObjectFields g (x,t)  =  
-  envAdds "addObjectFields" 
-      [(mkFieldB x f, (F.subst sbt tf, ReadOnly, Initialized)) 
-        | FieldSig f _ m tf <- ms, isImmutable m ] g
+addObjectFields g (x,a,t)           
+  | a `elem` [WriteGlobal,ThisVar,ReturnVar] = return g
+  | otherwise                                = envAdds "addObjectFields" xts g
   where
+    xts = [(mkFieldB x f, (F.subst sbt tf, ReadOnly, Initialized)) 
+                | FieldSig f _ m tf <- ms, isImmutable m ]
+
     ms  | Just (TCons _ ms _) <- flattenType g t = M.elems ms
         | otherwise                              = []
 
-    sbt = F.mkSubst [ (f, F.expr $ mkFieldB x f) | FieldSig f _ m _ <- ms
+    sbt = F.mkSubst $ [ (f, F.expr $ mkFieldB x f) | FieldSig f _ m _ <- ms
                                                  , isImmutable m ]
+                   ++ [ (F.symbol "this", F.expr $ F.symbol x) ]
 
 envAdd x t g = envAdds "envAdd" [(x,t)] g
 

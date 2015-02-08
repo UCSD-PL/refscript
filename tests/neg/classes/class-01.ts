@@ -11,7 +11,7 @@ class Greeter {
 	/*@ d : number */
 	public  d ;
 	
-	/*@ static e : { } */
+	/*@ e : { } */
 	private static e = { };
 
 	/*@ new(message: { string | v = "a" } ) => void */

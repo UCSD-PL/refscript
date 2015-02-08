@@ -6,7 +6,6 @@ function foo(x: Node) {
 }
 
 class Node {
-  /*@ new () => void */
   constructor() { }
 
   /*@ field : [Immutable] number */

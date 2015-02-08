@@ -9072,7 +9072,7 @@ var TypeScript;
             throw new Error("toRsLValue not implemented for " + TypeScript.SyntaxKind[this.kind()]);
         };
 
-        SyntaxNode.prototype.toRsClassElt = function (helper) {
+        SyntaxNode.prototype.toRsClassElt = function (helper, mut) {
             throw new Error("toRsClassElt not implemented for " + TypeScript.SyntaxKind[this.kind()]);
         };
 
@@ -9791,7 +9791,7 @@ var TypeScript;
 
             if (this.classElements.toArray().some(function (v) {
                 return v.kind() === 137 /* ConstructorDeclaration */;
-            })) {
+            }) || this.firstToken().kind() === 63 /* DeclareKeyword */) {
                 var classElts = this.classElements.toRsClassElt(helper, mutabilityVar);
             } else {
                 helper.postDiagnostic(this, TypeScript.DiagnosticCode.Class_0_needs_to_have_an_explicit_constructor, [this.identifier.text()]);
@@ -14337,11 +14337,7 @@ var TypeScript;
 
             if (bindAnns.length === 0) {
                 var decl = helper.getDeclForAST(this);
-                if (mut) {
-                    var type = decl.getSignatureSymbol().toRsTCtor(4 /* PresetK */, mut);
-                } else {
-                    var type = decl.getSignatureSymbol().toRsTCtor();
-                }
+                var type = decl.getSignatureSymbol().toRsTCtor(mut);
                 var typeStr = type.toString();
                 anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 8 /* RawConstr */, "new " + typeStr));
             }
@@ -38465,10 +38461,9 @@ var TypeScript;
             }
         };
 
-        PullSignatureSymbol.prototype.toRsTCtor = function (mut, presetMut) {
-            var tParams = this.getTypeParameters().map(function (p) {
-                return p.type.toRsTypeParameter();
-            });
+        PullSignatureSymbol.prototype.toRsTCtor = function (mut) {
+            var tParams = [];
+
             var tArgs = this.parameters.map(function (p) {
                 return new TypeScript.BoundedRsType(p.name, p.type.toRsType());
             });
@@ -38483,7 +38478,7 @@ var TypeScript;
             for (var i = nonOptionalLength; i <= totParamsLength; i++) {
                 sigs.push(tArgs.slice(0, i));
             }
-            var retT = this.returnType.toRsType(mut, presetMut);
+            var retT = this.returnType.toRsType(4 /* PresetK */, mut);
 
             switch (sigs.length) {
                 case 0:

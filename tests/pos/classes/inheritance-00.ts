@@ -28,14 +28,19 @@ class A {
 	bar(x: IColorPoint): void {  }
 	/*@ baz: (x: INatPoint): void */
 	baz(x: INatPoint): void {  }
+  constructor (){}
 }
 
-class B extends A { }
+class B extends A {
+  constructor (){ super();}
+}
 
 class C extends B {
   /*@ a : nat */
   a: number = 2; 
 	/*@ baz: (x: INatPoint): void */
 	baz(x: INatPoint): void {  }
+
+  constructor (){ super();}
 }
 

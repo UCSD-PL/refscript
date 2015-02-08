@@ -336,24 +336,29 @@ addObjectFields g (x,a,t)
   | a `elem` [WriteGlobal,ThisVar,ReturnVar] = return g
   | otherwise                                = envAdds "addObjectFields" xts g
   where
-    xts     = [(mkFieldB x f, (F.subst sbt $ tf `strengthen` kv f, a, Initialized)) 
-                | FieldSig f _ m tf <- ms, isImmutable m ]
+    xts       = [(mkFieldB x f, (F.subst sbt $ tf `strengthen` kv f, a, Initialized)) 
+                  | FieldSig f _ m tf <- ms, isImmutable m ]
 
     -- 
     -- XXX  : Still need to add keyVal because of the way we express invariants 
     --        of the form "if field 'kind' has value `v` then class 'A' is in 
     --        fact an instance of class 'B' where (B <: A) 
     --
-    kv s    = F.uexprReft $ F.EApp kvSym [F.eVar x, str s]
-    kvSym   = F.dummyLoc $ F.symbol "keyVal"
-    str     = F.expr . F.symbolText
+    kv s      = F.uexprReft $ F.EApp kvSym [F.eVar x, str s]
+    kvSym     = F.dummyLoc $ F.symbol "keyVal"
+    str       = F.expr . F.symbolText
 
-    ms      | Just (TCons _ ms _) <- flattenType g t = M.elems ms
-            | otherwise                              = []
+    ms        | Just (TCons m ms _) <- flattenType g t = defMut m <$> M.elems ms
+              | otherwise                              = []
 
-    sbt     = F.mkSubst $ [(f, F.expr $ mkFieldB x f) 
-                            | FieldSig f _ m _ <- ms, isImmutable m ]
-                       ++ [ (F.symbol "this", F.expr $ F.symbol x) ]
+    defMut m (FieldSig f o m0 t)  
+              | isInheritedMutability m0 = FieldSig f o m  t
+              | otherwise                = FieldSig f o m0 t
+    defMut _ f = f 
+
+    sbt       = F.mkSubst $ [(f, F.expr $ mkFieldB x f) 
+                              | FieldSig f _ m _ <- ms, isImmutable m ]
+                         ++ [ (F.symbol "this", F.expr $ F.symbol x) ]
 
 envAdd x t g = envAdds "envAdd" [(x,t)] g
 

@@ -62,13 +62,13 @@ import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
 
-import           Data.Maybe                     (catMaybes, maybeToList, isNothing)
+import           Data.Maybe                     (catMaybes, maybeToList)
 import           Data.Monoid                    (mempty, mconcat)
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map.Strict                as M
 import qualified Data.List                      as L
+import qualified Data.HashSet                   as HS
 import           Data.Function                  (on)
-import           Data.Text                      (pack)
 import           Text.PrettyPrint.HughesPJ
 import           Language.Nano.Types
 import           Language.Nano.Errors
@@ -278,7 +278,7 @@ freshenAnn l
 --   refinements.
 --
 ---------------------------------------------------------------------------------------
-envAdds :: (IsLocated x, F.Symbolic x, PP [x]) 
+envAdds :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
         => String 
         -> [(x, (RefType,Assignability,Initialization))] 
         -> CGEnv 
@@ -288,7 +288,7 @@ envAdds _ xts g
   = do ts'            <- zipWithM inv ts is
        let xtas        = zip xs $ zip3 ts' as is
 
-       zipWithM_         (reftCheck g) xs ts'
+       zipWithM_         (reftCheck g HS.empty) xs ts'
 
        g'             <- foldM addObjectFields g $ zip xs ts'
        
@@ -303,20 +303,27 @@ envAdds _ xts g
      inv t _           = return t
 
 
--- | `reftCheck g x t` checks that no glaobal symbols (as reported in @g@) 
---   appear in the refinement of type @t@.
---
-reftCheck g x t        | null forbiddenSyms 
-                       = return ()
-                       | otherwise
-                       = cgError $ errorForbiddenSyms (srcPos x) t forbiddenSyms
+reftCheck g ok x t      | Just its <- bkFuns t
+                        = mapM_ check its
+                        | otherwise 
+                        = reftCheckNoFun g x t ok 
   where
-    forbiddenSyms      = [ s | s <- foldReft rr [] t
-                             , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g
-                             , not $ refinementReady a 
-                         ]
-    rr r xs            = F.syms r ++ xs
-    refinementReady    = (`elem` [ReadOnly, ImportDecl, WriteLocal])
+    break s bs t        = (HS.fromList $ map b_sym bs, maybeToList s ++ map b_type bs ++ [t])
+    check (_,s,bs,t)    | (ss,ts) <- break s bs t
+                        = mapM_ (reftCheck g (ok `HS.union` ss) x) ts 
+
+
+reftCheckNoFun g x t ok | HS.null $ forbiddenSyms `HS.difference` ok
+                        = return ()
+                        | otherwise
+                        = cgError $ errorForbiddenSyms (srcPos x) t $ HS.toList forbiddenSyms
+  where
+    forbiddenSyms       = HS.fromList 
+                          [ s | s <- foldReft rr [] t
+                              , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g
+                              , not $ a `elem` [ReadOnly, ImportDecl, WriteLocal]
+                          ]
+    rr r xs             = F.syms r ++ xs
 
 
 -- | `addObjectFields g (x,t)` when introducing an object @x@ in environment @g@
@@ -333,7 +340,7 @@ addObjectFields g (x,t)  =
     ms  | Just (TCons _ ms _) <- flattenType g t = M.elems ms
         | otherwise                              = []
 
-    sbt = F.mkSubst [ (f, F.expr $ mkFieldB x f) | FieldSig f _ m tf <- ms
+    sbt = F.mkSubst [ (f, F.expr $ mkFieldB x f) | FieldSig f _ m _ <- ms
                                                  , isImmutable m ]
 
 envAdd x t g = envAdds "envAdd" [(x,t)] g

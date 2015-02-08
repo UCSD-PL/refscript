@@ -216,7 +216,7 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     varBinds  = zip (fmap ann <$> xs) $ (,WriteLocal,Initialized) <$> ts
     argBind   = [(argId l, (argTy l ts (cge_names g), ReadOnly, Initialized))]
     thisBind  = (Id (srcPos dummySpan) "this",) .
-                (, WriteGlobal, Initialized)   <$> 
+                (, ThisVar, Initialized)   <$> 
                 maybeToList thisTO
 
 
@@ -579,7 +579,7 @@ consExpr g (NullLit l) _
 
 consExpr g (ThisRef l) _
   = case envFindTy (Id (ann l) "this") g of
-      Just t  -> Just <$> envAddFresh l (t, WriteGlobal, Initialized) g
+      Just t  -> Just <$> envAddFresh l (t, ThisVar, Initialized) g
       Nothing -> cgError $ errorUnboundId (ann l) "this" 
 
 consExpr g (VarRef l x) _
@@ -774,8 +774,9 @@ consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> RefType -> CGM (Maybe (I
 consCast g l e tc
   = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
         tc'     <- freshTyFun g l (rType tc)
-        (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tc', WriteLocal, Initialized) g
-        consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e, Just tc')]) opTy 
+        (x,g')  <- envAddFresh l (tc', WriteLocal, Initialized) g
+        tt      <- safeEnvFindTy x g'
+        consCall g' l "user-cast" (FI Nothing [(VarRef l x, Nothing),(e, Just tc')]) opTy 
                       
 -- | Dead code 
 --   Only prove the top-level false.

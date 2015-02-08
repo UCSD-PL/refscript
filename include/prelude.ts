@@ -645,7 +645,6 @@ interface Array<T> {
     reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
     // reduceRight<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
-    // TODO: "&& v >= 0" shouldn't be needed (see measure len)
     /*@ length: { v: number | (v = (len this) && v >= 0) } */
     length: number;
 

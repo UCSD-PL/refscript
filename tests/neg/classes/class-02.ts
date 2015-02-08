@@ -23,10 +23,12 @@ class A {
 	private foo(): void {  }
 	bar(x: IPoint): void {  }
 	baz(x: INatPoint): void {  }
+  constructor() {}
 }
 
 
 class B extends A {
 	bar(x: IColorPoint): void {  }
 	baz(x: IPoint): void {  }
+  constructor() { super(); }
 }

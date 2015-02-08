@@ -28,6 +28,8 @@ class A {
 
 	/*@ bar: (x: #IPoint): void */
 	bar(x: IColorPoint): void {  }
+
+  constructor() {}
 }
 
 
@@ -38,5 +40,7 @@ class B extends A {
 
 	/*@ bar : (x: #IColorPoint): void */
 	bar(x: IPoint): void {  }
+
+  constructor() { super(); }
 
 }

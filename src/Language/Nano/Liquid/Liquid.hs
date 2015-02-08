@@ -54,7 +54,7 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 -- import           Text.PrettyPrint.HughesPJ 
 -- import qualified Data.Foldable                      as FO
 
@@ -1114,6 +1114,14 @@ globals ts = [(x,s1,s2) | (x, s1@(_, WriteGlobal, Initialized), s2@(_, WriteGlob
 
 
 errorLiquid' = errorLiquid . srcPos
+
+traceTypePP l msg act 
+  = do  z <- act
+        case z of
+          Just (x,g) -> do  t <- safeEnvFindTy x g 
+                            return $ Just $ trace (ppshow (srcPos l) ++ " " ++ msg ++ " : " ++ ppshow t) (x,g)
+          Nothing    ->  return Nothing 
+    
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

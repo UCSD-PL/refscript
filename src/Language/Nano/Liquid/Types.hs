@@ -582,16 +582,30 @@ zipType l γ t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _)
   | x1 == x2
   = do  ts    <- zipWithM (\t t' -> appZ <$> zipType l γ t t') t1s t2s
         return $ (TRef x2 (m2:ts), r1)
+  -- 
+  --    t1 <: t2
+  --
+  | Just (_, m1':t1s') <- weaken γ (x1,m1:t1s) x2 
+  = zipType l γ (TRef x2 (m1':t1s') r1 `strengthen` rtExt t1 (F.symbol x1)) t2
+  -- 
+  --    t2 <: t1
+  --
+  --    Only support this limited case with NO type arguments
+  --
+  | Just (_, [m2']) <- weaken γ (x2,m2:t2s) x1
+  = return (TRef x2 [m2'], r1)
 
   | otherwise
-  = case weaken γ (x1,m1:t1s) x2 of
-      -- Try to move along the class hierarchy
-      Just (_, m1':t1s') -> zipType l γ (TRef x2 (m1':t1s') r1 `strengthen` rtExt t1 (F.symbol x1)) t2
-      Just _             -> Nothing
-      -- Unfold structures
-      Nothing        -> do  t1' <- flattenType γ t1 
-                            t2' <- flattenType γ t2
-                            zipType l γ t1' t2'
+  = Nothing
+  -- 
+  -- DO NOT Unfold to structures
+  --
+  -- DANGER OF INFINITE LOOPS BECAUSE OF RECURSIVE TYPES
+  --
+  -- Nothing        -> do  t1' <- tracePP "FUCK - 1" <$> flattenType γ t1 
+  --                       t2' <- tracePP "FUCK - 2" <$> flattenType γ t2
+  --                       zipType l γ t1' t2'
+  --                       
   where
     rtExt t c  = F.Reft (vv t, [raExt t c])
     raExt t c  = F.RConc $ F.PBexp $ F.EApp (sym t) 

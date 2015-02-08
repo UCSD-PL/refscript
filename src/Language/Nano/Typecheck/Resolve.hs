@@ -45,6 +45,7 @@ import           Data.Function                       (on)
 import qualified Data.Map.Strict                  as M
 import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Env
+import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Types
@@ -213,8 +214,7 @@ weaken γ tr@(s,_) t
 
        case unwrap $ lesp n1 n2 g of
          []                  -> Nothing
-         path                -> -- tracePP ("weakening from " ++ ppshow tr ++ " to " ++ ppshow t) $
-                                foldlM (doEdge ch) tr $ map toNodes (toEdges path)
+         path                -> foldlM (doEdge ch) tr $ map toNodes (toEdges path)
   where
     ch@(ClassHierarchy g m)   = cha γ
     unwrap (LP lpath)         = lpath

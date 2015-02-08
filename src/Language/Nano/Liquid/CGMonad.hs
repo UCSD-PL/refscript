@@ -93,7 +93,7 @@ import           Language.Fixpoint.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -288,9 +288,9 @@ envAdds _ xts g
   = do ts'            <- zipWithM inv ts is
        let xtas        = zip xs $ zip3 ts' as is
 
-       zipWithM_         (reftCheck g HS.empty) xs ts'
-
        g'             <- foldM addObjectFields g $ zip3 xs as ts'
+       
+       zipWithM_         (reftCheck g' HS.empty) xs ts'
        
        is             <- catMaybes    <$> forM xtas addFixpointBind
        _              <- forM xtas     $  \(x,(t,_,_)) -> addAnnot x x t
@@ -310,7 +310,7 @@ reftCheck g ok x t      | Just its <- bkFuns t
   where
     break s bs t        = (HS.fromList $ map b_sym bs, maybeToList s ++ map b_type bs ++ [t])
     check (_,s,bs,t)    | (ss,ts) <- break s bs t
-                        = mapM_ (reftCheck g (ok `HS.union` ss) x) ts 
+                        = mapM_ (reftCheck g (ok `HS.union` ss) x) ts
 
 
 reftCheckNoFun g x t ok | HS.null $ forbiddenSyms `HS.difference` ok
@@ -321,7 +321,7 @@ reftCheckNoFun g x t ok | HS.null $ forbiddenSyms `HS.difference` ok
     forbiddenSyms       = HS.fromList 
                           [ s | s <- foldReft rr [] t
                               , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g
-                              , not $ a `elem` [ReadOnly, ImportDecl, WriteLocal]
+                              , a `elem` [ReturnVar,WriteGlobal]
                           ]
     rr r xs             = F.syms r ++ xs
 
@@ -336,29 +336,26 @@ addObjectFields g (x,a,t)
   | a `elem` [WriteGlobal,ThisVar,ReturnVar] = return g
   | otherwise                                = envAdds "addObjectFields" xts g
   where
-    xts = [(mkFieldB x f, (F.subst sbt tf, ReadOnly, Initialized)) 
+    xts     = [(mkFieldB x f, (F.subst sbt $ tf `strengthen` kv f, a, Initialized)) 
                 | FieldSig f _ m tf <- ms, isImmutable m ]
 
-    ms  | Just (TCons _ ms _) <- flattenType g t = M.elems ms
-        | otherwise                              = []
+    -- 
+    -- XXX  : Still need to add keyVal because of the way we express invariants 
+    --        of the form "if field 'kind' has value `v` then class 'A' is in 
+    --        fact an instance of class 'B' where (B <: A) 
+    --
+    kv s    = F.uexprReft $ F.EApp kvSym [F.eVar x, str s]
+    kvSym   = F.dummyLoc $ F.symbol "keyVal"
+    str     = F.expr . F.symbolText
 
-    sbt = F.mkSubst $ [ (f, F.expr $ mkFieldB x f) | FieldSig f _ m _ <- ms
-                                                 , isImmutable m ]
-                   ++ [ (F.symbol "this", F.expr $ F.symbol x) ]
+    ms      | Just (TCons _ ms _) <- flattenType g t = M.elems ms
+            | otherwise                              = []
+
+    sbt     = F.mkSubst $ [(f, F.expr $ mkFieldB x f) 
+                            | FieldSig f _ m _ <- ms, isImmutable m ]
+                       ++ [ (F.symbol "this", F.expr $ F.symbol x) ]
 
 envAdd x t g = envAdds "envAdd" [(x,t)] g
-
--- envAdd x (t,a,i) g
---   = do t'       <- inv
---        io       <- addFixpointBind (x,(t',a,i))
---        case io of
---         Just b  -> do addAnnot x x t'
---                       return $ g { cge_names = E.envAdd x (t',a,i) $ cge_names g
---                                  , cge_fenv  = F.insertsIBindEnv [b] $ cge_fenv  g }
---         Nothing -> return g
---   where
---     inv | i == Initialized = addInvariant g t
---         | otherwise        = return t
 
 
 mkFieldB x f = mconcat [s "field_",s x,s "_",s f] where s = F.symbol
@@ -1102,8 +1099,8 @@ splitCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 -- | zipType wrapper
 --
 zipTypeUpM l g x t1 t2 = 
-  -- case zipType l g (ltracePP l ("Will need to replace " ++ ppshow (rTypeValueVar t1) ++ " with " ++ ppshow x ++ " in " ++ ppshow t2) t1) t2 of
   case zipType l g t1 t2 of
+  -- case zipType l g t1 t2 of
     Just (f, (F.Reft (s,ras))) -> let su  = F.mkSubst [(s, F.expr x)] in 
                                   let rs  = F.simplify $ F.Reft (s, F.subst su ras) `F.meet` F.uexprReft x in
                                   return  $ f rs

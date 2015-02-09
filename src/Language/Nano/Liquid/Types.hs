@@ -283,7 +283,7 @@ fixBAnd x y = F.Reft (v, cc <$> ([1..32] :: [Int]))
 
 strengthenKeyVal t =
     case bkFuns t of
-      Just [(vs ,s ,bs, tc@(TCons mt es _))] -> 
+      Just [(vs ,s ,bs, tc@(TCons _ _ _))] -> 
           mkFun (vs, s, bs, foldl strengthen tc (keyVal . b_sym <$> bs))
       _ -> t
   where
@@ -291,7 +291,6 @@ strengthenKeyVal t =
     keyVal k      = F.Reft (vv, [F.RConc $ F.PAtom F.Ueq (F.EApp kvSym [F.eVar vv, str k]) 
                                                          (F.eVar k)
                                 ])
-    ff            = ((keyVal . F.symbol) <$>)
     vv            = F.vv Nothing
     kvSym         = F.dummyLoc $ F.symbol "keyVal"
     str           = F.expr . F.symbolText

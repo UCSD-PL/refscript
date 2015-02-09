@@ -80,7 +80,7 @@ import           Data.Hashable
 import qualified Data.IntMap                     as I
 import           Data.Either                    (partitionEithers)
 import qualified Data.List                      as L
-import           Data.Maybe                     (fromMaybe, maybeToList, isJust, fromJust)
+import           Data.Maybe                     (fromMaybe, isJust, fromJust)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.Map.Strict                as M
 import           Data.Typeable                  ()
@@ -598,7 +598,9 @@ instance (PP r, F.Reftable r) => PP (RTypeQ q r) where
 ppHMap p = map (p . snd) . M.toList 
 
 instance PP t => PP (FuncInputs t) where
-  pp (FI a as) = ppArgs parens comma (maybeToList a ++ as)
+  pp (FI (Just a) []) = parens $ pp "this" <> colon <+> pp a
+  pp (FI (Just a) as) = parens $ pp "this" <> colon <+> pp a <> comma <+> ppArgs id comma as                          
+  pp (FI Nothing  as) = ppArgs parens comma as                          
 
 instance PP TVar where 
   pp     = pprint . F.symbol
@@ -704,7 +706,7 @@ mutSym (TRef (QN _ _ _ s) [] _)
 mutSym _                          = Nothing
 
 ppMut t@TVar{} = pp t
-ppMut t@TRef{} | Just s <- mutSym t
+ppMut t        | Just s <- mutSym t
                = pp s
                | otherwise 
                = pp "_??_"

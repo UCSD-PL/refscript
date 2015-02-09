@@ -362,7 +362,7 @@ tcClassElt γ d@(ID nm _ vs _ _ ) (Constructor l xs body)
                   = die $ unsupportedNonSingleConsTy (srcPos l)
                               
     -- FIXME      : Do case of mutliple overloads 
-    fixRet t      | Just (vs,Nothing,bs,t)  <- bkFun t
+    fixRet t      | Just (vs,Nothing,bs,_)  <- bkFun t
                   = Just $ mkFun (vs, Nothing , bs, tVoid)
                   | otherwise 
                   = Nothing
@@ -883,9 +883,10 @@ tcCall γ (ArrayLit l es)
 
 -- | `{ f1:t1,...,fn:tn }`
 tcCall γ (ObjectLit l bs) 
-  = do (FI _ es', t) <- tcNormalCall γ l "ObjectLit" (FI Nothing ((,Nothing) <$> es)) $ objLitTy l ps 
+  = do (FI _ es', t) <- tcNormalCall γ l "ObjectLit" args (objLitTy l ps)
        return $ (ObjectLit l (zip ps es'), t)
   where
+    args    = FI Nothing ((,Nothing) <$> es)
     (ps,es) = unzip bs
 
 -- | `new e(e1,...,en)`
@@ -898,36 +899,38 @@ tcCall γ (NewExpr l e es)
          _ -> tcError $ errorConstrMissing (srcPos l) t
 
 -- | e.f 
---   
---   Accessing field @f@ of an expression @e@ with type @te@, causes an implicit
---   coercion of @e@ to a type @te'@ (this type is a subtype of @te@ and
---   accounts for the case where @te@ is a union type where not all parts of the 
---   union can be accessed successfully at offset @f@. This is captured by the
---   call to `mkTy te' t`, that produces an accessor function with type:
---
---      getProp_f :: (this: te') => t
---
---   The coercion occurs when calling `getProp_f` with @e@ as argument.
---
+-- 
 tcCall γ ef@(DotRef l e f)
   = runFailM (tcExpr γ e Nothing) >>= \case 
       Right (_, te) -> 
           case getProp γ FieldAccess f te of
+            -- 
+            -- Special-casing Array.length
+            -- 
+            Just (TRef (QN _ _ [] s) _ _, _,_) 
+              | F.symbol "Array" == s && F.symbol "length" == F.symbol f -> 
+                  do (CallExpr l' (DotRef _ e' _) _, t') <- tcCall γ $ CallExpr l (DotRef l e $ Id l "_get_length_") []
+                     return (DotRef l' e' f, t')
+            -- 
+            -- Proceed with field access
+            --
             Just (te', t, _) ->
                 do (FI _ [e'],τ) <- tcNormalCall γ l ef args $ mkTy te' t
                    return         $ (DotRef l e' f, τ)
+
             Nothing -> tcError $ errorMissingFld (srcPos l) f te
+
       Left err -> tcError err
   where
-    args     = FI Nothing [(e,Nothing)]
-    mkTy s t = mkFun ([],Nothing,[B (F.symbol "this") s],t) 
+    args            = FI Nothing [(e,Nothing)]
+    mkTy s t        = mkFun ([],Nothing,[B (F.symbol "this") s],t) 
          
 -- | `super(e1,...,en)`
 --
 --   XXX: there shouldn't be any `super(..)` calls after SSA ... 
 --
-tcCall γ (CallExpr l e@(SuperRef _)  es) 
-  = error "UNIMPLEMENTED TC-SUPER-CALL" 
+tcCall _ (CallExpr _ (SuperRef _)  _) 
+  = error "BUG: super(..) calls should have been eliminated" 
 
 -- | `e.m(es)`
 --
@@ -959,7 +962,7 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
            (FI (Just e'') es', t') <- tcNormalCall γ l  ex (argsThis e' es) ft
            return                   $ (CallExpr l (DotRef l1 e'' f) es', t')
 
-      | Right (_,t) <- z
+      | Right (_,_) <- z
       = tcError $ errorCallNotFound (srcPos l) e f
 
       | Left err <- z

@@ -54,7 +54,7 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 -- import           Text.PrettyPrint.HughesPJ 
 -- import qualified Data.Foldable                      as FO
 
@@ -468,7 +468,7 @@ consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body)
 
     -- FIXME      : Do case of mutliple overloads 
     --              Making the return type immutable.
-    fixRet t      | Just (vs,Nothing,bs,t)  <- bkFun t
+    fixRet t      | Just (vs,Nothing,bs,_)  <- bkFun t
                   = Just $ mkFun (vs, Nothing , bs, tVoid)
                   | otherwise 
                   = Nothing
@@ -560,7 +560,7 @@ consExpr g (Cast_ l e) _ =
     CDn t t'    -> mseq (consExpr g e Nothing) $ \(x,g') -> Just <$> consDownCast g' l x t t'
 
 -- | < t > e
-consExpr g ex@(Cast l e) to =
+consExpr g ex@(Cast l e) _ =
   case [ ct | UserCast ct <- ann_fact l ] of 
     [t] -> consCast g l e t
     _   -> die $ bugNoCasts (srcPos l) ex
@@ -583,7 +583,7 @@ consExpr g (ThisRef l) _
       Nothing -> cgError $ errorUnboundId (ann l) "this" 
 
 consExpr g (VarRef l x) _
-  | Just (t,a@WriteGlobal,i) <- tInfo
+  | Just (t,WriteGlobal,i) <- tInfo
   = addAnnot (srcPos l) x t >> Just <$> envAddFresh l (t,WriteLocal,i) g
   | Just (t,_,_) <- tInfo
   = addAnnot (srcPos l) x t >> return (Just (x, g))
@@ -665,8 +665,8 @@ consExpr g c@(CallExpr l em@(DotRef _ e f) es) _
              = consCall g l c (args es) ft
 
              -- Invoking a method
-             | Just (_,tf,_) <- getProp g MethodAccess f t
-             = consCall g l c (argsThis (vr x) es) tf
+             | Just (_,ft,_) <- getProp g MethodAccess f t
+             = consCall g l c (argsThis (vr x) es) ft
                                 
              | otherwise 
              = cgError $ errorCallNotFound (srcPos l) e f
@@ -692,16 +692,25 @@ consExpr g (CallExpr l e es) _
 --   the type of `e` (possibly adding a relevant cast). So no need to repeat the
 --   call here. 
 --
-consExpr g ef@(DotRef l e f) _
+consExpr g (DotRef l e f) to
   = mseq (consExpr g e Nothing) $ \(x,g') -> do
       te <- safeEnvFindTy x g'
       case getProp g' FieldAccess f te of
+        -- 
+        -- Special-casing Array.length
+        -- 
+        Just (TRef (QN _ _ [] s) _ _, _, _) 
+          | F.symbol "Array" == s && F.symbol "length" == F.symbol f -> 
+              consExpr g' (CallExpr l (DotRef l (vr x) (Id l "_get_length_")) []) to
+
         Just (_,t,m) -> Just   <$> envAddFresh l (mkTy m x t,WriteLocal,Initialized) g'
+
         Nothing      -> cgError $  errorMissingFld (srcPos l) f te
   where
-    mkTy m x t | isTFun t      = t  
-               | isImmutable m = fmap F.top t `strengthen` F.symbolReft (mkFieldB x f)
-               | otherwise     = t  
+    vr         = VarRef $ getAnnotation e
+    mkTy m x t | isTFun t       = t  
+               | isImmutable m  = fmap F.top t `strengthen` F.symbolReft (mkFieldB x f)
+               | otherwise      = t  
 
 -- | e1[e2]
 consExpr g (BracketRef l e1 e2) _
@@ -775,7 +784,6 @@ consCast g l e tc
   = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
         tc'     <- freshTyFun g l (rType tc)
         (x,g')  <- envAddFresh l (tc', WriteLocal, Initialized) g
-        tt      <- safeEnvFindTy x g'
         consCall g' l "user-cast" (FI Nothing [(VarRef l x, Nothing),(e, Just tc')]) opTy 
                       
 -- | Dead code 
@@ -831,12 +839,17 @@ consCall g l fn ets ft0
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts <- T.mapM (`safeEnvFindTy` g') xes 
       case ol of 
-        [ft] -> consInstantiate l g' fn ft ts xes
-        _    -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
+        -- If multiple are valid, pick the first one
+        (ft:_) -> consInstantiate l g' fn ft ts xes
+        _      -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
   where
-    ol = [ lt | Overload cx t <- ann_fact l, cge_ctx g == cx
-              , lt <- callSigs, toType t == toType lt ]
+    ol = [ lt | Overload cx t <- ann_fact l
+              , cge_ctx g == cx
+              , lt <- callSigs
+              , arg_type (toType t) == arg_type (toType lt) ]
     callSigs  = extractCall g ft0
+    arg_type t = (\(a,b,c,_) -> (a,b,c)) <$> bkFun t 
+   
     
 balance (FI (Just to) ts) (FI Nothing fs)  = (FI (Just to) ts, FI (Just $ B (F.symbol "this") to) fs)
 balance (FI Nothing ts)   (FI (Just _) fs) = (FI Nothing ts, FI Nothing fs)
@@ -1116,12 +1129,12 @@ globals ts = [(x,s1,s2) | (x, s1@(_, WriteGlobal, Initialized), s2@(_, WriteGlob
 
 errorLiquid' = errorLiquid . srcPos
 
-traceTypePP l msg act 
-  = do  z <- act
-        case z of
-          Just (x,g) -> do  t <- safeEnvFindTy x g 
-                            return $ Just $ trace (ppshow (srcPos l) ++ " " ++ msg ++ " : " ++ ppshow t) (x,g)
-          Nothing    ->  return Nothing 
+-- traceTypePP l msg act 
+--   = do  z <- act
+--         case z of
+--           Just (x,g) -> do  t <- safeEnvFindTy x g 
+--                             return $ Just $ trace (ppshow (srcPos l) ++ " " ++ msg ++ " : " ++ ppshow t) (x,g)
+--           Nothing    ->  return Nothing 
     
 
 -- Local Variables:

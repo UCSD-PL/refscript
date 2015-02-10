@@ -1,7 +1,12 @@
 
-class HTMLElt { }
+class HTMLElt { 
 
-class HTMLDivElt extends HTMLElt { }
+  constructor() { }
+}
+
+class HTMLDivElt extends HTMLElt { 
+  constructor() { super(); }
+}
 
 /*@ foo :: (elt: { HTMLElt<Immutable> | true } ) => HTMLDivElt<Immutable> */
 function foo(elt: HTMLElt): HTMLDivElt {
@@ -12,4 +17,6 @@ function foo(elt: HTMLElt): HTMLDivElt {
   throw new Error("");
 }
 
-class HTMLCanvasElt extends HTMLElt { }
+class HTMLCanvasElt extends HTMLElt { 
+  constructor() { super(); }
+}

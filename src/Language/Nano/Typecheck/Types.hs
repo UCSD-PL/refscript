@@ -598,8 +598,8 @@ instance (PP r, F.Reftable r) => PP (RTypeQ q r) where
 ppHMap p = map (p . snd) . M.toList 
 
 instance PP t => PP (FuncInputs t) where
-  pp (FI (Just a) []) = parens $ pp "this" <> colon <+> pp a
-  pp (FI (Just a) as) = parens $ pp "this" <> colon <+> pp a <> comma <+> ppArgs id comma as                          
+  pp (FI (Just a) []) = parens $ brackets (pp "this" <> colon <+> pp a)
+  pp (FI (Just a) as) = parens $ brackets (pp "this" <> colon <+> pp a) <> comma <+> ppArgs id comma as                          
   pp (FI Nothing  as) = ppArgs parens comma as                          
 
 instance PP TVar where 

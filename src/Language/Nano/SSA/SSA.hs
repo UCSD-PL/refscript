@@ -181,7 +181,24 @@ ssaStmt (IfStmt l e s1 s2) = do
   {- where
     dbg (Just θ) = trace ("SSA ENV: " ++ ppshow θ) (Just θ) -}
 
--- while c { b }
+
+
+
+-- 
+-- | while c { b }
+--
+--   while (i <- f(i) ; cond(i)) {
+--     BODY
+--   }
+--   
+--   ===>
+--   
+--   i = f(i);
+--   while (cond(i)) {
+--     BODY
+--     i = f(i);
+--   }
+-- 
 ssaStmt (WhileStmt l cnd body)
   = do  (xs, x0s)         <- unzip . map (\(x, (SI xo,_)) -> (x, xo)) <$> getLoopPhis body
 

@@ -55,7 +55,7 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 -- import           Text.PrettyPrint.HughesPJ 
 -- import qualified Data.Foldable                      as FO
 
@@ -490,10 +490,10 @@ consClassElt g dfn (MemberVarDecl _ False x Nothing)
   where
     xts       = [ (x',t) | (FieldSig x' _ _ t) <- M.elems $ t_elts dfn, F.symbol x == x' ]
     imm_flds  = HS.fromList 
-              $ [ s | ((_,InstanceMember), (FieldSig s _ m t)) <- M.toList $ t_elts dfn 
+              $ [ s | ((_,InstanceMember), (FieldSig s _ m _)) <- M.toList $ t_elts dfn 
                     , isImmutable m ]
     mut_flds  = HS.fromList 
-              $ [ s | ((_,InstanceMember), (FieldSig s _ m t)) <- M.toList $ t_elts dfn 
+              $ [ s | ((_,InstanceMember), (FieldSig s _ m _)) <- M.toList $ t_elts dfn 
                     , not $ isImmutable m ]
 
 consClassElt _ _ (MemberVarDecl l False x _)
@@ -1136,12 +1136,12 @@ globals ts = [(x,s1,s2) | (x, s1@(_, WriteGlobal, Initialized), s2@(_, WriteGlob
 
 errorLiquid' = errorLiquid . srcPos
 
-traceTypePP l msg act 
-  = do  z <- act
-        case z of
-          Just (x,g) -> do  t <- safeEnvFindTy x g 
-                            return $ Just $ trace (ppshow (srcPos l) ++ " " ++ msg ++ " : " ++ ppshow t) (x,g)
-          Nothing    ->  return Nothing 
+-- traceTypePP l msg act 
+--   = do  z <- act
+--         case z of
+--           Just (x,g) -> do  t <- safeEnvFindTy x g 
+--                             return $ Just $ trace (ppshow (srcPos l) ++ " " ++ msg ++ " : " ++ ppshow t) (x,g)
+--           Nothing    ->  return Nothing 
     
 
 -- Local Variables:

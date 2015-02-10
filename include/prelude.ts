@@ -33,21 +33,21 @@ declare function isNaN(x:any) : boolean;
  ************************************************************************/
 
 /*@ builtin_BIBracketRef ::
-    /\ forall A. (a: IArray<A>, {idx: number | (0 <= idx && idx < (len a))}) => A
+    /\ forall A. (thearray: IArray<A>, {v: number | (0 <= v && v < (len thearray))}) => A
     /\ forall A. (MArray<A>, idx: number) => A + undefined
     /\ forall M A. (Array<M,A>, idx: number + undefined) => A + undefined
     /\ forall M A. (Array<M,A>, idx: undefined) => undefined
     /\ forall A. (o: {[y: string]: A }, x: {string | hasProperty(x,o)}) => A
     /\ (o: { }, x: { string | hasProperty(x,o) }) => top
  */
-declare function builtin_BIBracketRef<A>(_arr: A[], n: number): A;
+declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 
 /*@ builtin_BIBracketAssign :: 
-    /\ forall A. (_arr: Array<Immutable, A>, {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
-    /\ forall A. (_arr: Array<ReadOnly , A>, idx:number, val: A) => void
+    /\ forall A. (a: Array<Immutable, A>, {idx:number | (0 <= idx && idx < (len a))}, val: A) => void
+    /\ forall A. (a: Array<ReadOnly , A>, idx:number, val: A) => void
     /\ forall A M. ([Mutable]{[y: string]: A }, x:string, val: A) => void
  */
-declare function builtin_BIBracketAssign<A>(arr: A[], n: number, v: A): void;
+declare function builtin_BIBracketAssign<A>(a: A[], n: number, v: A): void;
 
 /*@ builtin_BISetProp :: 
     forall A M. ([M] { f ? : [Mutable] A }, A) => {A | true}
@@ -639,7 +639,8 @@ interface Array<T> {
     // reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
 
     //TODO why does callbackfn have 4 args in the typescript annotation but only 3 in the refscript?
-    /*@ reduce : forall U . (this: IArray<T>, callback: (x: U, y: T, n: {number | 0 <= v && v < len this}) => U, init: U) => {U | true} */
+
+    /*@ reduce : forall U . (this: IArray<T>, callback: (x: U, y: T, n: {number | 0 <= v && v < len this}) => U, init: U): U */
     reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
     reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;

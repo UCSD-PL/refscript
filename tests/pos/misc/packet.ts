@@ -1,8 +1,7 @@
 class Packet {
-  /*@ link : [#Mutable] Packet<Mutable> + undefined */
+  /*@ link : [Mutable] Packet<Mutable> + null */
   public link:Packet; 
 
-  /*@ new() => void */
   constructor() { }
 }
 

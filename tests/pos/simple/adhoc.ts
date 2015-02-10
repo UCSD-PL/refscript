@@ -13,7 +13,7 @@ function foo() {
 
     generate: function() 
     /*@ <anonymous>  () => { number | true } */
-    {return 3}
+    { return 3; }
 
   }
 

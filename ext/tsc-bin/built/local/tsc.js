@@ -14316,6 +14316,8 @@ var TypeScript;
                     var varDecl = parentClass.classElements.childAt(i);
                     if (!TypeScript.hasModifier(varDecl.modifiers, 16 /* Static */) && varDecl.variableDeclarator.equalsValueClause) {
                         statements.push(new TypeScript.RsExprStmt(helper.getSourceSpan(this), [], new TypeScript.RsAssignExpr(helper.getSourceSpan(this), [], new TypeScript.RsAssignOp("="), new TypeScript.RsLDot(helper.getSourceSpan(this), [], new TypeScript.RsThisRef(helper.getSourceSpan(this), []), varDecl.variableDeclarator.propertyName.text()), varDecl.variableDeclarator.equalsValueClause.toRsExp(helper))));
+                    } else {
+                        statements.push(new TypeScript.RsExprStmt(helper.getSourceSpan(this), [], new TypeScript.RsAssignExpr(helper.getSourceSpan(this), [], new TypeScript.RsAssignOp("="), new TypeScript.RsLDot(helper.getSourceSpan(this), [], new TypeScript.RsThisRef(helper.getSourceSpan(this), []), varDecl.variableDeclarator.propertyName.text()), new TypeScript.RsNullLit(helper.getSourceSpan(this), []))));
                     }
                 }
             }

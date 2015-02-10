@@ -313,11 +313,12 @@ reftCheck g ok x t      | Just its <- bkFuns t
                         = mapM_ (reftCheck g (ok `HS.union` ss) x) ts
 
 
-reftCheckNoFun g x t ok | HS.null $ forbiddenSyms `HS.difference` ok
+reftCheckNoFun g x t ok | HS.null $ forbiddenSyms `HS.difference` (x_sym `HS.insert` ok)
                         = return ()
                         | otherwise
                         = cgError $ errorForbiddenSyms (srcPos x) t $ HS.toList forbiddenSyms
   where
+    x_sym               = F.symbol x
     forbiddenSyms       = HS.fromList 
                           [ s | s <- foldReft rr [] t
                               , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g

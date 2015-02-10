@@ -1,7 +1,8 @@
 
 /*@ indirectIndex :: (a: IArray<number>, b: IArray<{number|((0 <= v) && (v < (len a)))}>, i: { number | ((0 <= v) && (v < (len b)))}) => number */
 function indirectIndex(a : number[], b : number[], i : number) : number {
-  return a[b[i]];
+  var bi = b[i];
+  return a[bi];
 
 }
 

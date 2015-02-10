@@ -264,23 +264,23 @@ classAncestorsFromPgm p s = [ t_name l | cur <- maybeToList (HM.lookup s m)
   where ClassHierarchy g m        = pCHA p
 
 ---------------------------------------------------------------------------
-allFields :: NanoBareR r -> AbsName -> [F.Symbol]
+allFields :: StaticKind -> NanoBareR r -> AbsName -> [F.Symbol]
 ---------------------------------------------------------------------------
-allFields p a = HS.toList . HS.unions 
-              $ HS.fromList . flds <$> classAncestorsFromPgm p a 
+allFields k p a = HS.toList . HS.unions 
+                $ HS.fromList . flds <$> classAncestorsFromPgm p a 
   where
     flds a = [ s | ID _ _ _ _ es    <- maybeToList $ resolveTypeInPgm p a
-                 , FieldSig s _ _ _ <- M.elems es ] 
+                 , ((_,k'),FieldSig s _ _ _) <- M.toList es, k == k' ] 
 
 
 ---------------------------------------------------------------------------
-onlyInheritedFields :: NanoBareR r -> AbsName -> [F.Symbol]
+onlyInheritedFields :: StaticKind -> NanoBareR r -> AbsName -> [F.Symbol]
 ---------------------------------------------------------------------------
-onlyInheritedFields p a = HS.toList . HS.unions 
+onlyInheritedFields k p a = HS.toList . HS.unions 
                         $ HS.fromList . flds <$> strictAncestorsFromPgm p a 
   where
     flds a = [ s | ID _ _ _ _ es    <- maybeToList $ resolveTypeInPgm p a
-                 , FieldSig s _ _ _ <- M.elems es ] 
+                 , ((_,k'),FieldSig s _ _ _) <- M.toList es, k == k' ] 
 
 ---------------------------------------------------------------------------
 classAncestors     :: EnvLike r t => t r -> AbsName -> [AbsName]

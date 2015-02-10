@@ -11,11 +11,10 @@ class Greeter {
 	/*@ d : number */
 	public         d = 4;
 	
-	/*@ statice : { } */
-	private static statice = { };
+	/*@ e: { } */
+	private static e = { };
 	
-	/*@ new (message: string) => void */
-	constructor(message) { }
+	constructor(message: string ) { }
 
 	/*@ greet1 : (): void */
 	private greet1() { }

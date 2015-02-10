@@ -453,7 +453,7 @@ consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body)
     mkCtorExitTy  = mkFun (vs,Nothing,bs,tVoid)
       where 
         bs        | Just (TCons _ ms _) <- flattenType g (TRef nm (tVar <$> vs) fTop)
-                  = sortBy c_sym [ B s t | (_,(FieldSig s _ _ t)) <- M.toList ms ]
+                  = sortBy c_sym [ B s t | ((_,InstanceMember),(FieldSig s _ _ t)) <- M.toList ms ]
                   | otherwise
                   = []
     

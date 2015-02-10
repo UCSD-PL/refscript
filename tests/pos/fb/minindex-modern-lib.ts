@@ -1,12 +1,12 @@
-/*@ minIndex :: (arr:IArray<number>) => {number | true} */
-function minIndex(arr){
+/*@ minIndex :: (a: IArray<number>) => {number | true} */
+function minIndex(a){
   
-  if (arr.length <= 0) return -1;
+  if (a.length <= 0) return -1;
  
   function body(min: number, cur: number, i: number) { 
-      return cur < arr[min] ? i : min 
+      return cur < a[min] ? i : min; 
   }; 
 
-  return arr.reduce(body, 0);
+  return a.reduce(body, 0);
 }
 

@@ -408,8 +408,6 @@ ctorVisitor ms            = defaultVisitor { endStmt = es } { endExpr = ee }
     es _                  = False
     ee FuncExpr{}         = True
     ee _                  = False
-        
-    -- flds p n  = allFields p n  
 
     te (AssignExpr la OpAssign (LDot ld (ThisRef _) s) e)
                           = AssignExpr <$> fr_ la 
@@ -420,7 +418,7 @@ ctorVisitor ms            = defaultVisitor { endStmt = es } { endExpr = ee }
 
     ts (ExprStmt _ (CallExpr l (SuperRef _) es)) 
       = do  parent  <- par      <$> getProgram <*> getCurrentClass 
-            flds    <- maybe [] <$> (onlyInheritedFields <$> getProgram) 
+            flds    <- maybe [] <$> (onlyInheritedFields InstanceMember <$> getProgram) 
                                 <*> getCurrentClass
             BlockStmt <$> fr_ l 
                       <*>  ((:) <$> superVS parent <*> mapM asgnS flds)
@@ -505,7 +503,7 @@ ssaClassElt (Constructor l xs bd)
             return     $ Constructor l xs bd'
   where
     symToVar    = freshenIdSSA . mkId . F.symbolString
-    allFlds     = L.sort <$> (maybe [] <$> (allFields <$> getProgram)
+    allFlds     = L.sort <$> (maybe [] <$> (allFields InstanceMember <$> getProgram)
                                        <*> getCurrentClass)
     bdM fs      = visitStmtsT (ctorVisitor fs) () bd
     exitM  fs   = single <$> ctorExit l fs

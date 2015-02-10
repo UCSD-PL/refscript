@@ -18,6 +18,7 @@ import qualified Data.Traversable                   as T
 import qualified Data.HashMap.Strict                as HM
 import           Data.Function                      (on)
 import qualified Data.Map.Strict                    as M
+import qualified Data.HashSet                       as HS
 import           Data.Maybe                         (maybeToList, fromMaybe, catMaybes)
 import           Data.List                          (sortBy)
 
@@ -54,7 +55,7 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 -- import           Text.PrettyPrint.HughesPJ 
 -- import qualified Data.Foldable                      as FO
 
@@ -147,8 +148,7 @@ initGlobalEnv  :: NanoRefType -> CGM CGEnv
 -------------------------------------------------------------------------------
 initGlobalEnv pgm@(Nano { code = Src s }) 
       = freshenCGEnvM (CGE nms bds grd ctx mod cha pth Nothing) 
-    >>= \g  -> envAdds "initGlobalEnv" extras g
-    >>= \g' -> return $ g'
+    >>= envAdds "initGlobalEnv" extras
   where
     reshuffle1 = \(_,_,c,d,e) -> (d,c,e)
     reshuffle2 = \(_,c,d,e)   -> (d,c,e)
@@ -398,7 +398,7 @@ consVarDecl g v@(VarDecl l x (Just e))
                   fta     <- freshTyVar gy l t
                   _       <- subType l (errorLiquid' l) gy ty  fta
                   _       <- subType l (errorLiquid' l) gy fta t
-                  Just   <$> envAdds "consVarDecl" [(x, (fta, WriteGlobal,Initialized))] g
+                  Just   <$> envAdd x (fta, WriteGlobal,Initialized) g
 
       _       -> cgError $ errorVarDeclAnnot (srcPos l) x
  
@@ -423,8 +423,7 @@ consExprT l g e (Just t) = consCall  g l "consExprT" (FI Nothing [(e, Nothing)])
 ------------------------------------------------------------------------------------
 consClassElts :: CGEnv -> IfaceDef F.Reft -> [ClassElt AnnTypeR] -> CGM ()
 ------------------------------------------------------------------------------------
-consClassElts g dfn ce
-   = mapM_ (consClassElt g dfn) ce
+consClassElts g = mapM_ . consClassElt g
 
 
 ------------------------------------------------------------------------------------
@@ -475,19 +474,27 @@ consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body)
 
 -- Static field
 consClassElt g dfn (MemberVarDecl l True x (Just e))
-  = case spec of 
-      Just (FieldSig _ _ _ t) -> 
-           void    $ consCall g l "field init"  (FI Nothing [(e, Just t)]) (mkInitFldTy t)
-      _ -> cgError $ errorClassEltAnnot (srcPos l) (t_name dfn) x
+  | Just (FieldSig _ _ _ t) <- spec
+  = void $ consCall g l "field init"  (FI Nothing [(e, Just t)]) (mkInitFldTy t)
+  | otherwise
+  = cgError $ errorClassEltAnnot (srcPos l) (t_name dfn) x
   where
-    spec    = M.lookup (F.symbol x, StaticMember) (t_elts dfn)
+    spec      = M.lookup (F.symbol x, StaticMember) (t_elts dfn)
  
 consClassElt _ _ (MemberVarDecl l True x Nothing)
   = cgError $ unsupportedStaticNoInit (srcPos l) x
 
 -- Instance variable
-consClassElt _ _ (MemberVarDecl _ False _ Nothing)
-  = return ()
+consClassElt g dfn (MemberVarDecl _ False x Nothing)
+  = forM_ xts $ uncurry $ reftCheck "consClas" g imm_flds mut_flds
+  where
+    xts       = [ (x',t) | (FieldSig x' _ _ t) <- M.elems $ t_elts dfn, F.symbol x == x' ]
+    imm_flds  = HS.fromList 
+              $ [ s | ((_,InstanceMember), (FieldSig s _ m t)) <- M.toList $ t_elts dfn 
+                    , isImmutable m ]
+    mut_flds  = HS.fromList 
+              $ [ s | ((_,InstanceMember), (FieldSig s _ m t)) <- M.toList $ t_elts dfn 
+                    , not $ isImmutable m ]
 
 consClassElt _ _ (MemberVarDecl l False x _)
   = die $ bugClassInstVarInit (srcPos l) x
@@ -503,11 +510,11 @@ consClassElt g dfn (MemberMethDef l True x xs body)
  
 -- | Instance method
 consClassElt g dfn (MemberMethDef l False x xs body) 
-  = case spec of
-      Just (MethSig _ t) -> 
-          do its   <- cgFunTys l x xs t 
-             mapM_    (consFun1 l g x xs body) $ addSelfB <$> its
-      _ -> cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) x
+  | Just (MethSig _ t) <- spec
+  = do  its <- cgFunTys l x xs t 
+        mapM_ (consFun1 l g x xs body) $ addSelfB <$> its
+  | otherwise
+  = cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) x
   where
     spec            = M.lookup (F.symbol x, InstanceMember) (t_elts dfn)
     addSelfB (i,(vs,so,xs,y)) 
@@ -736,7 +743,7 @@ consExpr g (ArrayLit l es) _
 
 -- | {f1:e1,...,fn:en}
 consExpr g (ObjectLit l bs) _
-  = consCall g l "ObjectLit" (FI Nothing ((,Nothing) <$> es)) $ strengthenKeyVal $ objLitTy l ps
+  = consCall g l "ObjectLit" (FI Nothing ((,Nothing) <$> es)) $ objLitTy l ps
   where
     (ps, es) = unzip bs
 
@@ -767,7 +774,7 @@ consExpr g (FuncExpr l fo xs body) tCxtO
     consFuncExpr ft = do kft       <-  freshTyFun g l ft
                          fts       <-  cgFunTys l f xs kft
                          forM_ fts  $  consFun1 l g f xs body
-                         Just      <$> envAddFresh l (kft, WriteGlobal, Initialized) g 
+                         Just      <$> envAddFresh l (kft, WriteLocal, Initialized) g 
   
     anns            = [ t | FuncAnn t <- ann_fact l ]
     f               = maybe (F.symbol "<anonymous>") F.symbol fo
@@ -870,11 +877,11 @@ consInstantiate l g fn ft ts xes
         ts1             <- idxMapFI (instantiateTy l g) 1 ts
         let (ts2, its2)  = balance ts1 its1
         let (su, ts3)    = renameBinds (toList its2) (toList xes)
-        -- _               <- zipWithM_ (subType l err g) (ltracePP l "LQ:LHS" $ toList ts2) 
-        --                                                (ltracePP l "LQ:RHS" ts3)
         _               <- zipWithM_ (subType l err g) (toList ts2) ts3
-        Just           <$> envAddFresh l (F.subst su ot, WriteLocal, Initialized) g
+        Just <$> envAddFreshWithOK (HS.fromList $ bSyms its1) l 
+                                   (F.subst su ot, WriteLocal, Initialized) g
   where
+    bSyms bs             = b_sym <$> toList bs
     toList (FI x xs)     = maybeToList x ++ xs
     err                  = errorLiquid' l
     idxMapFI f i (FI Nothing ts)  = FI     Nothing        <$> mapM (uncurry f) (zip [i..] ts)
@@ -1129,12 +1136,12 @@ globals ts = [(x,s1,s2) | (x, s1@(_, WriteGlobal, Initialized), s2@(_, WriteGlob
 
 errorLiquid' = errorLiquid . srcPos
 
--- traceTypePP l msg act 
---   = do  z <- act
---         case z of
---           Just (x,g) -> do  t <- safeEnvFindTy x g 
---                             return $ Just $ trace (ppshow (srcPos l) ++ " " ++ msg ++ " : " ++ ppshow t) (x,g)
---           Nothing    ->  return Nothing 
+traceTypePP l msg act 
+  = do  z <- act
+        case z of
+          Just (x,g) -> do  t <- safeEnvFindTy x g 
+                            return $ Just $ trace (ppshow (srcPos l) ++ " " ++ msg ++ " : " ++ ppshow t) (x,g)
+          Nothing    ->  return Nothing 
     
 
 -- Local Variables:

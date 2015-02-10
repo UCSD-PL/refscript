@@ -34,11 +34,14 @@ module Language.Nano.Liquid.CGMonad (
   , Freshable (..)
 
   -- * Environment API
-  , envAddFresh, envAdds, envAdd, envAddReturn, envAddGuard, envPopGuard, envFindTy
-  , envFindTyWithAsgn, envFindTyForAsgn
+  , envAddFresh, envAddFreshWithOK, envAdds, envAddsWithOK, envAdd
+  , envAddReturn, envAddGuard, envPopGuard
+  , envFindTy, envFindTyWithAsgn, envFindTyForAsgn
   , safeEnvFindTy, safeEnvFindTyWithAsgn, safeEnvFindTyNoSngl
   , envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
+
+  , reftCheck
 
   , mkFieldB
 
@@ -259,9 +262,19 @@ envAddFresh :: IsLocated l
             -> CGEnv 
             -> CGM (Id AnnTypeR, CGEnv) 
 ---------------------------------------------------------------------------------------
-envAddFresh l (t,a,i) g 
+envAddFresh = envAddFreshWithOK HS.empty
+
+---------------------------------------------------------------------------------------
+envAddFreshWithOK :: IsLocated l 
+                  => HS.HashSet F.Symbol 
+                  -> l 
+                  -> (RefType, Assignability, Initialization) 
+                  -> CGEnv 
+                  -> CGM (Id AnnTypeR, CGEnv) 
+---------------------------------------------------------------------------------------
+envAddFreshWithOK ok l (t,a,i) g
   = do x  <- freshId l
-       g' <- envAdds "envAddFresh" [(x,(t,a,i))] g
+       g' <- envAddsWithOK ok "envAddFresh" [(x,(t,a,i))] g
        addAnnot l x t
        return (x, g')
    
@@ -274,9 +287,7 @@ freshenAnn l
        return $ Ann n (srcPos l) []
 
 
--- | We do not add binders for WriteGlobal variables as they cannot appear in
---   refinements.
---
+
 ---------------------------------------------------------------------------------------
 envAdds :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
         => String 
@@ -284,13 +295,27 @@ envAdds :: (IsLocated x, F.Symbolic x, PP x, PP [x])
         -> CGEnv 
         -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAdds _ xts g
+envAdds = envAddsWithOK HS.empty
+
+
+-- | We do not add binders for WriteGlobal variables as they cannot appear in
+--   refinements.
+--
+---------------------------------------------------------------------------------------
+envAddsWithOK :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
+              => HS.HashSet F.Symbol
+              -> String 
+              -> [(x, (RefType,Assignability,Initialization))] 
+              -> CGEnv 
+              -> CGM CGEnv
+---------------------------------------------------------------------------------------
+envAddsWithOK ok msg xts g
   = do ts'            <- zipWithM inv ts is
        let xtas        = zip xs $ zip3 ts' as is
 
-       g'             <- foldM addObjectFields g $ zip3 xs as ts'
+       g'             <- foldM (addObjectFieldsWithOK ok) g $ zip3 xs as ts'
        
-       zipWithM_         (reftCheck g' HS.empty) xs ts'
+       zipWithM_         (reftCheck msg g' ok HS.empty) xs ts'
        
        is             <- catMaybes    <$> forM xtas addFixpointBind
        _              <- forM xtas     $  \(x,(t,_,_)) -> addAnnot x x t
@@ -303,39 +328,50 @@ envAdds _ xts g
      inv t _           = return t
 
 
-reftCheck g ok x t      | Just its <- bkFuns t
+reftCheck msg g ok bad x t | Just its <- bkFuns t
                         = mapM_ check its
                         | otherwise 
-                        = reftCheckNoFun g x t ok 
+                        = reftCheck' msg g x t ok bad
   where
     break s bs t        = (HS.fromList $ map b_sym bs, maybeToList s ++ map b_type bs ++ [t])
     check (_,s,bs,t)    | (ss,ts) <- break s bs t
-                        = mapM_ (reftCheck g (ok `HS.union` ss) x) ts
+                        = mapM_ (reftCheck msg g (ok `HS.union` ss) bad x) ts
 
+reftCheck' :: (IsLocated a, F.Symbolic a) =>
+  t
+  -> CGEnv
+  -> a
+  -> RefType
+  -> HS.HashSet F.Symbol
+  -> HS.HashSet F.Symbol
+  -> ExceptT Error (State CGState) ()
 
-reftCheckNoFun g x t ok | HS.null $ forbiddenSyms `HS.difference` (x_sym `HS.insert` ok)
+reftCheck' msg g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.insert` ok)
                         = return ()
                         | otherwise
-                        = cgError $ errorForbiddenSyms (srcPos x) t $ HS.toList forbiddenSyms
+                        = cgError $ errorForbiddenSyms (srcPos x) t $ HS.toList forbiddenSet
   where
-    x_sym               = F.symbol x
-    forbiddenSyms       = HS.fromList 
-                          [ s | s <- foldReft rr [] t
-                              , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g
-                              , a `elem` [ReturnVar,WriteGlobal]
-                          ]
-    rr r xs             = F.syms r ++ xs
+    x_sym         = F.symbol x
+    allSyms       = [ s | s <- foldReft rr [] t ]    
+    forbiddenSyms = [ s | s <- allSyms
+                        , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g
+                        , a `elem` [ReturnVar,WriteGlobal] ]
+                 ++ [ s | s <- allSyms, s `HS.member` bad ]
+    forbiddenSet  = HS.fromList forbiddenSyms
+    rr (F.Reft (v, ras)) xs = concatMap ra ras ++ xs
+    ra (F.RConc p)          = F.syms p
+    ra (F.RKvar k su)       = F.targetSubstSyms su
 
 
--- | `addObjectFields g (x,t)` when introducing an object @x@ in environment @g@
+-- | `addObjectFieldsWithOK g (x,t)` when introducing an object @x@ in environment @g@
 --   also introduce bindings for all its IMMUTABLE fields. 
 ---------------------------------------------------------------------------------------
-addObjectFields :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
-                => CGEnv -> (x,Assignability,RefType) -> CGM CGEnv
+addObjectFieldsWithOK :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
+                => HS.HashSet F.Symbol -> CGEnv -> (x,Assignability,RefType) -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-addObjectFields g (x,a,t)           
+addObjectFieldsWithOK ok g (x,a,t)
   | a `elem` [WriteGlobal,ThisVar,ReturnVar] = return g
-  | otherwise                                = envAdds "addObjectFields" xts g
+  | otherwise                                = envAddsWithOK ok "addObjectFieldsWithOK" xts g
   where
     xts       = [(mkFieldB x f, (F.subst sbt $ tf `strengthen` kv f, a, Initialized)) 
                   | FieldSig f _ m tf <- ms, isImmutable m ]
@@ -1106,7 +1142,6 @@ splitCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 --
 zipTypeUpM l g x t1 t2 = 
   case zipType l g t1 t2 of
-  -- case zipType l g t1 t2 of
     Just (f, (F.Reft (s,ras))) -> let su  = F.mkSubst [(s, F.expr x)] in 
                                   let rs  = F.simplify $ F.Reft (s, F.subst su ras) `F.meet` F.uexprReft x in
                                   return  $ f rs

@@ -183,7 +183,7 @@ errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for '%
 errorMultipleCasts l cs       = mkErr l $ printf "Multiple Casts: %s" (ppshow cs) 
 errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"
 errorWellFormed l             = mkErr l $ printf "Well-formedness Error" 
-errorForbiddenSyms l t xs     = mkErr l $ printf "Symbol(s): %s, is (are) not readonly or local, so should not be appearing in the refinement of type '%s'." 
+errorForbiddenSyms l t xs     = mkErr l $ printf "Symbol(s): %s, is (are) not readonly, local, or an immutable field, so should not be appearing in the refinement of type '%s'." 
                                 (show $ intersperse comma $ map pp xs) (ppshow t)
  
 ---------------------------------------------------------------------------

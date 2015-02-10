@@ -52,6 +52,8 @@ interface IA {
 
 class A {
 
+  constructor() { }
+
 	classfoo(x: number): number;
 	classfoo(x: string): string;
 	classfoo(x: boolean): boolean;

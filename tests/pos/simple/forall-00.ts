@@ -5,6 +5,7 @@ class FooT {
   public fff(x:any): any {
     return [];
   }
+  constructor() { }
 }
 
 /*@ f1 :: (number) => number */

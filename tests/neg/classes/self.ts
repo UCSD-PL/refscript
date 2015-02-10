@@ -1,6 +1,8 @@
 class IdGen {
   /*@ gen : (this: Self<Mutable>) : {number | true} */
   gen() { return 0 }
+
+  constructor() {  }
 }
 class UniqueIdGen extends IdGen {
   private next = -1;
@@ -9,4 +11,5 @@ class UniqueIdGen extends IdGen {
     this.next++;
     return this.next;
   }
+  constructor() { super(); }
 }

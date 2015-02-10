@@ -12,6 +12,9 @@ class Foo {
 
   // Function field
   f = ext;
+
+  constructor() {}
+
 }
 
 

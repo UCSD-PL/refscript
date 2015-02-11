@@ -16474,8 +16474,21 @@ var TypeScript;
 
         EnumElementSyntax.prototype.toRsEnumElt = function (helper) {
             var anns = tokenAnnots(this.firstToken());
-            var enumDecl = helper.getDeclForAST(this);
-            return new TypeScript.RsEnumElt(helper.getSourceSpan(this), anns, this.propertyName.toRsId(helper), enumDecl.constantValue);
+
+            if (this.equalsValueClause && this.equalsValueClause.value) {
+                if (TypeScript.Syntax.isHexLit(this.equalsValueClause.value.fullText())) {
+                    return new TypeScript.RsEnumElt(helper.getSourceSpan(this), anns, this.propertyName.toRsId(helper), new TypeScript.RsHexLit(helper.getSourceSpan(this.equalsValueClause.value), [], this.equalsValueClause.value.fullText()));
+                } else if (TypeScript.Syntax.isIntLit(this.equalsValueClause.value.fullText())) {
+                    var enumDecl = helper.getDeclForAST(this);
+
+                    return new TypeScript.RsEnumElt(helper.getSourceSpan(this), anns, this.propertyName.toRsId(helper), new TypeScript.RsIntLit(helper.getSourceSpan(this.equalsValueClause.value), [], enumDecl.constantValue));
+                }
+            } else {
+                var enumDecl = helper.getDeclForAST(this);
+                if (TypeScript.Syntax.isIntLit(enumDecl.constantValue.toString())) {
+                    return new TypeScript.RsEnumElt(helper.getSourceSpan(this), anns, this.propertyName.toRsId(helper), new TypeScript.RsIntLit(helper.getSourceSpan(this), [], enumDecl.constantValue));
+                }
+            }
         };
         return EnumElementSyntax;
     })(TypeScript.SyntaxNode);
@@ -18584,6 +18597,18 @@ var TypeScript;
             throw new Error("toRsAST not implemented for " + TypeScript.SyntaxKind[token.kind()]);
         }
 
+        function isHexLit(s) {
+            var regexp = new RegExp('0[xX][0-9a-fA-F]+');
+            return regexp.test(s);
+        }
+        Syntax.isHexLit = isHexLit;
+
+        function isIntLit(s) {
+            var regexp = new RegExp('[0-9]+');
+            return regexp.test(s);
+        }
+        Syntax.isIntLit = isIntLit;
+
         function toRsExp(token, helper) {
             switch (token.kind()) {
                 case 11 /* IdentifierName */:
@@ -18591,7 +18616,11 @@ var TypeScript;
 
                 case 13 /* NumericLiteral */:
                     if (token.text().indexOf(".") === -1) {
-                        return new TypeScript.RsIntLit(helper.getSourceSpan(token), [], token.value());
+                        if (isHexLit(token.text())) {
+                            return new TypeScript.RsHexLit(helper.getSourceSpan(token), [], token.text());
+                        } else {
+                            return new TypeScript.RsIntLit(helper.getSourceSpan(token), [], token.value());
+                        }
                     } else {
                         return new TypeScript.RsNumLit(helper.getSourceSpan(token), [], token.value());
                     }
@@ -60047,6 +60076,27 @@ var TypeScript;
     })(RsExpression);
     TypeScript.RsIntLit = RsIntLit;
 
+    var RsHexLit = (function (_super) {
+        __extends(RsHexLit, _super);
+        function RsHexLit(span, ann, num) {
+            _super.call(this, ann);
+            this.span = span;
+            this.ann = ann;
+            this.num = num;
+        }
+        RsHexLit.prototype.toObject = function () {
+            return {
+                HexLit: [
+                    [this.span.toObject(), this.mapAnn(function (a) {
+                            return a.toObject();
+                        })],
+                    this.num]
+            };
+        };
+        return RsHexLit;
+    })(RsExpression);
+    TypeScript.RsHexLit = RsHexLit;
+
     var RsStringLit = (function (_super) {
         __extends(RsStringLit, _super);
         function RsStringLit(span, ann, str) {
@@ -60954,12 +61004,12 @@ var TypeScript;
 
     var RsEnumElt = (function (_super) {
         __extends(RsEnumElt, _super);
-        function RsEnumElt(span, ann, name, num) {
+        function RsEnumElt(span, ann, name, exp) {
             _super.call(this, ann);
             this.span = span;
             this.ann = ann;
             this.name = name;
-            this.num = num;
+            this.exp = exp;
         }
         RsEnumElt.prototype.toObject = function () {
             return [
@@ -60967,7 +61017,7 @@ var TypeScript;
                         return a.toObject();
                     })],
                 this.name.toObject(),
-                this.num
+                this.exp.toObject()
             ];
         };
         return RsEnumElt;

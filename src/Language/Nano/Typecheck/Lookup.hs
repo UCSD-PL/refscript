@@ -17,6 +17,7 @@ import           Data.Generics
 import qualified Data.Map.Strict as M
 
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Syntax
 
 import qualified Language.Fixpoint.Types as F
 
@@ -98,10 +99,12 @@ getProp γ _ s t@(TModule m   ) = do m'         <- resolveModuleInEnv γ m
 -- FIXME: Instead of the actual integer value, assign unique symbolic values: 
 --        E.g. A_B_C_1 ... 
 getProp γ _ s t@(TEnum e     ) = do e'         <- resolveEnumInEnv γ e
-                                    io         <- envFindTy (F.symbol s) (e_symbols e')
-                                    case io of 
-                                      Just i   -> return (t, tInt `strengthen` exprReft i `bitVector` i, t_immutable)
-                                      Nothing  -> return (t, tInt, t_immutable)
+                                    io         <- envFindTy (F.symbol s) (e_mapping e')
+                                    case io of
+                                      IntLit _ i -> return (t, tInt `strengthen` exprReft i, t_immutable)
+                                      -- TODO 
+                                      HexLit _ s -> return $ error "getProp enum" 
+                                      _          -> Nothing
 
 getProp _ _ _ _                = Nothing
 

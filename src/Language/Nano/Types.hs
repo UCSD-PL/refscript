@@ -275,13 +275,9 @@ data EnumDef = EnumDef {
     --
       e_name       :: F.Symbol
     -- 
-    -- ^ Contents: Int -> Symbols
+    -- ^ Contents: Symbols -> Expr (expected IntLit or HexLit)
     --
-    , e_properties :: I.IntMap F.Symbol
-    -- 
-    -- ^ Contents: Symbols -> Int
-    --
-    , e_symbols    :: Env (Maybe Int)
+    , e_mapping    :: Env (Expression ())
 
 } deriving (Data, Typeable)
 

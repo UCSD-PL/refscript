@@ -712,7 +712,7 @@ ppMut t        | Just s <- mutSym t
                = pp "_??_"
 
 instance PP EnumDef where
-  pp (EnumDef n ss _) = pp n <+> braces (intersperse comma $ pp <$> I.elems ss)
+  pp (EnumDef n m) = pp n <+> braces (pp m)
  
 instance (PP r, F.Reftable r) => PP (ModuleDef r) where
   pp (ModuleDef vars tys enums path) =  
@@ -882,19 +882,19 @@ immObjectLitTy l _ ps ts
 ---------------------------------------------------------------------------------
 enumTy :: EnumDef -> RType F.Reft
 ---------------------------------------------------------------------------------
-enumTy (EnumDef _ ps _) = TAll a $ TFun Nothing [a',b] ot fTop
-  where
-    a        = TV (F.symbol "A") (srcPos dummySpan)
-    a'       = B x0 (tVar a)
-    x0       = F.symbol "x0"
-    x1       = F.symbol "x1"
-    pi       = F.POr $ (F.PAtom F.Eq (F.eVar v) . F.expr) <$> I.keys ps 
-    v        = F.vv Nothing
-    b        = B x1 $ tInt `strengthen` F.predReft pi
-    el       = I.toList ps
-    ot       = tString `strengthen` F.predReft (F.PAnd $ si <$> el)
-    si (i,s) = F.PImp (F.PAtom F.Eq (F.expr x1) (F.expr i))
-                      (F.PAtom F.Eq (F.expr v ) (F.expr $ F.symbolText s))
+enumTy (EnumDef _ _) = error "enumTy"  -- TAll a $ TFun Nothing [a',b] ot fTop
+--   where
+--     a        = TV (F.symbol "A") (srcPos dummySpan)
+--     a'       = B x0 (tVar a)
+--     x0       = F.symbol "x0"
+--     x1       = F.symbol "x1"
+--     pi       = F.POr $ (F.PAtom F.Eq (F.eVar v) . F.expr) <$> I.keys ps 
+--     v        = F.vv Nothing
+--     b        = B x1 $ tInt `strengthen` F.predReft pi
+--     el       = I.toList ps
+--     ot       = tString `strengthen` F.predReft (F.PAnd $ si <$> el)
+--     si (i,s) = F.PImp (F.PAtom F.Eq (F.expr x1) (F.expr i))
+--                       (F.PAtom F.Eq (F.expr v ) (F.expr $ F.symbolText s))
     
 ---------------------------------------------------------------------------------
 setPropTy :: (PPR r, IsLocated l) => l -> F.Symbol -> RType r -> RType r

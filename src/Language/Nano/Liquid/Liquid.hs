@@ -573,7 +573,8 @@ consExpr g ex@(Cast l e) _ =
     _   -> die $ bugNoCasts (srcPos l) ex
 
 consExpr g (IntLit l i) _
-  = Just <$> envAddFresh l (tInt `eSingleton` i `bitVector` i, WriteLocal, Initialized) g
+  = Just <$> envAddFresh l (tInt `eSingleton` i, WriteLocal, Initialized) g
+  -- = Just <$> envAddFresh l (tInt `eSingleton` i `bitVector` i, WriteLocal, Initialized) g
 
 consExpr g (BoolLit l b) _
   = Just <$> envAddFresh l (pSingleton tBool b, WriteLocal, Initialized) g 

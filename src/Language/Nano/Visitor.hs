@@ -773,22 +773,19 @@ scrapeModules pgm@(Nano { code = Src stmts })
                                       TEnum $ nameInPath l p x, Initialized)) ]
     vStmt _ _                      = [ ]
 
-    tStmts                         = concatMap . tStmt 
+    tStmts                   = concatMap . tStmt 
 
-    -- tStmt                         :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, IfaceDef r)]
-    tStmt ap c@(ClassStmt{})       = maybeToList $ resolveType ap c
-    tStmt ap c@(IfaceStmt{})       = maybeToList $ resolveType ap c
-    tStmt _ _                      = [ ]
+    -- tStmt                   :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, IfaceDef r)]
+    tStmt ap c@(ClassStmt{}) = maybeToList $ resolveType ap c
+    tStmt ap c@(IfaceStmt{}) = maybeToList $ resolveType ap c
+    tStmt _ _                = [ ]
 
-    eStmts                         = concatMap eStmt
-    eStmt                         :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, EnumDef)]
-    eStmt (EnumStmt _ n es)        = [(fmap srcPos n, 
-                                      EnumDef (F.symbol n) (I.fromList  $ catMaybes $ enumElt  <$> es) 
-                                                           (envFromList $ sEnumElt <$> es))]
-    eStmt _                        = []
-    enumElt (EnumElt _ s i)        = (,F.symbol s) <$> i
-    sEnumElt (EnumElt _ s i)       = (F.symbol s,i) 
-    ss                             = fmap ann
+    eStmts                   = concatMap eStmt
+    eStmt                   :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, EnumDef)]
+    eStmt (EnumStmt _ n es)  = [(fmap srcPos n, EnumDef (F.symbol n) (envFromList $ sEnumElt <$> es))]
+    eStmt _                  = []
+    sEnumElt (EnumElt _ s e) = (F.symbol s, fmap (const ()) e) 
+    ss                       = fmap ann
  
 
 typeNames :: IsLocated a => AbsPath -> [ Statement a ] -> [ AbsName ] 

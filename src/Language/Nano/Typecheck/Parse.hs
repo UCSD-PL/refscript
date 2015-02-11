@@ -30,6 +30,7 @@ import qualified Data.List                        as     L
 import qualified Data.IntMap.Strict               as I
 import qualified Data.HashMap.Strict              as HM
 import           Data.Tuple
+import qualified Data.HashSet                     as HS
 
 import           Text.PrettyPrint.HughesPJ               (text)
 import qualified Data.Foldable                    as     FO
@@ -50,6 +51,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Locations
 import           Language.Nano.Names
+import           Language.Nano.Misc                      (fst4) 
 import           Language.Nano.Program
 import           Language.Nano.Types              hiding (Exported)
 import           Language.Nano.Visitor     
@@ -855,7 +857,14 @@ ctxCEltTvar as s = go s ++ as
 factTvars :: FactQ q r -> [TVar]
 factTvars = go
   where
-    tvars                   = fst . bkAll
+    tvars t                 | Just ts <- bkFuns t
+                            = HS.toList $ foldUnions $ HS.fromList . fst4 <$> ts
+                            | otherwise
+                            = []
+    
+    foldUnions (α:αs)       = foldl HS.intersection α αs
+    foldUnions _            = HS.empty
+
     go (VarAnn t)           = tvars t
     go (FuncAnn t)          = tvars t
     go (FieldAnn m)         = tvars $ f_type m

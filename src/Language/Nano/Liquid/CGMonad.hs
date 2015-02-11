@@ -346,10 +346,10 @@ reftCheck' :: (IsLocated a, F.Symbolic a) =>
   -> HS.HashSet F.Symbol
   -> ExceptT Error (State CGState) ()
 
-reftCheck' msg g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.insert` ok)
-                        = return ()
-                        | otherwise
-                        = cgError $ errorForbiddenSyms (srcPos x) t $ HS.toList forbiddenSet
+reftCheck' _ g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.insert` ok)
+                          = return ()
+                          | otherwise
+                          = cgError $ errorForbiddenSyms (srcPos x) t $ HS.toList forbiddenSet
   where
     x_sym         = F.symbol x
     allSyms       = [ s | s <- foldReft rr [] t ]    
@@ -358,9 +358,9 @@ reftCheck' msg g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.
                         , a `elem` [ReturnVar,WriteGlobal] ]
                  ++ [ s | s <- allSyms, s `HS.member` bad ]
     forbiddenSet  = HS.fromList forbiddenSyms
-    rr (F.Reft (v, ras)) xs = concatMap ra ras ++ xs
+    rr (F.Reft (_, ras)) xs = concatMap ra ras ++ xs
     ra (F.RConc p)          = F.syms p
-    ra (F.RKvar k su)       = F.targetSubstSyms su
+    ra (F.RKvar _ su)       = F.targetSubstSyms su
 
 
 -- | `addObjectFieldsWithOK g (x,t)` when introducing an object @x@ in environment @g@
@@ -388,13 +388,14 @@ addObjectFieldsWithOK ok g (x,a,t)
     ms        | Just (TCons m ms _) <- flattenType g t = defMut m <$> M.elems ms
               | otherwise                              = []
 
-    defMut m (FieldSig f o m0 t)  
-              | isInheritedMutability m0 = FieldSig f o m  t
-              | otherwise                = FieldSig f o m0 t
+    defMut m (FieldSig f o m0 t) | isInheritedMutability m0 
+                                 = FieldSig f o m  t
+                                 | otherwise                
+                                 = FieldSig f o m0 t
     defMut _ f = f 
 
-    sbt       = F.mkSubst $ [(f, F.expr $ mkFieldB x f) 
-                              | FieldSig f _ m _ <- ms, isImmutable m ]
+    sbt       = F.mkSubst $ [(f, F.expr $ mkFieldB x f) | FieldSig f _ m _ <- ms
+                                                        , isImmutable m ]
                          ++ [ (F.symbol "this", F.expr $ F.symbol x) ]
 
 envAdd x t g = envAdds "envAdd" [(x,t)] g

@@ -1,16 +1,15 @@
 
-
-
 class A {
   
-  public x;
+  /*@ x: [Immutable] number */
+  public x: number;
 
-  public y;
+  /*@ y : [Mutable] { number | v = x } */
+  public y: number;
 
-  /*@ new (a: number) => void */
   constructor(a: number) {
     this.x = a;
-    this.y = a;
+    this.y = a + 1;
   }
 
 }

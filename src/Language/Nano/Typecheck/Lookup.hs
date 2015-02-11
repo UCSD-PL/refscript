@@ -23,7 +23,7 @@ import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Names
 import           Language.Nano.Types
 import           Language.Nano.Env
--- import           Language.Nano.Errors
+import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types

@@ -710,14 +710,35 @@ consExpr g (DotRef l e f) to
           | F.symbol "Array" == s && F.symbol "length" == F.symbol f -> 
               consExpr g' (CallExpr l (DotRef l (vr x) (Id l "_get_length_")) []) to
 
-        Just (_,t,m) -> Just   <$> envAddFresh l (mkTy m x t,WriteLocal,Initialized) g'
+        Just (_,t,m) -> Just   <$> envAddFresh l (mkTy m x te t,WriteLocal,Initialized) g'
 
         Nothing      -> cgError $  errorMissingFld (srcPos l) f te
   where
     vr         = VarRef $ getAnnotation e
-    mkTy m x t | isTFun t       = t  
-               | isImmutable m  = fmap F.top t `strengthen` F.symbolReft (mkFieldB x f)
-               | otherwise      = t  
+    mkTy m x te t | isTFun t       = F.subst (sbt x te) t 
+                  | isImmutable m  = fmap F.top t `strengthen` F.symbolReft (mkFieldB x f)
+                  | otherwise      = F.subst (sbt x te) t
+
+    -- 
+    -- TODO: 
+    --  
+    -- This was copied over from `addObjectFieldsWithOK` -- put in separate
+    -- function
+    --
+    sbt x t    = F.mkSubst $ [(s, F.expr $ mkFieldB x s) | FieldSig s _ m _ <- ms t
+                                                         , isImmutable m ]
+                          ++ [ (F.symbol "this", F.expr $ F.symbol x) ]
+
+    ms t       | Just (TCons m ms _) <- flattenType g t = defMut m <$> M.elems ms
+               | otherwise                              = []
+
+    defMut m (FieldSig f o m0 t) | isInheritedMutability m0 
+                                 = FieldSig f o m  t
+                                 | otherwise                
+                                 = FieldSig f o m0 t
+    defMut _ f = f 
+
+
 
 -- | e1[e2]
 consExpr g (BracketRef l e1 e2) _

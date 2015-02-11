@@ -6,6 +6,8 @@ class Point {
 
   /*@ y : number */ 
   y: number 
+
+  constructor() {}
 }  
 
 assert("x" in new Point());  // returns true

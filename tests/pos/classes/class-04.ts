@@ -1,19 +1,11 @@
 class A {
-
-	/*@ new (x: number) => void */
 	constructor(x: number) { }
-
 }
 
 class B extends A {
-
+  constructor () { super(1); }
 }
 
 class C extends B {
-
-	/*@ new () => void */
-	constructor() {
-    super(1); 
-  }
-
+	constructor() { super(); }
 }

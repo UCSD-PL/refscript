@@ -1,8 +1,5 @@
 class A {
 
-	/*@ new () => void */
-	constructor() { }
-
 	/*@ a : { number | v > 0 } */
 	public a = 2;
 
@@ -13,6 +10,8 @@ class A {
 	public foo() {
 		return 2;  
 	}
+
+  constructor() {}
 
 }
 
@@ -25,6 +24,8 @@ class B extends A {
 	public foo() {
 		return 10;  
 	}
+
+  constructor() { super(); }
 
 }
 

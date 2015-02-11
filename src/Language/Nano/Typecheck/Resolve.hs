@@ -17,6 +17,8 @@ module Language.Nano.Typecheck.Resolve (
 
   -- * Ancestors
   , weaken, allAncestors, classAncestors, interfaceAncestors, isAncestor
+  , onlyInheritedFields
+  , allFields
 
   -- * Keys
   , boundKeys
@@ -35,6 +37,7 @@ import qualified Data.HashMap.Strict              as HM
 import           Data.Maybe                          (maybeToList)
 import           Data.Foldable                       (foldlM)
 import           Data.List                           (find)
+import qualified Data.HashSet                    as  HS
 import           Data.Graph.Inductive.Graph
 import           Data.Graph.Inductive.Query.DFS
 import           Data.Graph.Inductive.Query.BFS
@@ -42,6 +45,7 @@ import           Data.Function                       (on)
 import qualified Data.Map.Strict                  as M
 import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Env
+-- import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Types
@@ -210,8 +214,7 @@ weaken γ tr@(s,_) t
 
        case unwrap $ lesp n1 n2 g of
          []                  -> Nothing
-         path                -> -- tracePP ("weakening from " ++ ppshow tr ++ " to " ++ ppshow t) $
-                                foldlM (doEdge ch) tr $ map toNodes (toEdges path)
+         path                -> foldlM (doEdge ch) tr $ map toNodes (toEdges path)
   where
     ch@(ClassHierarchy g m)   = cha γ
     unwrap (LP lpath)         = lpath
@@ -237,6 +240,47 @@ ancestors k γ s = [ t_name l | cur <- maybeToList (HM.lookup s m)
                              , l   <- maybeToList $ lab g anc
                              , t_class l == k ]
   where ClassHierarchy g m   = cha γ
+
+
+-- XXX : only strict parents 
+---------------------------------------------------------------------------
+strictAncestorsFromPgm :: Nano a r -> AbsName -> [AbsName]
+---------------------------------------------------------------------------
+strictAncestorsFromPgm p s = [ t_name l | cur <- maybeToList (HM.lookup s m)
+                                        , anc <- reachable cur g
+                                        , cur /= anc      -- only gather parents
+                                        , l   <- maybeToList $ lab g anc
+                                        , t_class l == ClassKind ]
+  where ClassHierarchy g m              = pCHA p
+
+-- XXX : includes search in all parent classes (including the current one)
+---------------------------------------------------------------------------
+classAncestorsFromPgm :: Nano a r -> AbsName -> [AbsName]
+---------------------------------------------------------------------------
+classAncestorsFromPgm p s = [ t_name l | cur <- maybeToList (HM.lookup s m)
+                                  , anc <- reachable cur g
+                                  , l   <- maybeToList $ lab g anc
+                                  , t_class l == ClassKind ]
+  where ClassHierarchy g m        = pCHA p
+
+---------------------------------------------------------------------------
+allFields :: StaticKind -> NanoBareR r -> AbsName -> [F.Symbol]
+---------------------------------------------------------------------------
+allFields k p a = HS.toList . HS.unions 
+                $ HS.fromList . flds <$> classAncestorsFromPgm p a 
+  where
+    flds a = [ s | ID _ _ _ _ es    <- maybeToList $ resolveTypeInPgm p a
+                 , ((_,k'),FieldSig s _ _ _) <- M.toList es, k == k' ] 
+
+
+---------------------------------------------------------------------------
+onlyInheritedFields :: StaticKind -> NanoBareR r -> AbsName -> [F.Symbol]
+---------------------------------------------------------------------------
+onlyInheritedFields k p a = HS.toList . HS.unions 
+                        $ HS.fromList . flds <$> strictAncestorsFromPgm p a 
+  where
+    flds a = [ s | ID _ _ _ _ es    <- maybeToList $ resolveTypeInPgm p a
+                 , ((_,k'),FieldSig s _ _ _) <- M.toList es, k == k' ] 
 
 ---------------------------------------------------------------------------
 classAncestors     :: EnvLike r t => t r -> AbsName -> [AbsName]

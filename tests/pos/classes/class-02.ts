@@ -1,12 +1,4 @@
 
-class A {
-
-}
-
-class B extends A {
-
-}
-
-class C extends B {
- 
-}
+declare class A { }
+declare class B extends A { }
+declare class C extends B { }

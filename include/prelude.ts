@@ -33,21 +33,21 @@ declare function isNaN(x:any) : boolean;
  ************************************************************************/
 
 /*@ builtin_BIBracketRef ::
-    /\ forall A. (arr: IArray<A>, {idx: number | (0 <= idx && idx < (len arr))}) => A
-    /\ forall A. (arr: MArray<A>, idx: number) => {A + undefined | true}
-    /\ forall M A. (arr: Array<M,A>, idx: number + undefined) => {A + undefined | true}
-    /\ forall M A. (arr: Array<M,A>, idx: undefined) => {undefined | true}
+    /\ forall A. (thearray: IArray<A>, {v: number | (0 <= v && v < (len thearray))}) => A
+    /\ forall A. (MArray<A>, idx: number) => A + undefined
+    /\ forall M A. (Array<M,A>, idx: number + undefined) => A + undefined
+    /\ forall M A. (Array<M,A>, idx: undefined) => undefined
     /\ forall A. (o: {[y: string]: A }, x: {string | hasProperty(x,o)}) => A
     /\ (o: { }, x: { string | hasProperty(x,o) }) => top
  */
-declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
+declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 
 /*@ builtin_BIBracketAssign :: 
-    /\ forall A. (arr: IArray<A>, {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
-    /\ forall A. (arr: ROArray<A>, idx:number, val: A) => {void | true}
-    /\ forall A M. ([Mutable]{[y: string]: A }, x:string, val: A) => {void | true}
+    /\ forall A. (a: Array<Immutable, A>, {idx:number | (0 <= idx && idx < (len a))}, val: A) => void
+    /\ forall A. (a: Array<ReadOnly , A>, idx:number, val: A) => void
+    /\ forall A M. ([Mutable]{[y: string]: A }, x:string, val: A) => void
  */
-declare function builtin_BIBracketAssign<A>(arr: A[], n: number, v: A): void;
+declare function builtin_BIBracketAssign<A>(a: A[], n: number, v: A): void;
 
 /*@ builtin_BISetProp :: 
     forall A M. ([M] { f ? : [Mutable] A }, A) => {A | true}
@@ -564,7 +564,7 @@ interface Boolean { }
  
 
 //TODO: the refinement is ignored?
-/*@ measure len :: forall A . (A) => { number | v >= 0 } */
+/*@ measure len :: forall A . (A) => number */
 
 
 /*@ interface Array<M, T> */
@@ -639,15 +639,20 @@ interface Array<T> {
     // reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
 
     //TODO why does callbackfn have 4 args in the typescript annotation but only 3 in the refscript?
-    /*@ reduce : forall U . (this: IArray<T>, callback: (x: U, y: T, n: {number | 0 <= v && v < len this}) => U, init: U) => {U | true} */
+
+    /*@ reduce : forall U . (this: IArray<T>, callback: (x: U, y: T, n: {number | 0 <= v && v < len this}) => U, init: U): U */
     reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
     reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
     // reduceRight<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
-    // TODO: "&& v >= 0" shouldn't be needed (see measure len)
-    /*@ length: { v: number | (v = (len this) && v >= 0) } */
     length: number;
+
+    /*@ _get_length_ : 
+        /\ (this: Array<Immutable,T>): { v: number | v >= 0 && v = (len this) } 
+        /\ (this: Array<M,T>): { v: number | v >= 0 } 
+     */
+    _get_length_(): number;
 
 //      // [n: number]: T;
 }

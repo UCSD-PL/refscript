@@ -10,14 +10,18 @@
 
 class Animal {
   public kind = "";
+  constructor() {}
 }
 class Horse extends Animal { 
   public kind = "horse";
   public gallop() {} 
+  constructor() { super(); }
 }
 class Snake extends Animal { 
   public kind = "snake";
-  public sneak() {} }
+  public sneak() {} 
+  constructor() { super(); }
+}
 
 /*@ move :: (a: AnimalK) => { void | true } */
 function move(a: Animal) {

@@ -1,18 +1,24 @@
 /*@ alias HTML = HTMLElt<Mutable> */
 
 
-class HTMLElt { }
+class HTMLElt { 
+
+  constructor() { }
+}
 
 class DivElt extends HTMLElt {  
   public htmlDivElt__ = 0; 
+  constructor() { super(); }
 }
 
 class SpanElt extends HTMLElt { 
   public htmlSpanElt__ = 1; 
+  constructor() { super(); }
 }
 
 class CanvasElt extends HTMLElt { 
   public htmlCanvasElt__ = 2; 
+  constructor() { super(); }
 }
 
 // UNCHECKED TS Specification

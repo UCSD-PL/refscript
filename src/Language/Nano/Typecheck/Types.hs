@@ -80,7 +80,7 @@ import           Data.Hashable
 import qualified Data.IntMap                     as I
 import           Data.Either                    (partitionEithers)
 import qualified Data.List                      as L
-import           Data.Maybe                     (fromMaybe, maybeToList, isJust, fromJust)
+import           Data.Maybe                     (fromMaybe, isJust, fromJust)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.Map.Strict                as M
 import           Data.Typeable                  ()
@@ -248,7 +248,7 @@ mkFun (αs, s, bs, rt) = mkAll αs (TFun s bs rt fTop)
 bkArr (TFun s xts t _) = Just (s, xts, t)
 bkArr _                = Nothing
 
-mkAll αs t           = go (reverse αs) t
+mkAll αs t           = mkAnd $ go (reverse αs) <$> bkAnd t
   where
     go (α:αs) t      = go αs (TAll α t)
     go []     t      = t
@@ -426,17 +426,17 @@ setRTypeR (TRef x y _)      r = TRef x y r
 setRTypeR t                 _ = t
 
 
-mapElt f (CallSig t)         = CallSig        $ f t
-mapElt f (ConsSig t)         = ConsSig        $ f t
-mapElt f (IndexSig x b t)    = IndexSig x b   $ f t
-mapElt f (FieldSig x o m t)  = FieldSig x o m $ f t
-mapElt f (MethSig  x t)      = MethSig  x     $ f t
+mapElt f (CallSig t)         = CallSig         $ f t
+mapElt f (ConsSig t)         = ConsSig         $ f t
+mapElt f (IndexSig x b t)    = IndexSig x b    $ f t
+mapElt f (FieldSig x o m t)  = FieldSig x o m  $ f t
+mapElt f (MethSig  x t)      = MethSig  x      $ f t
 
-mapElt' f (CallSig t)         = CallSig      $ f t
-mapElt' f (ConsSig t)         = ConsSig      $ f t
-mapElt' f (IndexSig x b t)    = IndexSig x b $ f t
-mapElt' f (FieldSig x o m t)  = FieldSig x (toType $ f $ ofType o) (toType $ f $ ofType m) (f t)
-mapElt' f (MethSig  x t)      = MethSig  x   $ f t
+mapElt' f (CallSig t)        = CallSig         $ f t
+mapElt' f (ConsSig t)        = ConsSig         $ f t
+mapElt' f (IndexSig x b t)   = IndexSig x b    $ f t
+mapElt' f (FieldSig x o m t) = FieldSig x (toType $ f $ ofType o) (toType $ f $ ofType m) (f t)
+mapElt' f (MethSig  x t)     = MethSig  x      $ f t
 
 mapEltM f (CallSig t)        = CallSig        <$> f t
 mapEltM f (ConsSig t)        = ConsSig        <$> f t
@@ -575,7 +575,7 @@ instance PP Char where
 
 
 instance (PP r, F.Reftable r) => PP (RTypeQ q r) where
-  pp (TVar α r)               = F.ppTy r $ (text "TVAR##" <> pp α <> text "##") 
+  pp (TVar α r)               = F.ppTy r $ (text "#" <> pp α) 
   pp (TFun (Just s) xts t _)  = ppArgs parens comma (B (F.symbol "this") s:xts) <+> text "=>" <+> pp t 
   pp (TFun _ xts t _)         = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)             = text "∀" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
@@ -590,7 +590,7 @@ instance (PP r, F.Reftable r) => PP (RTypeQ q r) where
   pp (TCons m bs r)           | M.size bs < 3
                               = F.ppTy r $ ppMut m <+> braces (intersperse semi $ ppHMap pp bs)
                               | otherwise
-                              = F.ppTy r $ lbrace $+$ nest 2 (vcat $ ppHMap pp bs) $+$ rbrace
+                              = F.ppTy r $ ppMut m <+> lbrace $+$ nest 2 (vcat $ ppHMap pp bs) $+$ rbrace
   pp (TModule s  )            = text "module" <+> pp s
   pp (TClass c   )            = text "typeof" <+> pp c
   pp (TEnum c   )             = text "enum" <+> pp c
@@ -598,7 +598,9 @@ instance (PP r, F.Reftable r) => PP (RTypeQ q r) where
 ppHMap p = map (p . snd) . M.toList 
 
 instance PP t => PP (FuncInputs t) where
-  pp (FI a as) = ppArgs parens comma (maybeToList a ++ as)
+  pp (FI (Just a) []) = parens $ brackets (pp "this" <> colon <+> pp a)
+  pp (FI (Just a) as) = parens $ brackets (pp "this" <> colon <+> pp a) <> comma <+> ppArgs id comma as                          
+  pp (FI Nothing  as) = ppArgs parens comma as                          
 
 instance PP TVar where 
   pp     = pprint . F.symbol
@@ -700,20 +702,14 @@ mutSym (TRef (QN _ _ _ s) [] _)
   | s == F.symbol "AnyMutability" = Just "_AM_"
   | s == F.symbol "ReadOnly"      = Just "_RO_"
   | s == F.symbol "AssignsFields" = Just "_AF"
-  | s == F.symbol "InheritedMut"  = Just "_IM_"
+  | s == F.symbol "InheritedMut"  = Just "_IN_"
 mutSym _                          = Nothing
 
-
-ppMut (TRef (QN _ _ _ s) _ _)
-  | s == F.symbol "Mutable"       = pp "_MU_"
-  | s == F.symbol "Immutable"     = pp "_IM_"
-  | s == F.symbol "AnyMutability" = pp "_AM_"
-  | s == F.symbol "ReadOnly"      = pp "_RO_"
-  | s == F.symbol "AssignsFields" = pp "_AF_" 
-  | s == F.symbol "InheritedMut"  = pp "_IM_"
-  | otherwise                     = pp "?" <> pp s <> pp "?"
-ppMut t@(TVar{})                  = pp t
-ppMut _                           = pp "?"
+ppMut t@TVar{} = pp t
+ppMut t        | Just s <- mutSym t
+               = pp s
+               | otherwise 
+               = pp "_??_"
 
 instance PP EnumDef where
   pp (EnumDef n ss _) = pp n <+> braces (intersperse comma $ pp <$> I.elems ss)
@@ -757,7 +753,6 @@ tNull                       = TApp TNull    [] fTop
 tErr                        = tVoid
 tFunErr                     = ([],[],tErr)
 
-
 isTFun (TFun _ _ _ _)       = True
 isTFun (TAnd ts)            = all isTFun ts
 isTFun (TAll _ t)           = isTFun t
@@ -776,33 +771,10 @@ isTNull _                   = False
 isTVoid (TApp TVoid _ _ )   = True
 isTVoid _                   = False
 
-
 orNull t@(TApp TUn ts _)    | any isNull ts = t
 orNull   (TApp TUn ts r)    | otherwise     = TApp TUn (tNull:ts) r
 orNull t                    | isNull t      = t
 orNull t                    | otherwise     = TApp TUn [tNull,t] fTop
-
-
-
--- -----------------------------------------------------------------------
--- builtinOpTy       :: (IsLocated l) => l -> BuiltinOp -> Env t -> t
--- -----------------------------------------------------------------------
--- builtinOpTy l o g = fromMaybe err $ envFindTy ox g
---   where 
---     err           = die $ bugUnknown (srcPos l) "builtinOp" o
---     ox            = builtinOpId o
- 
-builtinOpId BIUndefined     = builtinId "BIUndefined"
-builtinOpId BIBracketRef    = builtinId "BIBracketRef"
-builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
-builtinOpId BIArrayLit      = builtinId "BIArrayLit"
-builtinOpId BIObjectLit     = builtinId "BIObjectLit"
-builtinOpId BISetProp       = builtinId "BISetProp"
-builtinOpId BIForInKeys     = builtinId "BIForInKeys"
-builtinOpId BINumArgs       = builtinId "BINumArgs"
-builtinOpId BITruthy        = builtinId "BITruthy"
-builtinOpId BICondExpr      = builtinId "BICondExpr"
-builtinOpId BICastExpr      = builtinId "BICastExpr"
 
 
 ---------------------------------------------------------------------------------
@@ -848,13 +820,22 @@ objLitTy l ps     = mkFun (vs, Nothing, bs, rt)
     vs            = [mv] ++ mvs ++ avs
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
     rt            = TCons mt elts fTop
-    elts          = M.fromList [((s, InstanceMember), FieldSig s f_required m $ ofType a) | (s,m,a) <- zip3 ss mts ats ]
+    elts          = M.fromList [ ((s, InstanceMember), FieldSig s f_required m $ ofType a) 
+                               | (s,m,a) <- zip3 ss mts ats ]
     (mv, mt)      = freshTV l mSym (0::Int)                             -- obj mutability
     (mvs, mts)    = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
     (avs, ats)    = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
     ss            = [F.symbol p | p <- ps]
     mSym          = F.symbol "M"
     aSym          = F.symbol "A"
+--     -- keyVal(v,"x") = x
+--     keyVal k      = F.Reft (vv, [F.RConc $ F.PAtom F.Ueq (F.EApp kvSym [F.eVar vv, str k]) 
+--                                                          (F.eVar k)
+--                                 ])
+--     ff            = ((keyVal . F.symbol) <$>)
+--     vv            = F.vv Nothing
+--     kvSym         = F.dummyLoc $ F.symbol "keyVal"
+--     str           = F.expr . F.symbolText
 
 lenId l           = Id l "length" 
 argId l           = Id l "arguments"
@@ -956,37 +937,53 @@ mkEltFromType = fmap (mkAnd . fmap (mkFun . squash)) . sequence . map bkFun . bk
 
 mkInitFldTy t = mkFun ([], Nothing, [B (F.symbol "f") t], tVoid)
 
+ 
+builtinOpId BIUndefined     = builtinId "BIUndefined"
+builtinOpId BIBracketRef    = builtinId "BIBracketRef"
+builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
+builtinOpId BIArrayLit      = builtinId "BIArrayLit"
+builtinOpId BIObjectLit     = builtinId "BIObjectLit"
+builtinOpId BISetProp       = builtinId "BISetProp"
+builtinOpId BIForInKeys     = builtinId "BIForInKeys"
+builtinOpId BICtorExit      = builtinId "BICtorExit"
+builtinOpId BINumArgs       = builtinId "BINumArgs"
+builtinOpId BITruthy        = builtinId "BITruthy"
+builtinOpId BICondExpr      = builtinId "BICondExpr"
+builtinOpId BICastExpr      = builtinId "BICastExpr"
+builtinOpId BISuper         = builtinId "BISuper"
+builtinOpId BISuperVar      = builtinId "BISuperVar"
+builtinOpId BICtor          = builtinId "BICtor"
 
-infixOpId OpLT         = builtinId "OpLT"
-infixOpId OpLEq        = builtinId "OpLEq"
-infixOpId OpGT         = builtinId "OpGT"
-infixOpId OpGEq        = builtinId "OpGEq"
-infixOpId OpEq         = builtinId "OpEq"
-infixOpId OpStrictEq   = builtinId "OpSEq"
-infixOpId OpNEq        = builtinId "OpNEq"
-infixOpId OpStrictNEq  = builtinId "OpSNEq"
-infixOpId OpLAnd       = builtinId "OpLAnd"
-infixOpId OpLOr        = builtinId "OpLOr"
-infixOpId OpSub        = builtinId "OpSub"
-infixOpId OpAdd        = builtinId "OpAdd"
-infixOpId OpMul        = builtinId "OpMul"
-infixOpId OpDiv        = builtinId "OpDiv"
-infixOpId OpMod        = builtinId "OpMod"
-infixOpId OpInstanceof = builtinId "OpInstanceof"
-infixOpId OpBOr        = builtinId "OpBOr"
-infixOpId OpBXor       = builtinId "OpBXor"
-infixOpId OpBAnd       = builtinId "OpBAnd"
-infixOpId OpIn         = builtinId "OpIn"
-infixOpId OpLShift     = builtinId "OpLShift"
-infixOpId OpSpRShift   = builtinId "OpSpRShift"
-infixOpId OpZfRShift   = builtinId "OpZfRShift"
+infixOpId OpLT              = builtinId "OpLT"
+infixOpId OpLEq             = builtinId "OpLEq"
+infixOpId OpGT              = builtinId "OpGT"
+infixOpId OpGEq             = builtinId "OpGEq"
+infixOpId OpEq              = builtinId "OpEq"
+infixOpId OpStrictEq        = builtinId "OpSEq"
+infixOpId OpNEq             = builtinId "OpNEq"
+infixOpId OpStrictNEq       = builtinId "OpSNEq"
+infixOpId OpLAnd            = builtinId "OpLAnd"
+infixOpId OpLOr             = builtinId "OpLOr"
+infixOpId OpSub             = builtinId "OpSub"
+infixOpId OpAdd             = builtinId "OpAdd"
+infixOpId OpMul             = builtinId "OpMul"
+infixOpId OpDiv             = builtinId "OpDiv"
+infixOpId OpMod             = builtinId "OpMod"
+infixOpId OpInstanceof      = builtinId "OpInstanceof"
+infixOpId OpBOr             = builtinId "OpBOr"
+infixOpId OpBXor            = builtinId "OpBXor"
+infixOpId OpBAnd            = builtinId "OpBAnd"
+infixOpId OpIn              = builtinId "OpIn"
+infixOpId OpLShift          = builtinId "OpLShift"
+infixOpId OpSpRShift        = builtinId "OpSpRShift"
+infixOpId OpZfRShift        = builtinId "OpZfRShift"
 
-prefixOpId PrefixMinus  = builtinId "PrefixMinus"
-prefixOpId PrefixPlus   = builtinId "PrefixPlus"
-prefixOpId PrefixLNot   = builtinId "PrefixLNot"
-prefixOpId PrefixTypeof = builtinId "PrefixTypeof"
-prefixOpId PrefixBNot   = builtinId "PrefixBNot"
-prefixOpId o            = errorstar $ "prefixOpId: Cannot handle: " ++ ppshow o
+prefixOpId PrefixMinus      = builtinId "PrefixMinus"
+prefixOpId PrefixPlus       = builtinId "PrefixPlus"
+prefixOpId PrefixLNot       = builtinId "PrefixLNot"
+prefixOpId PrefixTypeof     = builtinId "PrefixTypeof"
+prefixOpId PrefixBNot       = builtinId "PrefixBNot"
+prefixOpId o                = errorstar $ "prefixOpId: Cannot handle: " ++ ppshow o
 
 
 mkId            = Id (initialPos "") 

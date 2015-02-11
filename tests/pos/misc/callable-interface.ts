@@ -1,4 +1,4 @@
 interface Foo {
 	(): number;
-    (x:string): string;
+  (x:string): string;
 }

@@ -31,6 +31,8 @@ module Language.Nano.Liquid.Types (
   -- * Conversions
   , RefTypable (..), eSingleton, pSingleton, BitVectorable(..), fixBAnd
 
+  -- , strengthenKeyVal
+
   -- * Manipulating RefType
   , rTypeReft, rTypeSort, rTypeSortedReft, rTypeValueVar
 
@@ -201,9 +203,8 @@ eProp (InfixExpr _ OpLT   e1 e2)       = F.PAtom F.Lt (F.expr e1) (F.expr e2)
 eProp (InfixExpr _ OpLEq  e1 e2)       = F.PAtom F.Le (F.expr e1) (F.expr e2) 
 eProp (InfixExpr _ OpGT   e1 e2)       = F.PAtom F.Gt (F.expr e1) (F.expr e2)  
 eProp (InfixExpr _ OpGEq  e1 e2)       = F.PAtom F.Ge (F.expr e1) (F.expr e2)  
-eProp (InfixExpr _ OpEq   e1 e2)       = F.PAtom F.Eq (F.expr e1) (F.expr e2) 
--- XXX @==@ and @===@ are translated the same. This should not make a difference
--- as long as same type operands are used.
+-- FIXME: 
+-- eProp (InfixExpr _ OpEq   e1 e2)       = F.PAtom F.Eq (F.expr e1) (F.expr e2) 
 eProp (InfixExpr _ OpStrictEq   e1 e2) = F.PAtom F.Eq (F.expr e1) (F.expr e2) 
 eProp (InfixExpr _ OpNEq  e1 e2)       = F.PAtom F.Ne (F.expr e1) (F.expr e2) 
 eProp (InfixExpr _ OpLAnd e1 e2)       = pAnd (F.prop e1) (F.prop e2) 
@@ -278,6 +279,21 @@ fixBAnd x y = F.Reft (v, cc <$> ([1..32] :: [Int]))
     bi n i  = F.PBexp $ F.EApp sym [F.expr n, F.expr i]
     sym     = F.dummyLoc $ F.symbol "bv_idx"
     v       = F.vv Nothing
+
+
+-- strengthenKeyVal t =
+--     case bkFuns t of
+--       Just [(vs ,s ,bs, tc@(TCons _ _ _))] -> 
+--           mkFun (vs, s, bs, foldl strengthen tc (keyVal . b_sym <$> bs))
+--       _ -> t
+--   where
+--     -- keyVal(v,"x") = x
+--     keyVal k      = F.Reft (vv, [F.RConc $ F.PAtom F.Ueq (F.EApp kvSym [F.eVar vv, str k]) 
+--                                                          (F.eVar k)
+--                                 ])
+--     vv            = F.vv Nothing
+--     kvSym         = F.dummyLoc $ F.symbol "keyVal"
+--     str           = F.expr . F.symbolText
 
 
 
@@ -565,16 +581,30 @@ zipType l γ t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _)
   | x1 == x2
   = do  ts    <- zipWithM (\t t' -> appZ <$> zipType l γ t t') t1s t2s
         return $ (TRef x2 (m2:ts), r1)
+  -- 
+  --    t1 <: t2
+  --
+  | Just (_, m1':t1s') <- weaken γ (x1,m1:t1s) x2 
+  = zipType l γ (TRef x2 (m1':t1s') r1 `strengthen` rtExt t1 (F.symbol x1)) t2
+  -- 
+  --    t2 <: t1
+  --
+  --    Only support this limited case with NO type arguments
+  --
+  | Just (_, [m2']) <- weaken γ (x2,m2:t2s) x1
+  = return (TRef x2 [m2'], r1)
 
   | otherwise
-  = case weaken γ (x1,m1:t1s) x2 of
-      -- Try to move along the class hierarchy
-      Just (_, m1':t1s') -> zipType l γ (TRef x2 (m1':t1s') r1 `strengthen` rtExt t1 (F.symbol x1)) t2
-      Just _             -> Nothing
-      -- Unfold structures
-      Nothing        -> do  t1' <- flattenType γ t1 
-                            t2' <- flattenType γ t2
-                            zipType l γ t1' t2'
+  = Nothing
+  -- 
+  -- DO NOT Unfold to structures
+  --
+  -- DANGER OF INFINITE LOOPS BECAUSE OF RECURSIVE TYPES
+  --
+  -- Nothing        -> do  t1' <- tracePP "FUCK - 1" <$> flattenType γ t1 
+  --                       t2' <- tracePP "FUCK - 2" <$> flattenType γ t2
+  --                       zipType l γ t1' t2'
+  --                       
   where
     rtExt t c  = F.Reft (vv t, [raExt t c])
     raExt t c  = F.RConc $ F.PBexp $ F.EApp (sym t) 

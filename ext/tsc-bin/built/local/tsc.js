@@ -477,7 +477,11 @@ var TypeScript;
         Gather_statistics_about_initialization: "Gather statistics about initialization",
         Invalid_reference_of_this_in_constructor: "Invalid reference of 'this' in constructor.",
         No_support_for_value_assigned_enumeration_element_0: "No support for value assigned enumeration element '{0}'.",
-        Initialization_of_parameter_0_at_the_signature_site_is_not_supported: "Initialization of parameter '{0}' at the signature site is not supported."
+        Initialization_of_parameter_0_at_the_signature_site_is_not_supported: "Initialization of parameter '{0}' at the signature site is not supported.",
+        Cannot_infer_mutability_parameter_for_class_constructor: "Cannot infer mutability parameter for class constructor.",
+        Class_0_needs_to_have_an_explicit_constructor: "Class '{0}' needs to have an explicit constructor.",
+        Class_0_extends_other_classes_so_needs_to_have_an_explicit_constructor: "Class '{0}' extends other classes so needs to have an explicit constructor.",
+        Constructor_parent_has_not_been_set: "Constructor parent has not been set."
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -2636,7 +2640,11 @@ var TypeScript;
         "Gather statistics about initialization": { "code": 8028, "category": 2 /* Message */ },
         "Invalid reference of 'this' in constructor.": { "code": 8029, "category": 1 /* Error */ },
         "No support for value assigned enumeration element '{0}'.": { "code": 8030, "category": 5 /* Unimplemented */ },
-        "Initialization of parameter '{0}' at the signature site is not supported.": { "code": 8031, "category": 5 /* Unimplemented */ }
+        "Initialization of parameter '{0}' at the signature site is not supported.": { "code": 8031, "category": 5 /* Unimplemented */ },
+        "Cannot infer mutability parameter for class constructor.": { "code": 8032, "category": 5 /* Unimplemented */ },
+        "Class '{0}' needs to have an explicit constructor.": { "code": 8033, "category": 5 /* Unimplemented */ },
+        "Class '{0}' extends other classes so needs to have an explicit constructor.": { "code": 8034, "category": 5 /* Unimplemented */ },
+        "Constructor parent has not been set.": { "code": 8035, "category": 4 /* Bug */ }
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -5966,7 +5974,7 @@ var TypeScript;
             throw new Error("toRsLValue not implemented for " + TypeScript.SyntaxKind[list.kind()]);
         }
 
-        function toRsClassElt(list, helper) {
+        function toRsClassElt(list, helper, mut) {
             throw new Error("toRsClassElt not implemented for " + TypeScript.SyntaxKind[list.kind()]);
         }
 
@@ -6145,8 +6153,8 @@ var TypeScript;
             EmptySeparatedSyntaxList.prototype.toRsLValue = function (helper) {
                 return toRsLValue(this, helper);
             };
-            EmptySeparatedSyntaxList.prototype.toRsClassElt = function (helper) {
-                return toRsClassElt(this, helper);
+            EmptySeparatedSyntaxList.prototype.toRsClassElt = function (helper, mut) {
+                return toRsClassElt(this, helper, mut);
             };
             EmptySeparatedSyntaxList.prototype.toRsForInit = function (helper) {
                 return toRsForInit(this, helper);
@@ -6338,8 +6346,8 @@ var TypeScript;
             SingletonSeparatedSyntaxList.prototype.toRsLValue = function (helper) {
                 return toRsLValue(this, helper);
             };
-            SingletonSeparatedSyntaxList.prototype.toRsClassElt = function (helper) {
-                return toRsClassElt(this, helper);
+            SingletonSeparatedSyntaxList.prototype.toRsClassElt = function (helper, mut) {
+                return toRsClassElt(this, helper, mut);
             };
             SingletonSeparatedSyntaxList.prototype.toRsForInit = function (helper) {
                 return toRsForInit(this, helper);
@@ -6594,8 +6602,8 @@ var TypeScript;
             NormalSeparatedSyntaxList.prototype.toRsLValue = function (helper) {
                 return toRsLValue(this, helper);
             };
-            NormalSeparatedSyntaxList.prototype.toRsClassElt = function (helper) {
-                return toRsClassElt(this, helper);
+            NormalSeparatedSyntaxList.prototype.toRsClassElt = function (helper, mut) {
+                return toRsClassElt(this, helper, mut);
             };
             NormalSeparatedSyntaxList.prototype.toRsForInit = function (helper) {
                 return toRsForInit(this, helper);
@@ -8027,9 +8035,9 @@ var TypeScript;
             throw new Error("toRsLValue not implemented for " + TypeScript.SyntaxKind[list.kind()]);
         }
 
-        function toRsClassElt(list, helper, anns) {
+        function toRsClassElt(list, helper, mut) {
             return new TypeScript.RsASTList(list.toArray().map(function (m) {
-                return m.toRsClassElt(helper);
+                return m.toRsClassElt(helper, mut);
             }));
         }
 
@@ -8193,8 +8201,8 @@ var TypeScript;
             EmptySyntaxList.prototype.toRsLValue = function (helper, anns) {
                 return toRsLValue(this, helper);
             };
-            EmptySyntaxList.prototype.toRsClassElt = function (helper, anns) {
-                return toRsClassElt(this, helper);
+            EmptySyntaxList.prototype.toRsClassElt = function (helper, mut) {
+                return toRsClassElt(this, helper, mut);
             };
             EmptySyntaxList.prototype.toRsForInit = function (helper, anns) {
                 return toRsForInit(this, helper);
@@ -8378,8 +8386,8 @@ var TypeScript;
             SingletonSyntaxList.prototype.toRsLValue = function (helper, anns) {
                 return toRsLValue(this, helper);
             };
-            SingletonSyntaxList.prototype.toRsClassElt = function (helper, anns) {
-                return toRsClassElt(this, helper);
+            SingletonSyntaxList.prototype.toRsClassElt = function (helper, mut) {
+                return toRsClassElt(this, helper, mut);
             };
             SingletonSyntaxList.prototype.toRsForInit = function (helper, anns) {
                 return toRsForInit(this, helper);
@@ -8607,8 +8615,8 @@ var TypeScript;
             NormalSyntaxList.prototype.toRsLValue = function (helper, anns) {
                 return toRsLValue(this, helper);
             };
-            NormalSyntaxList.prototype.toRsClassElt = function (helper, anns) {
-                return toRsClassElt(this, helper);
+            NormalSyntaxList.prototype.toRsClassElt = function (helper, mut) {
+                return toRsClassElt(this, helper, mut);
             };
             NormalSyntaxList.prototype.toRsForInit = function (helper, anns) {
                 return toRsForInit(this, helper);
@@ -9064,7 +9072,7 @@ var TypeScript;
             throw new Error("toRsLValue not implemented for " + TypeScript.SyntaxKind[this.kind()]);
         };
 
-        SyntaxNode.prototype.toRsClassElt = function (helper) {
+        SyntaxNode.prototype.toRsClassElt = function (helper, mut) {
             throw new Error("toRsClassElt not implemented for " + TypeScript.SyntaxKind[this.kind()]);
         };
 
@@ -9736,15 +9744,23 @@ var TypeScript;
                     return t !== null;
                 }));
                 var sourceSpan = helper.getSourceSpan(this);
-                return new TypeScript.RsInferredClassAnnotation(sourceSpan, this.identifier, typeParams, extendsSerial, implementsHeritage);
+                return {
+                    ann: new TypeScript.RsInferredClassAnnotation(sourceSpan, this.identifier, typeParams, extendsSerial, implementsHeritage),
+                    mut: mutType
+                };
             } else if (anns.length === 1) {
-                return anns[0];
+                return {
+                    ann: anns[0],
+                    mut: undefined
+                };
             } else {
                 helper.postDiagnostic(this, this.identifier.text());
             }
         };
 
         ClassDeclarationSyntax.prototype.toRsStmt = function (helper) {
+            helper.pushParentNode(this);
+
             var originalAnnots = tokenAnnots(this.firstToken());
 
             var restAnnots = originalAnnots.filter(function (a) {
@@ -9755,7 +9771,10 @@ var TypeScript;
                 return a.kind() === 5 /* RawClass */;
             });
 
-            restAnnots.push(this.headerAnnotation(helper, classAnnots));
+            var _headerAnnotation = this.headerAnnotation(helper, classAnnots);
+            var mutabilityVar = _headerAnnotation.mut;
+
+            restAnnots.push(_headerAnnotation.ann);
 
             var ext = TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
                 return t.toRsHeritageIds(helper, 48 /* ExtendsKeyword */);
@@ -9770,7 +9789,17 @@ var TypeScript;
                 restAnnots.push(new TypeScript.RsExported(this.getSourceSpan(helper), 14 /* RawExported */, ""));
             }
 
-            return new TypeScript.RsClassStmt(helper.getSourceSpan(this), restAnnots, this.identifier.toRsId(helper), (ext && ext.length > 0) ? ext[0] : null, imp, this.classElements.toRsClassElt(helper));
+            if (this.classElements.toArray().some(function (v) {
+                return v.kind() === 137 /* ConstructorDeclaration */;
+            }) || this.firstToken().kind() === 63 /* DeclareKeyword */) {
+                var classElts = this.classElements.toRsClassElt(helper, mutabilityVar);
+            } else {
+                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Class_0_needs_to_have_an_explicit_constructor, [this.identifier.text()]);
+            }
+
+            helper.popParentNode();
+
+            return new TypeScript.RsClassStmt(helper.getSourceSpan(this), restAnnots, this.identifier.toRsId(helper), (ext && ext.length > 0) ? ext[0] : null, imp, classElts);
         };
         return ClassDeclarationSyntax;
     })(TypeScript.SyntaxNode);
@@ -9917,6 +9946,9 @@ var TypeScript;
                     var possible = "0123456789";
                     mutParam += possible.charAt(Math.floor(Math.random() * possible.length));
                 }
+
+                var mutType = new TypeScript.TTVar(mutParam);
+
                 typeParams.unshift(mutParam);
 
                 annotStr += (typeParams.length > 0) ? ("<" + typeParams.join(", ") + "> ") : " ";
@@ -9970,7 +10002,20 @@ var TypeScript;
                         var anns = tokenAnnots(c.newKeyword);
                         if (anns.length === 0) {
                             var eltSymbol = helper.getSymbolForAST(c);
-                            return [new TypeScript.RsConsSig(eltSymbol.type.toRsType()).toString()];
+                            var ss = eltSymbol;
+                            var tParams = ss.getTypeParameters().map(function (p) {
+                                return p.type.toRsTypeParameter();
+                            });
+                            var tArgs = ss.parameters.map(function (p) {
+                                return new TypeScript.BoundedRsType(p.name, p.type.toRsType());
+                            });
+                            if (mutType) {
+                                var tRet = ss.returnType.toRsType(4 /* PresetK */, mutType);
+                            } else {
+                                var tRet = ss.returnType.toRsType();
+                            }
+
+                            return [new TypeScript.RsConsSig(new TypeScript.RsTFun(tParams, tArgs, tRet)).toString()];
                         } else {
                             return anns.map(function (m) {
                                 return m.content();
@@ -14263,7 +14308,23 @@ var TypeScript;
             return true;
         };
 
-        ConstructorDeclarationSyntax.prototype.toRsClassElt = function (helper) {
+        ConstructorDeclarationSyntax.prototype.memberInitializations = function (helper, parentClass) {
+            var statements = [];
+
+            for (var i = 0, n = parentClass.classElements.childCount(); i < n; i++) {
+                if (parentClass.classElements.childAt(i).kind() === 136 /* MemberVariableDeclaration */) {
+                    var varDecl = parentClass.classElements.childAt(i);
+                    if (!TypeScript.hasModifier(varDecl.modifiers, 16 /* Static */) && varDecl.variableDeclarator.equalsValueClause) {
+                        statements.push(new TypeScript.RsExprStmt(helper.getSourceSpan(this), [], new TypeScript.RsAssignExpr(helper.getSourceSpan(this), [], new TypeScript.RsAssignOp("="), new TypeScript.RsLDot(helper.getSourceSpan(this), [], new TypeScript.RsThisRef(helper.getSourceSpan(this), []), varDecl.variableDeclarator.propertyName.text()), varDecl.variableDeclarator.equalsValueClause.toRsExp(helper))));
+                    } else {
+                        statements.push(new TypeScript.RsExprStmt(helper.getSourceSpan(this), [], new TypeScript.RsAssignExpr(helper.getSourceSpan(this), [], new TypeScript.RsAssignOp("="), new TypeScript.RsLDot(helper.getSourceSpan(this), [], new TypeScript.RsThisRef(helper.getSourceSpan(this), []), varDecl.variableDeclarator.propertyName.text()), new TypeScript.RsNullLit(helper.getSourceSpan(this), []))));
+                    }
+                }
+            }
+            return statements;
+        };
+
+        ConstructorDeclarationSyntax.prototype.toRsClassElt = function (helper, mut) {
             var _this = this;
             this.callSignature.parameterList.parameters.toNonSeparatorArray().forEach(function (p) {
                 if (p.equalsValueClause) {
@@ -14278,7 +14339,7 @@ var TypeScript;
 
             if (bindAnns.length === 0) {
                 var decl = helper.getDeclForAST(this);
-                var type = decl.getSignatureSymbol().toRsTCtor();
+                var type = decl.getSignatureSymbol().toRsTCtor(mut);
                 var typeStr = type.toString();
                 anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 8 /* RawConstr */, "new " + typeStr));
             }
@@ -14287,9 +14348,36 @@ var TypeScript;
                 return null;
             }
 
+            var list = this.block.statements;
+            var parent = helper.getParentNode();
+
+            var rsBlock = [];
+
+            if (parent && parent.kind() === 131 /* ClassDeclaration */) {
+                var parentClass = parent;
+
+                var emitPropertyAssignmentsAfterSuperCall = TypeScript.ASTHelpers.getExtendsHeritageClause(parentClass.heritageClauses) !== null;
+
+                var propertyAssignmentIndex = emitPropertyAssignmentsAfterSuperCall ? 1 : 0;
+
+                for (var i = 0, n = list.childCount(); i < n; i++) {
+                    if (i === propertyAssignmentIndex) {
+                        rsBlock = TypeScript.ArrayUtilities.concat([rsBlock, this.memberInitializations(helper, parentClass)]);
+                    }
+                    var node = list.childAt(i);
+                    rsBlock.push(node.toRsStmt(helper));
+                }
+
+                if (i === propertyAssignmentIndex) {
+                    rsBlock = TypeScript.ArrayUtilities.concat([rsBlock, this.memberInitializations(helper, parentClass)]);
+                }
+            } else {
+                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Constructor_parent_has_not_been_set);
+            }
+
             return new TypeScript.RsConstructor(helper.getSourceSpan(this), anns, new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (t) {
                 return t.toRsId(helper);
-            })), new TypeScript.RsASTList([this.block.toRsStmt(helper)]));
+            })), new TypeScript.RsASTList(rsBlock));
         };
         return ConstructorDeclarationSyntax;
     })(TypeScript.SyntaxNode);
@@ -14396,7 +14484,7 @@ var TypeScript;
             return true;
         };
 
-        MemberFunctionDeclarationSyntax.prototype.toRsClassElt = function (helper) {
+        MemberFunctionDeclarationSyntax.prototype.toRsClassElt = function (helper, mut) {
             var _this = this;
             this.callSignature.parameterList.parameters.toNonSeparatorArray().forEach(function (p) {
                 if (p.equalsValueClause) {
@@ -14760,7 +14848,7 @@ var TypeScript;
             return true;
         };
 
-        MemberVariableDeclarationSyntax.prototype.toRsClassElt = function (helper) {
+        MemberVariableDeclarationSyntax.prototype.toRsClassElt = function (helper, mut) {
             var _this = this;
             var isStatic = this.modifiers.toArray().some(function (t) {
                 return t.kind() === 58 /* StaticKeyword */;
@@ -18546,7 +18634,7 @@ var TypeScript;
             return new TypeScript.RsLVar(helper.getSourceSpan(token), [], token.text());
         }
 
-        function toRsClassElt(token, helper) {
+        function toRsClassElt(token, helper, mut) {
             throw new Error("toRsClassElt not implemented for " + TypeScript.SyntaxKind[token.kind()]);
         }
 
@@ -18790,8 +18878,8 @@ var TypeScript;
             VariableWidthTokenWithNoTrivia.prototype.toRsLValue = function (helper) {
                 return toRsLValue(this, helper);
             };
-            VariableWidthTokenWithNoTrivia.prototype.toRsClassElt = function (helper) {
-                return toRsClassElt(this, helper);
+            VariableWidthTokenWithNoTrivia.prototype.toRsClassElt = function (helper, mut) {
+                return toRsClassElt(this, helper, mut);
             };
             VariableWidthTokenWithNoTrivia.prototype.toRsForInit = function (helper) {
                 return toRsForInit(this, helper);
@@ -19036,8 +19124,8 @@ var TypeScript;
             VariableWidthTokenWithLeadingTrivia.prototype.toRsLValue = function (helper) {
                 return toRsLValue(this, helper);
             };
-            VariableWidthTokenWithLeadingTrivia.prototype.toRsClassElt = function (helper) {
-                return toRsClassElt(this, helper);
+            VariableWidthTokenWithLeadingTrivia.prototype.toRsClassElt = function (helper, mut) {
+                return toRsClassElt(this, helper, mut);
             };
             VariableWidthTokenWithLeadingTrivia.prototype.toRsForInit = function (helper) {
                 return toRsForInit(this, helper);
@@ -19282,8 +19370,8 @@ var TypeScript;
             VariableWidthTokenWithTrailingTrivia.prototype.toRsLValue = function (helper) {
                 return toRsLValue(this, helper);
             };
-            VariableWidthTokenWithTrailingTrivia.prototype.toRsClassElt = function (helper) {
-                return toRsClassElt(this, helper);
+            VariableWidthTokenWithTrailingTrivia.prototype.toRsClassElt = function (helper, mut) {
+                return toRsClassElt(this, helper, mut);
             };
             VariableWidthTokenWithTrailingTrivia.prototype.toRsForInit = function (helper) {
                 return toRsForInit(this, helper);
@@ -19529,8 +19617,8 @@ var TypeScript;
             VariableWidthTokenWithLeadingAndTrailingTrivia.prototype.toRsLValue = function (helper) {
                 return toRsLValue(this, helper);
             };
-            VariableWidthTokenWithLeadingAndTrailingTrivia.prototype.toRsClassElt = function (helper) {
-                return toRsClassElt(this, helper);
+            VariableWidthTokenWithLeadingAndTrailingTrivia.prototype.toRsClassElt = function (helper, mut) {
+                return toRsClassElt(this, helper, mut);
             };
             VariableWidthTokenWithLeadingAndTrailingTrivia.prototype.toRsForInit = function (helper) {
                 return toRsForInit(this, helper);
@@ -19763,8 +19851,8 @@ var TypeScript;
             FixedWidthTokenWithNoTrivia.prototype.toRsLValue = function (helper) {
                 return toRsLValue(this, helper);
             };
-            FixedWidthTokenWithNoTrivia.prototype.toRsClassElt = function (helper) {
-                return toRsClassElt(this, helper);
+            FixedWidthTokenWithNoTrivia.prototype.toRsClassElt = function (helper, mut) {
+                return toRsClassElt(this, helper, mut);
             };
             FixedWidthTokenWithNoTrivia.prototype.toRsForInit = function (helper) {
                 return toRsForInit(this, helper);
@@ -19999,8 +20087,8 @@ var TypeScript;
             FixedWidthTokenWithLeadingTrivia.prototype.toRsLValue = function (helper) {
                 return toRsLValue(this, helper);
             };
-            FixedWidthTokenWithLeadingTrivia.prototype.toRsClassElt = function (helper) {
-                return toRsClassElt(this, helper);
+            FixedWidthTokenWithLeadingTrivia.prototype.toRsClassElt = function (helper, mut) {
+                return toRsClassElt(this, helper, mut);
             };
             FixedWidthTokenWithLeadingTrivia.prototype.toRsForInit = function (helper) {
                 return toRsForInit(this, helper);
@@ -20235,8 +20323,8 @@ var TypeScript;
             FixedWidthTokenWithTrailingTrivia.prototype.toRsLValue = function (helper) {
                 return toRsLValue(this, helper);
             };
-            FixedWidthTokenWithTrailingTrivia.prototype.toRsClassElt = function (helper) {
-                return toRsClassElt(this, helper);
+            FixedWidthTokenWithTrailingTrivia.prototype.toRsClassElt = function (helper, mut) {
+                return toRsClassElt(this, helper, mut);
             };
             FixedWidthTokenWithTrailingTrivia.prototype.toRsForInit = function (helper) {
                 return toRsForInit(this, helper);
@@ -20472,8 +20560,8 @@ var TypeScript;
             FixedWidthTokenWithLeadingAndTrailingTrivia.prototype.toRsLValue = function (helper) {
                 return toRsLValue(this, helper);
             };
-            FixedWidthTokenWithLeadingAndTrailingTrivia.prototype.toRsClassElt = function (helper) {
-                return toRsClassElt(this, helper);
+            FixedWidthTokenWithLeadingAndTrailingTrivia.prototype.toRsClassElt = function (helper, mut) {
+                return toRsClassElt(this, helper, mut);
             };
             FixedWidthTokenWithLeadingAndTrailingTrivia.prototype.toRsForInit = function (helper) {
                 return toRsForInit(this, helper);
@@ -31627,6 +31715,7 @@ var TypeScript;
             for (var i = 0; i < n; i++) {
                 var arg = parameters.astAt(i);
                 var id = parameters.identifierAt(i);
+                console.log("EMIT DEF VALUE: " + id.text());
                 var equalsValueClause = parameters.initializerAt(i);
                 if (equalsValueClause) {
                     this.emitIndent();
@@ -31645,6 +31734,7 @@ var TypeScript;
                 var n = parameters.length;
                 var lastArg = parameters.astAt(n - 1);
                 var id = parameters.identifierAt(n - 1);
+                console.log("EMIT REST VALUE: " + id.text());
                 this.emitIndent();
                 this.recordSourceMappingStart(lastArg);
                 this.writeToOutput("var ");
@@ -32704,6 +32794,7 @@ var TypeScript;
                     if (TypeScript.hasFlag(parameterDecl.flags, 8388608 /* PropertyParameter */)) {
                         this.emitIndent();
                         this.recordSourceMappingStart(parameter);
+                        console.log("PROPERTY PARAMETER: " + parameter.identifier.text());
                         this.writeToOutputWithSourceMapRecord("this." + parameter.identifier.text(), parameter.identifier);
                         this.writeToOutput(" = ");
                         this.writeToOutputWithSourceMapRecord(parameter.identifier.text(), parameter.identifier);
@@ -32719,6 +32810,7 @@ var TypeScript;
                     if (!TypeScript.hasModifier(varDecl.modifiers, 16 /* Static */) && varDecl.variableDeclarator.equalsValueClause) {
                         this.emitIndent();
                         this.emitMemberVariableDeclaration(varDecl);
+                        console.log("MEMBER VARIABLE ASGN: " + varDecl.fullText());
                         this.writeLineToOutput("");
                     }
                 }
@@ -38371,10 +38463,9 @@ var TypeScript;
             }
         };
 
-        PullSignatureSymbol.prototype.toRsTCtor = function () {
-            var tParams = this.getTypeParameters().map(function (p) {
-                return p.type.toRsTypeParameter();
-            });
+        PullSignatureSymbol.prototype.toRsTCtor = function (mut) {
+            var tParams = [];
+
             var tArgs = this.parameters.map(function (p) {
                 return new TypeScript.BoundedRsType(p.name, p.type.toRsType());
             });
@@ -38387,10 +38478,9 @@ var TypeScript;
 
             var sigs = [];
             for (var i = nonOptionalLength; i <= totParamsLength; i++) {
-                var aaa = tArgs.slice(0, i);
-                sigs.push(aaa);
+                sigs.push(tArgs.slice(0, i));
             }
-            var retT = TypeScript.TVoid;
+            var retT = this.returnType.toRsType(4 /* PresetK */, mut);
 
             switch (sigs.length) {
                 case 0:
@@ -60890,6 +60980,7 @@ var TypeScript;
         function RsHelper(_semanticInfoChain) {
             this._semanticInfoChain = _semanticInfoChain;
             this._diagnostics = [];
+            this._parentNode = [];
             this._initValidator = new TypeScript.InitializationValidator();
         }
         RsHelper.prototype.ctorValidate = function () {
@@ -60936,6 +61027,27 @@ var TypeScript;
 
         RsHelper.prototype.diagnostics = function () {
             return this._diagnostics;
+        };
+
+        RsHelper.prototype.getParentNode = function () {
+            if (this._parentNode && this._parentNode.length > 0) {
+                return this._parentNode[this._parentNode.length - 1];
+            }
+            return null;
+        };
+
+        RsHelper.prototype.pushParentNode = function (p) {
+            if (!this._parentNode) {
+                this._parentNode = [];
+            }
+            this._parentNode.push(p);
+        };
+
+        RsHelper.prototype.popParentNode = function () {
+            if (this._parentNode && this._parentNode.length > 0) {
+                this._parentNode.pop();
+            }
+            return null;
         };
         return RsHelper;
     })();

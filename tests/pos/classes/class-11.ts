@@ -1,4 +1,4 @@
-class Foo{}
+declare class Foo{}
 
 /*@ bar :: () => {void | true} */
 function bar() {}

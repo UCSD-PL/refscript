@@ -7,6 +7,8 @@ class A {
   public x = 1;
   /*@ y : { number | v = 1 } */
   public y = 12;
+
+  constructor() {  } 
 }
 
 /*@ foo :: () => {void | true} */

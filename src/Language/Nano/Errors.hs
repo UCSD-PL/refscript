@@ -11,6 +11,7 @@ import Text.PrettyPrint.HughesPJ
 import Language.Nano.Locations
 import Language.ECMAScript3.PrettyPrint
 import Language.Fixpoint.Errors
+import Language.Fixpoint.Misc
 import Language.Fixpoint.PrettyPrint
 
 
@@ -78,6 +79,7 @@ bugSSAConstructorInit l       = mkErr l $ printf "BUG: Multiple definition of th
 bugClassInstVarInit l x       = mkErr l $ printf "BUG: Instance variable '%s' initialization should have been moved to constructor." (ppshow x)
 bugNestedCasts l e            = mkErr l $ printf "BUG: Nested casts on expression '%s'." (ppshow e)
 bugMemberMethDecl l s         = mkErr l $ printf "BUG: MemberMethDecls are not allowed at %s." (ppshow s)
+bugConsSigMissing l           = mkErr l $ printf "BUG: Constructor signature missing."
 
 bugClassDefNotFound l x       = mkErr l $ printf "BUG: Class definition for '%s' not found." (ppshow x)
 bugEnvFindTy l x              = mkErr l $ printf "BUG: envFindTy failed to find binding '%s'" (ppshow x)
@@ -101,6 +103,8 @@ errorSSAUnboundId l x         = mkErr l $ printf "SSA: Identifier '%s' unbound" 
 errorUpdateInExpr l e         = mkErr l $ printf "Unsupported: assignment in If-then-else expression %s" (ppshow e)
 errorEffectInFieldDef l       = mkErr l $ printf "Cannot have effects in field initialization."
 errorUninitStatFld l x        = mkErr l $ printf "Uninitialized static member '%s' is not allowed." (ppshow x)
+bugSuperNotHandled l e        = mkErr l $ printf "BUG: Expression '%s' should have been taken care of." (ppshow e)
+bugSuperWithNoParent l        = mkErr l $ printf "BUG: Calling 'super()' in constructor of class with no parent."
 
 
 ---------------------------------------------------------------------------
@@ -179,6 +183,8 @@ errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for '%
 errorMultipleCasts l cs       = mkErr l $ printf "Multiple Casts: %s" (ppshow cs) 
 errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"
 errorWellFormed l             = mkErr l $ printf "Well-formedness Error" 
+errorForbiddenSyms l t xs     = mkErr l $ printf "Symbol(s): %s, is (are) not readonly, local, or an immutable field, so should not be appearing in the refinement of type '%s'." 
+                                (show $ intersperse comma $ map pp xs) (ppshow t)
  
 ---------------------------------------------------------------------------
 -- | Pervasive (typechecking TC and Liquid)

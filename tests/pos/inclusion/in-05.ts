@@ -1,11 +1,9 @@
 
 
 class Point { 
-  /*@ x : number */ 
-  x: number = 1; 
-
-  /*@ y : number */ 
-  y: number = 2
+  x: number = 1;
+  y: number = 2;
+  constructor () {}
 }  
 
 assert("x" in new Point());  // returns true

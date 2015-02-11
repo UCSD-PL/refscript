@@ -13,6 +13,7 @@ class Task {
       (<Packet>packet).id = 0;
     }
   }
+  constructor() {}
 }
 declare class Packet {
   public id;

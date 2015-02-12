@@ -1,7 +1,9 @@
 
 
 /*@ predicate IsField(x,f,t)    = keyVal(x,f) & t = t  */
+
 /*@ predicate P_Symbol(X, B, N) = IsField(X, "flags", B) => extends_interface(X, N) */
+
 /*@ alias ISymbolF              = { v: Symbol<Immutable> | P_Symbol(v, 0x02000000, "Transient") &&
                                                            P_Symbol(v, 0x01000000, "Merged")      } */
 
@@ -22,8 +24,12 @@ interface TransientSymbol extends Symbol { }
 
 /*@ getSymbolLinks :: (symbol: ISymbolF) => { void | true } */
 function getSymbolLinks(symbol: Symbol): void {
+
     if (symbol.flags & SymbolFlags.Transient) {
+
         var ts = <TransientSymbol>symbol;
+
     }
+
 }
 

@@ -354,14 +354,15 @@ wordP p  = condIdP ok p
 ----------------------------------------------------------------------------------
 tConP :: Parser TCon
 ----------------------------------------------------------------------------------
-tConP =  try (reserved "number"    >> return TInt)
-     <|> try (reserved "boolean"   >> return TBool)
-     <|> try (reserved "undefined" >> return TUndef)
-     <|> try (reserved "void"      >> return TVoid)
-     <|> try (reserved "top"       >> return TTop)
-     <|> try (reserved "string"    >> return TString)
-     <|> try (reserved "null"      >> return TNull)
-     <|> try (reserved "bool"      >> return TFPBool)
+tConP =  try (reserved "number"      >> return TInt)
+     <|> try (reserved "bitvector32" >> return TBV32)
+     <|> try (reserved "boolean"     >> return TBool)
+     <|> try (reserved "undefined"   >> return TUndef)
+     <|> try (reserved "void"        >> return TVoid)
+     <|> try (reserved "top"         >> return TTop)
+     <|> try (reserved "string"      >> return TString)
+     <|> try (reserved "null"        >> return TNull)
+     <|> try (reserved "bool"        >> return TFPBool)
 
 bareAllP p
   = do tvs   <- optionMaybe (reserved "forall" *> many1 tvarP <* dot) 

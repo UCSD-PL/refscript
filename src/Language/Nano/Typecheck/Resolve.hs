@@ -45,7 +45,7 @@ import           Data.Function                       (on)
 import qualified Data.Map.Strict                  as M
 import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Env
--- import           Language.Nano.Errors
+import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Types
@@ -182,7 +182,8 @@ flattenType γ (TEnum x)
   where
     -- TODO 
     mkField (k, IntLit _ i) = [(key k, fld k $ tInt `strengthen` exprReft i)]
-    mkField (k, HexLit _ s) = [(key k, fld k $ tInt `strengthen` error "flattenType")]
+    mkField (k, HexLit _ s) | Just e <- bitVectorValue s
+                            = [(key k, fld k $ tBV32 `strengthen` e)]
     mkField _               = []
     fld k = FieldSig (F.symbol k) f_required t_immutable
     key   = (,InstanceMember) . F.symbol 

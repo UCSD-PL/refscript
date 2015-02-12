@@ -481,7 +481,8 @@ var TypeScript;
         Cannot_infer_mutability_parameter_for_class_constructor: "Cannot infer mutability parameter for class constructor.",
         Class_0_needs_to_have_an_explicit_constructor: "Class '{0}' needs to have an explicit constructor.",
         Class_0_extends_other_classes_so_needs_to_have_an_explicit_constructor: "Class '{0}' extends other classes so needs to have an explicit constructor.",
-        Constructor_parent_has_not_been_set: "Constructor parent has not been set."
+        Constructor_parent_has_not_been_set: "Constructor parent has not been set.",
+        Invalid_enumeration_entry_for_0: "Invalid enumeration entry for '{0}'."
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -2644,7 +2645,8 @@ var TypeScript;
         "Cannot infer mutability parameter for class constructor.": { "code": 8032, "category": 5 /* Unimplemented */ },
         "Class '{0}' needs to have an explicit constructor.": { "code": 8033, "category": 5 /* Unimplemented */ },
         "Class '{0}' extends other classes so needs to have an explicit constructor.": { "code": 8034, "category": 5 /* Unimplemented */ },
-        "Constructor parent has not been set.": { "code": 8035, "category": 4 /* Bug */ }
+        "Constructor parent has not been set.": { "code": 8035, "category": 4 /* Bug */ },
+        "Invalid enumeration entry for '{0}'.": { "code": 8036, "category": 5 /* Unimplemented */ }
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -16475,20 +16477,16 @@ var TypeScript;
         EnumElementSyntax.prototype.toRsEnumElt = function (helper) {
             var anns = tokenAnnots(this.firstToken());
 
-            if (this.equalsValueClause && this.equalsValueClause.value) {
-                if (TypeScript.Syntax.isHexLit(this.equalsValueClause.value.fullText())) {
-                    return new TypeScript.RsEnumElt(helper.getSourceSpan(this), anns, this.propertyName.toRsId(helper), new TypeScript.RsHexLit(helper.getSourceSpan(this.equalsValueClause.value), [], this.equalsValueClause.value.fullText()));
-                } else if (TypeScript.Syntax.isIntLit(this.equalsValueClause.value.fullText())) {
-                    var enumDecl = helper.getDeclForAST(this);
-
-                    return new TypeScript.RsEnumElt(helper.getSourceSpan(this), anns, this.propertyName.toRsId(helper), new TypeScript.RsIntLit(helper.getSourceSpan(this.equalsValueClause.value), [], enumDecl.constantValue));
-                }
-            } else {
+            if (!this.equalsValueClause) {
                 var enumDecl = helper.getDeclForAST(this);
                 if (TypeScript.Syntax.isIntLit(enumDecl.constantValue.toString())) {
                     return new TypeScript.RsEnumElt(helper.getSourceSpan(this), anns, this.propertyName.toRsId(helper), new TypeScript.RsIntLit(helper.getSourceSpan(this), [], enumDecl.constantValue));
                 }
+
+                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Invalid_enumeration_entry_for_0, [this.propertyName.text()]);
             }
+
+            return new TypeScript.RsEnumElt(helper.getSourceSpan(this), anns, this.propertyName.toRsId(helper), this.equalsValueClause.toRsExp(helper));
         };
         return EnumElementSyntax;
     })(TypeScript.SyntaxNode);

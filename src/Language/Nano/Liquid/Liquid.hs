@@ -26,6 +26,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 
+import qualified Language.Fixpoint.Bitvector        as BV
 import qualified Language.Fixpoint.Config           as C
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Errors
@@ -574,7 +575,13 @@ consExpr g ex@(Cast l e) _ =
 
 consExpr g (IntLit l i) _
   = Just <$> envAddFresh l (tInt `eSingleton` i, WriteLocal, Initialized) g
-  -- = Just <$> envAddFresh l (tInt `eSingleton` i `bitVector` i, WriteLocal, Initialized) g
+
+-- Assuming by default 32-bit BitVector
+consExpr g (HexLit l x) _
+  | Just e <- bitVectorValue x
+  = Just <$> envAddFresh l (tBV32 `strengthen` e, WriteLocal, Initialized) g
+  | otherwise
+  = Just <$> envAddFresh l (tBV32, WriteLocal, Initialized) g
 
 consExpr g (BoolLit l b) _
   = Just <$> envAddFresh l (pSingleton tBool b, WriteLocal, Initialized) g 
@@ -615,14 +622,14 @@ consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
     l2 = getAnnotation e2
     cc (QN AK_ _ _ s) = F.symbolString s 
 
--- | `e1 & e2`
-consExpr g (InfixExpr l o@OpBAnd e1 e2) _
-  = do opTy <- safeEnvFindTy (infixOpId o) g
-       consCall g l o (FI Nothing ((,Nothing) <$> [e1, e2])) $ mkTy opTy
-  where
-    mkTy (TFun Nothing [B x tx, B y ty] out r) = 
-          TFun Nothing [B x tx, B y ty] (out `strengthen` fixBAnd x y) r 
-    mkTy t = t
+-- -- | `e1 & e2`
+-- consExpr g (InfixExpr l o@OpBAnd e1 e2) _
+--   = do opTy <- safeEnvFindTy (infixOpId o) g
+--        consCall g l o (FI Nothing ((,Nothing) <$> [e1, e2])) $ mkTy opTy
+--   where
+--     mkTy (TFun Nothing [B x tx, B y ty] out r) = 
+--           TFun Nothing [B x tx, B y ty] (out `strengthen` fixBAnd x y) r 
+--     mkTy t = t
 
 consExpr g (InfixExpr l o e1 e2) _
   = do opTy <- safeEnvFindTy (infixOpId o) g

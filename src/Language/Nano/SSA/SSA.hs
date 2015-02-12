@@ -631,6 +631,9 @@ ssaExpr ::  Data r => Expression (AnnSSA r) -> SSAM r ([Statement (AnnSSA r)], E
 ssaExpr e@(IntLit _ _)
   = return ([], e)
 
+ssaExpr e@(HexLit _ _)
+  = return ([], e)
+
 ssaExpr e@(BoolLit _ _)
   = return ([], e)
 

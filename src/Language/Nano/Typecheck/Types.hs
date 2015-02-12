@@ -46,7 +46,7 @@ module Language.Nano.Typecheck.Types (
   , isMutable, isImmutable, isAssignsFields, isInheritedMutability
 
   -- * Primitive Types
-  , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
+  , tInt, tBV32, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
   , isTVar, isTObj, isFlattenable, isPrimitive, isConstr, subtypeable, isTUndef, isTNull, isTVoid
   , isTFun, fTop, orNull, isArr
 
@@ -72,6 +72,9 @@ module Language.Nano.Typecheck.Types (
   -- * Symbols
   , ctorSymbol, callSymbol, stringIndexSymbol, numericIndexSymbol 
 
+  -- * BitVector
+  , bitVectorValue
+
   ) where 
 
 import           Data.Data
@@ -93,6 +96,7 @@ import           Language.Nano.Locations
 import           Language.Nano.Names
 
 import qualified Language.Fixpoint.Types        as F
+import qualified Language.Fixpoint.Bitvector    as BV
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.PrettyPrint
@@ -191,6 +195,9 @@ instance ExprReftable a () where
 
 instance F.Expression a => ExprReftable a F.Reft where
   exprReft = F.exprReft
+
+instance F.Reftable r => ExprReftable BV.Bv r where
+  exprReft = F.ofReft . F.exprReft
 
 
 funTys l f xs ft 
@@ -607,6 +614,7 @@ instance PP TVar where
 
 instance PP TCon where
   pp TInt      = text "number"
+  pp TBV32     = text "bitvector"
   pp TBool     = text "boolean"
   pp TString   = text "string"
   pp TVoid     = text "void"
@@ -626,6 +634,7 @@ instance Hashable TCon where
   hashWithSalt s TNull        = hashWithSalt s (6 :: Int)
   hashWithSalt s TUndef       = hashWithSalt s (7 :: Int)
   hashWithSalt s TFPBool      = hashWithSalt s (8 :: Int)
+  hashWithSalt s TBV32        = hashWithSalt s (9 :: Int)
 
 instance (PP r, F.Reftable r) => PP (BindQ q r) where 
   pp (B x t)          = pp x <> colon <> pp t 
@@ -744,6 +753,7 @@ isTVar _                    = False
 
 tInt, tBool, tUndef, tNull, tString, tVoid, tErr :: (F.Reftable r) => RTypeQ q r
 tInt                        = TApp TInt     [] fTop 
+tBV32                       = TApp TBV32    [] fTop
 tBool                       = TApp TBool    [] fTop
 tString                     = TApp TString  [] fTop
 tTop                        = TApp TTop     [] fTop
@@ -988,4 +998,13 @@ prefixOpId o                = errorstar $ "prefixOpId: Cannot handle: " ++ ppsho
 
 mkId            = Id (initialPos "") 
 builtinId       = mkId . ("builtin_" ++)
+
+
+
+
+-- | BitVectors
+
+bitVectorValue ('0':x) = Just $ exprReft (BV.Bv BV.S32  $ "\"#" ++ x ++ "\"")
+bitVectorValue _       = Nothing
+
 

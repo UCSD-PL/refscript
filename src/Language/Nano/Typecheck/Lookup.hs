@@ -20,6 +20,7 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
 
 import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Bitvector as BV
 
 import           Language.Nano.Names
 import           Language.Nano.Types
@@ -40,7 +41,7 @@ import           Control.Applicative ((<$>))
 excludedFieldSymbols = F.symbol <$> [ "hasOwnProperty", "prototype", "__proto__" ]
 
 
-type PPRD r = (BitVectorable r, ExprReftable Int r, PP r, F.Reftable r, Data r)
+type PPRD r = (ExprReftable Int r, PP r, F.Reftable r, Data r)
 
 
 data AccessKind = MethodAccess | FieldAccess
@@ -64,11 +65,12 @@ instance PP AccessKind where
 getProp :: (PPRD r, EnvLike r g, F.Symbolic f, PP f) 
         => g r -> AccessKind -> f -> RType r -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
-getProp γ b s t@(TApp _ _ _  ) =                  getPropApp γ b s t
+getProp γ b s t@(TApp _ _ _  ) = getPropApp γ b s t
 
-getProp γ b s t@(TCons m es _) = do (t',m')    <- accessMember True γ b InstanceMember s 
-                                                $ M.union es objProto
-                                    return      $ (t,t',combMut m m')
+getProp γ b s t@(TCons m es _) 
+  = do  (t',m')    <- accessMember True γ b InstanceMember s 
+                    $ M.union es objProto
+        return      $ (t,t',combMut m m')
   where 
   -- Add Object as the prototype type
     objProto = M.singleton (protoSym, InstanceMember) 
@@ -76,35 +78,38 @@ getProp γ b s t@(TCons m es _) = do (t',m')    <- accessMember True γ b Instan
     protoSym = F.symbol "prototype"
     
 getProp γ b s t@(TRef x ts@(m:ts') r)  
-                               = do d          <- resolveTypeInEnv γ x
-                                    es         <- flatten Nothing InstanceMember γ (d,ts)
-                                    (t',m')    <- accessMember True γ b InstanceMember s es
-                                    t''        <- fixMethType t'
-                                    return      $ (t, t'',combMut (toType m) m')
+  = do  d          <- resolveTypeInEnv γ x
+        es         <- flatten Nothing InstanceMember γ (d,ts)
+        (t',m')    <- accessMember True γ b InstanceMember s es
+        t''        <- fixMethType t'
+        return      $ (t, t'',combMut (toType m) m')
   where
     fixMethType ft | isTFun ft                  = mkAnd . (replaceSelf <$>) <$> bkFuns ft
                    | otherwise                  = Just $ ft
     replaceSelf (vs, Just (TSelf m'), bs, ot)   = mkFun (vs, Just (TRef x (m':ts') r), bs, ot)
     replaceSelf a                               = mkFun a
 
-getProp γ b s t@(TClass c    ) = do d          <- resolveTypeInEnv γ c
-                                    es         <- flatten Nothing StaticMember γ (d,[])
-                                    (t', m)    <- accessMember True γ b StaticMember s es
-                                    return      $ (t,t',m)
+getProp γ b s t@(TClass c) 
+  = do  d          <- resolveTypeInEnv γ c
+        es         <- flatten Nothing StaticMember γ (d,[])
+        (t', m)    <- accessMember True γ b StaticMember s es
+        return      $ (t,t',m)
 
-getProp γ _ s t@(TModule m   ) = do m'         <- resolveModuleInEnv γ m
-                                    (_,_,t',_) <- envFindTy s $ m_variables m'
-                                    return      $ (t,t', t_readOnly) 
+getProp γ _ s t@(TModule m) 
+  = do  m'         <- resolveModuleInEnv γ m
+        (_,_,t',_) <- envFindTy s $ m_variables m'
+        return      $ (t,t', t_readOnly) 
 
 -- FIXME: Instead of the actual integer value, assign unique symbolic values: 
 --        E.g. A_B_C_1 ... 
-getProp γ _ s t@(TEnum e     ) = do e'         <- resolveEnumInEnv γ e
-                                    io         <- envFindTy (F.symbol s) (e_mapping e')
-                                    case io of
-                                      IntLit _ i -> return (t, tInt `strengthen` exprReft i, t_immutable)
-                                      -- TODO 
-                                      HexLit _ s -> return $ error "getProp enum" 
-                                      _          -> Nothing
+getProp γ _ s t@(TEnum e     ) 
+  = do e'         <- resolveEnumInEnv γ e
+       io         <- envFindTy (F.symbol s) (e_mapping e')
+       case io of
+         IntLit _ i -> return (t, tInt `strengthen` exprReft i, t_immutable)
+         -- XXX : is 32-bit going to be enough ???
+         HexLit _ s -> return (t, tBV32 `strengthen` exprReft (BV.Bv BV.S32 s), t_immutable)
+         _          -> Nothing
 
 getProp _ _ _ _                = Nothing
 

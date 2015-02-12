@@ -301,6 +301,8 @@ envAdds = envAddsWithOK HS.empty
 -- | We do not add binders for WriteGlobal variables as they cannot appear in
 --   refinements.
 --
+--   ok : Symbols that are 'ok' to appear in refinements
+--
 ---------------------------------------------------------------------------------------
 envAddsWithOK :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
               => HS.HashSet F.Symbol
@@ -351,13 +353,13 @@ reftCheck' _ g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.in
                           | otherwise
                           = cgError $ errorForbiddenSyms (srcPos x) t $ HS.toList forbiddenSet
   where
-    x_sym         = F.symbol x
-    allSyms       = [ s | s <- foldReft rr [] t ]    
-    forbiddenSyms = [ s | s <- allSyms
-                        , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g
-                        , a `elem` [ReturnVar,WriteGlobal] ]
-                 ++ [ s | s <- allSyms, s `HS.member` bad ]
-    forbiddenSet  = HS.fromList forbiddenSyms
+    x_sym                   = F.symbol x
+    allSyms                 = [ s | s <- foldReft rr [] t ]    
+    forbiddenSyms           = [ s | s <- allSyms
+                                  , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g
+                                  , a `elem` [ReturnVar,WriteGlobal] ]
+                           ++ [ s | s <- allSyms, s `HS.member` bad ]
+    forbiddenSet            = HS.fromList forbiddenSyms
     rr (F.Reft (_, ras)) xs = concatMap ra ras ++ xs
     ra (F.RConc p)          = F.syms p
     ra (F.RKvar _ su)       = F.targetSubstSyms su
@@ -373,8 +375,10 @@ addObjectFieldsWithOK ok g (x,a,t)
   | a `elem` [WriteGlobal,ThisVar,ReturnVar] = return g
   | otherwise                                = envAddsWithOK ok "addObjectFieldsWithOK" xts g
   where
-    xts       = [(mkFieldB x f, (F.subst sbt $ tf `strengthen` kv f, a, Initialized)) 
-                  | FieldSig f _ m tf <- ms, isImmutable m ]
+
+    xts       = [(mkFieldB x f, ty f m tf)   | FieldSig f _ m tf <- ms, isImmutable m ]
+
+    ty f m tf = (F.subst sbt $ tf `strengthen` kv f, a, Initialized)
 
     -- 
     -- XXX  : Still need to add keyVal because of the way we express invariants 

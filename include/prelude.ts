@@ -182,28 +182,17 @@ declare function builtin_PrefixLNot<A>(x: A): boolean;
  */
 declare function builtin_PrefixBNot(n: number): number;
 
+/*@ builtin_OpBOr ::
+    (a: bitvector32, b: bitvector32) => { v: bitvector32 | v = bvor(a,b) }
+ */
 declare function builtin_OpBOr(a: number, b: number): number;
 declare function builtin_OpBXor(a: number, b: number): number;
-declare function builtin_OpBAnd(a: number, b: number): number;
-/**
- *
- *    Bitwise "and" operator `&`
- *    
- *     builtin_OpBAnd :: (a: number, y: number) 
- *                     => { v: number | (bv_idx(a,1)  && bv_idx(b,1)  => bv_idx(v,1)) 
- *                                      (bv_idx(a,2)  && bv_idx(b,2)  => bv_idx(v,2))  
- *                                      ...
- *                                      (bv_idx(a,32) && bv_idx(b,32) => bv_idx(v,32)) 
- *                        } 
- *
- */
 
-declare function builtin_OpLShift(a: number, b: number): number;
-/*@ builtin_OpSpRShift ::
-    (a: number, b: number) => {v:number | [(a = 0 => v = 0);
-                                           (a < 0 => (a < v && v <= 0));
-                                           (a > 0 => (a > v && v >= 0))] }
+/*@ builtin_OpBAnd ::
+    (a: bitvector32, b: bitvector32) => { v: bitvector32 | v = bvand(a,b) }
  */
+declare function builtin_OpBAnd(a: number, b: number): number;
+declare function builtin_OpLShift(a: number, b: number): number;
 declare function builtin_OpSpRShift(a: number, b: number): number;
 declare function builtin_OpZfRShift(a: number, b: number): number;
 
@@ -791,7 +780,8 @@ declare var console: Console;
 declare function builtin_PrefixTypeof<A>(x: A): string; 
 
 /*@ builtin_BITruthy :: 
-    forall A. (x:A) => { v:boolean | ((Prop v) <=> Prop(x)) }        
+    /\ (b: bitvector32) => { v: boolean | ((Prop v) <=> (b /= (lit "#x00000000" (BitVec (Size32 obj))))) }
+    /\ forall A. (x:A)  => { v: boolean | ((Prop v) <=> Prop(x)) }        
 */
 declare function builtin_BITruthy<A>(x: A): boolean; 
 
@@ -811,20 +801,9 @@ declare function builtin_BIFalsy<A>(x: A): boolean;
 /*@ invariant {v:number | [(ttag(v)  =  "number");
                            (Prop(v) <=> v /= 0  )]}	*/
 
+/*  invariant {v:bitvector32 | [(ttag(v)  =  "number");
+                                (Prop(v) <=> (v /= (lit "#x00000000" (BitVec (Size32 obj)))))]}	*/
 
-/**
- *
- *    Handling Bitvectors
- *    
- *    bv_idx(n,i): this boolean value is true if the the i-th position of 
- *                 bitvector n is set (to 1).
- *
- */
-
-/*@ measure bv_idx :: forall A B . (A, B) => bool */
-
-/*  builtin_bitVector :: (n: number, i: number) => { v: number | bv_idx(n,i) } */
-declare function builtin_bitVector(n: number, i: number): number;
 
 
 /**

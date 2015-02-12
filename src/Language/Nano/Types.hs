@@ -51,6 +51,7 @@ data TVar = TV {
 -- | Type Constructors
 data TCon
   = TInt                -- ^ number
+  | TBV32               -- ^ bitvector
   | TBool               -- ^ boolean
   | TString             -- ^ string
   | TVoid               -- ^ void
@@ -432,6 +433,7 @@ instance F.Symbolic a => F.Symbolic (Located a) where
 
 instance Eq TCon where
   TInt     == TInt     = True   
+  TBV32    == TBV32    = True   
   TBool    == TBool    = True           
   TString  == TString  = True
   TVoid    == TVoid    = True         
@@ -496,6 +498,7 @@ tconCode TUn             = 6
 tconCode TNull           = 7
 tconCode TUndef          = 8
 tconCode TFPBool         = 9
+tconCode TBV32           = 10
 
 
 -----------------------------------------------------------------------

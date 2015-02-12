@@ -59,7 +59,7 @@ import           Language.ECMAScript3.Syntax.Annotations
 import qualified System.Console.CmdArgs.Verbosity as V
 
 
-type PPRSF r = (BitVectorable r, PPR r, Substitutable r (Fact r), Free (Fact r)) 
+type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r)) 
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
@@ -655,6 +655,9 @@ tcExpr :: PPRSF r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR
 -------------------------------------------------------------------------------
 tcExpr _ e@(IntLit _ _) _
   = return (e, tInt)
+
+tcExpr _ e@(HexLit _ _) _
+  = return (e, tBV32)
 
 tcExpr _ e@(BoolLit _ _) _
   = return (e, tBool)

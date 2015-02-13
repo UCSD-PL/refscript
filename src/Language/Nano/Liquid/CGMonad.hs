@@ -367,7 +367,10 @@ reftCheck' _ g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.in
 --   also introduce bindings for all its IMMUTABLE fields. 
 ---------------------------------------------------------------------------------------
 addObjectFieldsWithOK :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
-                => HS.HashSet F.Symbol -> CGEnv -> (x,Assignability,RefType) -> CGM CGEnv
+                      => HS.HashSet F.Symbol 
+                      -> CGEnv 
+                      -> (x,Assignability,RefType) 
+                      -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 addObjectFieldsWithOK ok g (x,a,t)
               | a `elem` [WriteGlobal,ThisVar,ReturnVar] 
@@ -378,22 +381,9 @@ addObjectFieldsWithOK ok g (x,a,t)
     xts       = [(fd f, ty f tf) | FieldSig f _ m tf <- ms, isImmutable m ]
 
     fd        = mkFieldB x 
-    ty f tf   = ( F.subst (substFieldSyms g x t) (tf `strengthen` kv f)
-                , a
-                , Initialized
-                )  
+    ty f tf   = (F.subst (substFieldSyms g x t) tf, a, Initialized)
 
     sub       = F.subst $ substFieldSyms g x t
-
-    -- 
-    -- XXX  : Still need to add keyVal because of the way we express invariants 
-    --        of the form "if field 'kind' has value `v` then class 'A' is in 
-    --        fact an instance of class 'B' where (B <: A) 
-    --
-    kv s      = F.uexprReft $ F.EApp kvSym [F.eVar x, str s]
-    kvSym     = F.dummyLoc  $ F.symbol "keyVal"
-
-    str       = F.expr . F.symbolText
 
     ms        | Just (TCons m ms _) <- flattenType g t = defMut m <$> M.elems ms
               | otherwise                              = []
@@ -408,7 +398,6 @@ addObjectFieldsWithOK ok g (x,a,t)
 
 
 envAdd x t g = envAdds "envAdd" [(x,t)] g
-
 
 
 instance PP F.IBindEnv where

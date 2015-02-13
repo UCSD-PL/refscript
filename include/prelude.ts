@@ -268,8 +268,6 @@ declare function builtin_BIForInKeys(obj: Object): string[];
 
 /*@ measure enumProp    :: forall A . (string, A) => bool */
 
-/*@ measure keyVal      :: forall A B . (A,string) => B */
-
 
 
 /*************************************************************************

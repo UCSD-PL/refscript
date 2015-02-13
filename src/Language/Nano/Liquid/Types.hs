@@ -53,8 +53,12 @@ module Language.Nano.Liquid.Types (
   -- * Raw low-level Location-less constructors
   , rawStringSymbol 
 
-  -- Zip types
+  -- * Zip types
   , zipType
+
+  -- * Subst field syms
+  , substFieldSyms, mkFieldB
+
 
   ) where
 
@@ -536,31 +540,32 @@ getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
 --  * semantically equivalent to @t1@
 --
 --------------------------------------------------------------------------------
-zipType :: IsLocated l => l -> CGEnv -> RefType -> RefType -> Maybe (F.Reft -> RefType, F.Reft)
+zipType :: (IsLocated l, F.Symbolic x) 
+        => l -> CGEnv -> x -> RefType -> RefType -> Maybe (F.Reft -> RefType, F.Reft)
 --------------------------------------------------------------------------------
 --
 -- Top type in LHS
 --
-zipType _ _ _ t2                | isTop t2 = return (setRTypeR t2, fTop)
+zipType _ _ _ _ t2               | isTop t2 = return (setRTypeR t2, fTop)
 
 -- 
 -- Unions
 --
-zipType _ γ (TApp TUn t1s r1) (TApp TUn t2s _)
+zipType _ γ _ (TApp TUn t1s r1) (TApp TUn t2s _)
                                  = (,r1) <$> mkUnionR <$> mapM rr t2s
   where
     rr               t2          = L.find (related γ t2) t1s `relate` t2
     relate (Just t1) _           = return $ t1 `strengthen` noKVars r1
     relate Nothing   t2          = return $ fmap F.bot t2
 
-zipType l γ t1 t2@(TApp TUn _ _) = zipType l γ (TApp TUn [t1] fTop) t2
+zipType l γ x t1 t2@(TApp TUn _ _) = zipType l γ x (TApp TUn [t1] fTop) t2
 
-zipType l γ (TApp TUn t1s r1) t2 = L.find (related γ t2) t1s `relate` t2
+zipType l γ x (TApp TUn t1s r1) t2 = L.find (related γ t2) t1s `relate` t2
   where
-    relate (Just t1) t2          = zipType l γ (t1 `strengthen` noKVars r1) t2
+    relate (Just t1) t2          = zipType l γ x (t1 `strengthen` noKVars r1) t2
     relate Nothing   t2          = return (setRTypeR t, fromMaybe fTop $ rTypeROpt t) where t = fmap F.bot t2
 
-zipType _ _ (TSelf _) (TSelf m2) = return (\_ -> TSelf m2, fTop)
+zipType _ _ _ (TSelf _) (TSelf m2) = return (\_ -> TSelf m2, fTop)
 --
 -- No unions below this point
 --
@@ -577,15 +582,15 @@ zipType _ _ (TSelf _) (TSelf m2) = return (\_ -> TSelf m2, fTop)
 --   
 --   C<Si> || {F;M} = toStruct(C<Si>) || {F;M}
 --   
-zipType l γ t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _) 
+zipType l γ x t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _) 
   | x1 == x2
-  = do  ts    <- zipWithM (\t t' -> appZ <$> zipType l γ t t') t1s t2s
+  = do  ts    <- zipWithM (\t t' -> appZ <$> zipType l γ x t t') t1s t2s
         return $ (TRef x2 (m2:ts), r1)
   -- 
   --    t1 <: t2
   --
   | Just (_, m1':t1s') <- weaken γ (x1,m1:t1s) x2 
-  = zipType l γ (TRef x2 (m1':t1s') r1 `strengthen` rtExt t1 (F.symbol x1)) t2
+  = zipType l γ x (TRef x2 (m1':t1s') r1 `strengthen` rtExt t1 (F.symbol x1)) t2
   -- 
   --    t2 <: t1
   --
@@ -600,11 +605,7 @@ zipType l γ t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _)
   -- DO NOT Unfold to structures
   --
   -- DANGER OF INFINITE LOOPS BECAUSE OF RECURSIVE TYPES
-  --
-  -- Nothing        -> do  t1' <- tracePP "FUCK - 1" <$> flattenType γ t1 
-  --                       t2' <- tracePP "FUCK - 2" <$> flattenType γ t2
-  --                       zipType l γ t1' t2'
-  --                       
+  -- 
   where
     rtExt t c  = F.Reft (vv t, [raExt t c])
     raExt t c  = F.RConc $ F.PBexp $ F.EApp (sym t) 
@@ -613,56 +614,56 @@ zipType l γ t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _)
     sym t      | isClassType γ t = F.dummyLoc $ F.symbol "extends_class"
                | otherwise       = F.dummyLoc $ F.symbol "extends_interface"
 
-zipType _ _ t1@(TRef _ [] _) _ = error $ "zipType l on " ++ ppshow t1  -- Invalid type
-zipType _ _ _ t2@(TRef _ [] _) = error $ "zipType l on " ++ ppshow t2  -- Invalid type
+zipType _ _ _ t1@(TRef _ [] _) _ = error $ "zipType l on " ++ ppshow t1  -- Invalid type
+zipType _ _ _ _ t2@(TRef _ [] _) = error $ "zipType l on " ++ ppshow t2  -- Invalid type
 
-zipType l γ t1@(TRef _ _ _) t2 = do t1' <- flattenType γ t1
-                                    zipType l γ t1' t2
+zipType l γ x t1@(TRef _ _ _) t2 = do t1' <- flattenTypeWithSub γ x t1
+                                      zipType l γ x t1' t2
 
-zipType l γ t1 t2@(TRef _ _ _) = do t2' <- flattenType γ t2 
-                                    zipType l γ t1 t2'
+zipType l γ x t1 t2@(TRef _ _ _) = do t2' <- flattenTypeWithSub γ x t2 
+                                      zipType l γ x t1 t2'
 
-zipType l γ t1@(TClass x1) t2@(TClass x2) 
+zipType l γ x t1@(TClass x1) t2@(TClass x2) 
   | x2 `elem` allAncestors γ x1
   = return $ (setRTypeR (TClass x2), fTop)
   | otherwise 
-  = do  t1' <- flattenType γ t1 
-        t2' <- flattenType γ t2
-        zipType l γ t1' t2'
+  = do  t1' <- flattenTypeWithSub γ x t1 
+        t2' <- flattenTypeWithSub γ x t2
+        zipType l γ x t1' t2'
 
-zipType l γ t1@(TClass _) t2 = do t1' <- flattenType γ t1
-                                  zipType l γ t1' t2
+zipType l γ x t1@(TClass _) t2 = do t1' <- flattenTypeWithSub γ x t1
+                                    zipType l γ x t1' t2
 
-zipType l γ t1 t2@(TClass _) = do t2' <- flattenType γ t2
-                                  zipType l γ t1 t2'
+zipType l γ x t1 t2@(TClass _) = do t2' <- flattenTypeWithSub γ x t2
+                                    zipType l γ x t1 t2'
 
-zipType _ _ (TApp c [] r) (TApp c' [] _) | c == c'  = return (TApp c [], r)
+zipType _ _ _ (TApp c [] r) (TApp c' [] _) | c == c'  = return (TApp c [], r)
 
-zipType _ _ (TVar v r) (TVar v' _)       | v == v'  = return (TVar v, r)
+zipType _ _ _ (TVar v r) (TVar v' _)       | v == v'  = return (TVar v, r)
 -- 
 -- Function types
 --
 -- (Si)=>S || (Ti)=>T = (Si||Ti)=>S||T
 --
-zipType l γ (TFun (Just s1) x1s t1 r1) (TFun (Just s2) x2s t2 _) = do
-  s   <- appZ <$> zipType l γ s1 s2
-  xs  <- zipWithM (zipBind l γ) x1s x2s 
-  t   <- appZ <$> zipType l γ t1 t2 
+zipType l γ x (TFun (Just s1) x1s t1 r1) (TFun (Just s2) x2s t2 _) = do
+  s   <- appZ <$> zipType l γ x s1 s2
+  xs  <- zipWithM (zipBind l γ x) x1s x2s 
+  t   <- appZ <$> zipType l γ x t1 t2 
   return (TFun (Just s) xs t, r1)
  
-zipType l γ (TFun Nothing x1s t1 r1) (TFun Nothing x2s t2 _) = do 
-  xs  <- zipWithM (zipBind l γ) x1s x2s 
-  t   <- appZ <$> zipType l γ t1 t2 
+zipType l γ x (TFun Nothing x1s t1 r1) (TFun Nothing x2s t2 _) = do 
+  xs  <- zipWithM (zipBind l γ x) x1s x2s 
+  t   <- appZ <$> zipType l γ x t1 t2 
   return (TFun Nothing xs t, r1)
 
-zipType _ _ (TFun _ _ _ _ ) (TFun _ _ _ _) = Nothing
+zipType _ _ _ (TFun _ _ _ _ ) (TFun _ _ _ _) = Nothing
 
 -- Object types
 --
 -- { F1,F2 } | { F1',F3' } = { F1|F1',top(F3) }, where disjoint F2 F3'
 --
-zipType l γ (TCons _ e1s r1) (TCons m2 e2s _) = do 
-    common'            <- T.mapM (uncurry $ zipElts l γ) common
+zipType l γ x (TCons _ e1s r1) (TCons m2 e2s _) = do 
+    common'            <- T.mapM (uncurry $ zipElts l γ x) common
     return              $ (TCons m2 (common' `M.union` disjoint'), r1)
   where 
     common              = M.intersectionWith (,) e1s e2s
@@ -672,11 +673,11 @@ zipType l γ (TCons _ e1s r1) (TCons m2 e2s _) = do
 --
 -- s1 /\ s2 .. /\ sn | t1 /\ t2 .. tm = s1'|t1' /\ .. sk'|tk' /\ .. top(tm')
 --
-zipType l γ (TAnd t1s) (TAnd t2s) =
+zipType l γ x (TAnd t1s) (TAnd t2s) =
     case [ (pick t2, t2) | t2 <- t2s ] of
       []              -> error $ "zipType l: impossible intersection types" 
-      [(t1,t2)]       -> zipType l γ t1 t2
-      ts              -> do ts' <- mapM (\(t,t') -> appZ <$> zipType l γ t t') ts
+      [(t1,t2)]       -> zipType l γ x t1 t2
+      ts              -> do ts' <- mapM (\(t,t') -> appZ <$> zipType l γ x t t') ts
                             return (setRTypeR $ TAnd ts', fTop)
   where
     pick t2            = fromCandidates [ t1 | t1 <- t1s, t1 `matches` t2 ]
@@ -687,32 +688,57 @@ zipType l γ (TAnd t1s) (TAnd t2s) =
     fromCandidates  _  = die $ bug (srcPos l) 
                        $ "zipType l: multiple matches of " ++ ppshow t2s ++ " with " ++ ppshow t1s
 
-zipType l γ t1 (TAnd t2s) = zipType l γ (TAnd [t1]) (TAnd t2s)
-zipType l γ (TAnd t1s) t2 = zipType l γ (TAnd t1s) (TAnd [t2])
+zipType l γ x t1 (TAnd t2s) = zipType l γ x (TAnd [t1]) (TAnd t2s)
+zipType l γ x (TAnd t1s) t2 = zipType l γ x (TAnd t1s) (TAnd [t2])
 
 -- FIXME: preserve t1's ref in all occurences of TVar v1 in the LHS
-zipType l γ (TAll v1 t1) (TAll v2 t2) = 
-    (,fTop) . setRTypeR . TAll v1 . appZ <$> zipType l γ t1 (apply θ t2) 
+zipType l γ x (TAll v1 t1) (TAll v2 t2) = 
+    (,fTop) . setRTypeR . TAll v1 . appZ <$> zipType l γ x t1 (apply θ t2) 
   where
     θ = fromList [(v2, tVar v1 :: RefType)]
 
-zipType l _ t1 t2 = errorstar $ printf "BUG[zipType] Unsupported:\n\t%s\n\t%s\nand\n\t%s" 
-                      (ppshow $ srcPos l) (ppshow t1) (ppshow t2)
+zipType l _ _ t1 t2 = errorstar $ printf "BUG[zipType] Unsupported:\n\t%s\n\t%s\nand\n\t%s" 
+                        (ppshow $ srcPos l) (ppshow t1) (ppshow t2)
 
 
-zipBind l γ (B _ t1) (B s2 t2) = B s2 <$> appZ <$> zipType l γ t1 t2 
+zipBind l γ x (B _ t1) (B s2 t2) = B s2 <$> appZ <$> zipType l γ x t1 t2 
 
 ------------------------------------------------------------------------------------------
-zipElts :: IsLocated l => l -> CGEnv -> TypeMember F.Reft -> TypeMember F.Reft -> Maybe (TypeMember F.Reft) 
+zipElts :: (IsLocated l, F.Symbolic x) 
+        => l -> CGEnv -> x -> TypeMember F.Reft -> TypeMember F.Reft -> Maybe (TypeMember F.Reft) 
 ------------------------------------------------------------------------------------------
-zipElts l γ (CallSig t1)        (CallSig t2)           = CallSig           <$> appZ <$> zipType l γ t1 t2 
-zipElts l γ (ConsSig t1)        (ConsSig t2)           = ConsSig           <$> appZ <$> zipType l γ t1 t2 
-zipElts l γ (IndexSig _ _ t1)   (IndexSig x2 b2 t2)    = IndexSig x2 b2    <$> appZ <$> zipType l γ t1 t2 
-zipElts l γ (FieldSig _ _ _ t1) (FieldSig x2 o2 m2 t2) = FieldSig x2 o2 m2 <$> appZ <$> zipType l γ t1 t2
-zipElts l γ (MethSig _  t1)     (MethSig x2 t2)        = MethSig  x2       <$> appZ <$> zipType l γ t1 t2
-zipElts _ _ _                   _                      = Nothing
+zipElts l γ x (CallSig t1)        (CallSig t2)           = CallSig           <$> appZ <$> zipType l γ x t1 t2 
+zipElts l γ x (ConsSig t1)        (ConsSig t2)           = ConsSig           <$> appZ <$> zipType l γ x t1 t2 
+zipElts l γ x (IndexSig _ _ t1)   (IndexSig x2 b2 t2)    = IndexSig x2 b2    <$> appZ <$> zipType l γ x t1 t2 
+zipElts l γ x (FieldSig _ _ _ t1) (FieldSig x2 o2 m2 t2) = FieldSig x2 o2 m2 <$> appZ <$> zipType l γ x t1 t2
+zipElts l γ x (MethSig _  t1)     (MethSig x2 t2)        = MethSig  x2       <$> appZ <$> zipType l γ x t1 t2
+zipElts _ _ _ _                   _                      = Nothing
 
 appZ (f,r) = f r
 
+flattenTypeWithSub g x t = F.subst (substFieldSyms g x t) <$> flattenType g t
 
+------------------------------------------------------------------------------------------
+substFieldSyms :: F.Symbolic a => CGEnv -> a -> RefType -> F.Subst
+------------------------------------------------------------------------------------------
+substFieldSyms g x t 
+  = F.mkSubst  $ [(s      , F.expr $ mkFieldB x s) | FieldSig s _ m _ <- ms t
+                                                   , isImmutable m            ]
+              ++ [(thisSym, F.expr $ F.symbol x  ) ]
+  where
+    thisSym    = F.symbol "this" 
+
+    ms t       | Just (TCons m ms _) <- flattenType g t = defMut m <$> M.elems ms
+               | otherwise                              = []
+
+    defMut m (FieldSig f o m0 t) 
+               | isInheritedMutability m0 
+               = FieldSig f o m  t
+               | otherwise                
+               = FieldSig f o m0 t
+
+    defMut _ f = f 
+
+
+mkFieldB x f = mconcat [s "field_",s x,s "_",s f] where s = F.symbol
 

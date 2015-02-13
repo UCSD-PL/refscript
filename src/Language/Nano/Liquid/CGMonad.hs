@@ -43,8 +43,6 @@ module Language.Nano.Liquid.CGMonad (
 
   , reftCheck
 
-  , mkFieldB
-
   -- * Add Subtyping Constraints
   , subType, wellFormed -- , safeExtends
   
@@ -372,13 +370,20 @@ addObjectFieldsWithOK :: (IsLocated x, F.Symbolic x, PP x, PP [x])
                 => HS.HashSet F.Symbol -> CGEnv -> (x,Assignability,RefType) -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 addObjectFieldsWithOK ok g (x,a,t)
-  | a `elem` [WriteGlobal,ThisVar,ReturnVar] = return g
-  | otherwise                                = envAddsWithOK ok "addObjectFieldsWithOK" xts g
+              | a `elem` [WriteGlobal,ThisVar,ReturnVar] 
+              = return g
+              | otherwise
+              = envAddsWithOK ok "addObjectFieldsWithOK" xts g
   where
+    xts       = [(fd f, ty f tf) | FieldSig f _ m tf <- ms, isImmutable m ]
 
-    xts       = [(mkFieldB x f, ty f m tf)   | FieldSig f _ m tf <- ms, isImmutable m ]
+    fd        = mkFieldB x 
+    ty f tf   = ( F.subst (substFieldSyms g x t) (tf `strengthen` kv f)
+                , a
+                , Initialized
+                )  
 
-    ty f m tf = (F.subst sbt $ tf `strengthen` kv f, a, Initialized)
+    sub       = F.subst $ substFieldSyms g x t
 
     -- 
     -- XXX  : Still need to add keyVal because of the way we express invariants 
@@ -386,26 +391,24 @@ addObjectFieldsWithOK ok g (x,a,t)
     --        fact an instance of class 'B' where (B <: A) 
     --
     kv s      = F.uexprReft $ F.EApp kvSym [F.eVar x, str s]
-    kvSym     = F.dummyLoc $ F.symbol "keyVal"
+    kvSym     = F.dummyLoc  $ F.symbol "keyVal"
+
     str       = F.expr . F.symbolText
 
     ms        | Just (TCons m ms _) <- flattenType g t = defMut m <$> M.elems ms
               | otherwise                              = []
 
-    defMut m (FieldSig f o m0 t) | isInheritedMutability m0 
-                                 = FieldSig f o m  t
-                                 | otherwise                
-                                 = FieldSig f o m0 t
+    defMut m (FieldSig f o m0 t) 
+              | isInheritedMutability m0 
+              = FieldSig f o m  t
+              | otherwise                
+              = FieldSig f o m0 t
+
     defMut _ f = f 
 
-    sbt       = F.mkSubst $ [(f, F.expr $ mkFieldB x f) | FieldSig f _ m _ <- ms
-                                                        , isImmutable m ]
-                         ++ [ (F.symbol "this", F.expr $ F.symbol x) ]
 
 envAdd x t g = envAdds "envAdd" [(x,t)] g
 
-
-mkFieldB x f = mconcat [s "field_",s x,s "_",s f] where s = F.symbol
 
 
 instance PP F.IBindEnv where
@@ -1146,7 +1149,7 @@ splitCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 -- | zipType wrapper
 --
 zipTypeUpM l g x t1 t2 = 
-  case zipType l g t1 t2 of
+  case zipType l g x t1 t2 of
     Just (f, (F.Reft (s,ras))) -> let su  = F.mkSubst [(s, F.expr x)] in 
                                   let rs  = F.simplify $ F.Reft (s, F.subst su ras) `F.meet` F.uexprReft x in
                                   return  $ f rs
@@ -1157,8 +1160,8 @@ zipTypeUpM l g x t1 t2 =
                                     --                      "\nIN      " ++ ppshow r) $ f rs
     Nothing -> cgError $ bugZipType (srcPos l) t1 t2
 
-zipTypeDownM l g _ t1 t2 = 
-  case zipType l g t1 t2 of
+zipTypeDownM l g x t1 t2 = 
+  case zipType l g x t1 t2 of
     Just (f, r) -> return $ f r
 --     Just (f, r@(F.Reft (s,ras))) -> let su  = F.mkSubst [(s, F.expr x)] in 
 --                                     -- let rs  = F.simplify $ F.Reft (s, subK su <$> ras) `F.meet` F.uexprReft x in

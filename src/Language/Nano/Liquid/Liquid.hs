@@ -56,7 +56,7 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 -- import           Text.PrettyPrint.HughesPJ 
 -- import qualified Data.Foldable                      as FO
 
@@ -723,30 +723,9 @@ consExpr g (DotRef l e f) to
         Nothing      -> cgError $  errorMissingFld (srcPos l) f te
   where
     vr         = VarRef $ getAnnotation e
-    mkTy m x te t | isTFun t       = F.subst (sbt x te) t 
+    mkTy m x te t | isTFun t       = F.subst (substFieldSyms g x te) t 
                   | isImmutable m  = fmap F.top t `strengthen` F.symbolReft (mkFieldB x f)
-                  | otherwise      = F.subst (sbt x te) t
-
-    -- 
-    -- TODO: 
-    --  
-    -- This was copied over from `addObjectFieldsWithOK` -- put in separate
-    -- function
-    --
-    sbt x t    = F.mkSubst $ [(s, F.expr $ mkFieldB x s) | FieldSig s _ m _ <- ms t
-                                                         , isImmutable m ]
-                          ++ [ (F.symbol "this", F.expr $ F.symbol x) ]
-
-    ms t       | Just (TCons m ms _) <- flattenType g t = defMut m <$> M.elems ms
-               | otherwise                              = []
-
-    defMut m (FieldSig f o m0 t) | isInheritedMutability m0 
-                                 = FieldSig f o m  t
-                                 | otherwise                
-                                 = FieldSig f o m0 t
-    defMut _ f = f 
-
-
+                  | otherwise      = F.subst (substFieldSyms g x te) t
 
 -- | e1[e2]
 consExpr g (BracketRef l e1 e2) _
@@ -834,8 +813,7 @@ consDeadCode g l e t
 consUpCast g l x _ t2
   = do (tx,a,i)  <- safeEnvFindTyWithAsgn x g
        ztx       <- zipTypeUpM l g x tx t2
-       (z,g')    <- envAddFresh l (ztx,a,i) g
-       return     $ (z,g') 
+       envAddFresh l (ztx,a,i) g
 
 -- | DownCast(x, t1 => t2)
 consDownCast g l x _ t2

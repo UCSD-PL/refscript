@@ -1,5 +1,5 @@
 
-/*@  predicate non_zero(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
+/*@  predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
 
 enum SymbolFlags {
   Import             = 0x00400000,  // Import
@@ -9,9 +9,14 @@ enum SymbolFlags {
   Prototype          = 0x04000000,  // Symbol for the prototype property (without source code representation)
 }
 
+
+
 interface Symbol {
 
-  /*@ flags : [Immutable] { v: bitvector32 | (non_zero(bvand(v, lit "#x02000000" (BitVec (Size32 obj))))) <=>  extends_interface(this,"TransientSymbol") } */
+  /*@ flags : [Immutable] { v: bitvector32 | [(bv_truthy(bvand(v, lit "#x02000000" (BitVec (Size32 obj))))) <=>  extends_interface(this,"TransientSymbol");
+                                              (bv_truthy(bvand(v, lit "#x00400000" (BitVec (Size32 obj))))) <=>  extends_interface(this,"ImportSymbol");
+                                              (bv_truthy(bvand(v, lit "#x00800000" (BitVec (Size32 obj))))) <=>  extends_interface(this,"MergedSymbol");
+                                              (bv_truthy(bvand(v, lit "#x04000000" (BitVec (Size32 obj))))) <=>  extends_interface(this,"PrototypeSymbol")] } */
   flags: SymbolFlags;
 
   name: string; 
@@ -19,13 +24,14 @@ interface Symbol {
 }
 
 interface TransientSymbol extends Symbol { }
+interface ImportSymbol extends Symbol { }
 
 /*@ getSymbolLinks :: (symbol: Symbol<Immutable>) => { void | true } */
 function getSymbolLinks(symbol: Symbol): void {
 
   if (symbol.flags & SymbolFlags.Merged) {
 
-    var ts = <TransientSymbol>symbol;
+    var ts = <ImportSymbol>symbol;
 
   }
 

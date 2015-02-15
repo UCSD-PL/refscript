@@ -272,7 +272,7 @@ envAddFreshWithOK :: IsLocated l
 ---------------------------------------------------------------------------------------
 envAddFreshWithOK ok l (t,a,i) g
   = do x  <- freshId l
-       g' <- envAddsWithOK ok "envAddFresh" [(x,(t,a,i))] g
+       g' <- envAddsWithOK True ok "envAddFresh" [(x,(t,a,i))] g
        addAnnot l x t
        return (x, g')
    
@@ -293,27 +293,31 @@ envAdds :: (IsLocated x, F.Symbolic x, PP x, PP [x])
         -> CGEnv 
         -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAdds = envAddsWithOK HS.empty
+envAdds = envAddsWithOK True HS.empty
+
+envAddsNoFields = envAddsWithOK False HS.empty
 
 
--- | We do not add binders for WriteGlobal variables as they cannot appear in
---   refinements.
+-- | No binders for WriteGlobal variables as they cannot appear in refinements.
+--
+--   doFields : add bindings for fields (True/False)
 --
 --   ok : Symbols that are 'ok' to appear in refinements
 --
 ---------------------------------------------------------------------------------------
 envAddsWithOK :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
-              => HS.HashSet F.Symbol
+              => Bool
+              -> HS.HashSet F.Symbol
               -> String 
               -> [(x, (RefType,Assignability,Initialization))] 
               -> CGEnv 
               -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAddsWithOK ok msg xts g
+envAddsWithOK doFields ok msg xts g
   = do ts'            <- zipWithM inv ts is
        let xtas        = zip xs $ zip3 ts' as is
 
-       g'             <- foldM (addObjectFieldsWithOK ok) g $ zip3 xs as ts'
+       g'             <- foldM (addObjectFieldsWithOK doFields ok) g $ zip3 xs as ts'
        
        zipWithM_         (reftCheck msg g' ok HS.empty) xs ts'
        
@@ -367,16 +371,18 @@ reftCheck' _ g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.in
 --   also introduce bindings for all its IMMUTABLE fields. 
 ---------------------------------------------------------------------------------------
 addObjectFieldsWithOK :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
-                      => HS.HashSet F.Symbol 
+                      => Bool
+                      -> HS.HashSet F.Symbol 
                       -> CGEnv 
                       -> (x,Assignability,RefType) 
                       -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-addObjectFieldsWithOK ok g (x,a,t)
+addObjectFieldsWithOK False ok g (x,a,t) = return g
+addObjectFieldsWithOK True  ok g (x,a,t) 
               | a `elem` [WriteGlobal,ThisVar,ReturnVar] 
               = return g
               | otherwise
-              = envAddsWithOK ok "addObjectFieldsWithOK" xts g
+              = envAddsWithOK False ok "addObjectFieldsWithOK" xts g
   where
     xts       = [(fd f, ty f tf) | FieldSig f _ m tf <- ms, isImmutable m ]
 

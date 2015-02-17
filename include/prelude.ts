@@ -196,6 +196,11 @@ declare function builtin_OpLShift(a: number, b: number): number;
 declare function builtin_OpSpRShift(a: number, b: number): number;
 declare function builtin_OpZfRShift(a: number, b: number): number;
 
+/*@  predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
+
+/*@ builtin_bv_truthy :: (b: bitvector32) => { boolean | (Prop v) <=> bv_truthy(b) } */
+declare function builtin_bv_truthy(b: number): boolean; 
+
 
 /**
  *
@@ -582,8 +587,11 @@ interface Array<T> {
 
     shift(): T;
 
-    /*@ slice: forall N . (start: number, start: number): {Array<N,T> | true} */
-    slice(start/*?*/: number, end/*?*/: number): T[];
+    /*@ slice : /\ forall N . (start: number, end: number): Array<N,T>
+                /\ forall N . (start: number): Array<N,T>
+                /\ forall N . (): Array<N,T>
+     */
+    slice(start?: number, end?: number): T[];
 
     /*@ sort : 
         /\ ( ) => { v : Array<M,T> | len(v) = len(this) } 

@@ -26,6 +26,8 @@ module Language.Nano.Typecheck.Types (
   -- * Predicates on Types 
   , isTop, isNull, isVoid, isTNum, isUndef, isUnion, isTString, isTBool
 
+  , isBvEnum
+
   -- * Primitive Types
   , t_object
 
@@ -89,6 +91,7 @@ import qualified Data.Map.Strict                as M
 import           Data.Typeable                  ()
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.PrettyPrint
+import qualified Language.Nano.Env              as E
 import           Language.Nano.Misc
 import           Language.Nano.Types
 import           Language.Nano.Errors
@@ -559,6 +562,11 @@ allEltType (ConsSig        t) = [t]
 allEltType (CallSig        t) = [t]
 allEltType (IndexSig _ _   t) = [t]
 
+
+isBvEnum              = all hex . map snd . E.envToList . e_mapping
+  where
+    hex (HexLit _ _ ) = True 
+    hex _             = False
 
 
 ----------------------------------------------------------------------------------

@@ -599,7 +599,7 @@ consExpr g (ThisRef l) _
 
 consExpr g (VarRef l x) _
   | Just (t,WriteGlobal,i) <- tInfo
-  = addAnnot (srcPos l) x t >> Just <$> envAddFresh l (t,WriteLocal,i) g
+  = Just <$> envAddFresh l (t,WriteLocal,i) g
   | Just (t,_,_) <- tInfo
   = addAnnot (srcPos l) x t >> return (Just (x, g))
   | otherwise
@@ -621,15 +621,6 @@ consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
   where
     l2 = getAnnotation e2
     cc (QN AK_ _ _ s) = F.symbolString s 
-
--- -- | `e1 & e2`
--- consExpr g (InfixExpr l o@OpBAnd e1 e2) _
---   = do opTy <- safeEnvFindTy (infixOpId o) g
---        consCall g l o (FI Nothing ((,Nothing) <$> [e1, e2])) $ mkTy opTy
---   where
---     mkTy (TFun Nothing [B x tx, B y ty] out r) = 
---           TFun Nothing [B x tx, B y ty] (out `strengthen` fixBAnd x y) r 
---     mkTy t = t
 
 consExpr g (InfixExpr l o e1 e2) _
   = do opTy <- safeEnvFindTy (infixOpId o) g
@@ -724,7 +715,7 @@ consExpr g (DotRef l e f) to
   where
     vr         = VarRef $ getAnnotation e
     mkTy m x te t | isTFun t       = F.subst (substFieldSyms g x te) t 
-                  | isImmutable m  = fmap F.top t `strengthen` F.symbolReft (mkFieldB x f)
+                  | isImmutable m  = fmap F.top t `strengthen` F.usymbolReft (mkFieldB x f)
                   | otherwise      = F.subst (substFieldSyms g x te) t
 
 -- | e1[e2]
@@ -1074,13 +1065,17 @@ envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 ----------------------------------------------------------------------------------
 
 -- 1. use @envFindTy@ to get types for the phi-var x in environments g1 AND g2
+--
 -- 2. use @freshTyPhis@ to generate fresh types (and an extended environment with 
 --    the fresh-type bindings) for all the phi-vars using the unrefined types 
---    from step 1.
--- 3. generate subtyping constraints between the types from step 1 and the fresh types
--- 4. return the extended environment.
-
-envJoin' l g g1 g2
+--    from step 1
+--
+-- 3. generate subtyping constraints between the types from step 1 and the fresh
+--    types
+--
+-- 4. return the extended environment
+--
+envJoin' l g g1 g2 
   = do  let (t1s, t2s) = unzip $ catMaybes $ getPhiTypes l g1 g2 <$> xs
 
         -- t1s : the types of the phi vars in the 1st branch 

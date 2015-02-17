@@ -322,7 +322,6 @@ envAddsWithOK doFields ok msg xts g
        zipWithM_         (reftCheck msg g' ok HS.empty) xs ts'
        
        is             <- catMaybes    <$> forM xtas addFixpointBind
-       _              <- forM xtas     $  \(x,(t,_,_)) -> addAnnot x x t
 
        return          $ g' { cge_names = E.envAdds xtas       $ cge_names g'
                             , cge_fenv  = F.insertsIBindEnv is $ cge_fenv  g' }

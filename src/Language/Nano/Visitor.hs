@@ -53,7 +53,7 @@ import           Data.Generics
 import qualified Data.HashSet                   as H
 import           Data.List                      (partition)
 import qualified Data.Map.Strict                as M
-import           Data.Maybe                     (maybeToList, listToMaybe, catMaybes, isJust)
+import           Data.Maybe                     (maybeToList, listToMaybe, isJust)
 import qualified Data.IntMap                    as I
 import           Data.Traversable               (traverse)
 import           Control.Applicative            ((<$>), (<*>))
@@ -720,8 +720,10 @@ fixEnums p@(Nano { code = Src ss, pModules = m })
     tr         = transAnnR f []
     f _ _      = fixEnumInType p
 
-fixEnumInType p (TRef x [] r) | isJust (resolveEnumInPgm p x) = tInt `strengthen` r
-fixEnumInType _ t = t
+fixEnumInType p (TRef x [] r) | Just e <- resolveEnumInPgm p x
+                              = if isBvEnum e then tBV32 `strengthen` r
+                                              else tInt  `strengthen` r
+fixEnumInType _ t             = t
 
 fixEnumsInModule p m@(ModuleDef { m_variables = mv, m_types = mt })
                = m { m_variables = mv', m_types = mt' }

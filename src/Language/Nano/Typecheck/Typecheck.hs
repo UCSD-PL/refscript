@@ -54,7 +54,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
 
--- import           Debug.Trace                        hiding (traceShow)
+import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -227,8 +227,7 @@ tcEnvFindTy            :: (PPRSF r, F.Symbolic x, IsLocated x) => x -> TCEnv r -
 tcEnvFindTy x γ         = fst3 <$> tcEnvFindTyWithAgsn x γ 
 
 tcEnvFindTyWithAgsn    :: (PPRSF r, F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability, Initialization)
-tcEnvFindTyWithAgsn x γ = case -- trace ("lookip for: " ++ ppshow (F.symbol x) ++ " in " ++ ppshow (envKeys $ tce_names γ)) $
-                              envFindTy x $ tce_names γ of 
+tcEnvFindTyWithAgsn x γ = case envFindTy x $ tce_names γ of 
                             Just t -> Just $ adjustInit t
                             Nothing     ->
                               case tce_parent γ of 

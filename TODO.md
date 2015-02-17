@@ -8,6 +8,8 @@ See https://github.com/UCSD-PL/rs-benchmarks
 Tool/Implementation
 -------------------
 
+  - Better error message at 'ziptype l ...' 
+
   - Disallow (buggy): module K.L.M, which can be replaced by 
 
       module K { module L ... }

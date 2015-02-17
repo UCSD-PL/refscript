@@ -464,7 +464,7 @@ var TypeScript;
         HeritageClauses_to_RefScript: "HeritageClauses to RefScript",
         ForInStatementSyntax_to_RsStatement: "ForInStatementSyntax to RsStatement",
         Cannot_translate_type_0_into_RefScript_type: "Cannot translate type '{0}' into RefScript type.",
-        Anonymous_function_cannot_have_more_than_one_type_annotations: "Anonymous function cannot have more than one type annotations.",
+        Anonymous_function_should_have_exactly_one_type_annotation: "Anonymous function should have exactly one type annotation.",
         Import_library_only_enabled_with_refscript: "Import library (only enabled with 'refscript').",
         Constructors_should_have_at_most_one_annotation: "Constructors should have at most one annotation.",
         Methods_should_have_exactly_one_annotation: "Methods should have exactly one annotation.",
@@ -482,7 +482,8 @@ var TypeScript;
         Class_0_needs_to_have_an_explicit_constructor: "Class '{0}' needs to have an explicit constructor.",
         Class_0_extends_other_classes_so_needs_to_have_an_explicit_constructor: "Class '{0}' extends other classes so needs to have an explicit constructor.",
         Constructor_parent_has_not_been_set: "Constructor parent has not been set.",
-        Invalid_enumeration_entry_for_0: "Invalid enumeration entry for '{0}'."
+        Invalid_enumeration_entry_for_0: "Invalid enumeration entry for '{0}'.",
+        RefScript_does_not_support_the_cast_0: "RefScript does not support the cast: '{0}'."
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -2628,7 +2629,7 @@ var TypeScript;
         "HeritageClauses to RefScript": { "code": 8015, "category": 5 /* Unimplemented */ },
         "ForInStatementSyntax to RsStatement": { "code": 8016, "category": 5 /* Unimplemented */ },
         "Cannot translate type '{0}' into RefScript type.": { "code": 8017, "category": 5 /* Unimplemented */ },
-        "Anonymous function cannot have more than one type annotations.": { "code": 8018, "category": 1 /* Error */ },
+        "Anonymous function should have exactly one type annotation.": { "code": 8018, "category": 1 /* Error */ },
         "Import library (only enabled with 'refscript').": { "code": 8019, "category": 2 /* Message */ },
         "Constructors should have at most one annotation.": { "code": 8020, "category": 5 /* Unimplemented */ },
         "Methods should have exactly one annotation.": { "code": 8021, "category": 5 /* Unimplemented */ },
@@ -2646,7 +2647,8 @@ var TypeScript;
         "Class '{0}' needs to have an explicit constructor.": { "code": 8033, "category": 5 /* Unimplemented */ },
         "Class '{0}' extends other classes so needs to have an explicit constructor.": { "code": 8034, "category": 5 /* Unimplemented */ },
         "Constructor parent has not been set.": { "code": 8035, "category": 4 /* Bug */ },
-        "Invalid enumeration entry for '{0}'.": { "code": 8036, "category": 5 /* Unimplemented */ }
+        "Invalid enumeration entry for '{0}'.": { "code": 8036, "category": 5 /* Unimplemented */ },
+        "RefScript does not support the cast: '{0}'.": { "code": 8037, "category": 5 /* Unimplemented */ }
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -9125,6 +9127,7 @@ var TypeScript;
 (function (TypeScript) {
     function tokenAnnots(token, context) {
         var ctx = (context !== undefined) ? context : 3 /* OtherContext */;
+
         var commentTrivia = token.leadingTrivia().toArray().filter(function (t) {
             return t.kind() === 6 /* MultiLineCommentTrivia */;
         });
@@ -10016,7 +10019,6 @@ var TypeScript;
                             } else {
                                 var tRet = ss.returnType.toRsType();
                             }
-
                             return [new TypeScript.RsConsSig(new TypeScript.RsTFun(tParams, tArgs, tRet)).toString()];
                         } else {
                             return anns.map(function (m) {
@@ -16601,7 +16603,12 @@ var TypeScript;
                     break;
                 default:
                     var eltSymbol = helper.getSymbolForAST(this.type);
-                    castType = eltSymbol.type.toRsType(3 /* ParametricK */);
+                    if (eltSymbol && eltSymbol.type) {
+                        castType = eltSymbol.type.toRsType(3 /* ParametricK */);
+                    } else {
+                        castType = TypeScript.TError;
+                        helper.postDiagnostic(this, TypeScript.DiagnosticCode.RefScript_does_not_support_the_cast_0, [this.fullText()]);
+                    }
                     break;
             }
 
@@ -17017,14 +17024,13 @@ var TypeScript;
                 }
             });
 
-            var anns = tokenAnnots(this.block);
+            var anns = TypeScript.ArrayUtilities.concat([tokenAnnots(this.functionKeyword), tokenAnnots(this.block)]);
             var funcAnns = anns.filter(function (a) {
                 return a.kind() === 3 /* RawFunc */;
             });
 
-            if (funcAnns.length === 0) {
-            } else if (funcAnns.length !== 1) {
-                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Anonymous_function_cannot_have_more_than_one_type_annotations);
+            if (funcAnns.length !== 1) {
+                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Anonymous_function_should_have_exactly_one_type_annotation);
             }
 
             return new TypeScript.RsFuncExpr(helper.getSourceSpan(this), anns, this.identifier ? this.identifier.toRsId(helper) : null, new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (p) {

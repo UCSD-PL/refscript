@@ -718,17 +718,19 @@ mkUq                  = zipWith tx ([0..] :: [Int])
 
 stmtTypeBindings _                = go
   where
-    go (FunctionStmt l f _ _)     = [(f, t) | FuncAnn t <- ann_fact l ] ++
-                                    [(f, t) | VarAnn t <- ann_fact l ]
-    go (VarDeclStmt _ vds)        = [(x, t) | VarDecl l x _ <- vds, VarAnn t <- ann_fact l]   
+    go (FunctionStmt l f _ _)     = [(f, t) | FuncAnn t     <- ann_fact l ] ++
+                                    [(f, t) | VarAnn  t     <- ann_fact l ]
+    go (VarDeclStmt _ vds)        = [(x, t) | VarDecl l x _ <- vds
+                                            , VarAnn  t     <- ann_fact l ]
     go _                          = []
 
 celtTypeBindings _                = (mapSnd eltType <$>) . go 
   where
-    go (Constructor l _ _)        = [(x, e) | ConsAnn  e <- ann_fact l, let x = Id l "ctor" ]
-    go (MemberVarDecl l _ x _)    = [(x, e) | FieldAnn e <- ann_fact l] ++ 
-                                    [(x, e) | StatAnn  e <- ann_fact l]
-    go (MemberMethDef l _ x _ _)  = [(x, e) | MethAnn  e <- ann_fact l]
+    go (Constructor l _ _)        = [(x, e) | ConsAnn  e <- ann_fact l
+                                            , let x       = Id l "ctor" ]
+    go (MemberVarDecl l _ x _)    = [(x, e) | FieldAnn e <- ann_fact l  ] ++ 
+                                    [(x, e) | StatAnn  e <- ann_fact l  ]
+    go (MemberMethDef l _ x _ _)  = [(x, e) | MethAnn  e <- ann_fact l  ] 
     go _                          = []
 
 -- debugTyBinds p@(Nano {code = Src ss}) = trace msg p

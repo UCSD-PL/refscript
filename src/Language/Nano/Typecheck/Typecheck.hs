@@ -54,7 +54,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
 
-import           Debug.Trace                        hiding (traceShow)
+-- import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -135,14 +135,10 @@ tcNano p@(Nano {code = Src fs})
 patch :: PPRSF r => [Statement (AnnSSA r)] -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
 patch fs = 
-  do 
-      
-  -- 1. add the up-cast at ssa join points 
-      -- fs'                     <- visitStmtsT vs () fs
-
-      (m,θ)                   <- (,) <$> getAnns <*> getSubst
-      
-  -- 2. patch code with annotations gathered in `m`
+  do  (m,θ)                   <- (,) <$> getAnns <*> getSubst
+      --   
+      -- patch code with annotations gathered in `m`
+      --
       return                   $ (pa m <$>) <$> apply θ <$> fs
   where
     pa m     (Ann i l fs)      = Ann i l $ nub $ fs ++ filter accepted (I.findWithDefault [] i m)
@@ -161,8 +157,7 @@ patch fs =
 -------------------------------------------------------------------------------
 initGlobalEnv :: PPRSF r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
-initGlobalEnv pgm@(Nano { code = Src ss }) = -- trace (ppshow mod) $ trace (ppshow cha) $ 
-                                             TCE nms mod cha ctx pth Nothing
+initGlobalEnv pgm@(Nano { code = Src ss }) = TCE nms mod cha ctx pth Nothing
   where
     reshuffle1 = \(_,_,c,d,e) -> (d,c,e)
     reshuffle2 = \(_,c,d,e)   -> (d,c,e)
@@ -184,7 +179,7 @@ initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod cha ctx pth parent
     tyBinds   = [(tVarId α, (tVar α, ReadOnly, Initialized)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) $ (,WriteLocal, Initialized) <$> ts
     nms       = envAddReturn f (t, ReadOnly, Initialized)
-              $ envAdds  (thisBind ++ tyBinds ++ varBinds ++ args) 
+              $ envAdds (thisBind ++ tyBinds ++ varBinds ++ args) 
               $ envMap (\(_,_,c,d,e) -> (d,c,e)) 
               $ mkVarEnv $ visibleVars s
     mod       = tce_mod γ

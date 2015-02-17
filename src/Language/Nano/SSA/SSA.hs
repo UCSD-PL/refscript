@@ -90,11 +90,11 @@ ssaFun :: Data r => AnnSSA r -> [Var r] -> [Statement (AnnSSA r)] -> SSAM r [Sta
 ssaFun l xs body = do  
     (θ, glbs) <- (,) <$> getSsaEnv <*> getGlobs
     let (ros, wgs, wls) = variablesInScope glbs body
-    withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $   -- Variables from OUTER scope are UNASSIGNABLE
-      withAssignability ReadOnly (unshadow ros)         $ 
-        withAssignability WriteGlobal (unshadow wgs)    $ 
-          withAssignability WriteLocal wls              $ 
-            withAssignability WriteLocal xs             $   -- Also add parameters as SSAed vars 
+    withAssignability ForeignLocal (unshadow $ ssaEnvIds θ) $  -- Variables from OUTER scope are UNASSIGNABLE
+      withAssignability ReadOnly (unshadow ros)             $ 
+        withAssignability WriteGlobal (unshadow wgs)        $ 
+          withAssignability WriteLocal wls                  $ 
+            withAssignability WriteLocal xs                 $  -- Also add parameters as SSAed vars 
         do  arg         <- argId    <$> freshenAnn l
             ret         <- returnId <$> freshenAnn l
             setSsaEnv    $ extSsaEnv (arg: ret : xs) θ      -- Extend SsaEnv with formal binders
@@ -391,10 +391,10 @@ ssaStmt (ClassStmt l n e is bd)
 ssaStmt (ModuleStmt l n body)
   = do  θ <- getSsaEnv
         (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
-        withAssignability ReadOnly (ssaEnvIds θ)   $            -- Variables from OUTER scope are UNASSIGNABLE
-          withAssignability ReadOnly ros        $ 
-            withAssignability WriteGlobal wgs   $ 
-              withAssignability WriteLocal wls  $ 
+        withAssignability ForeignLocal (ssaEnvIds θ)  $            -- Variables from OUTER scope are INACCESSIBLE
+          withAssignability ReadOnly ros              $ 
+            withAssignability WriteGlobal wgs         $ 
+              withAssignability WriteLocal wls        $ 
             do  (_, body')   <- withinModule n (ssaStmts body)  -- Transform function
                 setSsaEnv θ                                     -- Restore Outer SsaEnv
                 return        $ (True, ModuleStmt l n body')
@@ -507,16 +507,16 @@ ssaClassElt :: Data r => ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
 ssaClassElt (Constructor l xs bd)
   = do θ <- getSsaEnv
        (ros, wgs, wls) <- (`variablesInScope` bd) <$> getGlobs
-       withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $    -- Variables from OUTER scope are NON-ASSIGNABLE
-          withAssignability ReadOnly (unshadow ros)        $    -- ReadOnly in scope
-            withAssignability WriteGlobal (unshadow wgs)   $    -- Globals in scope
-              withAssignability WriteLocal wls             $    -- Locals in scope
-                withAssignability WriteLocal xs            $    -- Also add parameters as SSAed vars 
-         do setSsaEnv  $ extSsaEnv xs θ                         -- Extend SsaEnv with formal binders
+       withAssignability ForeignLocal (unshadow $ ssaEnvIds θ) $  -- Variables from OUTER scope are INACCESSIBLE
+          withAssignability ReadOnly (unshadow ros)            $  -- ReadOnly in scope
+            withAssignability WriteGlobal (unshadow wgs)       $  -- Globals in scope
+              withAssignability WriteLocal wls                 $  -- Locals in scope
+                withAssignability WriteLocal xs                $  -- Also add parameters as SSAed vars 
+         do setSsaEnv  $ extSsaEnv xs θ                           -- Extend SsaEnv with formal binders
             fs        <- mapM symToVar =<< allFlds
             (_, bd')  <- ssaStmts =<< (++) <$> bdM fs 
                                            <*> exitM fs
-            setSsaEnv θ                                         -- Restore Outer SsaEnv
+            setSsaEnv θ                                           -- Restore Outer SsaEnv
             return     $ Constructor l xs bd'
   where
     symToVar    = freshenIdSSA . mkId . F.symbolString
@@ -544,11 +544,11 @@ ssaClassElt (MemberVarDecl l True x Nothing)
 ssaClassElt (MemberMethDef l s e xs body) = do 
     θ <- getSsaEnv
     (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
-    withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $       -- Variables from OUTER scope are NON-ASSIGNABLE
-      withAssignability ReadOnly (unshadow ros)         $       -- ReadOnly in scope
-        withAssignability WriteGlobal (unshadow wgs)    $       -- Globals in scope
-          withAssignability WriteLocal wls              $       -- Locals in scope
-            withAssignability WriteLocal xs             $       -- Also add parameters as SSAed vars 
+    withAssignability ForeignLocal (unshadow $ ssaEnvIds θ) $   -- Variables from OUTER scope are INACCESSIBLE
+      withAssignability ReadOnly (unshadow ros)             $   -- ReadOnly in scope
+        withAssignability WriteGlobal (unshadow wgs)        $   -- Globals in scope
+          withAssignability WriteLocal wls                  $   -- Locals in scope
+            withAssignability WriteLocal xs                 $   -- Also add parameters as SSAed vars 
       do  setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ       -- Extend SsaEnv with formal binders
           (_, body')   <- ssaStmts body                         -- Transform function
           setSsaEnv θ                                           -- Restore Outer SsaEnv
@@ -829,14 +829,15 @@ ssaVarRef ::  Data r => AnnSSA r -> Id (AnnSSA r) -> SSAM r (Expression (AnnSSA 
 ------------------------------------------------------------------------------------------
 ssaVarRef l x
   = do getAssignability x >>= \case
-         WriteGlobal -> return e
-         ReadOnly    -> maybe e  (VarRef l) <$> findSsaEnv x
-         WriteLocal  -> findSsaEnv x >>= \case
-             Just t  -> return   $ VarRef l t
-             Nothing -> return   $ VarRef l x -- ssaError $ errorSSAUnboundId (srcPos x) x
-         ImportDecl  -> ssaError $ errorSSAUnboundId (srcPos x) x
-         ReturnVar   -> ssaError $ errorSSAUnboundId (srcPos x) x
-         ThisVar     -> ssaError $ errorSSAUnboundId (srcPos x) x
+         WriteGlobal  -> return e
+         ReadOnly     -> maybe e  (VarRef l) <$> findSsaEnv x
+         WriteLocal   -> findSsaEnv x >>= \case
+             Just t   -> return   $ VarRef l t
+             Nothing  -> return   $ VarRef l x
+         ForeignLocal -> ssaError $ errorForeignLocal (srcPos x) x
+         ImportDecl   -> ssaError $ errorSSAUnboundId (srcPos x) x
+         ReturnVar    -> ssaError $ errorSSAUnboundId (srcPos x) x
+         ThisVar      -> ssaError $ errorSSAUnboundId (srcPos x) x
     where
        e = VarRef l x
  

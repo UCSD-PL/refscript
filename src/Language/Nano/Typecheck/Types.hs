@@ -660,12 +660,13 @@ instance PP StaticKind where
   pp InstanceMember = text ""
 
 instance PP Assignability where
-  pp ReadOnly    = text "ReadOnly"
-  pp WriteLocal  = text "WriteLocal"
-  pp WriteGlobal = text "WriteGlobal"
-  pp ImportDecl  = text "ImportDecl"
-  pp ReturnVar   = text "ReturnVar"
-  pp ThisVar     = text "ThisVar"
+  pp ReadOnly     = text "ReadOnly"
+  pp WriteLocal   = text "WriteLocal"
+  pp ForeignLocal = text "ForeignLocal"
+  pp WriteGlobal  = text "WriteGlobal"
+  pp ImportDecl   = text "ImportDecl"
+  pp ReturnVar    = text "ReturnVar"
+  pp ThisVar      = text "ThisVar"
 
 instance PP IfaceKind where
   pp ClassKind      = pp "class" 

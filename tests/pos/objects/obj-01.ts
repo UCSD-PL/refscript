@@ -3,7 +3,7 @@
 
 function inc(n: number) { return n + 1; }
 
-var x = { f: inc };
+var /*@ readonly */ x = { f: inc };
 
 /*@ foo :: () => { number | v = 6 } */
 function foo() :number {

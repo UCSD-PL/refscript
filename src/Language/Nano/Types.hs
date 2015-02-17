@@ -355,6 +355,11 @@ data Assignability
   --
   | WriteLocal  
   -- 
+  -- ^ Local but not in current scope.
+  -- ^ Cannot appear in refinements, cannot be read at SSA
+  --
+  | ForeignLocal
+  -- 
   -- ^ Written in non-local-scope, cannot do SSA
   -- ^ CANNOT appear in refinements
   --

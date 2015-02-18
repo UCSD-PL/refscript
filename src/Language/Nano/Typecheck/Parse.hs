@@ -492,6 +492,7 @@ data RawSpec
   | RawInvt     (SourceSpan, String)   -- Invariants
   | RawCast     (SourceSpan, String)   -- Casts
   | RawExported (SourceSpan, String)   -- Exported
+  | RawReadOnly (SourceSpan, String)   -- ReadOnly
   deriving (Show,Eq,Ord,Data,Typeable,Generic)
 
 data PSpec l r
@@ -512,6 +513,7 @@ data PSpec l r
   | Invt    l (RTypeQ RK r) 
   | CastSp  l (RTypeQ RK r)
   | Exported l
+  | RdOnly l
 
   -- Used only for parsing specs
   | ErrorSpec
@@ -538,6 +540,7 @@ parseAnnot = go
     go (RawInvt     (ss, _)) = Invt               ss <$> bareTypeP
     go (RawCast     (ss, _)) = CastSp             ss <$> bareTypeP
     go (RawExported (ss, _)) = return  $ Exported ss
+    go (RawReadOnly (ss, _)) = return  $ RdOnly ss
 
 
 patch2 ss (id, t)    = (fmap (const ss) id , t)
@@ -561,6 +564,7 @@ getSpecString = go
     go (RawInvt     (_, s)) = s  
     go (RawCast     (_, s)) = s  
     go (RawExported (_, s)) = s  
+    go (RawReadOnly (_, s)) = s  
 
 instance IsLocated RawSpec where
   srcPos (RawMeas     (s,_)) = s 
@@ -579,6 +583,7 @@ instance IsLocated RawSpec where
   srcPos (RawInvt     (s,_)) = s  
   srcPos (RawCast     (s,_)) = s  
   srcPos (RawExported (s,_)) = s  
+  srcPos (RawReadOnly (s,_)) = s  
 
 
 instance FromJSON SourcePos where
@@ -699,6 +704,7 @@ extractFact = go
     go (Iface   (_,t)) = Just $ IfaceAnn  t
     go (CastSp  _ t  ) = Just $ UserCast  t
     go (Exported  _  ) = Just $ ExportedElt
+    go (RdOnly  _    ) = Just $ ReadOnlyVar
     go (AnFunc  t    ) = Just $ FuncAnn   t
     go _               = Nothing
 

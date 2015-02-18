@@ -465,7 +465,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
        return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
 -- e1.f = e2
-tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
+tcStmt γ e@(ExprStmt l (AssignExpr l2 OpAssign r@(LDot l1 e1 f) e2))
   = do z               <- runFailM ( tcExpr γ e1 Nothing )
        case z of 
          Right (_,te1) -> tcSetProp $ fmap snd3 $ getProp γ FieldAccess f te1
@@ -843,13 +843,10 @@ tcCall γ (InfixExpr l o e1 e2)
 --   Special case for Enumeration, and object literals with numeric or 
 --   string arguments. 
 --
-tcCall γ (BracketRef l e1 e2)
+tcCall γ e@(BracketRef l e1 e2)
   = runFailM (tcExpr γ e1 Nothing) >>= \case
       -- Enumeration
-      Right (_, TEnum n) -> 
-          case resolveEnumInEnv γ n of
-            Just ed -> call (rTop $ enumTy ed)
-            _       -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
+      Right (_, TEnum _) -> tcError $ unimplemented (srcPos l) msg e
       -- Object literal
       Right (_, TCons _ _ _) -> 
           case e2 of
@@ -859,6 +856,7 @@ tcCall γ (BracketRef l e1 e2)
       -- Default
       _ -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
   where 
+    msg     = "Support for dynamic access of enumerations"
     call ty = tcNormalCall γ l BIBracketRef 
                 (FI Nothing [(e1, Nothing), (e2, Nothing)]) ty >>= \case
           (FI _ [e1', e2'], t) -> return (BracketRef l e1' e2', t)

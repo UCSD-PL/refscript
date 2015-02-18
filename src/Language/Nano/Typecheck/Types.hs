@@ -66,7 +66,7 @@ module Language.Nano.Typecheck.Types (
   , arrayLitTy
   , objLitTy
   , setPropTy
-  , enumTy
+  -- , enumTy
 
   -- * Builtin: Binders
   , mkId, argId, argTy, returnTy
@@ -885,15 +885,10 @@ immObjectLitTy l _ ps ts
                          | (p,t) <- safeZip "immObjectLitTy" ps ts, let s = F.symbol p ]
     nps              = length ps
 
--- FIXME: the bounds check is not valid any more ...
---
--- ({ v: number |  (v = k1) \/ (v = k2) \/ ... }) => ... // for all the known keys
---
---
----------------------------------------------------------------------------------
-enumTy :: EnumDef -> RType F.Reft
----------------------------------------------------------------------------------
-enumTy (EnumDef _ _) = error "enumTy"  -- TAll a $ TFun Nothing [a',b] ot fTop
+-- ---------------------------------------------------------------------------------
+-- enumTy :: EnumDef -> RType F.Reft
+-- ---------------------------------------------------------------------------------
+-- enumTy (EnumDef _ _) = error "enumTy"  -- TAll a $ TFun Nothing [a',b] ot fTop
 --   where
 --     a        = TV (F.symbol "A") (srcPos dummySpan)
 --     a'       = B x0 (tVar a)

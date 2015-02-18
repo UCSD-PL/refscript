@@ -27,7 +27,7 @@ module Language.Nano.Liquid.CGMonad (
   , cgError      
 
   -- * Fresh Templates for Unknown Refinement Types 
-  , freshTyFun, freshTyVar, freshTyInst, freshTyPhis, freshTyPhis'
+  , freshTyFun, freshenType, freshTyInst, freshTyPhis, freshTyPhis'
   , freshTyObj, freshenCGEnvM
 
   -- * Freshable
@@ -620,9 +620,16 @@ freshTyFun g l t
   | isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= {- addInvariant g >>= -} wellFormed l g
   | otherwise          = return t
 
-freshTyVar g l t 
-  | isTrivialRefType t = freshTy "freshTyVar" (toType t) >>= wellFormed l g
+
+freshenType WriteGlobal g l t 
+  | isTrivialRefType t = freshTy "freshenType-WG" (toType t) >>= wellFormed l g
   | otherwise          = return t
+
+freshenType _ g l t 
+  | not (isTFun t)     = return t   
+  | isTrivialRefType t = freshTy "freshenType-RO" (toType t) >>= wellFormed l g
+  | otherwise          = return t
+
 
 -- | Instantiate Fresh Type (at Call-site)
 freshTyInst l g αs τs tbody
@@ -666,13 +673,13 @@ freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g
 freshenCGEnvM :: CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 freshenCGEnvM g  
-  = do  names   <- E.envFromList  <$> mapM (freshenVarbindingM g) (E.envToList  $ cge_names g)
+  = do  names   <- E.envFromList  <$> mapM (go g) (E.envToList  $ cge_names g)
         modules <- E.qenvFromList <$> mapM (freshenModuleDefM g) (E.qenvToList $ cge_mod g)
         return $ g { cge_names = names, cge_mod = modules } 
-
-freshenVarbindingM _ (x, (v@(TVar{}),a,i)) = return (x,(v,a,i))
-freshenVarbindingM g (x, (t,ReadOnly,i)  ) = (x,) . (,ReadOnly,i) <$> freshTyVar g (srcPos x) t
-freshenVarbindingM _ (x, (t,a,i)         ) = return (x,(t,a,i))
+  where
+    go _ (x, (v@(TVar{}),a,i)) = return (x,(v,a,i))
+    go g (x, (t,ReadOnly,i)  ) = (x,) . (,ReadOnly,i) <$> freshenType ReadOnly g (srcPos x) t
+    go _ (x, (t,a,i)         ) = return (x,(t,a,i))
 
 freshenModuleDefM g (a, m)
   = do  vars     <- E.envFromList <$> mapM f (E.envToList $ m_variables m)
@@ -681,7 +688,7 @@ freshenModuleDefM g (a, m)
   where
     f (x, (v,w,t,i)) =
       case w of
-        ReadOnly   -> do  ft    <- freshTyVar g x t 
+        ReadOnly   -> do  ft    <- freshenType ReadOnly g x t 
                           return   (x, (v, w, ft,i))
         _          -> return (x,(v,w,t,i))
 

@@ -289,7 +289,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
       opTy      <- setPropTy l (F.symbol f) <$> safeEnvFindTy (builtinOpId BISetProp) g'
       fmap snd <$> consCall g' l BISetProp (FI Nothing [(vr x1, Nothing),(e2, rhsCtx)]) opTy
   where
-      vr = VarRef $ getAnnotation e1
+      vr         = VarRef $ getAnnotation e1
    
 -- e
 consStmt g (ExprStmt _ e) 
@@ -396,7 +396,7 @@ consVarDecl g v@(VarDecl l x (Just e))
       -- WriteGlobal
       [(_,t)] -> mseq (consExpr g e $ Just t) $ \(y, gy) -> do
                   ty      <- safeEnvFindTy y gy
-                  fta     <- freshTyVar gy l t
+                  fta     <- freshenType WriteGlobal gy l t
                   _       <- subType l (errorLiquid' l) gy ty  fta
                   _       <- subType l (errorLiquid' l) gy fta t
                   Just   <$> envAdd x (fta, WriteGlobal,Initialized) g
@@ -539,7 +539,7 @@ consAsgn l g x e =
   case envFindTyForAsgn x g of 
     -- This is the first time we initialize this variable
     Just (t, WriteGlobal, Uninitialized) ->
-      do  t' <- freshTyVar g l t
+      do  t' <- freshenType WriteGlobal g l t
           mseq (consExprT l g e $ Just t') $ \(_, g') -> do
             g'' <- envAdds "consAsgn-0" [(x,(t', WriteGlobal, Initialized))] g'
             return $ Just g''
@@ -719,16 +719,15 @@ consExpr g (DotRef l e f) to
                   | otherwise      = F.subst (substFieldSyms g x te) t
 
 -- | e1[e2]
-consExpr g (BracketRef l e1 e2) _
+consExpr g e@(BracketRef l e1 e2) _
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
       opTy <- do  safeEnvFindTy x1 g' >>= \case 
-                    TEnum n -> case resolveEnumInEnv g' n of
-                                 Just ed -> return $ enumTy ed
-                                 _       -> safeEnvFindTy (builtinOpId BIBracketRef) g'
+                    TEnum n -> cgError $ unimplemented (srcPos l) msg e
                     _       -> safeEnvFindTy (builtinOpId BIBracketRef) g'
       consCall g' l BIBracketRef (FI Nothing ((,Nothing) <$> [vr x1, e2])) opTy
   where
-    vr = VarRef $ getAnnotation e1
+    msg = "Support for dynamic access of enumerations"
+    vr  = VarRef $ getAnnotation e1
 
 -- | e1[e2] = e3
 consExpr g (AssignExpr l OpAssign (LBracket _ e1 e2) e3) _

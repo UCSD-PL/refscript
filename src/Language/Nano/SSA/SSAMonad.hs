@@ -20,7 +20,7 @@ module Language.Nano.SSA.SSAMonad (
    -- * SSA Environment
    , SsaEnv
    , names
-   , updSsaEnv, updSsaEnv'
+   , initSsaEnv, updSsaEnv, updSsaEnv'
    , freshenAnn
    , freshenIdSSA
    , findSsaEnv
@@ -74,7 +74,6 @@ import           Language.Fixpoint.Errors
 type SSAM r     = ExceptT Error (State (SsaState r))
 
 data SsaState r = SsaST { 
-  
   -- 
   -- ^ Program
   --
@@ -123,17 +122,6 @@ data SsaState r = SsaST {
 
 type SsaEnv r     = Env (SsaInfo r)
 
-
--- -------------------------------------------------------------------------------------
--- withExtSsaEnv    :: [Var] -> SSAM r a -> SSAM r a
--- -------------------------------------------------------------------------------------
--- withExtSsaEnv xs act 
---   = do θ      <- getSsaEnv 
---        let θ'  = envAdds [(x, SI x) | x <- xs] θ
---        modify  $ \st -> st { names = θ' } 
---        r      <- act
---        modify  $ \st -> st { names = θ }
---        return  r
 
 -------------------------------------------------------------------------------------
 extSsaEnv    :: [Var r] -> SsaEnv r -> SsaEnv r
@@ -214,19 +202,27 @@ getAssignability x = fromMaybe WriteLocal . envFindTy x . assign <$> get
 
 
 -------------------------------------------------------------------------------------
+initSsaEnv   :: AnnSSA r -> Var r -> SSAM r (Var r)
+-------------------------------------------------------------------------------------
+initSsaEnv ll x       = getAssignability x >>= go
+  where 
+    go m@ReadOnly     = return x
+    go _              = updSsaEnv ll x
+    l                 = srcPos ll
+
+-------------------------------------------------------------------------------------
 updSsaEnv   :: AnnSSA r -> Var r -> SSAM r (Var r)
 -------------------------------------------------------------------------------------
-updSsaEnv ll x 
-  = do mut <- getAssignability x
-       case mut of
-         WriteLocal  -> updSsaEnvLocal ll x
-         WriteGlobal -> updSsaEnvGlobal ll x
-         ReadOnly    -> ssaError $ errorWriteImmutable l x 
-         ReturnVar   -> ssaError $ errorWriteImmutable l x 
-         ThisVar     -> ssaError $ errorWriteImmutable l x 
-         ImportDecl  -> ssaError $ errorWriteImmutable l x 
-  where
-    l = srcPos ll
+updSsaEnv ll x        = getAssignability x >>= go
+  where 
+    go   WriteLocal   = updSsaEnvLocal ll x
+    go   WriteGlobal  = updSsaEnvGlobal ll x
+    go m@ForeignLocal = ssaError $ errorWriteImmutable l m x 
+    go m@ReadOnly     = ssaError $ errorWriteImmutable l m x 
+    go m@ReturnVar    = ssaError $ errorWriteImmutable l m x 
+    go m@ThisVar      = ssaError $ errorWriteImmutable l m x 
+    go m@ImportDecl   = ssaError $ errorWriteImmutable l m x 
+    l                 = srcPos ll
 
 updSsaEnv' l x = (,) <$> getAssignability x <*> updSsaEnv l x
 

@@ -142,6 +142,7 @@ data FactQ q r
   | IfaceAnn    !(IfaceDefQ q r)
   | ClassAnn    !(ClassSigQ q r)
   | ExportedElt
+  | ReadOnlyVar
   | ModuleAnn   !(F.Symbol)
   | EnumAnn     !(F.Symbol)
     deriving (Eq, Show, Data, Typeable)

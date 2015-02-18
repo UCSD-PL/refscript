@@ -61,8 +61,8 @@ ssaNano :: Data r => NanoBareR r -> SSAM r (NanoSSAR r)
 ssaNano p@(Nano { code = Src fs })
   = do setGlobs $ allGlobs
        setMeas  $ S.fromList $ F.symbol <$> envIds (consts p)
-       withAssignability ReadOnly ros         $ 
-         withAssignability WriteLocal wls     $ 
+       withAssignability     ReadOnly    ros  $ 
+         withAssignability   WriteLocal  wls  $ 
            withAssignability WriteGlobal wgs  $ 
             do  (_,fs')  <- ssaStmts fs
                 ssaAnns  <- getAnns
@@ -76,31 +76,44 @@ ssaNano p@(Nano { code = Src fs })
 
 
 ---------------------------------------------------------------------------------------
-variablesInScope :: Data r => I.IntSet -> [Statement (AnnSSA r)] -> ([Var r], [Var r], [Var r])
+variablesInScope :: Data r 
+                 => I.IntSet 
+                 -> [Statement (AnnSSA r)] 
+                 -> ([Var r], [Var r], [Var r])
 ---------------------------------------------------------------------------------------
-variablesInScope gs fs = (ros, wgs, wls)
+variablesInScope gs fs = (rvs ++ ros, wgs, wls)
   where
-    vs            = hoistVarDecls fs
-    (wgs, wls)    = L.partition ((`I.member` gs) . ann_id . getAnnotation) vs 
-    ros           = hoistReadOnly fs
+    -- 
+    -- * (explicitly annotated) readonly * writeable
+    -- 
+    (rvs, wvs) = hoistVarDecls fs
+    --
+    -- write-globals * write-locals
+    --
+    (wgs, wls) = L.partition ((`I.member` gs) . ann_id . getAnnotation) wvs
+    --
+    -- (implicit) readonly
+    --
+    ros        = hoistReadOnly fs
 
 -------------------------------------------------------------------------------------
 ssaFun :: Data r => AnnSSA r -> [Var r] -> [Statement (AnnSSA r)] -> SSAM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------------
-ssaFun l xs body = do  
-    (θ, glbs) <- (,) <$> getSsaEnv <*> getGlobs
-    let (ros, wgs, wls) = variablesInScope glbs body
-    withAssignability ForeignLocal (unshadow $ ssaEnvIds θ) $  -- Variables from OUTER scope are UNASSIGNABLE
-      withAssignability ReadOnly (unshadow ros)             $ 
-        withAssignability WriteGlobal (unshadow wgs)        $ 
-          withAssignability WriteLocal wls                  $ 
-            withAssignability WriteLocal xs                 $  -- Also add parameters as SSAed vars 
-        do  arg         <- argId    <$> freshenAnn l
-            ret         <- returnId <$> freshenAnn l
-            setSsaEnv    $ extSsaEnv (arg: ret : xs) θ      -- Extend SsaEnv with formal binders
-            (_, body')  <- ssaStmts body                    -- Transform function
-            setSsaEnv θ                                     -- Restore Outer SsaEnv
-            return        $ body'
+ssaFun l xs body
+  = do  (θ, gs) <- (,) <$> getSsaEnv <*> getGlobs
+        let (ros, wgs, wls) = variablesInScope gs body
+        let _ = [ () | (k,i) <- envToList θ ]
+        withAssignability         ForeignLocal (unshadow $ ssaEnvIds θ) $ 
+          withAssignability       ReadOnly     (unshadow $ ros)         $ 
+            withAssignability     WriteGlobal  (unshadow wgs)           $ 
+              withAssignability   WriteLocal   wls                      $ 
+                withAssignability WriteLocal   xs                       $ 
+            do  arg         <- argId    <$> freshenAnn l
+                ret         <- returnId <$> freshenAnn l
+                setSsaEnv    $ extSsaEnv (arg: ret : xs) θ      -- Extend SsaEnv with formal binders
+                (_, body')  <- ssaStmts body                    -- Transform function
+                setSsaEnv θ                                     -- Restore Outer SsaEnv
+                return        $ body'
   where
     unshadow gs = L.deleteFirstsBy (on (==) unId) (fmap srcPos <$> gs) (fmap srcPos <$> xs)
 
@@ -160,29 +173,26 @@ ssaStmt (IfSingleStmt l b s)
   = ssaStmt (IfStmt l b s (EmptyStmt l))
 
 -- if b { s1 } else { s2 }
-ssaStmt (IfStmt l e s1 s2) = do
-    (se, e')     <- ssaExpr e
-    θ            <- getSsaEnv
-    φ            <- getSsaEnvGlob
-    (θ1, s1')    <- ssaWith θ φ ssaStmt s1
-    (θ2, s2')    <- ssaWith θ φ ssaStmt s2
-    (phis, θ', φ1, φ2) <- envJoin l θ1 θ2
-    case θ' of 
-      Just θ''   -> do  setSsaEnv     $ θ''
-                        latest       <- catMaybes <$> mapM findSsaEnv phis
-                        new          <- mapM (updSsaEnv l) phis
-                        addAnn l      $ PhiPost $ zip3 phis latest new 
-                        let stmt'     = prefixStmt l se
-                                      $ IfStmt l e' (splice s1' φ1) (splice s2' φ2)
-                        return        $ (True,  stmt')
-      Nothing    ->     let stmt'     = prefixStmt l se
-                                      $ IfStmt l e' (splice s1' φ1) (splice s2' φ2) in
-                        return (False, stmt')
+ssaStmt (IfStmt l e s1 s2) 
+  = do  (se, e')     <- ssaExpr e
+        θ            <- getSsaEnv
+        φ            <- getSsaEnvGlob
+        (θ1, s1')    <- ssaWith θ φ ssaStmt s1
+        (θ2, s2')    <- ssaWith θ φ ssaStmt s2
+        (phis, θ', φ1, φ2) <- envJoin l θ1 θ2
+        case θ' of 
+          Just θ''   -> do  setSsaEnv     $ θ''
+                            latest       <- catMaybes <$> mapM findSsaEnv phis
+                            new          <- mapM (updSsaEnv l) phis
+                            addAnn l      $ PhiPost $ zip3 phis latest new 
+                            let stmt'     = prefixStmt l se
+                                          $ IfStmt l e' (splice s1' φ1) (splice s2' φ2)
+                            return        $ (True,  stmt')
+          Nothing    ->     let stmt'     = prefixStmt l se
+                                          $ IfStmt l e' (splice s1' φ1) (splice s2' φ2) in
+                            return (False, stmt')
   {- where
     dbg (Just θ) = trace ("SSA ENV: " ++ ppshow θ) (Just θ) -}
-
-
-
 
 -- 
 -- | while c { b }
@@ -201,22 +211,21 @@ ssaStmt (IfStmt l e s1 s2) = do
 -- 
 ssaStmt (WhileStmt l cnd body)
   = do  (xs, x0s)         <- unzip . map (\(x, (SI xo,_)) -> (x, xo)) <$> getLoopPhis body
-
         xs'               <- mapM freshenIdSSA xs
         as                <- mapM getAssignability xs'
         let (l1s, l0s,_)  = unzip3 $ filter ((== WriteLocal) . thd3) (zip3 xs' x0s as)
-
+        -- 
         -- SSA only the WriteLocal variables - globals will remain the same.
-       
+        -- 
         l1s'              <- mapM (updSsaEnv l) l1s
         θ1                <- getSsaEnv
         (sc, cnd')        <- ssaExpr cnd
         when (not $ null sc) (ssaError $ errorUpdateInExpr (srcPos l) cnd)
         (t, body')        <- ssaStmt body
         θ2                <- getSsaEnv
-
+        -- 
         -- SSA only the WriteLocal variables - globals will remain the same.
-       
+        -- 
         let l2s            = [ x2 | (Just (SI x2), WriteLocal) <- mapFst (`envFindTy` θ2) <$> zip xs as ]
         addAnn l           $ PhiVar l1s'
         setSsaEnv          $ θ1
@@ -227,7 +236,6 @@ ssaStmt (WhileStmt l cnd body)
     where
         asgn _  [] _       = Nothing
         asgn l' ls rs      = Just $ BlockStmt l' $ zipWith (mkPhiAsgn l') ls rs
-
 
 ssaStmt (ForStmt _  NoInit _ _ _ )     =
     errorstar "unimplemented: ssaStmt-for-01"
@@ -391,10 +399,10 @@ ssaStmt (ClassStmt l n e is bd)
 ssaStmt (ModuleStmt l n body)
   = do  θ <- getSsaEnv
         (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
-        withAssignability ForeignLocal (ssaEnvIds θ)  $            -- Variables from OUTER scope are INACCESSIBLE
-          withAssignability ReadOnly ros              $ 
-            withAssignability WriteGlobal wgs         $ 
-              withAssignability WriteLocal wls        $ 
+        withAssignability       ForeignLocal (ssaEnvIds θ) $ 
+          withAssignability     ReadOnly     ros           $ 
+            withAssignability   WriteGlobal  wgs           $ 
+              withAssignability WriteLocal   wls           $ 
             do  (_, body')   <- withinModule n (ssaStmts body)  -- Transform function
                 setSsaEnv θ                                     -- Restore Outer SsaEnv
                 return        $ (True, ModuleStmt l n body')
@@ -507,16 +515,16 @@ ssaClassElt :: Data r => ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
 ssaClassElt (Constructor l xs bd)
   = do θ <- getSsaEnv
        (ros, wgs, wls) <- (`variablesInScope` bd) <$> getGlobs
-       withAssignability ForeignLocal (unshadow $ ssaEnvIds θ) $  -- Variables from OUTER scope are INACCESSIBLE
-          withAssignability ReadOnly (unshadow ros)            $  -- ReadOnly in scope
-            withAssignability WriteGlobal (unshadow wgs)       $  -- Globals in scope
-              withAssignability WriteLocal wls                 $  -- Locals in scope
-                withAssignability WriteLocal xs                $  -- Also add parameters as SSAed vars 
-         do setSsaEnv  $ extSsaEnv xs θ                           -- Extend SsaEnv with formal binders
+       withAssignability          ForeignLocal (unshadow $ ssaEnvIds θ) $  -- Variables from OUTER scope are INACCESSIBLE
+          withAssignability       ReadOnly     (unshadow ros)           $  -- ReadOnly in scope
+            withAssignability     WriteGlobal  (unshadow wgs)           $  -- Globals in scope
+              withAssignability   WriteLocal   wls                      $  -- Locals in scope
+                withAssignability WriteLocal   xs                       $  -- Also add parameters as SSAed vars 
+         do setSsaEnv  $ extSsaEnv xs θ                        -- Extend SsaEnv with formal binders
             fs        <- mapM symToVar =<< allFlds
             (_, bd')  <- ssaStmts =<< (++) <$> bdM fs 
                                            <*> exitM fs
-            setSsaEnv θ                                           -- Restore Outer SsaEnv
+            setSsaEnv θ                                        -- Restore Outer SsaEnv
             return     $ Constructor l xs bd'
   where
     symToVar    = freshenIdSSA . mkId . F.symbolString
@@ -762,7 +770,7 @@ ssaLval (LBracket ll e1 e2)
 -- | Helpers for gathering assignments for purifying effectful-expressions
 --------------------------------------------------------------------------
  
-ssaExprs f es       = (concat *** f) . unzip <$> mapM ssaExpr es
+ssaExprs f es = (concat *** f) . unzip <$> mapM ssaExpr es
 
 ssaExpr1 = case1 ssaExprs 
 ssaExpr2 = case2 ssaExprs 
@@ -817,7 +825,10 @@ ssaVarDecl :: Data r
            -> SSAM r ([Statement (AnnSSA r)], VarDecl (AnnSSA r))
 -------------------------------------------------------------------------------------
 ssaVarDecl (VarDecl l x (Just e)) = do
-    (s, x', e') <- ssaAsgn l x e
+
+    (s, e') <- ssaExpr e
+    x'      <- initSsaEnv l x
+
     return    (s, VarDecl l x' (Just e'))
 
 ssaVarDecl (VarDecl l x Nothing) = do

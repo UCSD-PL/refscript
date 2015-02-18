@@ -1,17 +1,17 @@
 
-var bar = function (x: number): number
-/*@ <anonymous> (x:number) => {number | v = x + 1} */
-{
-  return x + 1;
-}
+var bar /*@ readonly */ = 
+  function (x: number): number
+  /*@ <anonymous> (x:number) => {number | v = x + 1} */
+  { return x + 1; }
 
-var foo = function (x: number): number
-/*@ <anonymous> (x:number) => {number | v = x + 2} */
-{
-  var a = bar(x);
-  var b = bar(a);
-  return b;
-}
+var foo /*@ readonly */ = 
+  function (x: number): number
+  /*@ <anonymous> (x:number) => {number | v = x + 2} */
+  {
+    var a = bar(x);
+    var b = bar(a);
+    return b;
+  }
 
 var baz = foo;
 assert(bar(1) === 2);

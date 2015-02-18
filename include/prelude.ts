@@ -95,6 +95,7 @@ declare function builtin_OpGEq(a: any, b: any): boolean;
 
 /*@ builtin_OpAdd :: 
     /\ (x:number, y:number) => {number | v = x + y}
+    /\ (x:bitvector32, y:bitvector32) => { bitvector32 | true }
     /\ (x:number, y:string) => {string | true}
     /\ (x:string, y:number) => {string | true}
     /\ (x:string, y:string) => {string | true}

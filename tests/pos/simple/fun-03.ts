@@ -1,4 +1,6 @@
-/*@ foo1 :: (x:number) => () => { undefined | true } */
-function foo1(x:number) {
-  return function() { return undefined }
+
+/*@ foo :: (x:number) => () => { undefined | true } */
+function foo(x:number) {
+  var f = /*@ <anonymous> () => undefined */ function() { return undefined }
+  return f;
 }

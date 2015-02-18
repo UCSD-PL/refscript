@@ -1,3 +1,4 @@
+
 /*@ minIndex :: (a: IArray<number>) => {number | true} */
 function minIndex(a){
   

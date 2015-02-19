@@ -720,7 +720,7 @@ consExpr g (DotRef l e f) to
   where
     vr         = VarRef $ getAnnotation e
     mkTy m x te t | isTFun t       = F.subst (substFieldSyms g x te) t 
-                  | isImmutable m  = fmap F.top t `strengthen` F.usymbolReft (mkFieldB x f)
+                  | isImmutable m  = fmap F.top t `strengthen` F.symbolReft (mkFieldB x f)
                   | otherwise      = F.subst (substFieldSyms g x te) t
 
 -- | e1[e2]

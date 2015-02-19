@@ -13,7 +13,6 @@ import           Control.Applicative                ((<$>))
 import           Data.Hashable
 import           Data.Default
 import           Data.Monoid
-import qualified Data.IntMap                     as I
 import           Data.Function                      (on)
 import qualified Data.Map.Strict                 as M
 import           Data.Typeable                      (Typeable)

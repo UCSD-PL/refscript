@@ -64,7 +64,7 @@ import           Control.Monad.State
 import           Control.Monad.Trans.Except
 
 import           Data.Maybe                     (catMaybes, maybeToList)
-import           Data.Monoid                    (mempty, mconcat)
+import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map.Strict                as M
 import qualified Data.List                      as L
@@ -295,8 +295,6 @@ envAdds :: (IsLocated x, F.Symbolic x, PP x, PP [x])
 ---------------------------------------------------------------------------------------
 envAdds = envAddsWithOK True HS.empty
 
-envAddsNoFields = envAddsWithOK False HS.empty
-
 
 -- | No binders for WriteGlobal variables as they cannot appear in refinements.
 --
@@ -376,19 +374,17 @@ addObjectFieldsWithOK :: (IsLocated x, F.Symbolic x, PP x, PP [x])
                       -> (x,Assignability,RefType) 
                       -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-addObjectFieldsWithOK False ok g (x,a,t) = return g
+addObjectFieldsWithOK False _ g _ = return g
 addObjectFieldsWithOK True  ok g (x,a,t) 
               | a `elem` [WriteGlobal,ReturnVar] 
               = return g
               | otherwise
               = envAddsWithOK False ok "addObjectFieldsWithOK" xts g
   where
-    xts       = [(fd f, ty f tf) | FieldSig f _ m tf <- ms, isImmutable m ]
+    xts       = [(fd f, ty tf) | FieldSig f _ m tf <- ms, isImmutable m ]
 
     fd        = mkFieldB x 
-    ty f tf   = (F.subst (substFieldSyms g x t) tf, a, Initialized)
-
-    sub       = F.subst $ substFieldSyms g x t
+    ty tf     = (F.subst (substFieldSyms g x t) tf, a, Initialized)
 
     ms        | Just (TCons m ms _) <- flattenType g t = defMut m <$> M.elems ms
               | otherwise                              = []

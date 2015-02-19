@@ -56,7 +56,7 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 -- import           Text.PrettyPrint.HughesPJ 
 -- import qualified Data.Foldable                      as FO
 
@@ -720,14 +720,14 @@ consExpr g (DotRef l e f) to
   where
     vr         = VarRef $ getAnnotation e
     mkTy m x te t | isTFun t       = F.subst (substFieldSyms g x te) t 
-                  | isImmutable m  = fmap F.top t `strengthen` F.symbolReft (mkFieldB x f)
+                  | isImmutable m  = fmap F.top t `strengthen` F.usymbolReft (mkFieldB x f)
                   | otherwise      = F.subst (substFieldSyms g x te) t
 
 -- | e1[e2]
 consExpr g e@(BracketRef l e1 e2) _
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
       opTy <- do  safeEnvFindTy x1 g' >>= \case 
-                    TEnum n -> cgError $ unimplemented (srcPos l) msg e
+                    TEnum _ -> cgError $ unimplemented (srcPos l) msg e
                     _       -> safeEnvFindTy (builtinOpId BIBracketRef) g'
       consCall g' l BIBracketRef (FI Nothing ((,Nothing) <$> [vr x1, e2])) opTy
   where

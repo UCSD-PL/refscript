@@ -102,7 +102,6 @@ ssaFun :: Data r => AnnSSA r -> [Var r] -> [Statement (AnnSSA r)] -> SSAM r [Sta
 ssaFun l xs body
   = do  (θ, gs) <- (,) <$> getSsaEnv <*> getGlobs
         let (ros, wgs, wls) = variablesInScope gs body
-        let _ = [ () | (k,i) <- envToList θ ]
         withAssignability         ForeignLocal (unshadow $ ssaEnvIds θ) $ 
           withAssignability       ReadOnly     (unshadow $ ros)         $ 
             withAssignability     WriteGlobal  (unshadow wgs)           $ 

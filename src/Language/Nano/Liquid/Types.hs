@@ -62,7 +62,6 @@ module Language.Nano.Liquid.Types (
 
 import           Data.Maybe              (fromMaybe, catMaybes, maybeToList)
 import qualified Data.List               as L
-import           Data.Bits               ((.&.))
 import qualified Data.HashMap.Strict     as HM
 import qualified Data.Map.Strict         as M
 -- import qualified Data.HashSet            as S

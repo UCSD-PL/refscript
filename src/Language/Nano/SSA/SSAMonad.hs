@@ -220,7 +220,6 @@ updSsaEnv ll x        = getAssignability x >>= go
     go m@ForeignLocal = ssaError $ errorWriteImmutable l m x 
     go m@ReadOnly     = ssaError $ errorWriteImmutable l m x 
     go m@ReturnVar    = ssaError $ errorWriteImmutable l m x 
-    go m@ThisVar      = ssaError $ errorWriteImmutable l m x 
     go m@ImportDecl   = ssaError $ errorWriteImmutable l m x 
     l                 = srcPos ll
 

@@ -1,9 +1,10 @@
 
-
 class Animal {
-  /*@ kind : [Immutable] { v: string | [(v = "horse") => extends_class(this, "Horse");
+ 
+  /*@ kind : [Immutable] { v: string | [((v = "") || (v = "horse") || (v = "snake") || (v = "tiger"));
+                                        (v = "horse") => extends_class(this, "Horse");
                                         (v = "snake") => extends_class(this, "Snake")] } */
-  public kind = "";
+  public kind: string = "";
   constructor() {}
 }
 
@@ -22,7 +23,7 @@ class Snake extends Animal {
   }
 }
 
-/*@ move :: (a: Animal) => { void | true } */
+/*@ move :: (a: Animal<Immutable>) => { void | true } */
 function move(a: Animal) {
   if (a.kind === "horse") {
     var h = <Horse>a;

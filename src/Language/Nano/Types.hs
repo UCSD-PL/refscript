@@ -370,10 +370,6 @@ data Assignability
   -- ^ Used to denote return variable
   -- 
   | ReturnVar
-  -- 
-  -- ^ Used to denote 'this' variable
-  -- 
-  | ThisVar
   deriving (Show, Eq, Data, Typeable)
 
 
@@ -525,6 +521,7 @@ data BuiltinOp = BIUndefined
                | BIForInKeys
                | BICtorExit
                | BICtor
+               | BIThis
                  deriving (Eq, Ord, Show)
 
 instance PP BuiltinOp where

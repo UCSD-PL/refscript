@@ -1,37 +1,39 @@
 
 
-/*@ predicate Inst(X, Key, Val, Type) = ((keyVal(X, Key) = Val) => extends_class (X, Type)) */
-
-/*@ predicate InstHorse(V) = Inst(V,"kind","horse","Horse") */
-/*@ predicate InstSnake(V) = Inst(V,"kind","snake","Snake") */
-/*@ predicate InstTiger(V) = Inst(V,"kind","tiger","Tiger") */
-
-/*@ alias AnimalK = { v: Animal<Immutable> | InstHorse(v) && InstSnake(v) && InstTiger(v) } */
-
 class Animal {
+  /*@ kind : [Immutable] { v: string | [ ((v = "") || (v = "horse") || (v = "snake") || (v = "tiger"));
+                                         (v = "horse") => extends_class(this, "Horse");
+                                         (v = "snake") => extends_class(this, "Snake");
+                                         (v = "tiger") => extends_class(this, "Tiger")] } */
   public kind = "";
   constructor() {}
 }
 
 class Horse extends Animal { 
-  public kind = "horse";
   public gallop() {} 
-  constructor() { super(); }
+  constructor() { 
+    super(); 
+    this.kind = "horse";
+  }
 }
 
 class Snake extends Animal { 
-  public kind = "snake";
   public sneak() {}
-  constructor() { super(); }
+  constructor() { 
+    super(); 
+    this.kind = "snake";
+  }
 }
 
 class Tiger extends Animal { 
-  public kind = "tiger";
   public run() {}
-  constructor() { super(); }
+  constructor() { 
+    super(); 
+    this.kind = "tiger";
+  }
 }
 
-/*@ move :: (a: AnimalK) => { void | true } */
+/*@ move :: (a: Animal<Immutable>) => { void | true } */
 function move(a: Animal) {
   var k = a.kind;
   if (a.kind === "horse") {

@@ -666,7 +666,6 @@ instance PP Assignability where
   pp WriteGlobal  = text "WriteGlobal"
   pp ImportDecl   = text "ImportDecl"
   pp ReturnVar    = text "ReturnVar"
-  pp ThisVar      = text "ThisVar"
 
 instance PP IfaceKind where
   pp ClassKind      = pp "class" 
@@ -959,6 +958,7 @@ builtinOpId BICastExpr      = builtinId "BICastExpr"
 builtinOpId BISuper         = builtinId "BISuper"
 builtinOpId BISuperVar      = builtinId "BISuperVar"
 builtinOpId BICtor          = builtinId "BICtor"
+builtinOpId BIThis          = mkId "this"
 
 infixOpId OpLT              = builtinId "OpLT"
 infixOpId OpLEq             = builtinId "OpLEq"

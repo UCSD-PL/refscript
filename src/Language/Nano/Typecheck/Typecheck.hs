@@ -189,7 +189,7 @@ initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod cha ctx pth parent
     parent    = Just γ
     -- FIXME: this shouldn't be a special binding ... Include in xs
     thisBind  = (Id (srcPos dummySpan) "this",) . 
-                (, ThisVar, Initialized)   <$> 
+                (, ReadOnly, Initialized)   <$> 
                 maybeToList thisTO
 
 

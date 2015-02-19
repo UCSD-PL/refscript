@@ -1,0 +1,3 @@
+class _ { 
+  constructor() { }
+}

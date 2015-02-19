@@ -6,18 +6,12 @@ function inc(n:number) :number{
   return n + 1;
 }
 
-var gobj = {
-  a: 5,
-  b: "String",
-  f: inc
-};
+var gobj /*@ readonly */ = { a: 5, b: "String", f: inc };
 
 /*@ foo :: () => { number | v = 6 } */
 function foo ():number {
- 
-	// gobj.a = 120;
 
-	var ff :(number)=>number = gobj.f;
+	var ff: (number) => number = gobj.f;
 	return ff(gobj.a);
 
 }

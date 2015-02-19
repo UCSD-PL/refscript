@@ -29,10 +29,8 @@ module Language.Nano.Liquid.Types (
   , pAnd, pOr
 
   -- * Conversions
-  , RefTypable (..), eSingleton, pSingleton, BitVectorable(..), fixBAnd
-
-  -- , strengthenKeyVal
-
+  , RefTypable (..), eSingleton, pSingleton
+  
   -- * Manipulating RefType
   , rTypeReft, rTypeSort, rTypeSortedReft, rTypeValueVar
 
@@ -91,6 +89,7 @@ import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
 
+import qualified Language.Fixpoint.Bitvector as BV
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
@@ -248,58 +247,6 @@ instance RefTypable RefType where
 eSingleton      :: (F.Expression e) => RefType -> e -> RefType 
 eSingleton t e  = t `strengthen` (F.uexprReft e)
 
-class BitVectorable r where
-  bitVector :: RType r -> Int -> RType r
-
-instance BitVectorable F.Reft where
-  bitVector = bitVectorReft
-
-instance BitVectorable () where
-  bitVector t _ = t
-
-bitVectorReft t i | i > 0 && pow2 i = t `strengthen` reft 
-                  | otherwise       = t
-  where
-    pow2 x    = x .&. (x-1) == 0
-    log2 n    = round (logBase 2 $ fromIntegral n) :: Int
-    reft      = F.Reft (v, [F.RConc $ F.PBexp $ F.EApp sym [F.expr v, F.expr $ log2 i]])
-    sym       = F.dummyLoc $ F.symbol "bv_idx"
-    v         = F.vv Nothing
-
-
-
--- Builds the refinement: 
---  
---  bv_idx(a,1) && bv_idx(b,1) => bv_idx(v,1) /\ 
---  bv_idx(a,2) && bv_idx(b,2) => bv_idx(v,2) /\
---  ... 
---  bv_idx(a,32) && bv_idx(b,32) => bv_idx(v,32) /\
---
-fixBAnd x y = F.Reft (v, cc <$> ([1..32] :: [Int]))
-  where
-    cc      = F.RConc . g
-    -- bv_idx(v,i)
-    g i     = F.PImp (bi (F.eVar v) i) (F.PAnd [bi x i, bi y i])
-    bi n i  = F.PBexp $ F.EApp sym [F.expr n, F.expr i]
-    sym     = F.dummyLoc $ F.symbol "bv_idx"
-    v       = F.vv Nothing
-
-
--- strengthenKeyVal t =
---     case bkFuns t of
---       Just [(vs ,s ,bs, tc@(TCons _ _ _))] -> 
---           mkFun (vs, s, bs, foldl strengthen tc (keyVal . b_sym <$> bs))
---       _ -> t
---   where
---     -- keyVal(v,"x") = x
---     keyVal k      = F.Reft (vv, [F.RConc $ F.PAtom F.Ueq (F.EApp kvSym [F.eVar vv, str k]) 
---                                                          (F.eVar k)
---                                 ])
---     vv            = F.vv Nothing
---     kvSym         = F.dummyLoc $ F.symbol "keyVal"
---     str           = F.expr . F.symbolText
-
-
 
 pSingleton      :: (F.Predicate p) => RefType -> p -> RefType 
 pSingleton t p  = t `strengthen` (F.propReft p)
@@ -324,6 +271,7 @@ rTypeSort (TVar α _)               = F.FObj $ F.symbol α
 rTypeSort (TAll v t)               = rTypeSortForAll $ TAll v t
 rTypeSort (TFun (Just s) xts t _)  = F.FFunc 0 $ rTypeSort <$> [s] ++ (b_type <$> xts) ++ [t]
 rTypeSort (TFun Nothing  xts t _)  = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
+rTypeSort (TApp TBV32 _ _ )        = BV.mkSort BV.S32
 rTypeSort (TApp c ts _)            = rTypeSortApp c ts 
 rTypeSort (TAnd (t:_))             = rTypeSort t
 rTypeSort (TRef (QN _ _ _ s) ts _) = F.FApp (rawStringFTycon $ F.symbolString s) (rTypeSort <$> ts)
@@ -340,6 +288,7 @@ rTypeSortApp c ts                  = F.FApp (tconFTycon c) (rTypeSort <$> ts)
 
 tconFTycon :: TCon -> F.FTycon 
 tconFTycon TInt                    = F.intFTyCon
+tconFTycon TBV32                   = error "tconFTycon should be unreachable for BV32" -- BV.mkSort BV.S32 -- BV.bvTyCon
 tconFTycon TBool                   = rawStringFTycon "Boolean"
 tconFTycon TFPBool                 = F.boolFTyCon
 tconFTycon TVoid                   = rawStringFTycon "Void"

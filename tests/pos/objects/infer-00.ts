@@ -1,6 +1,6 @@
-var gobj= {
-  a: 5
-};
+
+/*@ gobj :: { a: { number | v > 0 } } */
+var gobj = { a: 5 };
 
 /*@ foo :: () => { number | v > 0 } */
 function foo () :number {

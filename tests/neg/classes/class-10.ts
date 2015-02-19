@@ -4,7 +4,7 @@ function foo(x: Node) {
     x.field = 2;
   }
 }
-
+ 
 class Node {
   constructor() { }
 

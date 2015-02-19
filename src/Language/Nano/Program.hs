@@ -258,6 +258,7 @@ instance IsNano (VarDecl a) where
 instance IsNano (Expression a) where 
   isNano (BoolLit _ _)           = True
   isNano (IntLit _ _)            = True
+  isNano (HexLit _ _)            = True
   isNano (NullLit _ )            = True
   isNano (ArrayLit _ es)         = all isNano es
   isNano (StringLit _ _)         = True

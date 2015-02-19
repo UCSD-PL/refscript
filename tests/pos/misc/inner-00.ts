@@ -1,6 +1,8 @@
 
-/*@ main :: (x: number) => { v: number |v > x} */
-function main(x: number): number {
+/*@ main :: (xx: number) => { v: number |v > x} */
+function main(xx: number): number {
+  
+var x /*@ readonly */ = xx;
 
 	var rand = 10;
 	if (rand > 5) {

@@ -27,7 +27,7 @@ module Language.Nano.Liquid.CGMonad (
   , cgError      
 
   -- * Fresh Templates for Unknown Refinement Types 
-  , freshTyFun, freshTyVar, freshTyInst, freshTyPhis, freshTyPhis'
+  , freshTyFun, freshenType, freshTyInst, freshTyPhis, freshTyPhis'
   , freshTyObj, freshenCGEnvM
 
   -- * Freshable
@@ -272,7 +272,7 @@ envAddFreshWithOK :: IsLocated l
 ---------------------------------------------------------------------------------------
 envAddFreshWithOK ok l (t,a,i) g
   = do x  <- freshId l
-       g' <- envAddsWithOK ok "envAddFresh" [(x,(t,a,i))] g
+       g' <- envAddsWithOK True ok "envAddFresh" [(x,(t,a,i))] g
        addAnnot l x t
        return (x, g')
    
@@ -293,30 +293,35 @@ envAdds :: (IsLocated x, F.Symbolic x, PP x, PP [x])
         -> CGEnv 
         -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAdds = envAddsWithOK HS.empty
+envAdds = envAddsWithOK True HS.empty
+
+envAddsNoFields = envAddsWithOK False HS.empty
 
 
--- | We do not add binders for WriteGlobal variables as they cannot appear in
---   refinements.
+-- | No binders for WriteGlobal variables as they cannot appear in refinements.
+--
+--   doFields : add bindings for fields (True/False)
+--
+--   ok : Symbols that are 'ok' to appear in refinements
 --
 ---------------------------------------------------------------------------------------
 envAddsWithOK :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
-              => HS.HashSet F.Symbol
+              => Bool
+              -> HS.HashSet F.Symbol
               -> String 
               -> [(x, (RefType,Assignability,Initialization))] 
               -> CGEnv 
               -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAddsWithOK ok msg xts g
+envAddsWithOK doFields ok msg xts g
   = do ts'            <- zipWithM inv ts is
        let xtas        = zip xs $ zip3 ts' as is
 
-       g'             <- foldM (addObjectFieldsWithOK ok) g $ zip3 xs as ts'
+       g'             <- foldM (addObjectFieldsWithOK doFields ok) g $ zip3 xs as ts'
        
        zipWithM_         (reftCheck msg g' ok HS.empty) xs ts'
        
        is             <- catMaybes    <$> forM xtas addFixpointBind
-       _              <- forM xtas     $  \(x,(t,_,_)) -> addAnnot x x t
 
        return          $ g' { cge_names = E.envAdds xtas       $ cge_names g'
                             , cge_fenv  = F.insertsIBindEnv is $ cge_fenv  g' }
@@ -349,13 +354,13 @@ reftCheck' _ g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.in
                           | otherwise
                           = cgError $ errorForbiddenSyms (srcPos x) t $ HS.toList forbiddenSet
   where
-    x_sym         = F.symbol x
-    allSyms       = [ s | s <- foldReft rr [] t ]    
-    forbiddenSyms = [ s | s <- allSyms
-                        , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g
-                        , a `elem` [ReturnVar,WriteGlobal] ]
-                 ++ [ s | s <- allSyms, s `HS.member` bad ]
-    forbiddenSet  = HS.fromList forbiddenSyms
+    x_sym                   = F.symbol x
+    allSyms                 = [ s | s <- foldReft rr [] t ]    
+    forbiddenSyms           = [ s | s <- allSyms
+                                  , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g
+                                  , a `elem` [ReturnVar,WriteGlobal] ]
+                           ++ [ s | s <- allSyms, s `HS.member` bad ]
+    forbiddenSet            = HS.fromList forbiddenSyms
     rr (F.Reft (_, ras)) xs = concatMap ra ras ++ xs
     ra (F.RConc p)          = F.syms p
     ra (F.RKvar _ su)       = F.targetSubstSyms su
@@ -365,33 +370,25 @@ reftCheck' _ g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.in
 --   also introduce bindings for all its IMMUTABLE fields. 
 ---------------------------------------------------------------------------------------
 addObjectFieldsWithOK :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
-                => HS.HashSet F.Symbol -> CGEnv -> (x,Assignability,RefType) -> CGM CGEnv
+                      => Bool
+                      -> HS.HashSet F.Symbol 
+                      -> CGEnv 
+                      -> (x,Assignability,RefType) 
+                      -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-addObjectFieldsWithOK ok g (x,a,t)
-              | a `elem` [WriteGlobal,ThisVar,ReturnVar] 
+addObjectFieldsWithOK False ok g (x,a,t) = return g
+addObjectFieldsWithOK True  ok g (x,a,t) 
+              | a `elem` [WriteGlobal,ReturnVar] 
               = return g
               | otherwise
-              = envAddsWithOK ok "addObjectFieldsWithOK" xts g
+              = envAddsWithOK False ok "addObjectFieldsWithOK" xts g
   where
     xts       = [(fd f, ty f tf) | FieldSig f _ m tf <- ms, isImmutable m ]
 
     fd        = mkFieldB x 
-    ty f tf   = ( F.subst (substFieldSyms g x t) (tf `strengthen` kv f)
-                , a
-                , Initialized
-                )  
+    ty f tf   = (F.subst (substFieldSyms g x t) tf, a, Initialized)
 
     sub       = F.subst $ substFieldSyms g x t
-
-    -- 
-    -- XXX  : Still need to add keyVal because of the way we express invariants 
-    --        of the form "if field 'kind' has value `v` then class 'A' is in 
-    --        fact an instance of class 'B' where (B <: A) 
-    --
-    kv s      = F.uexprReft $ F.EApp kvSym [F.eVar x, str s]
-    kvSym     = F.dummyLoc  $ F.symbol "keyVal"
-
-    str       = F.expr . F.symbolText
 
     ms        | Just (TCons m ms _) <- flattenType g t = defMut m <$> M.elems ms
               | otherwise                              = []
@@ -406,7 +403,6 @@ addObjectFieldsWithOK ok g (x,a,t)
 
 
 envAdd x t g = envAdds "envAdd" [(x,t)] g
-
 
 
 instance PP F.IBindEnv where
@@ -624,9 +620,16 @@ freshTyFun g l t
   | isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= {- addInvariant g >>= -} wellFormed l g
   | otherwise          = return t
 
-freshTyVar g l t 
-  | isTrivialRefType t = freshTy "freshTyVar" (toType t) >>= wellFormed l g
+
+freshenType WriteGlobal g l t 
+  | isTrivialRefType t = freshTy "freshenType-WG" (toType t) >>= wellFormed l g
   | otherwise          = return t
+
+freshenType _ g l t 
+  | not (isTFun t)     = return t   
+  | isTrivialRefType t = freshTy "freshenType-RO" (toType t) >>= wellFormed l g
+  | otherwise          = return t
+
 
 -- | Instantiate Fresh Type (at Call-site)
 freshTyInst l g αs τs tbody
@@ -670,13 +673,13 @@ freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g
 freshenCGEnvM :: CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 freshenCGEnvM g  
-  = do  names   <- E.envFromList  <$> mapM (freshenVarbindingM g) (E.envToList  $ cge_names g)
+  = do  names   <- E.envFromList  <$> mapM (go g) (E.envToList  $ cge_names g)
         modules <- E.qenvFromList <$> mapM (freshenModuleDefM g) (E.qenvToList $ cge_mod g)
         return $ g { cge_names = names, cge_mod = modules } 
-
-freshenVarbindingM _ (x, (v@(TVar{}),a,i)) = return (x,(v,a,i))
-freshenVarbindingM g (x, (t,ReadOnly,i)  ) = (x,) . (,ReadOnly,i) <$> freshTyVar g (srcPos x) t
-freshenVarbindingM _ (x, (t,a,i)         ) = return (x,(t,a,i))
+  where
+    go _ (x, (v@(TVar{}),a,i)) = return (x,(v,a,i))
+    go g (x, (t,ReadOnly,i)  ) = (x,) . (,ReadOnly,i) <$> freshenType ReadOnly g (srcPos x) t
+    go _ (x, (t,a,i)         ) = return (x,(t,a,i))
 
 freshenModuleDefM g (a, m)
   = do  vars     <- E.envFromList <$> mapM f (E.envToList $ m_variables m)
@@ -685,7 +688,7 @@ freshenModuleDefM g (a, m)
   where
     f (x, (v,w,t,i)) =
       case w of
-        ReadOnly   -> do  ft    <- freshTyVar g x t 
+        ReadOnly   -> do  ft    <- freshenType ReadOnly g x t 
                           return   (x, (v, w, ft,i))
         _          -> return (x,(v,w,t,i))
 

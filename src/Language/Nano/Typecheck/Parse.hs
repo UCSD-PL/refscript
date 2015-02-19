@@ -354,14 +354,15 @@ wordP p  = condIdP ok p
 ----------------------------------------------------------------------------------
 tConP :: Parser TCon
 ----------------------------------------------------------------------------------
-tConP =  try (reserved "number"    >> return TInt)
-     <|> try (reserved "boolean"   >> return TBool)
-     <|> try (reserved "undefined" >> return TUndef)
-     <|> try (reserved "void"      >> return TVoid)
-     <|> try (reserved "top"       >> return TTop)
-     <|> try (reserved "string"    >> return TString)
-     <|> try (reserved "null"      >> return TNull)
-     <|> try (reserved "bool"      >> return TFPBool)
+tConP =  try (reserved "number"      >> return TInt)
+     <|> try (reserved "bitvector32" >> return TBV32)
+     <|> try (reserved "boolean"     >> return TBool)
+     <|> try (reserved "undefined"   >> return TUndef)
+     <|> try (reserved "void"        >> return TVoid)
+     <|> try (reserved "top"         >> return TTop)
+     <|> try (reserved "string"      >> return TString)
+     <|> try (reserved "null"        >> return TNull)
+     <|> try (reserved "bool"        >> return TFPBool)
 
 bareAllP p
   = do tvs   <- optionMaybe (reserved "forall" *> many1 tvarP <* dot) 
@@ -491,6 +492,7 @@ data RawSpec
   | RawInvt     (SourceSpan, String)   -- Invariants
   | RawCast     (SourceSpan, String)   -- Casts
   | RawExported (SourceSpan, String)   -- Exported
+  | RawReadOnly (SourceSpan, String)   -- ReadOnly
   deriving (Show,Eq,Ord,Data,Typeable,Generic)
 
 data PSpec l r
@@ -511,6 +513,7 @@ data PSpec l r
   | Invt    l (RTypeQ RK r) 
   | CastSp  l (RTypeQ RK r)
   | Exported l
+  | RdOnly l
 
   -- Used only for parsing specs
   | ErrorSpec
@@ -537,6 +540,7 @@ parseAnnot = go
     go (RawInvt     (ss, _)) = Invt               ss <$> bareTypeP
     go (RawCast     (ss, _)) = CastSp             ss <$> bareTypeP
     go (RawExported (ss, _)) = return  $ Exported ss
+    go (RawReadOnly (ss, _)) = return  $ RdOnly ss
 
 
 patch2 ss (id, t)    = (fmap (const ss) id , t)
@@ -560,6 +564,7 @@ getSpecString = go
     go (RawInvt     (_, s)) = s  
     go (RawCast     (_, s)) = s  
     go (RawExported (_, s)) = s  
+    go (RawReadOnly (_, s)) = s  
 
 instance IsLocated RawSpec where
   srcPos (RawMeas     (s,_)) = s 
@@ -578,6 +583,7 @@ instance IsLocated RawSpec where
   srcPos (RawInvt     (s,_)) = s  
   srcPos (RawCast     (s,_)) = s  
   srcPos (RawExported (s,_)) = s  
+  srcPos (RawReadOnly (s,_)) = s  
 
 
 instance FromJSON SourcePos where
@@ -698,6 +704,7 @@ extractFact = go
     go (Iface   (_,t)) = Just $ IfaceAnn  t
     go (CastSp  _ t  ) = Just $ UserCast  t
     go (Exported  _  ) = Just $ ExportedElt
+    go (RdOnly  _    ) = Just $ ReadOnlyVar
     go (AnFunc  t    ) = Just $ FuncAnn   t
     go _               = Nothing
 
@@ -717,17 +724,19 @@ mkUq                  = zipWith tx ([0..] :: [Int])
 
 stmtTypeBindings _                = go
   where
-    go (FunctionStmt l f _ _)     = [(f, t) | FuncAnn t <- ann_fact l ] ++
-                                    [(f, t) | VarAnn t <- ann_fact l ]
-    go (VarDeclStmt _ vds)        = [(x, t) | VarDecl l x _ <- vds, VarAnn t <- ann_fact l]   
+    go (FunctionStmt l f _ _)     = [(f, t) | FuncAnn t     <- ann_fact l ] ++
+                                    [(f, t) | VarAnn  t     <- ann_fact l ]
+    go (VarDeclStmt _ vds)        = [(x, t) | VarDecl l x _ <- vds
+                                            , VarAnn  t     <- ann_fact l ]
     go _                          = []
 
 celtTypeBindings _                = (mapSnd eltType <$>) . go 
   where
-    go (Constructor l _ _)        = [(x, e) | ConsAnn  e <- ann_fact l, let x = Id l "ctor" ]
-    go (MemberVarDecl l _ x _)    = [(x, e) | FieldAnn e <- ann_fact l] ++ 
-                                    [(x, e) | StatAnn  e <- ann_fact l]
-    go (MemberMethDef l _ x _ _)  = [(x, e) | MethAnn  e <- ann_fact l]
+    go (Constructor l _ _)        = [(x, e) | ConsAnn  e <- ann_fact l
+                                            , let x       = Id l "ctor" ]
+    go (MemberVarDecl l _ x _)    = [(x, e) | FieldAnn e <- ann_fact l  ] ++ 
+                                    [(x, e) | StatAnn  e <- ann_fact l  ]
+    go (MemberMethDef l _ x _ _)  = [(x, e) | MethAnn  e <- ann_fact l  ] 
     go _                          = []
 
 -- debugTyBinds p@(Nano {code = Src ss}) = trace msg p

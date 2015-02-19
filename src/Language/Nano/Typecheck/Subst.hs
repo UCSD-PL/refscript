@@ -119,6 +119,7 @@ instance Free (Fact r) where
   free (StatAnn m)          = free m
   free (ConsAnn c)          = free c
   free (FuncAnn c)          = free c
+  free (ReadOnlyVar)        = S.empty
   free (ClassAnn (vs,e,i))  = foldr S.delete (free $ e ++ i) vs
   free (UserCast t)         = free t
   free (IfaceAnn _)         = S.empty

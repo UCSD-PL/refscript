@@ -92,17 +92,19 @@ bugZipType l t1 t2            = mkErr l $ printf "BUG: zipType of types '%s' and
 errorInvalidTopStmt l x       = mkErr l $ printf "Invalid top-level statement: %s" (ppshow x) 
 errorDuplicate i l l'         = mkErr l $ printf "Duplicate Specification for '%s':\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
 errorDuplicateKey l x         = mkErr l $ printf "Duplicate key '%s' when merging creating environment" (ppshow x) 
+errorInvalidHex l x           = mkErr l $ printf "'%s' is not a valid HEX value" (ppshow x) 
 
 
 ---------------------------------------------------------------------------
 -- | SSA
 ---------------------------------------------------------------------------
-errorWriteImmutable l x       = mkErr l $ printf "Cannot assign to local variable '%s' outside local-scope. " (ppshow x)
+errorWriteImmutable l m x     = mkErr l $ printf "Cannot assign to %s-variable '%s'. " (ppshow m) (ppshow x)
                                        ++ printf "Add a type annotation to indicate it is globally writable." 
 errorSSAUnboundId l x         = mkErr l $ printf "SSA: Identifier '%s' unbound" (ppshow x) 
 errorUpdateInExpr l e         = mkErr l $ printf "Unsupported: assignment in If-then-else expression %s" (ppshow e)
 errorEffectInFieldDef l       = mkErr l $ printf "Cannot have effects in field initialization."
 errorUninitStatFld l x        = mkErr l $ printf "Uninitialized static member '%s' is not allowed." (ppshow x)
+errorForeignLocal l x         = mkErr l $ printf "Cannot reference local (out-of-scope) variable '%s'" (ppshow x) 
 bugSuperNotHandled l e        = mkErr l $ printf "BUG: Expression '%s' should have been taken care of." (ppshow e)
 bugSuperWithNoParent l        = mkErr l $ printf "BUG: Calling 'super()' in constructor of class with no parent."
 

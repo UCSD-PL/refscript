@@ -8,12 +8,8 @@ function apply<A,B>(f: (a: A) => B, x: A): B {
 function main(x:number,y:boolean) : number {
 	var yr = idt(y);
 	var xr = idt(x);
-	var z  = 1;
+	var z /*@ readonly */ = 1;
   
-	if (yr) {
-		z = 10;
-	}
-	
 	function plus(a:number): number {  
 		return a + z
 	};

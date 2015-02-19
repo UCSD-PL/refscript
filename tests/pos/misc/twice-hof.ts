@@ -8,12 +8,9 @@ function twice<A>(f:(a:A)=>A, x0:A): A{
 
 /*@ main :: (x:number, boolean) => { v:number |v >= x} */
 function main(x:number,y:boolean):number{
-	var yr :boolean= idt(y);
-	var xr :number= idt(x);
-	var z  :number= 1;
-	if (yr) {
-		z = 10;
-	}
+	var yr = idt(y);
+	var xr = idt(x);
+  var z  /*@ readonly */ = (yr) ? 1 : 10; 
 	
 	assert (z > 0);
 

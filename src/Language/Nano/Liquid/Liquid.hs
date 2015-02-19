@@ -507,32 +507,46 @@ consClassElt _ _ (MemberVarDecl l False x _)
   
 -- | Static method
 consClassElt g dfn (MemberMethDef l True x xs body)
-  = case spec of
-      Just (MethSig _ t) -> do its   <- cgFunTys l x xs t
-                               mapM_    (consFun1 l g x xs body) its
-      _                  -> cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) x
-  where
-    spec             = M.lookup (F.symbol x,StaticMember) (t_elts dfn)
- 
--- | Instance method
-consClassElt g dfn (MemberMethDef l False x xs body) 
-  | Just (MethSig _ t) <- spec
-  = do  its <- cgFunTys l x xs t 
-        mapM_ (consFun1 l g x xs body) $ addSelfB <$> its
+  | Just (MethSig _ t) <- M.lookup (F.symbol x,StaticMember) (t_elts dfn)
+  = do  its <- cgFunTys l x xs t
+        mapM_ (consFun1 l g x xs body) its
   | otherwise
   = cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) x
+ 
+-- | Instance method
+consClassElt g d@(ID nm _ vs _ es) (MemberMethDef l False x xs body) 
+  | Just (MethSig _ t) <- M.lookup (F.symbol x, InstanceMember) es
+        
+  = -- 
+    -- (1) Get the method type parts
+    -- 
+    -- (2) Get the right 'this' type, by replacing 'self' etc.  
+    --
+    -- (3) Replace with the correct type for fields
+    -- 
+    do ft     <- cgFunTys l x xs t
+       let its = mapSnd procFT <$> ft
+       mapM_     (consFun1 l g x xs body) its
+  | otherwise
+  = cgError  $ errorClassEltAnnot (srcPos l) nm x
   where
-    spec            = M.lookup (F.symbol x, InstanceMember) (t_elts dfn)
-    addSelfB (i,(vs,so,xs,y)) 
-                    = (i,(vs,mkSelf so,xs,y))
-    mkSelf (Just (TSelf m)) 
-                    = Just $ mkThis (toType m) (t_args dfn)
-    mkSelf (Just t) = Just t
-    mkSelf Nothing  = Just $ mkThis t_readOnly (t_args dfn) 
-    mkThis m (_:αs) = TRef an (ofType m : map tVar αs) fTop
-    mkThis _ _      = throw $ bug (srcPos l) "Liquid.Liquid.consClassElt MemberMethDef" 
-    an              = QN AK_ (srcPos l) ss (F.symbol $ t_name dfn)
-    QP AK_ _ ss     = cge_path g
+
+
+    procFT (vs,so,xs,y)   = (vs, Just this_T, s <$> xs, s y)
+      where this_T        = slf so
+            s             = F.subst (substFieldSyms g this this_T)
+            this          = builtinOpId BIThis
+
+    slf (Just (TSelf m))  = mkThis (toType m) vs
+    slf (Just t)          = t
+    slf Nothing           = mkThis t_readOnly vs
+
+    mkThis m (_:αs)       = TRef an (ofType m : map tVar αs) fTop
+    mkThis _ _            = throw $ bug (srcPos l) "Liquid.Liquid.consClassElt MemberMethDef" 
+
+    an                    = QN AK_ (srcPos l) ss (F.symbol nm)
+
+    QP AK_ _ ss           = cge_path g
 
 consClassElt _ _  (MemberMethDecl _ _ _ _) = return ()
 
@@ -598,9 +612,11 @@ consExpr g (NullLit l) _
   = Just <$> envAddFresh l (tNull, WriteLocal, Initialized) g
 
 consExpr g (ThisRef l) _
-  = case envFindTy (builtinOpId BIThis) g of
-      Just t  -> Just <$> envAddFresh l (t, ReadOnly, Initialized) g
+  = case envFindTyWithAsgn this g of
+      Just _  -> return  $ Just (this,g) 
       Nothing -> cgError $ errorUnboundId (ann l) "this" 
+  where
+    this = Id l "this" 
 
 consExpr g (VarRef l x) _
   | Just (t,WriteGlobal,i) <- tInfo

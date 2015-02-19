@@ -51,6 +51,7 @@ data TVar = TV {
 -- | Type Constructors
 data TCon
   = TInt                -- ^ number
+  | TBV32               -- ^ bitvector
   | TBool               -- ^ boolean
   | TString             -- ^ string
   | TVoid               -- ^ void
@@ -275,13 +276,9 @@ data EnumDef = EnumDef {
     --
       e_name       :: F.Symbol
     -- 
-    -- ^ Contents: Int -> Symbols
+    -- ^ Contents: Symbols -> Expr (expected IntLit or HexLit)
     --
-    , e_properties :: I.IntMap F.Symbol
-    -- 
-    -- ^ Contents: Symbols -> Int
-    --
-    , e_symbols    :: Env (Maybe Int)
+    , e_mapping    :: Env (Expression ())
 
 } deriving (Data, Typeable)
 
@@ -358,6 +355,11 @@ data Assignability
   --
   | WriteLocal  
   -- 
+  -- ^ Local but not in current scope.
+  -- ^ Cannot appear in refinements, cannot be read at SSA
+  --
+  | ForeignLocal
+  -- 
   -- ^ Written in non-local-scope, cannot do SSA
   -- ^ CANNOT appear in refinements
   --
@@ -368,10 +370,6 @@ data Assignability
   -- ^ Used to denote return variable
   -- 
   | ReturnVar
-  -- 
-  -- ^ Used to denote 'this' variable
-  -- 
-  | ThisVar
   deriving (Show, Eq, Data, Typeable)
 
 
@@ -436,6 +434,7 @@ instance F.Symbolic a => F.Symbolic (Located a) where
 
 instance Eq TCon where
   TInt     == TInt     = True   
+  TBV32    == TBV32    = True   
   TBool    == TBool    = True           
   TString  == TString  = True
   TVoid    == TVoid    = True         
@@ -500,6 +499,7 @@ tconCode TUn             = 6
 tconCode TNull           = 7
 tconCode TUndef          = 8
 tconCode TFPBool         = 9
+tconCode TBV32           = 10
 
 
 -----------------------------------------------------------------------
@@ -521,6 +521,7 @@ data BuiltinOp = BIUndefined
                | BIForInKeys
                | BICtorExit
                | BICtor
+               | BIThis
                  deriving (Eq, Ord, Show)
 
 instance PP BuiltinOp where

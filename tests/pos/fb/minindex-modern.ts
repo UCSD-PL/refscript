@@ -17,13 +17,15 @@ function reduce(me, callback, init) {
 }
 
 
-/*@ minIndex :: (arr:IArray<number>) => {number | true} */
-function minIndex(arr) {
+/*@ minIndex :: (arrrr:IArray<number>) => {number | true} */
+function minIndex(arrrr) {
+
+    var arr /*@ readonly */ = arrrr;
 
     if (arr.length <= 0) return -1;
     
     function body(min: number, cur: number, i: number) { 
-	return cur < arr[min] ? i : min; 
+	    return cur < arr[min] ? i : min; 
     }; 
     
     return reduce(arr, body, 0);

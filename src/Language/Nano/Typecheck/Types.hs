@@ -26,6 +26,8 @@ module Language.Nano.Typecheck.Types (
   -- * Predicates on Types 
   , isTop, isNull, isVoid, isTNum, isUndef, isUnion, isTString, isTBool
 
+  , isBvEnum
+
   -- * Primitive Types
   , t_object
 
@@ -46,7 +48,7 @@ module Language.Nano.Typecheck.Types (
   , isMutable, isImmutable, isAssignsFields, isInheritedMutability
 
   -- * Primitive Types
-  , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
+  , tInt, tBV32, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
   , isTVar, isTObj, isFlattenable, isPrimitive, isConstr, subtypeable, isTUndef, isTNull, isTVoid
   , isTFun, fTop, orNull, isArr
 
@@ -64,13 +66,16 @@ module Language.Nano.Typecheck.Types (
   , arrayLitTy
   , objLitTy
   , setPropTy
-  , enumTy
+  -- , enumTy
 
   -- * Builtin: Binders
   , mkId, argId, argTy, returnTy
 
   -- * Symbols
   , ctorSymbol, callSymbol, stringIndexSymbol, numericIndexSymbol 
+
+  -- * BitVector
+  , bitVectorValue
 
   ) where 
 
@@ -86,6 +91,7 @@ import qualified Data.Map.Strict                as M
 import           Data.Typeable                  ()
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.PrettyPrint
+import qualified Language.Nano.Env              as E
 import           Language.Nano.Misc
 import           Language.Nano.Types
 import           Language.Nano.Errors
@@ -93,6 +99,7 @@ import           Language.Nano.Locations
 import           Language.Nano.Names
 
 import qualified Language.Fixpoint.Types        as F
+import qualified Language.Fixpoint.Bitvector    as BV
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.PrettyPrint
@@ -191,6 +198,9 @@ instance ExprReftable a () where
 
 instance F.Expression a => ExprReftable a F.Reft where
   exprReft = F.exprReft
+
+instance F.Reftable r => ExprReftable BV.Bv r where
+  exprReft = F.ofReft . F.exprReft
 
 
 funTys l f xs ft 
@@ -553,6 +563,11 @@ allEltType (CallSig        t) = [t]
 allEltType (IndexSig _ _   t) = [t]
 
 
+isBvEnum              = all hex . map snd . E.envToList . e_mapping
+  where
+    hex (HexLit _ _ ) = True 
+    hex _             = False
+
 
 ----------------------------------------------------------------------------------
 -- | Pretty Printer Instances
@@ -607,6 +622,7 @@ instance PP TVar where
 
 instance PP TCon where
   pp TInt      = text "number"
+  pp TBV32     = text "bitvector"
   pp TBool     = text "boolean"
   pp TString   = text "string"
   pp TVoid     = text "void"
@@ -626,6 +642,7 @@ instance Hashable TCon where
   hashWithSalt s TNull        = hashWithSalt s (6 :: Int)
   hashWithSalt s TUndef       = hashWithSalt s (7 :: Int)
   hashWithSalt s TFPBool      = hashWithSalt s (8 :: Int)
+  hashWithSalt s TBV32        = hashWithSalt s (9 :: Int)
 
 instance (PP r, F.Reftable r) => PP (BindQ q r) where 
   pp (B x t)          = pp x <> colon <> pp t 
@@ -643,12 +660,12 @@ instance PP StaticKind where
   pp InstanceMember = text ""
 
 instance PP Assignability where
-  pp ReadOnly    = text "ReadOnly"
-  pp WriteLocal  = text "WriteLocal"
-  pp WriteGlobal = text "WriteGlobal"
-  pp ImportDecl  = text "ImportDecl"
-  pp ReturnVar   = text "ReturnVar"
-  pp ThisVar     = text "ThisVar"
+  pp ReadOnly     = text "ReadOnly"
+  pp WriteLocal   = text "WriteLocal"
+  pp ForeignLocal = text "ForeignLocal"
+  pp WriteGlobal  = text "WriteGlobal"
+  pp ImportDecl   = text "ImportDecl"
+  pp ReturnVar    = text "ReturnVar"
 
 instance PP IfaceKind where
   pp ClassKind      = pp "class" 
@@ -712,7 +729,7 @@ ppMut t        | Just s <- mutSym t
                = pp "_??_"
 
 instance PP EnumDef where
-  pp (EnumDef n ss _) = pp n <+> braces (intersperse comma $ pp <$> I.elems ss)
+  pp (EnumDef n m) = pp n <+> braces (pp m)
  
 instance (PP r, F.Reftable r) => PP (ModuleDef r) where
   pp (ModuleDef vars tys enums path) =  
@@ -744,6 +761,7 @@ isTVar _                    = False
 
 tInt, tBool, tUndef, tNull, tString, tVoid, tErr :: (F.Reftable r) => RTypeQ q r
 tInt                        = TApp TInt     [] fTop 
+tBV32                       = TApp TBV32    [] fTop
 tBool                       = TApp TBool    [] fTop
 tString                     = TApp TString  [] fTop
 tTop                        = TApp TTop     [] fTop
@@ -822,20 +840,12 @@ objLitTy l ps     = mkFun (vs, Nothing, bs, rt)
     rt            = TCons mt elts fTop
     elts          = M.fromList [ ((s, InstanceMember), FieldSig s f_required m $ ofType a) 
                                | (s,m,a) <- zip3 ss mts ats ]
-    (mv, mt)      = freshTV l mSym (0::Int)                             -- obj mutability
+    (mv, mt)      = freshTV l mSym (0::Int)                      -- obj mutability
     (mvs, mts)    = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
     (avs, ats)    = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
     ss            = [F.symbol p | p <- ps]
     mSym          = F.symbol "M"
     aSym          = F.symbol "A"
---     -- keyVal(v,"x") = x
---     keyVal k      = F.Reft (vv, [F.RConc $ F.PAtom F.Ueq (F.EApp kvSym [F.eVar vv, str k]) 
---                                                          (F.eVar k)
---                                 ])
---     ff            = ((keyVal . F.symbol) <$>)
---     vv            = F.vv Nothing
---     kvSym         = F.dummyLoc $ F.symbol "keyVal"
---     str           = F.expr . F.symbolText
 
 lenId l           = Id l "length" 
 argId l           = Id l "arguments"
@@ -874,27 +884,22 @@ immObjectLitTy l _ ps ts
                          | (p,t) <- safeZip "immObjectLitTy" ps ts, let s = F.symbol p ]
     nps              = length ps
 
--- FIXME: the bounds check is not valid any more ...
---
--- ({ v: number |  (v = k1) \/ (v = k2) \/ ... }) => ... // for all the known keys
---
---
----------------------------------------------------------------------------------
-enumTy :: EnumDef -> RType F.Reft
----------------------------------------------------------------------------------
-enumTy (EnumDef _ ps _) = TAll a $ TFun Nothing [a',b] ot fTop
-  where
-    a        = TV (F.symbol "A") (srcPos dummySpan)
-    a'       = B x0 (tVar a)
-    x0       = F.symbol "x0"
-    x1       = F.symbol "x1"
-    pi       = F.POr $ (F.PAtom F.Eq (F.eVar v) . F.expr) <$> I.keys ps 
-    v        = F.vv Nothing
-    b        = B x1 $ tInt `strengthen` F.predReft pi
-    el       = I.toList ps
-    ot       = tString `strengthen` F.predReft (F.PAnd $ si <$> el)
-    si (i,s) = F.PImp (F.PAtom F.Eq (F.expr x1) (F.expr i))
-                      (F.PAtom F.Eq (F.expr v ) (F.expr $ F.symbolText s))
+-- ---------------------------------------------------------------------------------
+-- enumTy :: EnumDef -> RType F.Reft
+-- ---------------------------------------------------------------------------------
+-- enumTy (EnumDef _ _) = error "enumTy"  -- TAll a $ TFun Nothing [a',b] ot fTop
+--   where
+--     a        = TV (F.symbol "A") (srcPos dummySpan)
+--     a'       = B x0 (tVar a)
+--     x0       = F.symbol "x0"
+--     x1       = F.symbol "x1"
+--     pi       = F.POr $ (F.PAtom F.Eq (F.eVar v) . F.expr) <$> I.keys ps 
+--     v        = F.vv Nothing
+--     b        = B x1 $ tInt `strengthen` F.predReft pi
+--     el       = I.toList ps
+--     ot       = tString `strengthen` F.predReft (F.PAnd $ si <$> el)
+--     si (i,s) = F.PImp (F.PAtom F.Eq (F.expr x1) (F.expr i))
+--                       (F.PAtom F.Eq (F.expr v ) (F.expr $ F.symbolText s))
     
 ---------------------------------------------------------------------------------
 setPropTy :: (PPR r, IsLocated l) => l -> F.Symbol -> RType r -> RType r
@@ -953,6 +958,7 @@ builtinOpId BICastExpr      = builtinId "BICastExpr"
 builtinOpId BISuper         = builtinId "BISuper"
 builtinOpId BISuperVar      = builtinId "BISuperVar"
 builtinOpId BICtor          = builtinId "BICtor"
+builtinOpId BIThis          = mkId "this"
 
 infixOpId OpLT              = builtinId "OpLT"
 infixOpId OpLEq             = builtinId "OpLEq"
@@ -988,4 +994,13 @@ prefixOpId o                = errorstar $ "prefixOpId: Cannot handle: " ++ ppsho
 
 mkId            = Id (initialPos "") 
 builtinId       = mkId . ("builtin_" ++)
+
+
+
+
+-- | BitVectors
+
+bitVectorValue ('0':x) = Just $ exprReft (BV.Bv BV.S32  $ "\"#" ++ x ++ "\"")
+bitVectorValue _       = Nothing
+
 

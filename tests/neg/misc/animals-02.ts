@@ -13,7 +13,7 @@ class Horse extends Animal {
   public gallop() {} 
   constructor() { 
     super(); 
-    this.kind = "no horse";
+    this.kind = "horse";
   }
 }
 
@@ -21,7 +21,7 @@ class Snake extends Animal {
   public sneak() {}
   constructor() { 
     super(); 
-    this.kind = "no snake";
+    this.kind = "horse";
   }
 }
 

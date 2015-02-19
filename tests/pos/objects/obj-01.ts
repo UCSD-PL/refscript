@@ -1,11 +1,17 @@
 
 /*@ qualif PLusOne(v:number, w: number): v = w + 1   */
+/*@ qualif Six(v:number): v = 6   */
 
-function inc(n: number) { return n + 1; }
+function inc1(n: number) { return n + 1; }
+function inc2(n: number) { return n + 2; }
 
-var x = { f: inc };
+var x /*@ readonly */ = { f: inc1 };
 
-/*@ foo :: () => { number | v = 6 } */
 function foo() :number {
   return (x.f)(5);
 }
+
+// x = { f: inc2 };
+
+assert(foo() === 6);
+

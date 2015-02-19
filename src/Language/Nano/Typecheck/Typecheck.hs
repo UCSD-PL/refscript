@@ -59,7 +59,7 @@ import           Language.ECMAScript3.Syntax.Annotations
 import qualified System.Console.CmdArgs.Verbosity as V
 
 
-type PPRSF r = (BitVectorable r, PPR r, Substitutable r (Fact r), Free (Fact r)) 
+type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r)) 
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
@@ -135,14 +135,10 @@ tcNano p@(Nano {code = Src fs})
 patch :: PPRSF r => [Statement (AnnSSA r)] -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
 patch fs = 
-  do 
-      
-  -- 1. add the up-cast at ssa join points 
-      -- fs'                     <- visitStmtsT vs () fs
-
-      (m,θ)                   <- (,) <$> getAnns <*> getSubst
-      
-  -- 2. patch code with annotations gathered in `m`
+  do  (m,θ)                   <- (,) <$> getAnns <*> getSubst
+      --   
+      -- patch code with annotations gathered in `m`
+      --
       return                   $ (pa m <$>) <$> apply θ <$> fs
   where
     pa m     (Ann i l fs)      = Ann i l $ nub $ fs ++ filter accepted (I.findWithDefault [] i m)
@@ -161,8 +157,7 @@ patch fs =
 -------------------------------------------------------------------------------
 initGlobalEnv :: PPRSF r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
-initGlobalEnv pgm@(Nano { code = Src ss }) = -- trace (ppshow mod) $ trace (ppshow cha) $ 
-                                             TCE nms mod cha ctx pth Nothing
+initGlobalEnv pgm@(Nano { code = Src ss }) = TCE nms mod cha ctx pth Nothing
   where
     reshuffle1 = \(_,_,c,d,e) -> (d,c,e)
     reshuffle2 = \(_,c,d,e)   -> (d,c,e)
@@ -184,7 +179,7 @@ initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod cha ctx pth parent
     tyBinds   = [(tVarId α, (tVar α, ReadOnly, Initialized)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) $ (,WriteLocal, Initialized) <$> ts
     nms       = envAddReturn f (t, ReadOnly, Initialized)
-              $ envAdds  (thisBind ++ tyBinds ++ varBinds ++ args) 
+              $ envAdds (thisBind ++ tyBinds ++ varBinds ++ args) 
               $ envMap (\(_,_,c,d,e) -> (d,c,e)) 
               $ mkVarEnv $ visibleVars s
     mod       = tce_mod γ
@@ -194,7 +189,7 @@ initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod cha ctx pth parent
     parent    = Just γ
     -- FIXME: this shouldn't be a special binding ... Include in xs
     thisBind  = (Id (srcPos dummySpan) "this",) . 
-                (, ThisVar, Initialized)   <$> 
+                (, ReadOnly, Initialized)   <$> 
                 maybeToList thisTO
 
 
@@ -227,8 +222,7 @@ tcEnvFindTy            :: (PPRSF r, F.Symbolic x, IsLocated x) => x -> TCEnv r -
 tcEnvFindTy x γ         = fst3 <$> tcEnvFindTyWithAgsn x γ 
 
 tcEnvFindTyWithAgsn    :: (PPRSF r, F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability, Initialization)
-tcEnvFindTyWithAgsn x γ = case -- trace ("lookip for: " ++ ppshow (F.symbol x) ++ " in " ++ ppshow (envKeys $ tce_names γ)) $
-                              envFindTy x $ tce_names γ of 
+tcEnvFindTyWithAgsn x γ = case envFindTy x $ tce_names γ of 
                             Just t -> Just $ adjustInit t
                             Nothing     ->
                               case tce_parent γ of 
@@ -471,7 +465,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
        return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
 -- e1.f = e2
-tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
+tcStmt γ e@(ExprStmt l (AssignExpr l2 OpAssign r@(LDot l1 e1 f) e2))
   = do z               <- runFailM ( tcExpr γ e1 Nothing )
        case z of 
          Right (_,te1) -> tcSetProp $ fmap snd3 $ getProp γ FieldAccess f te1
@@ -655,6 +649,9 @@ tcExpr :: PPRSF r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR
 -------------------------------------------------------------------------------
 tcExpr _ e@(IntLit _ _) _
   = return (e, tInt)
+
+tcExpr _ e@(HexLit _ _) _
+  = return (e, tBV32)
 
 tcExpr _ e@(BoolLit _ _) _
   = return (e, tBool)
@@ -846,13 +843,10 @@ tcCall γ (InfixExpr l o e1 e2)
 --   Special case for Enumeration, and object literals with numeric or 
 --   string arguments. 
 --
-tcCall γ (BracketRef l e1 e2)
+tcCall γ e@(BracketRef l e1 e2)
   = runFailM (tcExpr γ e1 Nothing) >>= \case
       -- Enumeration
-      Right (_, TEnum n) -> 
-          case resolveEnumInEnv γ n of
-            Just ed -> call (rTop $ enumTy ed)
-            _       -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
+      Right (_, TEnum _) -> tcError $ unimplemented (srcPos l) msg e
       -- Object literal
       Right (_, TCons _ _ _) -> 
           case e2 of
@@ -862,6 +856,7 @@ tcCall γ (BracketRef l e1 e2)
       -- Default
       _ -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
   where 
+    msg     = "Support for dynamic access of enumerations"
     call ty = tcNormalCall γ l BIBracketRef 
                 (FI Nothing [(e1, Nothing), (e2, Nothing)]) ty >>= \case
           (FI _ [e1', e2'], t) -> return (BracketRef l e1' e2', t)

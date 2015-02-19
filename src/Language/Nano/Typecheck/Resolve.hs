@@ -45,13 +45,15 @@ import           Data.Function                       (on)
 import qualified Data.Map.Strict                  as M
 import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Env
--- import           Language.Nano.Errors
+import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Types
 import           Language.Nano.Program
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
+
+import           Language.ECMAScript3.Syntax
 
 
 -- import           Debug.Trace
@@ -175,11 +177,16 @@ flattenType γ (TModule x)
     mkField (k,(_,_,t,_)) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) f_required t_immutable t)
 
 flattenType γ (TEnum x)
-  = do  es      <- M.fromList . map  mkField . envToList . e_symbols <$> resolveEnumInEnv γ x
+  = do  es      <- M.fromList . concatMap  mkField . envToList . e_mapping <$> resolveEnumInEnv γ x
         return   $ TCons t_immutable es fTop
   where
-    mkField (k, Just i ) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) f_required t_immutable $ tInt `strengthen` exprReft i)
-    mkField (k, Nothing) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) f_required t_immutable $ tInt)
+    -- TODO 
+    mkField (k, IntLit _ i) = [(key k, fld k $ tInt `strengthen` exprReft i)]
+    mkField (k, HexLit _ s) | Just e <- bitVectorValue s
+                            = [(key k, fld k $ tBV32 `strengthen` e)]
+    mkField _               = []
+    fld k = FieldSig (F.symbol k) f_required t_immutable
+    key   = (,InstanceMember) . F.symbol 
 
 flattenType γ (TApp TInt _ _)
   = do  es      <- t_elts <$> resolveTypeInEnv γ (mkAbsName [] $ F.symbol "Number")

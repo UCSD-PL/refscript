@@ -1,19 +1,17 @@
 
-/*@ inc :: (n: number) => number */
-function inc(n) {
-  return n + 1;
+/*@ qualif PLusOne(v:number, w: number): v = w + 1   */
+/*@ qualif Six(v:number): v = 6   */
+
+function inc1(n: number) { return n + 1; }
+function inc2(n: number) { return n + 2; }
+
+var x = { f: inc1 };
+
+function foo() :number {
+  return (x.f)(5);
 }
 
-var obj = {
-  a: 5,
-  b: "String",
-  f: inc
-};
+x = { f: inc2 };
 
-/*@ foo :: () => { v: number | v = 7 } */
-function foo () {
-  
-  var ff = obj.f;
-  return ff(obj.a);
+assert(foo() === 6);
 
-}

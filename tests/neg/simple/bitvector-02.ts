@@ -1,5 +1,4 @@
 
-/*@  predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
 
 enum SymbolFlags {
   Import             = 0x00400000,  // Import

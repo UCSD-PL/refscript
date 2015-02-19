@@ -775,17 +775,17 @@ tcExpr γ e@(SuperRef l) _
 
 -- | function (x,..) {  }
 tcExpr γ (FuncExpr l fo xs body) tCtxO
-  = case anns of 
-      [ft] -> tcFuncExpr ft
-      _    -> case tCtxO of
-                Just tCtx -> tcFuncExpr tCtx
-                Nothing   -> tcError $ errorNoFuncAnn $ srcPos l
+  | Just ft   <- funTy 
+  =  do ts    <- tcFunTys l f xs ft
+        body' <- foldM (tcFun1 γ l f xs) body ts
+        return $ (FuncExpr l fo xs body', ft)
+  | otherwise        
+  = tcError $ errorNoFuncAnn $ srcPos l
   where
-    tcFuncExpr t = do ts    <- tcFunTys l f xs t
-                      body' <- foldM (tcFun1 γ l f xs) body ts
-                      return $ (FuncExpr l fo xs body', t)
-    anns         = [ t | FuncAnn t <- ann_fact l ]
-    f            = maybe (F.symbol "<anonymous>") F.symbol fo
+    funTy | [ft]    <- [ t | FuncAnn t <- ann_fact l ] = Just ft
+          | Just ft <- tCtxO                           = Just ft
+          | otherwise                                  = Nothing
+    f = maybe (F.symbol "<anonymous>") F.symbol fo
 
 tcExpr _ e _ 
   = convertError "tcExpr" e

@@ -594,9 +594,13 @@ interface Array<T> {
      */
     slice(start?: number, end?: number): T[];
 
-    /*@ sort : 
+    /*  sort : 
         /\ ( ) => { v : Array<M,T> | len(v) = len(this) } 
         /\ (compareFn: (a: T, b: T) => number) => { v : Array<M,T> | len(v) = len(this) } 
+     */
+    /*@ sort : 
+        /\ ( ) => { v : Array<M,T> | true }
+        /\ (compareFn: (a: T, b: T) => number) => { v : Array<M,T> | true } 
      */
     sort(compareFn?: (a: T, b: T) => number): T[];
 

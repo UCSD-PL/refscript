@@ -118,7 +118,6 @@ declare function builtin_OpMul(a: number, b: number): number;
     (x: number, {y: number | y != 0}) => {v:number | (x > 0 && y > 1) => (0 <= v && v < x)}
  */
 declare function builtin_OpDiv(a: number, b: number): number;
-// FIXME: This is not correct. Add definition for: >>
 
 declare function builtin_OpMod(a: number, b: number): number;
 

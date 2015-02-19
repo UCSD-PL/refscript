@@ -215,6 +215,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (ConsAnn c)      = text "Constructor Annotation" <+> pp c
   pp (UserCast c)     = text "Cast Annotation"        <+> pp c
   pp (ExportedElt)    = text "Exported"
+  pp (ReadOnlyVar)    = text "ReadOnlyVar"
   pp (FuncAnn t)      = text "Func Annotation"        <+> pp t
   pp (FieldAnn f)     = text "Field Annotation"       <+> pp f
   pp (MethAnn m)      = text "Method Annotation"      <+> pp m

@@ -206,9 +206,8 @@ initSsaEnv   :: AnnSSA r -> Var r -> SSAM r (Var r)
 -------------------------------------------------------------------------------------
 initSsaEnv ll x       = getAssignability x >>= go
   where 
-    go m@ReadOnly     = return x
+    go ReadOnly       = return x
     go _              = updSsaEnv ll x
-    l                 = srcPos ll
 
 -------------------------------------------------------------------------------------
 updSsaEnv   :: AnnSSA r -> Var r -> SSAM r (Var r)

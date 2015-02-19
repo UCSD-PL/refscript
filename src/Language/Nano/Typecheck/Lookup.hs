@@ -25,10 +25,8 @@ import qualified Language.Fixpoint.Bitvector as BV
 import           Language.Nano.Names
 import           Language.Nano.Types
 import           Language.Nano.Env
-import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
-import           Language.Nano.Liquid.Types
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Subst
 import           Control.Applicative ((<$>))

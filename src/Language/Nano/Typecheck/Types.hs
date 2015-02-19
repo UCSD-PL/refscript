@@ -82,7 +82,6 @@ module Language.Nano.Typecheck.Types (
 import           Data.Data
 import           Data.Default
 import           Data.Hashable
-import qualified Data.IntMap                     as I
 import           Data.Either                    (partitionEithers)
 import qualified Data.List                      as L
 import           Data.Maybe                     (fromMaybe, isJust, fromJust)

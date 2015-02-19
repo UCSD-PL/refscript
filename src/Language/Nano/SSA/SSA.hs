@@ -848,7 +848,6 @@ ssaVarRef l x
          ForeignLocal -> ssaError $ errorForeignLocal (srcPos x) x
          ImportDecl   -> ssaError $ errorSSAUnboundId (srcPos x) x
          ReturnVar    -> ssaError $ errorSSAUnboundId (srcPos x) x
-         ThisVar      -> ssaError $ errorSSAUnboundId (srcPos x) x
     where
        e = VarRef l x
  

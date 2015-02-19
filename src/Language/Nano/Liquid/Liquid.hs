@@ -216,9 +216,7 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     tyBinds   = [(Loc (srcPos l) α, (tVar α, ReadOnly, Initialized)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) $ (,WriteLocal,Initialized) <$> ts
     argBind   = [(argId l, (argTy l ts (cge_names g), ReadOnly, Initialized))]
-    thisBind  = (Id (srcPos dummySpan) "this",) .
-                (, ThisVar, Initialized)   <$> 
-                maybeToList thisTO
+    thisBind  = (builtinOpId BIThis,) . (, ReadOnly, Initialized) <$> maybeToList thisTO
 
 
 -------------------------------------------------------------------------------
@@ -431,13 +429,20 @@ consClassElts g = mapM_ . consClassElt g
 consClassElt :: CGEnv -> IfaceDef F.Reft -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body) 
-  = do  g'       <- envAdd ctorExit (mkCtorExitTy,ReadOnly,Initialized) g
-        g''      <- envAdds "ctor-super" superInfo g'
+  = do  g0       <- envAdd ctorExit (mkCtorExitTy,ReadOnly,Initialized) g
+        g1       <- envAdds "ctor-super" superInfo g0
+        g2       <- envAdds "ctor-this"  thisInfo  g1
         cTy      <- mkCtorTy
         ts       <- splitCtorTys l ctor cTy
-        forM_ ts  $ consFun1 l g'' ctor xs body
+        forM_ ts  $ consFun1 l g2 ctor xs body
   where 
 
+    -- XXX        : 'this' will not appear in the code but it might appear in
+    --              refinements, so add it in scope here.
+    this_T        = TRef nm (tVar <$> vs) fTop
+    thisInfo      = [(this,(this_T,ReadOnly,Initialized))]
+
+    this          = builtinOpId BIThis
     ctor          = builtinOpId BICtor
     ctorExit      = builtinOpId BICtorExit
     super         = builtinOpId BISuper
@@ -452,7 +457,7 @@ consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body)
     --              checks at the return from the constructor.
     mkCtorExitTy  = mkFun (vs,Nothing,bs,tVoid)
       where 
-        bs        | Just (TCons _ ms _) <- flattenType g (TRef nm (tVar <$> vs) fTop)
+        bs        | Just (TCons _ ms _) <- flattenType g this_T
                   = sortBy c_sym [ B s t | ((_,InstanceMember),(FieldSig s _ _ t)) <- M.toList ms ]
                   | otherwise
                   = []
@@ -593,8 +598,8 @@ consExpr g (NullLit l) _
   = Just <$> envAddFresh l (tNull, WriteLocal, Initialized) g
 
 consExpr g (ThisRef l) _
-  = case envFindTy (Id (ann l) "this") g of
-      Just t  -> Just <$> envAddFresh l (t, ThisVar, Initialized) g
+  = case envFindTy (builtinOpId BIThis) g of
+      Just t  -> Just <$> envAddFresh l (t, ReadOnly, Initialized) g
       Nothing -> cgError $ errorUnboundId (ann l) "this" 
 
 consExpr g (VarRef l x) _
@@ -643,7 +648,7 @@ consExpr g (CondExpr l e e1 e2) to
 
 -- | super(e1,..,en)
 consExpr g (CallExpr l (SuperRef _) es) _
-  = case envFindTy (F.symbol "this") g of
+  = case envFindTy (builtinOpId BIThis) g of
       Just t -> 
           case extractParent g t of 
             Just (TRef x _ _) -> 
@@ -755,7 +760,7 @@ consExpr g (NewExpr l e es) _
 
 -- | super
 consExpr g (SuperRef l) _
-  = case envFindTy (Id (ann l) "this") g of 
+  = case envFindTy (builtinOpId BIThis) g of 
       Just t   -> case extractParent g t of 
                     Just tp -> Just <$> envAddFresh l (tp, WriteGlobal, Initialized) g
                     Nothing -> cgError $ errorSuper (ann l)

@@ -378,7 +378,7 @@ addObjectFieldsWithOK :: (IsLocated x, F.Symbolic x, PP x, PP [x])
 ---------------------------------------------------------------------------------------
 addObjectFieldsWithOK False ok g (x,a,t) = return g
 addObjectFieldsWithOK True  ok g (x,a,t) 
-              | a `elem` [WriteGlobal,ThisVar,ReturnVar] 
+              | a `elem` [WriteGlobal,ReturnVar] 
               = return g
               | otherwise
               = envAddsWithOK False ok "addObjectFieldsWithOK" xts g

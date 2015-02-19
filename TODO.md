@@ -26,6 +26,8 @@ Tool/Implementation
 
 
   - WELL-FORMEDNESS CHECKS: 
+
+    * TRefs should have a mutability position
       
     * each sort should be represented at most once at a union
 

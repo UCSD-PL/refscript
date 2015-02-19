@@ -17045,7 +17045,7 @@ var TypeScript;
                 }
             });
 
-            var anns = TypeScript.ArrayUtilities.concat([leadingTokenAnnots(this.functionKeyword), leadingTokenAnnots(this.block)]);
+            var anns = TypeScript.ArrayUtilities.concat([leadingTokenAnnots(this.functionKeyword), trailingTokenAnnots(this.callSignature), leadingTokenAnnots(this.block)]);
             var funcAnns = anns.filter(function (a) {
                 return a.kind() === 4 /* RawFunc */;
             });

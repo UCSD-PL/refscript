@@ -850,8 +850,8 @@ tcCall γ e@(BracketRef l e1 e2)
       -- Object literal
       Right (_, TCons _ _ _) -> 
           case e2 of
-            StringLit l2 s -> tcExpr γ (DotRef l e1 (Id l2 s)) Nothing
-            IntLit l2 n -> tcExpr γ (DotRef l e1 (Id l2 $ show n)) Nothing
+            -- StringLit l2 s -> tcExpr γ (DotRef l e1 (Id l2 s)) Nothing
+            -- IntLit l2 n -> tcExpr γ (DotRef l e1 (Id l2 $ show n)) Nothing
             _ -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
       -- Default
       _ -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call

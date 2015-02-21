@@ -381,10 +381,14 @@ addObjectFieldsWithOK True  ok g (x,a,t)
               | otherwise
               = envAddsWithOK False ok "addObjectFieldsWithOK" xts g
   where
-    xts       = [(fd f, ty tf) | FieldSig f _ m tf <- ms, isImmutable m ]
+    xts       = [(fd f, ty o tf) | FieldSig f o m tf <- ms, isImmutable m ]
 
     fd        = mkFieldB x 
-    ty tf     = (F.subst (substFieldSyms g x t) tf, a, Initialized)
+
+    ty o tf   | optionalFieldType o 
+              = (orUndef $ F.subst (substFieldSyms g x t) tf, a, Initialized)
+              | otherwise
+              = (F.subst (substFieldSyms g x t) tf, a, Initialized)
 
     ms        | Just (TCons m ms _) <- flattenType g t = defMut m <$> M.elems ms
               | otherwise                              = []

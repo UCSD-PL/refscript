@@ -108,7 +108,8 @@ envFromList        = L.foldl' step envEmpty
   where
     step γ (i, t)  = case envFindLoc i γ of
                        Nothing -> envAdd i t γ
-                       Just l' -> throw $ errorDuplicate i (srcPos i) l'
+                       Just l' | l' /= srcPos i -> throw $ errorDuplicate i (srcPos i) l'
+                               | otherwise      -> γ
 
 -- Allows duplicates in list -- last one in list will be used
 envFromList'      :: (PP x, IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t

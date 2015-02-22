@@ -1,13 +1,13 @@
 
-/*@ indirectIndex :: (a: IArray<number>, b: IArray<{number|((0 <= v) && (v < (len a)))}>, i: { number | ((0 <= v) && (v < (len b)))}) => number */
-function indirectIndex(a : number[], b : number[], i : number) : number {
+/*@ indirectIndex :: (x: IArray<number>, b: IArray<{number|((0 <= v) && (v < (len x)))}>, i: { number | ((0 <= v) && (v < (len b)))}) => number */
+function indirectIndex(x : number[], b : number[], i : number) : number {
   var bi = b[i];
-  return a[bi];
+  return x[bi];
 
 }
 
-/*@ writeIndex :: (a:IArray<number>, i:{ number | (0 <= v && v < (len a)) }, v: number) => void */
-function writeIndex(a : number[], i : number, v: number) : void {
-  a[i] = v;
+/*@ writeIndex :: (x:IArray<number>, i:{ number | (0 <= v && v < (len x)) }, v: number) => void */
+function writeIndex(x : number[], i : number, v: number) : void {
+  x[i] = v;
   return;
 }

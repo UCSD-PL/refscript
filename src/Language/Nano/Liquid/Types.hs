@@ -483,9 +483,9 @@ getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
 
 -- | @zipType@ returns a type that is:
 --
---  * structurally equivalent to @t2@
---
 --  * semantically equivalent to @t1@
+--
+--  * structurally equivalent to @t2@
 --
 --------------------------------------------------------------------------------
 zipType :: (IsLocated l, F.Symbolic x) 
@@ -630,6 +630,7 @@ zipType l γ x (TAnd t1s) (TAnd t2s) =
   where
     pick t2            = fromCandidates [ t1 | t1 <- t1s, t1 `matches` t2 ]
     t `matches` t'     = isSubtype γ t t' || isSubtype γ t' t 
+
     fromCandidates [ ] = die $ bug (srcPos l) 
                        $ "zipType l: cannot match " ++ ppshow t2s ++ " with any of " ++ ppshow t1s
     fromCandidates [t] = t

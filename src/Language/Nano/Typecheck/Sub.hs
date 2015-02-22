@@ -296,8 +296,8 @@ convertFun l γ (TFun s1 b1s o1 _) (TFun s2 b2s o2 _)
                             (zipWithM (convert' l γ) args2 args1)
   where
     lengthSub | length b1s == length b2s = CDNo
-              | length b1s >  length b2s = CDDn
-              | otherwise                = CDUp
+              -- | length b1s >  length b2s = CDDn
+              | otherwise                = CDDead
     s1'       = fromMaybe tTop s1 
     s2'       = fromMaybe tTop s2
     args1     = s1' : map b_type b1s

@@ -1,3 +1,7 @@
+
+// PV: Type binder names should be "hard to guess" -- add an "_" in the end 
+
+
 /*************************************************************************
  *        
  *  GENERAL PURPOSE AUXILIARY DEFINITIONS 
@@ -33,7 +37,7 @@ declare function isNaN(x:any) : boolean;
  ************************************************************************/
 
 /*@ builtin_BIBracketRef ::
-    /\ forall A  . (a: IArray<A>, {v: number | (0 <= v && v < (len a))}) => A
+    /\ forall A  . (x_: IArray<A>, {v: number | (0 <= v && v < (len x_))}) => A
     /\ forall A  . (MArray<A> , idx: number) => A + undefined
     /\ forall M A. (Array<M,A>, idx: number + undefined) => A + undefined
     /\ forall M A. (Array<M,A>, idx: undefined) => undefined

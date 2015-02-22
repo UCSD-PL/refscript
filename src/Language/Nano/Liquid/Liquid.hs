@@ -88,8 +88,8 @@ refTc cfg f p
   = do donePhase Loud "Generate Constraints"
        solveConstraints f cgi
   where
-    cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
-    -- cgi = generateConstraints cfg p
+    -- cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
+    cgi = generateConstraints cfg p
 
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 

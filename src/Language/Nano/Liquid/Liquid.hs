@@ -88,8 +88,8 @@ refTc cfg f p
   = do donePhase Loud "Generate Constraints"
        solveConstraints f cgi
   where
-    -- cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
-    cgi = generateConstraints cfg p
+    cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
+    -- cgi = generateConstraints cfg p
 
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
@@ -328,6 +328,17 @@ consStmt g (ReturnStmt l Nothing)
        return Nothing
        
 -- return e 
+consStmt g (ReturnStmt l (Just e@(VarRef lv x)))
+  | Just t <- envFindTy x g
+  = do  g'    <- envAdd fn (finalizeTy t,ReadOnly,Initialized) g
+        consStmt g' (ReturnStmt l (Just (CallExpr l (VarRef lv fn) [e]))) 
+  | otherwise 
+  = do  _ <- consCall g l "return" (FI Nothing [(e, Just retTy)]) $ returnTy retTy True
+        return Nothing
+  where
+    retTy = envFindReturn g 
+    fn    = Id l "__finalize__"
+
 consStmt g (ReturnStmt l (Just e))
   = do  _ <- consCall g l "return" (FI Nothing [(e, Just retTy)]) $ returnTy retTy True
         return Nothing
@@ -663,16 +674,12 @@ consExpr g (CondExpr l e e1 e2) to
 
 -- | super(e1,..,en)
 consExpr g (CallExpr l (SuperRef _) es) _
-  = case envFindTy (builtinOpId BIThis) g of
-      Just t -> 
-          case extractParent g t of 
-            Just (TRef x _ _) -> 
-                case extractCtor g (TClass x) of
-                  Just ct -> consCall g l "super" (FI Nothing ((,Nothing) <$> es)) ct
-                  _       -> cgError $ errorUnboundId (ann l) "super"
-            Just _  -> cgError $ errorUnboundId (ann l) "super"
-            Nothing -> cgError $ errorUnboundId (ann l) "super"
-      Nothing -> cgError $ errorUnboundId (ann l) "this"
+  | Just t            <- envFindTy (builtinOpId BIThis) g
+  , Just (TRef x _ _) <- extractParent g t
+  , Just ct           <- extractCtor g (TClass x) 
+  = consCall g l "super" (FI Nothing ((,Nothing) <$> es)) ct
+  | otherwise
+  = cgError $ errorUnboundId (ann l) "super"
 
 -- | e.m(es)
 consExpr g c@(CallExpr l em@(DotRef _ e f) es) _

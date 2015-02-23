@@ -39,7 +39,7 @@ import           Control.Applicative ((<$>))
 excludedFieldSymbols = F.symbol <$> [ "hasOwnProperty", "prototype", "__proto__" ]
 
 
-type PPRD r = (ExprReftable Int r, PP r, F.Reftable r, Data r)
+type PPRD r = (ExprReftable F.Symbol r, ExprReftable Int r, PP r, F.Reftable r, Data r)
 
 
 data AccessKind = MethodAccess | FieldAccess
@@ -282,6 +282,5 @@ getPropUnion γ b f ts =
     ([],[] ,[])                           -> Nothing
     (ts,ts',ms)  | all isImmutable     ms -> Just (mkUnion ts, mkUnion ts', t_immutable)
                  | all isMutable       ms -> Just (mkUnion ts, mkUnion ts', t_mutable)
-                 | all isAssignsFields ms -> Just (mkUnion ts, mkUnion ts', t_assignsFields)
                  | otherwise              -> Just (mkUnion ts, mkUnion ts', t_readOnly)
 

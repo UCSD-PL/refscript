@@ -145,6 +145,8 @@ data FactQ q r
   | ReadOnlyVar
   | ModuleAnn   !(F.Symbol)
   | EnumAnn     !(F.Symbol)
+  -- Auxiliary
+  | BypassUnique
     deriving (Eq, Show, Data, Typeable)
 
 type Fact      = FactQ AK
@@ -224,6 +226,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (IfaceAnn _)     = text "UNIMPLEMENTED:pp:IfaceAnn"
   pp (ModuleAnn s)    = text "module"                 <+> pp s
   pp (EnumAnn s)      = text "enum"                   <+> pp s
+  pp (BypassUnique)   = text "BypassUnique" 
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
   pp             = vcat . (ppB <$>) . I.toList 

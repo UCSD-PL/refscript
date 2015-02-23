@@ -202,4 +202,5 @@ errorVariadic l f             = mkErr l $ printf "Cannot call variadic on type '
 errorVariadicNoArgs l f       = mkErr l $ printf "Cannot make variadic call '%s' without arguments." (ppshow f)
 errorConflateTypeMembers l es = mkErr l $ printf "Cannot conflate type members '%s'." (ppshow es)  
 errorCallSuperOnNonClass l x  = mkErr l $ printf "Cannot call 'super' on non class type '%s'." (ppshow x)
+errorAssignsFields l x t      = mkErr l $ printf "Variable '%s' with type '%s' can only be assigned fields or returned." (ppshow x) (ppshow t)
 

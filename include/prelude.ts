@@ -46,6 +46,8 @@ declare function isNaN(x:any) : boolean;
  */
 declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 
+// XXX: add case for A<AssignsFields> or A<Unique> 
+
 /*@ builtin_BIBracketAssign :: 
     /\ forall A. (a: Array<Immutable, A>, {idx:number | (0 <= idx && idx < (len a))}, val: A) => void
     /\ forall A. (a: Array<ReadOnly , A>, idx:number, val: A) => void
@@ -54,7 +56,8 @@ declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 declare function builtin_BIBracketAssign<A>(a: A[], n: number, v: A): void;
 
 /*@ builtin_BISetProp :: 
-    forall A M. ([M] { f ? : [Mutable] A }, A) => {A | true}
+    /\ forall A M. ([UniqueMutable] { f ? : [M] A }, A) => { A | true }
+    /\ forall A M. ([M] { f ? : [Mutable] A }      , A) => { A | true }
  */
 declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
@@ -950,19 +953,19 @@ interface Immutable extends ReadOnly {
     immutable__: void;
 } 
 
-/*@ interface Mutable extends AssignsFields */
-interface Mutable extends AssignsFields {
+/*@ interface Mutable extends ReadOnly */
+interface Mutable extends ReadOnly {
     mutable__: void;
+} 
+
+/*@ interface UniqueMutable extends Mutable */
+interface UniqueMutable extends Mutable {
+    unique_mutable__: void;
 } 
 
 /*@ interface AnyMutability extends ReadOnly */
 interface AnyMutability extends ReadOnly {
     defaultMut__: void;
-} 
-
-/*@ interface AssignsFields extends ReadOnly */
-interface AssignsFields extends ReadOnly {
-    assignsFields_: void;
 } 
 
 /*@ interface InheritedMut */

@@ -41,7 +41,7 @@ module Language.Nano.Typecheck.TCMonad (
   , subtypeM, isSubtype, checkTypes
 
   -- * Casts
-  , castM, deadcastM, freshId
+  , castM, deadcastM, freshCastId, isCastId
 
   -- * Verbosity / Options
   , whenLoud', whenLoud, whenQuiet', whenQuiet, getOpts, getAstCount
@@ -57,6 +57,7 @@ import           Data.Function                      (on)
 import qualified Data.HashMap.Strict                as M
 import qualified Data.Map.Strict                    as MM
 import           Data.Maybe                         (catMaybes, isJust, maybeToList)
+import           Data.List                          (isPrefixOf) 
 import           Data.Monoid                  
 import qualified Data.IntMap.Strict                 as I
 
@@ -300,7 +301,9 @@ instance Freshable a => Freshable [a] where
 
 freshTVar l _ =  ((`TV` l). F.intSymbol (F.symbol "T")) <$> tick
 
-freshId l =  Id l . ("__cast_" ++) . show <$> tick
+castPrefix        = "__cast_"
+freshCastId l     =  Id l . (castPrefix ++) . show <$> tick
+isCastId (Id _ s) = castPrefix `isPrefixOf` s
 
 
 --------------------------------------------------------------------------------

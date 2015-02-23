@@ -313,7 +313,7 @@ interface Object {
       * @param v A property name.
       */
     /*@ hasOwnProperty : forall A . (this: A, p: string) 
-                      => { boolean | Prop(v) <=> hasDirectProperty(p, this) }
+                       : { boolean | Prop(v) <=> hasDirectProperty(p, this) }
      */
     hasOwnProperty(p: string): boolean;
 

@@ -439,8 +439,10 @@ interface Math {
     exp(x: number): number;
     floor(x: number): number;
     log(x: number): number;
+    /*@ max : (a:number, b:number) : {number | v = if (a < b) then b else a} */
     max(a: number, b: number): number;
     // max(...values: number[]): number;
+    /*@ min : (a:number, b:number) : {number | v = if (a < b) then a else b} */
     min(a: number, b:number): number;
     // min(...values: number[]): number;
     pow(x: number, y: number): number;

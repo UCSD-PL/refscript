@@ -1,9 +1,15 @@
   
-/*@ addEntry :: forall T . (ob: [Mutable] { [x:string]: T }, entry: { 0: string; 1: T })
-             => { [Mutable] {[x: string]: T} | true } */
+
+/*@ alias MMap<T> = [Mutable] {[x:string]: T} */
+
+
+/*@ addEntry :: forall T . (ob: MMap<T>, entry: { f0: string; f1: T }) => { MMap<T> | true } */
 
 function addEntry(ob, entry) {
-  ob[entry[0]] = entry[1];
+
+  ob[entry.f0] = entry.f1;
+
   return ob;
+
 }
 

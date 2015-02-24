@@ -632,15 +632,14 @@ tcNormalCallWCtx γ l o es t
 
 tcRetW γ l (Just e@(VarRef lv x))
   | Just t <- tcEnvFindTy x γ, needsCall t 
-  = do  fn      <- (`Id` "__finalize__") <$> freshenAnn l
-        let γ'   = tcEnvAdd fn (finalizeTy t,ReadOnly,Initialized) γ
-        (s,eo)  <- tcRetW γ' l (Just (CallExpr l (VarRef l fn) [e']))
-        case s of 
-          -- e' won't be cast
-          ReturnStmt _ (Just (CallExpr _ _ [e''])) -> return (ReturnStmt l (Just e''),eo)
-          _ -> die $ bug (srcPos l) "tcRetW"
+  = tcRetW (newEnv t) l (Just (CallExpr l (VarRef l fn) [e'])) >>= \case 
+      -- e' won't be cast
+      (ReturnStmt _ (Just (CallExpr _ _ [e''])),eo) -> return (ReturnStmt l (Just e''),eo)
+      _ -> die $ bug (srcPos l) "tcRetW"
   where 
-    e' = fmap (\a -> a { ann_fact = BypassUnique : ann_fact a }) e
+    newEnv t = tcEnvAdd fn (finalizeTy t,ReadOnly,Initialized) γ
+    fn       = Id l "__finalize__"
+    e'       = fmap (\a -> a { ann_fact = BypassUnique : ann_fact a }) e
     needsCall (TRef x (m:ts) r) = isUniqueMutable m 
     needsCall _                 = False
 
@@ -880,19 +879,15 @@ tcCall γ e@(BracketRef l e1 e2)
       -- Enumeration
       Right (_, TEnum _) -> tcError $ unimplemented (srcPos l) msg e
       -- Object literal
-      Right (_, TCons _ _ _) -> 
-          case e2 of
-            -- StringLit l2 s -> tcExpr γ (DotRef l e1 (Id l2 s)) Nothing
-            -- IntLit l2 n -> tcExpr γ (DotRef l e1 (Id l2 $ show n)) Nothing
-            _ -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
+      Right (_, TCons _ _ _) -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
       -- Default
       _ -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
   where 
     msg     = "Support for dynamic access of enumerations"
-    call ty = tcNormalCall γ l BIBracketRef 
-                (FI Nothing [(e1, Nothing), (e2, Nothing)]) ty >>= \case
+    call ty = tcNormalCall γ l BIBracketRef (args e1 e2) ty >>= \case
           (FI _ [e1', e2'], t) -> return (BracketRef l e1' e2', t)
           _ -> tcError $ impossible (srcPos l) "tcCall BracketRef"
+    args e1 e2 = FI Nothing [(e1, Nothing), (e2, Nothing)]
    
 -- | `e1[e2] = e3`
 tcCall γ (AssignExpr l OpAssign (LBracket l1 e1 e2) e3)

@@ -88,8 +88,8 @@ refTc cfg f p
   = do donePhase Loud "Generate Constraints"
        solveConstraints f cgi
   where
-    cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
-    -- cgi = generateConstraints cfg p
+    -- cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
+    cgi = generateConstraints cfg p
 
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
@@ -329,7 +329,7 @@ consStmt g (ReturnStmt l Nothing)
        
 -- return e 
 consStmt g (ReturnStmt l (Just e@(VarRef lv x)))
-  | Just t <- envFindTy x g
+  | Just t <- envFindTy x g, needsCall t 
   = do  g'    <- envAdd fn (finalizeTy t,ReadOnly,Initialized) g
         consStmt g' (ReturnStmt l (Just (CallExpr l (VarRef lv fn) [e]))) 
   | otherwise 
@@ -338,6 +338,8 @@ consStmt g (ReturnStmt l (Just e@(VarRef lv x)))
   where
     retTy = envFindReturn g 
     fn    = Id l "__finalize__"
+    needsCall (TRef _ (m:_) _) = isUniqueMutable m 
+    needsCall _                = False
 
 consStmt g (ReturnStmt l (Just e))
   = do  _ <- consCall g l "return" (FI Nothing [(e, Just retTy)]) $ returnTy retTy True

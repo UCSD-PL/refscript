@@ -49,9 +49,9 @@ declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 // XXX: add case for A<AssignsFields> or A<Unique> 
 
 /*@ builtin_BIBracketAssign :: 
-    /\ forall A. (a: Array<Immutable, A>, {idx:number | (0 <= idx && idx < (len a))}, val: A) => void
-    /\ forall A. (a: Array<ReadOnly , A>, idx:number, val: A) => void
-    /\ forall A M. ([Mutable]{[y: string]: A }, x:string, val: A) => void
+    /\ forall A   . (x_: IArray<A>, {idx:number | (0 <= idx && idx < (len x_))}, val: A) => void
+    /\ forall A M . (x_: Array<M,A>, idx:number, val: A) => void
+    /\ forall A   . ([Mutable]{[y: string]: A }, x:string, val: A) => void
  */
 declare function builtin_BIBracketAssign<A>(a: A[], n: number, v: A): void;
 
@@ -206,10 +206,7 @@ declare function builtin_OpLShift(a: number, b: number): number;
 declare function builtin_OpSpRShift(a: number, b: number): number;
 declare function builtin_OpZfRShift(a: number, b: number): number;
 
-/*@  predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
-
-/*@ builtin_bv_truthy :: (b: bitvector32) => { boolean | (Prop v) <=> bv_truthy(b) } */
-declare function builtin_bv_truthy(b: number): boolean; 
+/*   predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
 
 
 /**
@@ -554,9 +551,7 @@ interface Boolean { }
  *
  */
  
-
-//TODO: the refinement is ignored?
-/*@ measure len :: forall A . (A) => number */
+/*@ measure len :: forall M A . (Array<M,A>) => number */
 
 
 /*@ interface Array<M,T> */
@@ -806,9 +801,6 @@ declare function builtin_BIFalsy<A>(x: A): boolean;
 
 /*@ invariant {v:number | [(ttag(v)  =  "number");
                            (Prop(v) <=> v /= 0  )]}	*/
-
-/*  invariant {v:bitvector32 | [(ttag(v)  =  "number");
-                                (Prop(v) <=> (v /= (lit "#x00000000" (BitVec (Size32 obj)))))]}	*/
 
 
 

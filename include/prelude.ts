@@ -138,30 +138,17 @@ declare function builtin_PrefixPlus(a: number): number;
  */
 declare function builtin_PrefixMinus(a: number): number;
 
-/*  builtin_OpEq :: 
-    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
- */
-// declare function builtin_OpEq<A,B>(a: A, b: B): boolean;
-
-/*  builtin_OpSEq :: 
-    /\ forall A  . (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }
-    /\ forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
- */
 /*@ builtin_OpSEq :: 
-    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
+    /\ forall A   . (x:A, y:A) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
+    /\ forall A B . (x:A, y:B) => {v:boolean | (not (Prop v)) } 
  */
 declare function builtin_OpSEq<A,B>(x: A, y: B): boolean;
 
-/*@ builtin_OpNEq :: 
-    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (not (x ~~ y))) } 
- */
-declare function builtin_OpNEq<A,B>(x: A, y: B): boolean;
-
 /*@ builtin_OpSNEq :: 
-    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (not (x ~~ y))) } 
+    /\ forall A   . (x:A, y:A) => {v:boolean | ((Prop v) <=> (not (x ~~ y))) } 
+    /\ forall A B . (x:A, y:B) => {v:boolean | (Prop v) } 
  */
 declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
-// FIXME: the two version of inequality should not be the same...
 
 /*@ builtin_OpLAnd :: 
     /\ forall B. (x: undefined, y:B) => {undefined | true}
@@ -310,7 +297,7 @@ interface Object {
       * @param v A property name.
       */
     /*@ hasOwnProperty : forall A . (this: A, p: string) 
-                       : { boolean | Prop(v) <=> hasDirectProperty(p, this) }
+                      => { boolean | Prop(v) <=> hasDirectProperty(p, this) }
      */
     hasOwnProperty(p: string): boolean;
 
@@ -451,10 +438,8 @@ interface Math {
     exp(x: number): number;
     floor(x: number): number;
     log(x: number): number;
-    /*@ max : (a:number, b:number) : {number | v = if (a < b) then b else a} */
     max(a: number, b: number): number;
     // max(...values: number[]): number;
-    /*@ min : (a:number, b:number) : {number | v = if (a < b) then a else b} */
     min(a: number, b:number): number;
     // min(...values: number[]): number;
     pow(x: number, y: number): number;

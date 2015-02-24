@@ -1,17 +1,15 @@
 
-/*@ toNumber :: (x: string) => { number | 0 <= v }*/
-function toNumber(x) {
-  var n = NumberC(x);
-  if (n >= 0) {
-    return n;
-  }
-  else {
-    return 0;
-  }
-}
+/*@ where :: forall T . (values: IArray<T>, f: (T) => boolean) 
+          => { IArray<T> | (len v) = 5 } */
 
+function where<T>(values: T[], f: (v: T) => boolean): T[] {
+	var result = new Array<T>(5);
 
-/*@ foo :: (#Array[#Immutable, string]) => #Array[#Immutable,{ number | 0 < v } ] */
-function foo(arr) {
-  return arr.map(toNumber);
+	for (var i = 0; i < values.length; i++) {
+		if (f(values[i])) {
+			result.push(values[i]);
+		}
+	}
+
+	return result;
 }

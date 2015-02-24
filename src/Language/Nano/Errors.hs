@@ -90,7 +90,7 @@ bugZipType l t1 t2            = mkErr l $ printf "BUG: zipType of types '%s' and
 -- | Nano
 ---------------------------------------------------------------------------
 errorInvalidTopStmt l x       = mkErr l $ printf "Invalid top-level statement: %s" (ppshow x) 
-errorDuplicate i l l'         = mkErr l $ printf "Duplicate Specification for '%s':\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
+errorDuplicate i l l'         = mkErr l $ printf "Duplicate specification for '%s':\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
 errorDuplicateKey l x         = mkErr l $ printf "Duplicate key '%s' when merging creating environment" (ppshow x) 
 errorInvalidHex l x           = mkErr l $ printf "'%s' is not a valid HEX value" (ppshow x) 
 
@@ -202,4 +202,5 @@ errorVariadic l f             = mkErr l $ printf "Cannot call variadic on type '
 errorVariadicNoArgs l f       = mkErr l $ printf "Cannot make variadic call '%s' without arguments." (ppshow f)
 errorConflateTypeMembers l es = mkErr l $ printf "Cannot conflate type members '%s'." (ppshow es)  
 errorCallSuperOnNonClass l x  = mkErr l $ printf "Cannot call 'super' on non class type '%s'." (ppshow x)
+errorAssignsFields l x t      = mkErr l $ printf "Variable '%s' with type '%s' can only be assigned fields or returned." (ppshow x) (ppshow t)
 

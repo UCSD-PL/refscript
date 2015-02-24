@@ -132,12 +132,6 @@ applyTAlias l t _ ts_ r a
     su                   = F.mkSubst  $ zip xs es
     θ                    = S.fromList $ zip αs ts
 
--- OLD splitTsEs ts       = (ts', [e | TExp e <- es'])
--- OLD   where
--- OLD     (ts', es')     = break isExp ts
--- OLD     isExp (TExp _) = True
--- OLD     isExp _        = False
-
 splitTsEs l t na nx ts_
   | na + nx /= n = die $ errorTAliasNumArgs l na nx n
   | otherwise    = (ts, rTypeExp l t <$> tes)

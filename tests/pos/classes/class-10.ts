@@ -1,7 +1,8 @@
+
 /*@ foo :: (x: Node<Mutable> + undefined) => { void | true } */
 function foo(x: Node) {
   if (x) {
-    x.field = 2;
+    (<Node>x).field = 2;
   }
 }
 

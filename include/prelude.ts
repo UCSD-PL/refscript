@@ -296,8 +296,9 @@ interface Object {
       * Determines whether an object has a property with the specified name. 
       * @param v A property name.
       */
+    // TODO: this can be simplified if we had as invariant that hasDirectProperty => hasProperty
     /*@ hasOwnProperty : forall A . (this: A, p: string) 
-                      => { boolean | Prop(v) <=> hasDirectProperty(p, this) }
+                       : { boolean | Prop(v) <=> hasDirectProperty(p, this) && hasProperty(p, this)}
      */
     hasOwnProperty(p: string): boolean;
 

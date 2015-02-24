@@ -46,15 +46,18 @@ declare function isNaN(x:any) : boolean;
  */
 declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 
+// XXX: add case for A<AssignsFields> or A<Unique> 
+
 /*@ builtin_BIBracketAssign :: 
-    /\ forall A. (a: Array<Immutable, A>, {idx:number | (0 <= idx && idx < (len a))}, val: A) => void
-    /\ forall A. (a: Array<ReadOnly , A>, idx:number, val: A) => void
-    /\ forall A M. ([Mutable]{[y: string]: A }, x:string, val: A) => void
+    /\ forall A   . (x_: IArray<A>, {idx:number | (0 <= idx && idx < (len x_))}, val: A) => void
+    /\ forall A M . (x_: Array<M,A>, idx:number, val: A) => void
+    /\ forall A   . ([Mutable]{[y: string]: A }, x:string, val: A) => void
  */
 declare function builtin_BIBracketAssign<A>(a: A[], n: number, v: A): void;
 
 /*@ builtin_BISetProp :: 
-    forall A M. ([M] { f ? : [Mutable] A }, A) => {A | true}
+    /\ forall A M. ([UniqueMutable] { f ? : [M] A }, A) => { A | true }
+    /\ forall A M. ([M] { f ? : [Mutable] A }      , A) => { A | true }
  */
 declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
@@ -203,10 +206,7 @@ declare function builtin_OpLShift(a: number, b: number): number;
 declare function builtin_OpSpRShift(a: number, b: number): number;
 declare function builtin_OpZfRShift(a: number, b: number): number;
 
-/*@  predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
-
-/*@ builtin_bv_truthy :: (b: bitvector32) => { boolean | (Prop v) <=> bv_truthy(b) } */
-declare function builtin_bv_truthy(b: number): boolean; 
+/*   predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
 
 
 /**
@@ -310,7 +310,7 @@ interface Object {
       * @param v A property name.
       */
     /*@ hasOwnProperty : forall A . (this: A, p: string) 
-                      => { boolean | Prop(v) <=> hasDirectProperty(p, this) }
+                       : { boolean | Prop(v) <=> hasDirectProperty(p, this) }
      */
     hasOwnProperty(p: string): boolean;
 
@@ -451,8 +451,10 @@ interface Math {
     exp(x: number): number;
     floor(x: number): number;
     log(x: number): number;
+    /*@ max : (a:number, b:number) : {number | v = if (a < b) then b else a} */
     max(a: number, b: number): number;
     // max(...values: number[]): number;
+    /*@ min : (a:number, b:number) : {number | v = if (a < b) then a else b} */
     min(a: number, b:number): number;
     // min(...values: number[]): number;
     pow(x: number, y: number): number;
@@ -551,9 +553,7 @@ interface Boolean { }
  *
  */
  
-
-//TODO: the refinement is ignored?
-/*@ measure len :: forall A . (A) => number */
+/*@ measure len :: forall M A . (Array<M,A>) => number */
 
 
 /*@ interface Array<M,T> */
@@ -804,9 +804,6 @@ declare function builtin_BIFalsy<A>(x: A): boolean;
 /*@ invariant {v:number | [(ttag(v)  =  "number");
                            (Prop(v) <=> v /= 0  )]}	*/
 
-/*  invariant {v:bitvector32 | [(ttag(v)  =  "number");
-                                (Prop(v) <=> (v /= (lit "#x00000000" (BitVec (Size32 obj)))))]}	*/
-
 
 
 /**
@@ -950,19 +947,19 @@ interface Immutable extends ReadOnly {
     immutable__: void;
 } 
 
-/*@ interface Mutable extends AssignsFields */
-interface Mutable extends AssignsFields {
+/*@ interface Mutable extends ReadOnly */
+interface Mutable extends ReadOnly {
     mutable__: void;
+} 
+
+/*@ interface UniqueMutable extends Mutable */
+interface UniqueMutable extends Mutable {
+    unique_mutable__: void;
 } 
 
 /*@ interface AnyMutability extends ReadOnly */
 interface AnyMutability extends ReadOnly {
     defaultMut__: void;
-} 
-
-/*@ interface AssignsFields extends ReadOnly */
-interface AssignsFields extends ReadOnly {
-    assignsFields_: void;
 } 
 
 /*@ interface InheritedMut */

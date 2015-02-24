@@ -1,8 +1,5 @@
 
-/*@ bar :: (arr: IArray<number>, fn: (number, number) => string) => { IArray<string> | true} */ 
-function bar(arr, fn) {
-  return arr.map(fn);
+/*@ bar :: (IArray<number>, (number, number) => string) => { IArray<string> | true} */ 
+function bar(arr, f) {
+  return arr.map(f);
 }
-
-
-

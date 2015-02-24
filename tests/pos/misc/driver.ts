@@ -19,13 +19,13 @@ function acquire(l:number):number{
 
 /*@ release :: (number) => number */
 function release(l:number):number{
-  assert(l != 0);
+  assert(l !== 0);
   return 0;
 }
 
 /*@ driver :: (number, number, number) => number */ 
 function driver(l:number, newCount:number, oldCount:number){
-	if (newCount != oldCount){
+	if (newCount !== oldCount){
 		l        = acquire(l);
 		oldCount = newCount;
 		if (0 < newCount){

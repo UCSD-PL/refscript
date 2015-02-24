@@ -466,14 +466,15 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 
 -- e1.f = e2
 tcStmt γ e@(ExprStmt l (AssignExpr l2 OpAssign r@(LDot l1 e1 f) e2))
-  = do z               <- runFailM ( tcExpr γ e1 Nothing )
-       case z of 
-         Right (_,te1) -> tcSetProp $ fmap snd3 $ getProp γ FieldAccess f te1
-         Left _        -> tcSetProp $ Nothing
+  = do  z               <- runFailM ( tcExpr γ e1l Nothing )
+        case z of 
+          Right (_,te1) -> tcSetProp $ fmap snd3 $ getProp γ FieldAccess f te1
+          Left _        -> tcSetProp $ Nothing
   where
+    e1l = fmap (\a -> a { ann_fact = BypassUnique : ann_fact a }) e1
     tcSetProp rhsCtx = 
       do  opTy          <- setPropTy l (F.symbol f) <$> safeTcEnvFindTy l γ (builtinOpId BISetProp)
-          ([e1',e2'],_) <- tcNormalCallWCtx γ l BISetProp [(e1, Nothing), (e2, rhsCtx)] opTy
+          ([e1',e2'],_) <- tcNormalCallWCtx γ l BISetProp [(e1l, Nothing), (e2, rhsCtx)] opTy
           return         $ (ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 e1' f) e2', Just γ)
 
 -- e
@@ -597,38 +598,61 @@ tcEnvAddo _ _ Nothing  = Nothing
 tcEnvAddo γ x (Just t) = Just $ tcEnvAdds [(x, t)] γ 
 
   
-----------------------------------------------------------------------------------------------------------------
-tcExprTW :: PPRSF r => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, Maybe (RType r))
+--------------------------------------------------------------------------------
+tcExprTW :: PPRSF r => AnnSSA r -> TCEnv r -> ExprSSAR r 
+                    -> Maybe (RType r) -> TCM r (ExprSSAR r, Maybe (RType r))
 tcExprW  :: PPRSF r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, Maybe (RType r))
-tcExprWD :: PPRSF r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
-----------------------------------------------------------------------------------------------------------------
-tcExprTW _ γ e Nothing    = tcExprW γ e
-tcExprTW l γ e (Just t)   = (tcWrap $ tcExprT l γ e t)    >>= tcEW γ e
+tcExprWD :: PPRSF r => TCEnv r -> ExprSSAR r 
+                    -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
+--------------------------------------------------------------------------------
+tcExprTW _ γ e Nothing    
+  = tcExprW γ e
+tcExprTW l γ e (Just t)   
+  = (tcWrap $ tcExprT l γ e t) >>= tcEW γ e
 
-tcExprW γ e               = (tcWrap $ tcExpr γ e Nothing) >>= tcEW γ e 
+tcExprW γ e        
+  = (tcWrap $ tcExpr γ e Nothing) >>= tcEW γ e 
 
-tcExprWD γ e t            = (tcWrap $ tcExpr γ e t)       >>= tcEW γ e >>= \case 
-                              (e, Just t) -> return (e, t)
-                              (e, _     ) -> return (e, tNull)
+tcExprWD γ e t            
+  = (tcWrap $ tcExpr γ e t) >>= tcEW γ e >>= \case 
+      (e, Just t) -> return (e, t)
+      (e, _     ) -> return (e, tNull)
 
  
-tcNormalCallW γ l o es t = (tcWrap $ tcNormalCall γ l o (FI Nothing ((,Nothing) <$> es)) t) >>= \case
-                             Right (FI _ es', t') -> return (es', Just t')
-                             Left err             -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) err) es
+tcNormalCallW γ l o es t 
+  = (tcWrap $ tcNormalCall γ l o (FI Nothing ((,Nothing) <$> es)) t) >>= \case
+      Right (FI _ es', t') -> return (es', Just t')
+      Left err -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) err) es
                                 
 
-tcNormalCallWCtx γ l o es t = (tcWrap $ tcNormalCall γ l o (FI Nothing es) t) >>= \case
-                                Right (FI _ es', t') -> return (es', Just t')
-                                Left err             -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) err) (fst <$> es)
+tcNormalCallWCtx γ l o es t 
+  = (tcWrap $ tcNormalCall γ l o (FI Nothing es) t) >>= \case
+      Right (FI _ es', t') -> return (es', Just t')
+      Left err -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) err) (fst <$> es)
 
-tcRetW γ l (Just e)
+tcRetW γ l (Just e@(VarRef lv x))
+  | Just t <- tcEnvFindTy x γ, needsCall t 
+  = tcRetW (newEnv t) l (Just (CallExpr l (VarRef l fn) [e'])) >>= \case 
+      -- e' won't be cast
+      (ReturnStmt _ (Just (CallExpr _ _ [e''])),eo) -> return (ReturnStmt l (Just e''),eo)
+      _ -> die $ bug (srcPos l) "tcRetW"
+  where 
+    newEnv t = tcEnvAdd fn (finalizeTy t,ReadOnly,Initialized) γ
+    fn       = Id l "__finalize__"
+    e'       = fmap (\a -> a { ann_fact = BypassUnique : ann_fact a }) e
+    needsCall (TRef x (m:ts) r) = isUniqueMutable m 
+    needsCall _                 = False
+
+tcRetW γ l eo = tcRetW' γ l eo
+
+tcRetW' γ l (Just e)
   = (tcWrap $ tcNormalCall γ l "return" (FI Nothing [(e, Just retTy)]) (returnTy retTy True)) >>= \case
        Right (FI _ es', _) -> (,Nothing) . ReturnStmt l . Just <$> return (head es')
        Left err            -> (,Nothing) . ReturnStmt l . Just <$> deadcastM (tce_ctx γ) err e
   where
     retTy = tcEnvFindReturn γ 
 
-tcRetW γ l Nothing
+tcRetW' γ l Nothing
   = do (_, _) <- tcNormalCall γ l "return" (FI Nothing []) $ returnTy (tcEnvFindReturn γ) False
        return  $ (ReturnStmt l Nothing, Nothing)
   
@@ -668,9 +692,16 @@ tcExpr γ e@(ThisRef l) _
       Nothing -> tcError $ errorUnboundId (ann l) "this"
 
 tcExpr γ e@(VarRef l x) _
-  = case tcEnvFindTy x γ of
-      Just t  -> return (e, t)
-      Nothing -> tcError $ errorUnboundId (ann l) x
+  | Just t <- to
+  , BypassUnique `elem` (ann_fact l) = return (e,t)  -- HACK
+  | Just t <- to, isCastId x         = return (e,t)  -- HACK
+  | Just t <- to, disallowed t       = tcError $ errorAssignsFields (ann l) x t
+  | Just t <- to                     = return (e,t)
+  | otherwise                        = tcError $ errorUnboundId (ann l) x
+  where 
+    to = tcEnvFindTy x γ
+    disallowed (TRef _ (m:_) _)      = isUniqueMutable m
+    disallowed _                     = False
  
 -- | e ? e1 : e2
 --   
@@ -690,7 +721,7 @@ tcExpr γ e@(VarRef l x) _
 --
 tcExpr γ (CondExpr l e e1 e2) to
   = do  opTy                      <- mkTy to <$> safeTcEnvFindTy l γ (builtinOpId BICondExpr)
-        (sv,v)                    <- dup F.symbol (VarRef l) <$> freshId l
+        (sv,v)                    <- dup F.symbol (VarRef l) <$> freshCastId l
         let γ'                     = tcEnvAdd sv (tt, WriteLocal, Initialized) γ
         (FI _ [e',_,e1',e2'], t') <- tcNormalCall γ' l BICondExpr (args v) opTy
         return                     $ (CondExpr l e' e1' e2', t')
@@ -797,7 +828,7 @@ tcCast :: PPRSF r => TCEnv r -> AnnSSA r -> ExprSSAR r -> RType r -> TCM r (Expr
 ---------------------------------------------------------------------------------------
 tcCast γ l e tc 
   = do  opTy                <- safeTcEnvFindTy l γ (builtinOpId BICastExpr)
-        cid                 <- freshId l
+        cid                 <- freshCastId l
         let γ'               = tcEnvAdd (F.symbol cid) (tc, WriteLocal, Initialized) γ
         (FI _ [_, e'], t')  <- tcNormalCall γ' l "user-cast" 
                                (FI Nothing [(VarRef l cid, Nothing),(e, Just tc)]) opTy
@@ -848,19 +879,15 @@ tcCall γ e@(BracketRef l e1 e2)
       -- Enumeration
       Right (_, TEnum _) -> tcError $ unimplemented (srcPos l) msg e
       -- Object literal
-      Right (_, TCons _ _ _) -> 
-          case e2 of
-            -- StringLit l2 s -> tcExpr γ (DotRef l e1 (Id l2 s)) Nothing
-            -- IntLit l2 n -> tcExpr γ (DotRef l e1 (Id l2 $ show n)) Nothing
-            _ -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
+      Right (_, TCons _ _ _) -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
       -- Default
       _ -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
   where 
     msg     = "Support for dynamic access of enumerations"
-    call ty = tcNormalCall γ l BIBracketRef 
-                (FI Nothing [(e1, Nothing), (e2, Nothing)]) ty >>= \case
+    call ty = tcNormalCall γ l BIBracketRef (args e1 e2) ty >>= \case
           (FI _ [e1', e2'], t) -> return (BracketRef l e1' e2', t)
           _ -> tcError $ impossible (srcPos l) "tcCall BracketRef"
+    args e1 e2 = FI Nothing [(e1, Nothing), (e2, Nothing)]
    
 -- | `e1[e2] = e3`
 tcCall γ (AssignExpr l OpAssign (LBracket l1 e1 e2) e3)

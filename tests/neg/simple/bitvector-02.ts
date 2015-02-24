@@ -1,5 +1,7 @@
 
 
+/*@  predicate non_zero(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
+
 enum SymbolFlags {
   Import             = 0x00400000,  // Import
   Instantiated       = 0x00800000,  // Instantiated symbol
@@ -12,10 +14,10 @@ enum SymbolFlags {
 
 interface Symbol {
 
-  /*@ flags : [Immutable] { v: bitvector32 | [(bv_truthy(bvand(v, lit "#x02000000" (BitVec (Size32 obj))))) <=>  extends_interface(this,"TransientSymbol");
-                                              (bv_truthy(bvand(v, lit "#x00400000" (BitVec (Size32 obj))))) <=>  extends_interface(this,"ImportSymbol");
-                                              (bv_truthy(bvand(v, lit "#x00800000" (BitVec (Size32 obj))))) <=>  extends_interface(this,"MergedSymbol");
-                                              (bv_truthy(bvand(v, lit "#x04000000" (BitVec (Size32 obj))))) <=>  extends_interface(this,"PrototypeSymbol")] } */
+  /*@ flags : [Immutable] { v: bitvector32 | [(non_zero(bvand(v, lit "#x02000000" (BitVec (Size32 obj))))) <=>  extends_interface(this,"TransientSymbol");
+                                              (non_zero(bvand(v, lit "#x00400000" (BitVec (Size32 obj))))) <=>  extends_interface(this,"ImportSymbol");
+                                              (non_zero(bvand(v, lit "#x00800000" (BitVec (Size32 obj))))) <=>  extends_interface(this,"MergedSymbol");
+                                              (non_zero(bvand(v, lit "#x04000001" (BitVec (Size32 obj))))) <=>  extends_interface(this,"PrototypeSymbol")] } */
   flags: SymbolFlags;
 
   name: string; 

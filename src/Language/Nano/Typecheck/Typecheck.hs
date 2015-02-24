@@ -635,8 +635,9 @@ tcRetW γ l (Just e@(VarRef lv x))
   = tcRetW (newEnv t) l (Just (CallExpr l (VarRef l fn) [e'])) >>= \case 
       -- e' won't be cast
       (ReturnStmt _ (Just (CallExpr _ _ [e''])),eo) -> return (ReturnStmt l (Just e''),eo)
-      _ -> die $ bug (srcPos l) "tcRetW"
+      _ -> die $ errorUqMutSubtyping (srcPos l) e t retTy
   where 
+    retTy    = tcEnvFindReturn γ 
     newEnv t = tcEnvAdd fn (finalizeTy t,ReadOnly,Initialized) γ
     fn       = Id l "__finalize__"
     e'       = fmap (\a -> a { ann_fact = BypassUnique : ann_fact a }) e

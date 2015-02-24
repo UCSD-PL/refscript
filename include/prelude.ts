@@ -1,3 +1,7 @@
+
+// PV: Type binder names should be "hard to guess" -- add an "_" in the end 
+
+
 /*************************************************************************
  *        
  *  GENERAL PURPOSE AUXILIARY DEFINITIONS 
@@ -33,24 +37,27 @@ declare function isNaN(x:any) : boolean;
  ************************************************************************/
 
 /*@ builtin_BIBracketRef ::
-    /\ forall A. (thearray: IArray<A>, {v: number | (0 <= v && v < (len thearray))}) => A
-    /\ forall A. (MArray<A>, idx: number) => A + undefined
+    /\ forall A  . (x_: IArray<A>, {v: number | (0 <= v && v < (len x_))}) => A
+    /\ forall A  . (MArray<A> , idx: number) => A + undefined
     /\ forall M A. (Array<M,A>, idx: number + undefined) => A + undefined
     /\ forall M A. (Array<M,A>, idx: undefined) => undefined
-    /\ forall A. (o: {[y: string]: A }, x: {string | hasProperty(x,o)}) => A
-    /\ (o: { }, x: { string | hasProperty(x,o) }) => top
+    /\ forall A  . (o: {[y: string]: A }, x: {string | hasProperty(x,o)}) => A
+    /\             (o: { }, x: { string | hasProperty(x,o) }) => top
  */
 declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 
+// XXX: add case for A<AssignsFields> or A<Unique> 
+
 /*@ builtin_BIBracketAssign :: 
-    /\ forall A. (a: Array<Immutable, A>, {idx:number | (0 <= idx && idx < (len a))}, val: A) => void
-    /\ forall A. (a: Array<ReadOnly , A>, idx:number, val: A) => void
-    /\ forall A M. ([Mutable]{[y: string]: A }, x:string, val: A) => void
+    /\ forall A   . (x_: IArray<A>, {idx:number | (0 <= idx && idx < (len x_))}, val: A) => void
+    /\ forall A M . (x_: Array<M,A>, idx:number, val: A) => void
+    /\ forall A   . ([Mutable]{[y: string]: A }, x:string, val: A) => void
  */
 declare function builtin_BIBracketAssign<A>(a: A[], n: number, v: A): void;
 
 /*@ builtin_BISetProp :: 
-    forall A M. ([M] { f ? : [Mutable] A }, A) => {A | true}
+    /\ forall A M. ([UniqueMutable] { f ? : [M] A }, A) => { A | true }
+    /\ forall A M. ([M] { f ? : [Mutable] A }      , A) => { A | true }
  */
 declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
@@ -193,13 +200,13 @@ declare function builtin_OpBXor(a: number, b: number): number;
  */
 declare function builtin_OpBAnd(a: number, b: number): number;
 declare function builtin_OpLShift(a: number, b: number): number;
+/*@ builtin_OpSpRShift ::
+    (a: { number | v >= 0 }, b: { number | v >= 0}) => { number | v >= 0 }
+ */
 declare function builtin_OpSpRShift(a: number, b: number): number;
 declare function builtin_OpZfRShift(a: number, b: number): number;
 
-/*@  predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
-
-/*@ builtin_bv_truthy :: (b: bitvector32) => { boolean | (Prop v) <=> bv_truthy(b) } */
-declare function builtin_bv_truthy(b: number): boolean; 
+/*   predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
 
 
 /**
@@ -220,6 +227,7 @@ declare function builtin_bv_truthy(b: number): boolean;
 
 /*@ builtin_BIForInKeys :: 
     /\ forall A . (a: IArray<A>     )            => IArray<{ number | (0 <= v && v < (len a)) }>
+    /\            (o: Object<Immutable>)         => IArray<{ string | (hasProperty(v,o) && enumProp(v,o)) }>
     /\            (o: [Immutable]{ })            => IArray<{ string | (hasProperty(v,o) && enumProp(v,o)) }>
     /\ forall A . (o: [Immutable]{[s:string]:A}) => IArray<{ string | (hasProperty(v,o) && enumProp(v,o)) }>
  */
@@ -238,9 +246,10 @@ declare function builtin_BIForInKeys(obj: Object): string[];
  *
  *    hasProperty
  *
- *    This property is true if the first string argument is an existing field 
- *    of either the object referenced in the second or the objects it inherits 
- *    from through its prototype chain.
+ *    This property is true if the first string argument is a properyty of the
+ *    object referenced in the second, INCLUDING prototype traversal.
+ *
+ * 
  *
  */
 
@@ -251,24 +260,12 @@ declare function builtin_BIForInKeys(obj: Object): string[];
  *
  *    hasDirectProperty 
  *
- *    This property is true if the first string argument is an existing field 
- *    of the object referenced by the second.
+ *    This property is true if the first string argument is a properyty of the
+ *    object referenced in the second, NOT INCLUDING prototype traversal.
  *
  */
 
 /*@ measure hasDirectProperty :: forall A . (string, A) => bool */
-
-/**
- *
- *    hasInheritedProperty 
- *
- *    This property is true if the first string argument is a field inherited by
- *    the object's prototype chain.
- *
- */
-
-/*@ measure hasInheritedProperty :: forall A . (string, A) => bool */
-
 
 
 /*@ measure enumProp    :: forall A . (string, A) => bool */
@@ -556,12 +553,10 @@ interface Boolean { }
  *
  */
  
-
-//TODO: the refinement is ignored?
-/*@ measure len :: forall A . (A) => number */
+/*@ measure len :: forall M A . (Array<M,A>) => number */
 
 
-/*@ interface Array<M, T> */
+/*@ interface Array<M,T> */
 interface Array<T> {
 
     toString(): string;
@@ -570,7 +565,7 @@ interface Array<T> {
 
     /*@ concat: 
         /\ forall M0 . (this: IArray<T>, items: IArray<T>): { Array<M0,T> | (len v) = (len this) + (len items) }
-        /\ forall M0 M1 M2 . (this: M0, items: Array<M1,T>): {Array<M2,T> | true}
+        /\ forall M1 M2 . (items: Array<M1,T>): {Array<M2,T> | true}
     */
     concat<U extends T[]>(...items: U[]): T[];
 
@@ -595,13 +590,9 @@ interface Array<T> {
      */
     slice(start?: number, end?: number): T[];
 
-    /*  sort : 
-        /\ ( ) => { v : Array<M,T> | len(v) = len(this) } 
-        /\ (compareFn: (a: T, b: T) => number) => { v : Array<M,T> | len(v) = len(this) } 
-     */
-    /*@ sort : 
-        /\ ( ) => { v : Array<M,T> | true }
-        /\ (compareFn: (a: T, b: T) => number) => { v : Array<M,T> | true } 
+    /*@  sort : 
+        /\ ( ): { v : Array<M,T> | len(v) = len(this) } 
+        /\ (compareFn: (a: T, b: T) => number): { v : Array<M,T> | len(v) = len(this) } 
      */
     sort(compareFn?: (a: T, b: T) => number): T[];
 
@@ -621,19 +612,19 @@ interface Array<T> {
 
     forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void;
 
-    /*@ map : forall U. (callbackfn: (value: T) => U) => {IArray<U> | true} */
+    /*@ map : forall U. (callbackfn: (value: T) => U): {IArray<U> | true} */
     map<U>(callbackfn: (value: T) => U): U[];
     
-    /*@ map : forall U. (callbackfn:(value: T, index: number) => U)=> {IArray<U> | true} */
+    /*@ map : forall U. (callbackfn:(value: T, index: number) => U): {IArray<U> | true} */
     map<U>(callbackfn: (value: T, index: number) => U): U[];
     
-    /*@ map : forall U. (callbackfn:(value: T, index: number, array: IArray<T>) => U) => {IArray<U> | true} */
+    /*@ map : forall U. (callbackfn:(value: T, index: number, array: IArray<T>) => U): {IArray<U> | true} */
     map<U>(callbackfn: (value: T, index: number, array: T[]) => U): U[];
 
     /*@ filter : 
-        /\ forall N . (callbackfn: (value: T) => boolean) => {Array<N, T> | true}
-        /\ forall N . (callbackfn: (value: T, index: number) => boolean) => {Array<N, T> | true}
-        /\ forall N . (callbackfn: (value: T, index: number, array: IArray<T>) => boolean) => {Array<N, T> | true} */
+        /\ forall N . (callbackfn: (value: T) => boolean): {Array<N, T> | true}
+        /\ forall N . (callbackfn: (value: T, index: number) => boolean): {Array<N, T> | true}
+        /\ forall N . (callbackfn: (value: T, index: number, array: IArray<T>) => boolean): {Array<N, T> | true} */
     filter(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): T[];
 
 
@@ -813,9 +804,6 @@ declare function builtin_BIFalsy<A>(x: A): boolean;
 /*@ invariant {v:number | [(ttag(v)  =  "number");
                            (Prop(v) <=> v /= 0  )]}	*/
 
-/*  invariant {v:bitvector32 | [(ttag(v)  =  "number");
-                                (Prop(v) <=> (v /= (lit "#x00000000" (BitVec (Size32 obj)))))]}	*/
-
 
 
 /**
@@ -959,19 +947,19 @@ interface Immutable extends ReadOnly {
     immutable__: void;
 } 
 
-/*@ interface Mutable extends AssignsFields */
-interface Mutable extends AssignsFields {
+/*@ interface Mutable extends ReadOnly */
+interface Mutable extends ReadOnly {
     mutable__: void;
+} 
+
+/*@ interface UniqueMutable extends Mutable */
+interface UniqueMutable extends Mutable {
+    unique_mutable__: void;
 } 
 
 /*@ interface AnyMutability extends ReadOnly */
 interface AnyMutability extends ReadOnly {
     defaultMut__: void;
-} 
-
-/*@ interface AssignsFields extends ReadOnly */
-interface AssignsFields extends ReadOnly {
-    assignsFields_: void;
 } 
 
 /*@ interface InheritedMut */

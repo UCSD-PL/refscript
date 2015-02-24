@@ -26,7 +26,6 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 
-import qualified Language.Fixpoint.Bitvector        as BV
 import qualified Language.Fixpoint.Config           as C
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Errors
@@ -56,9 +55,9 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
--- import           Text.PrettyPrint.HughesPJ 
--- import qualified Data.Foldable                      as FO
+import           Debug.Trace                        (trace)
+import           Text.PrettyPrint.HughesPJ 
+import qualified Data.Foldable                      as FO
 
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
 
@@ -95,9 +94,9 @@ refTc cfg f p
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
   
--- ppCasts (Nano { code = Src fs }) = 
---   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
---                                 , TCast _ c <- ann_fact a ] 
+ppCasts (Nano { code = Src fs }) = 
+  fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+                                , TCast _ c <- ann_fact a ] 
          
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
@@ -329,6 +328,19 @@ consStmt g (ReturnStmt l Nothing)
        return Nothing
        
 -- return e 
+consStmt g (ReturnStmt l (Just e@(VarRef lv x)))
+  | Just t <- envFindTy x g, needsCall t 
+  = do  g'    <- envAdd fn (finalizeTy t,ReadOnly,Initialized) g
+        consStmt g' (ReturnStmt l (Just (CallExpr l (VarRef lv fn) [e]))) 
+  | otherwise 
+  = do  _ <- consCall g l "return" (FI Nothing [(e, Just retTy)]) $ returnTy retTy True
+        return Nothing
+  where
+    retTy = envFindReturn g 
+    fn    = Id l "__finalize__"
+    needsCall (TRef _ (m:_) _) = isUniqueMutable m 
+    needsCall _                = False
+
 consStmt g (ReturnStmt l (Just e))
   = do  _ <- consCall g l "return" (FI Nothing [(e, Just retTy)]) $ returnTy retTy True
         return Nothing
@@ -514,7 +526,7 @@ consClassElt g dfn (MemberMethDef l True x xs body)
   = cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) x
  
 -- | Instance method
-consClassElt g d@(ID nm _ vs _ es) (MemberMethDef l False x xs body) 
+consClassElt g (ID nm _ vs _ es) (MemberMethDef l False x xs body) 
   | Just (MethSig _ t) <- M.lookup (F.symbol x, InstanceMember) es
         
   = -- 
@@ -664,16 +676,12 @@ consExpr g (CondExpr l e e1 e2) to
 
 -- | super(e1,..,en)
 consExpr g (CallExpr l (SuperRef _) es) _
-  = case envFindTy (builtinOpId BIThis) g of
-      Just t -> 
-          case extractParent g t of 
-            Just (TRef x _ _) -> 
-                case extractCtor g (TClass x) of
-                  Just ct -> consCall g l "super" (FI Nothing ((,Nothing) <$> es)) ct
-                  _       -> cgError $ errorUnboundId (ann l) "super"
-            Just _  -> cgError $ errorUnboundId (ann l) "super"
-            Nothing -> cgError $ errorUnboundId (ann l) "super"
-      Nothing -> cgError $ errorUnboundId (ann l) "this"
+  | Just t            <- envFindTy (builtinOpId BIThis) g
+  , Just (TRef x _ _) <- extractParent g t
+  , Just ct           <- extractCtor g (TClass x) 
+  = consCall g l "super" (FI Nothing ((,Nothing) <$> es)) ct
+  | otherwise
+  = cgError $ errorUnboundId (ann l) "super"
 
 -- | e.m(es)
 consExpr g c@(CallExpr l em@(DotRef _ e f) es) _
@@ -688,6 +696,10 @@ consExpr g c@(CallExpr l em@(DotRef _ e f) es) _
              = consCall g l em (argsThis v vs) t
 
              -- Accessing and calling a function field
+             -- 
+             -- FIXME: 'this' should not appear in ft 
+             --        Add check for this. 
+             -- 
              | Just (_,ft,_) <- getProp g FieldAccess f t, isTFun ft
              = consCall g l c (args es) ft
 
@@ -885,9 +897,9 @@ consInstantiate :: PP a
                 => AnnTypeR 
                 -> CGEnv 
                 -> a 
-                -> RefType 
-                -> FuncInputs RefType 
-                -> FuncInputs (Id AnnTypeR) 
+                -> RefType                          -- Function spec 
+                -> FuncInputs RefType               -- Input types
+                -> FuncInputs (Id AnnTypeR)         -- Input ids
                 -> CGM (Maybe (Id AnnTypeR, CGEnv))
 --------------------------------------------------------------------------------
 consInstantiate l g fn ft ts xes 
@@ -902,6 +914,7 @@ consInstantiate l g fn ft ts xes
     bSyms bs             = b_sym <$> toList bs
     toList (FI x xs)     = maybeToList x ++ xs
     err                  = errorLiquid' l
+    
     idxMapFI f i (FI Nothing ts)  = FI     Nothing        <$> mapM (uncurry f) (zip [i..] ts)
     idxMapFI f i (FI (Just t) ts) = FI <$> Just <$> f i t <*> mapM (uncurry f) (zip [(i+1)..] ts)
 

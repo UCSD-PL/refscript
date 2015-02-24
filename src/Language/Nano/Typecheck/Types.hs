@@ -42,10 +42,12 @@ module Language.Nano.Typecheck.Types (
   , renameBinds
 
   -- * Mutability primitives
-  , t_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly, t_assignsFields
-  , tr_mutable, tr_immutable, tr_anyMutability, tr_inheritedMut, tr_readOnly, tr_assignsFields
+  , t_mutable, t_uq_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly
+  , tr_mutable, tr_immutable, tr_anyMutability, tr_inheritedMut, tr_readOnly
   , combMut, combMutInField
-  , isMutable, isImmutable, isAssignsFields, isInheritedMutability
+  , isMutable, isImmutable, isUniqueMutable, isInheritedMutability
+
+  , finalizeTy
 
   -- * Primitive Types
   , tInt, tBV32, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
@@ -111,7 +113,7 @@ import           Control.Exception              (throw)
 -- import           Debug.Trace (trace)
 
 
-type PPR  r = (ExprReftable Int r, PP r, F.Reftable r, Data r)
+type PPR  r = (ExprReftable F.Symbol r, ExprReftable Int r, PP r, F.Reftable r, Data r)
 
 ---------------------------------------------------------------------
 -- | Primitive Types
@@ -133,18 +135,17 @@ instance Default Mutability where
   def = mkMut "Immutable"
 
 t_mutable       = mkMut "Mutable"
+t_uq_mutable    = mkMut "UniqueMutable"
 t_immutable     = mkMut "Immutable"
 t_anyMutability = mkMut "AnyMutability"
 t_readOnly      = mkMut "ReadOnly"
 t_inheritedMut  = mkMut "InheritedMut"
-t_assignsFields = mkMut "AssignsFields"
 
 tr_mutable       = mkRelMut "Mutable"
 tr_immutable     = mkRelMut "Immutable"
 tr_anyMutability = mkRelMut "AnyMutability"
 tr_readOnly      = mkRelMut "ReadOnly"
 tr_inheritedMut  = mkRelMut "InheritedMut"
-tr_assignsFields = mkRelMut "AssignsFields"
 
 
 isMutable        (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "Mutable"
@@ -153,8 +154,9 @@ isMutable _                                 = False
 isImmutable      (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "Immutable"
 isImmutable _                               = False
 
-isAssignsFields  (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "AssignsFields"
-isAssignsFields  _                          = False
+isUniqueMutable  (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "UniqueMutable"
+isUniqueMutable  (TApp TUn ts _ )           = any isUniqueMutable ts
+isUniqueMutable  _                          = False
 
 isInheritedMutability  (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "InheritedMut"
 isInheritedMutability  _                          = False
@@ -190,16 +192,20 @@ ofType = fmap (const fTop)
 rTop = ofType . toType
 
 class ExprReftable a r where
-  exprReft :: a -> r 
+  exprReft  :: a -> r 
+  uexprReft :: a -> r
 
 instance ExprReftable a () where
-  exprReft _ = ()
+  exprReft  _ = ()
+  uexprReft _ = ()
 
 instance F.Expression a => ExprReftable a F.Reft where
-  exprReft = F.exprReft
+  exprReft   = F.exprReft
+  uexprReft  = F.uexprReft
 
 instance F.Reftable r => ExprReftable BV.Bv r where
-  exprReft = F.ofReft . F.exprReft
+  exprReft  = F.ofReft . F.exprReft
+  uexprReft = F.ofReft . F.uexprReft
 
 
 funTys l f xs ft 
@@ -714,6 +720,7 @@ ppMeth mt =
 
 mutSym (TRef (QN _ _ _ s) [] _)
   | s == F.symbol "Mutable"       = Just "_MU_"
+  | s == F.symbol "UniqueMutable" = Just "_UM_"
   | s == F.symbol "Immutable"     = Just "_IM_"
   | s == F.symbol "AnyMutability" = Just "_AM_"
   | s == F.symbol "ReadOnly"      = Just "_RO_"
@@ -882,31 +889,19 @@ immObjectLitTy l _ ps ts
                          [ ((s, InstanceMember), FieldSig s f_required t_immutable t)
                          | (p,t) <- safeZip "immObjectLitTy" ps ts, let s = F.symbol p ]
     nps              = length ps
-
--- ---------------------------------------------------------------------------------
--- enumTy :: EnumDef -> RType F.Reft
--- ---------------------------------------------------------------------------------
--- enumTy (EnumDef _ _) = error "enumTy"  -- TAll a $ TFun Nothing [a',b] ot fTop
---   where
---     a        = TV (F.symbol "A") (srcPos dummySpan)
---     a'       = B x0 (tVar a)
---     x0       = F.symbol "x0"
---     x1       = F.symbol "x1"
---     pi       = F.POr $ (F.PAtom F.Eq (F.eVar v) . F.expr) <$> I.keys ps 
---     v        = F.vv Nothing
---     b        = B x1 $ tInt `strengthen` F.predReft pi
---     el       = I.toList ps
---     ot       = tString `strengthen` F.predReft (F.PAnd $ si <$> el)
---     si (i,s) = F.PImp (F.PAtom F.Eq (F.expr x1) (F.expr i))
---                       (F.PAtom F.Eq (F.expr v ) (F.expr $ F.symbolText s))
     
+
 ---------------------------------------------------------------------------------
 setPropTy :: (PPR r, IsLocated l) => l -> F.Symbol -> RType r -> RType r
 ---------------------------------------------------------------------------------
 setPropTy l f ty =  
     case ty of 
-      TAll α2 (TAll μ2 (TFun Nothing [xt2,a2] rt2 r2)) 
-          -> TAll α2 (TAll μ2 (TAll vOpt (TFun Nothing [gg xt2,a2] rt2 r2)))
+      TAnd [TAll α1 (TAll μ1 (TFun Nothing [xt1,a1] rt1 r1)),
+            TAll α2 (TAll μ2 (TFun Nothing [xt2,a2] rt2 r2))]
+
+          -> TAnd [TAll α1 (TAll μ1 (TAll vOpt (TFun Nothing [gg xt1,a1] rt1 r1))),
+                   TAll α2 (TAll μ2 (TAll vOpt (TFun Nothing [gg xt2,a2] rt2 r2)))]
+
       _   -> errorstar $ "setPropTy " ++ ppshow ty
   where
     gg (B n (TCons m ts r))        = B n (TCons m (ff ts) r)
@@ -922,6 +917,22 @@ returnTy :: (PP r, F.Reftable r) => RType r -> Bool -> RType r
 ---------------------------------------------------------------------------------
 returnTy t True  = mkFun ([], Nothing, [B (F.symbol "r") t], tVoid)
 returnTy _ False = mkFun ([], Nothing, [], tVoid)
+
+---------------------------------------------------------------------------------
+finalizeTy :: (PP r, F.Reftable r, ExprReftable F.Symbol r) => RType r -> RType r
+---------------------------------------------------------------------------------
+finalizeTy t@(TRef x (m:ts) r) 
+  | isUniqueMutable m 
+  = mkFun ([mOut], Nothing, [B sx t], TRef x (tOut:ts) (uexprReft sx))
+  where 
+    sx   = F.symbol "x_"
+    tOut = tVar mOut
+    mOut = TV (F.symbol "N") (srcPos dummySpan)
+finalizeTy t
+  = mkFun ([mV]  , Nothing, [B (F.symbol "x") tV], tV)
+  where 
+    tV   = tVar mV
+    mV   = TV (F.symbol "V") (srcPos dummySpan)
 
 
 -- | `mkEltFunTy`: Creates a function type that corresponds to an invocation 

@@ -5,7 +5,7 @@ function idt(x) { return x;}
 /*@ idbool :: (boolean) => boolean */
 function idbool(x) { return idt(x); }
 
-/*@ main :: ({x:number|true}, boolean) => {v:number|v = x} */
+/*@ main :: (x:number, boolean) => { number | v = x } */
 function main(x, y){
   var yr = idt(y);
   var xr = idt(x);
@@ -15,5 +15,3 @@ function main(x, y){
   }
   return xr + z;
 }
- 
-

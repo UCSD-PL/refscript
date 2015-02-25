@@ -1,8 +1,5 @@
 
-
-/*@ leng :: (a: #Array[#Immutable,number]) => { number | (v = (len a)) } */
-function leng(a: number[]) {
-
+/*@ leng :: (a: IArray<number>) => { number | v = (len a) } */
+function leng(a) {
   return a.length;
-
 }

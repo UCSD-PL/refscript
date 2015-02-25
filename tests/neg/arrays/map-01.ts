@@ -3,6 +3,3 @@
 function bar(arr, f) {
   return arr.map(f);
 }
-
-
-

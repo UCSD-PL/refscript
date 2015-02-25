@@ -11,8 +11,8 @@
 /*@ crash :: forall A. () => A */
 declare function crash(): any; 
 
-/*@ assume :: (x:boolean) => {v:void | Prop x} */
-declare function assume(x: boolean): void;
+/*@ assume :: forall A . (x:A) => {v:void | Prop x} */
+declare function assume<A>(x: A): void;
 
 /*@ assert :: forall A . ({x:A|(Prop x)}) => void */
 declare function assert<A>(x: A): void;
@@ -37,21 +37,22 @@ declare function isNaN(x:any) : boolean;
  ************************************************************************/
 
 /*@ builtin_BIBracketRef ::
-    /\ forall A  . (x_: IArray<A>, {v: number | (0 <= v && v < (len x_))}) => A
-    /\ forall A  . (MArray<A> , idx: number) => A + undefined
-    /\ forall M A. (Array<M,A>, idx: number + undefined) => A + undefined
-    /\ forall M A. (Array<M,A>, idx: undefined) => undefined
-    /\ forall A  . (o: {[y: string]: A }, x: {string | hasProperty(x,o)}) => A
-    /\             (o: { }, x: { string | hasProperty(x,o) }) => top
+    /\ forall   A . (x_: IArray<A>, {v: number | (0 <= v && v < (len x_))}) => A
+    /\ forall   A . (MArray<A> , idx: number) => A + undefined
+    /\ forall M A . (Array<M,A>, idx: number + undefined) => A + undefined
+    /\ forall M A . (Array<M,A>, idx: undefined) => undefined
+    /\ forall   A . (o_: [Immutable] {[y: string]: A }, x_: string) => { A | hasProperty(x_,o_) } + { undefined | (not (hasProperty(x_,o_))) }
+    /\ forall M A . ([M] {[y: string]: A }, string) => A + undefined
+    /\              ({ }, string) => top
  */
 declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 
-// XXX: add case for A<AssignsFields> or A<Unique> 
+// TODO : add case for A<AssignsFields> or A<Unique> 
 
 /*@ builtin_BIBracketAssign :: 
     /\ forall A   . (x_: IArray<A>, {idx:number | (0 <= idx && idx < (len x_))}, val: A) => void
     /\ forall A M . (x_: Array<M,A>, idx:number, val: A) => void
-    /\ forall A   . ([Mutable]{[y: string]: A }, x:string, val: A) => void
+    /\ forall A   . ({[y: string]: A }, x:string, val: A) => void
  */
 declare function builtin_BIBracketAssign<A>(a: A[], n: number, v: A): void;
 

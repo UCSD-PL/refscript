@@ -693,12 +693,16 @@ tcExpr γ e@(ThisRef l) _
       Nothing -> tcError $ errorUnboundId (ann l) "this"
 
 tcExpr γ e@(VarRef l x) _
+  | Just t <- to, BypassUnique `elem` ann_fact l 
+  = return (e,t) 
+  | Just t <- to, isCastId x  -- Avoid TC added casts
+  = return (e,t)  
+  | Just t <- to, disallowed t       
+  = tcError $ errorAssignsFields (ann l) x t
   | Just t <- to
-  , BypassUnique `elem` (ann_fact l) = return (e,t)  -- HACK
-  | Just t <- to, isCastId x         = return (e,t)  -- HACK
-  | Just t <- to, disallowed t       = tcError $ errorAssignsFields (ann l) x t
-  | Just t <- to                     = return (e,t)
-  | otherwise                        = tcError $ errorUnboundId (ann l) x
+  = return (e,t)
+  | otherwise
+  = tcError $ errorUnboundId (ann l) x
   where 
     to = tcEnvFindTy x γ
     disallowed (TRef _ (m:_) _)      = isUniqueMutable m
@@ -833,7 +837,7 @@ tcCast γ l e tc
         let γ'               = tcEnvAdd (F.symbol cid) (tc, WriteLocal, Initialized) γ
         (FI _ [_, e'], t')  <- tcNormalCall γ' l "user-cast" 
                                (FI Nothing [(VarRef l cid, Nothing),(e, Just tc)]) opTy
-        return               $ (e', t')
+        return               $ (e', ltracePP l ("USER CAST OUTPUT TY OF " ++ ppshow cid) t')
 
 
 ---------------------------------------------------------------------------------------
@@ -879,8 +883,6 @@ tcCall γ e@(BracketRef l e1 e2)
   = runFailM (tcExpr γ e1 Nothing) >>= \case
       -- Enumeration
       Right (_, TEnum _) -> tcError $ unimplemented (srcPos l) msg e
-      -- Object literal
-      Right (_, TCons _ _ _) -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
       -- Default
       _ -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
   where 
@@ -1023,6 +1025,7 @@ tcNormalCall :: (PPRSF r, PP a)
              -> TCM r (FuncInputs (ExprSSAR r), RType r) 
 ------------------------------------------------------------------------------------------
 tcNormalCall γ l fn etos ft0 
+  -- = do ets            <- ltracePP l (ppshow fn ++ "  " ++ ppshow etos) <$> T.mapM (uncurry $ tcExprWD γ) etos
   = do ets            <- T.mapM (uncurry $ tcExprWD γ) etos
        z              <- resolveOverload γ l fn ets ft0
        case z of 

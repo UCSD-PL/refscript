@@ -14,7 +14,7 @@ function acquire(l){
 
 /*@ release :: (number) => number */
 function release(l){
-  assert(l != 0);
+  assert(l !== 0);
   return 0;
 }
 

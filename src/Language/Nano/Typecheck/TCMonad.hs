@@ -29,10 +29,10 @@ module Language.Nano.Typecheck.TCMonad (
   , getSubst, setSubst, addSubst
 
   -- * Function Types
-  , tcFunTys -- , tcMethTys, tcCtorTys
+  , tcFunTys
 
   -- * Annotations
-  , addAnn {-TEMP-}, getAnns --, getDef, setDef
+  , addAnn {-TEMP-}, getAnns
 
   -- * Unification
   , unifyTypeM, unifyTypesM
@@ -423,19 +423,21 @@ checkTypes γ  = mapM_ (\(a,ts) -> mapM_ (safeExtends $ setAP a γ) ts) types
 --------------------------------------------------------------------------------
 safeExtends :: (IsLocated l, PPR r) => TCEnv r -> (l, IfaceDef r) -> TCM r ()
 --------------------------------------------------------------------------------
-safeExtends γ (l, t@(ID c _ _ (es,_) _)) = 
-    case flatten' Nothing InstanceMember γ t of
-      Just ms -> forM_ es $ safeExtends1 γ l c ms 
-      Nothing -> tcError $ bugFlattenType (srcPos l) c
+safeExtends γ (l, t@(ID c _ _ (es,_) _)) 
+  | Just ms <- expand' InstanceMember γ t
+  = forM_ es $ safeExtends1 γ l c ms 
+  | otherwise 
+  = tcError $ bugExpandType (srcPos l) c
 
 safeExtends1 γ l c ms (p,ps)
-  = case flatten Nothing InstanceMember γ . (,ps) =<< resolveTypeInEnv γ p of
-      Just ns  | isSubtype γ (mkTCons t_immutable ms) (mkTCons t_immutable ns) 
-              -> return ()
-               | otherwise         
-              -> tcError $ errorClassExtends (srcPos l) c p (mkTCons t_immutable ms) 
-                                                            (mkTCons t_immutable ns)
-      Nothing -> tcError $ bugFlattenType (srcPos l) p
+  | Just d  <- resolveTypeInEnv γ p 
+  , Just ns <- expand InstanceMember γ d ps
+  = if isSubtype γ (mkTCons t_immutable ms) (mkTCons t_immutable ns) 
+      then return ()
+      else tcError $ errorClassExtends (srcPos l) c p (mkTCons t_immutable ms) 
+                                                      (mkTCons t_immutable ns)
+  | otherwise 
+  = tcError $ bugExpandType (srcPos l) p
   where
     mkTCons m es = TCons m (MM.filter (not . isConstr) es) fTop
 

@@ -88,8 +88,8 @@ refTc cfg f p
   = do donePhase Loud "Generate Constraints"
        solveConstraints f cgi
   where
-    cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
-    -- cgi = generateConstraints cfg p
+    -- cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
+    cgi = generateConstraints cfg p
 
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
@@ -282,7 +282,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
       t         <- safeEnvFindTy x1 g' 
-      let rhsCtx = fmap snd3 $ getProp g' FieldAccess f t
+      let rhsCtx = fmap snd3 $ getProp g' FieldAccess Nothing f t
       opTy      <- setPropTy l (F.symbol f) <$> safeEnvFindTy (builtinOpId BISetProp) g'
       fmap snd <$> consCall g' l BISetProp (FI Nothing [(vr x1, Nothing),(e2, rhsCtx)]) opTy
   where
@@ -464,13 +464,15 @@ consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body)
                   | otherwise
                   = []
 
-    -- XXX        : keep the right order of fields
-    --              Make the return object immutable to avoid contra-variance
-    --              checks at the return from the constructor.
+    -- XXX        : * Keep the right order of fields
+    --              * Make the return object immutable to avoid contra-variance
+    --                checks at the return from the constructor.
+    --              * Exclude __proto__ field 
     mkCtorExitTy  = mkFun (vs,Nothing,bs,tVoid)
       where 
-        bs        | Just (TCons _ ms _) <- flattenType g this_T
-                  = sortBy c_sym [ B s t | ((_,InstanceMember),(FieldSig s _ _ t)) <- M.toList ms ]
+        bs        | Just (TCons _ ms _) <- expandType g this_T
+                  = sortBy c_sym [ B s t | ((_,InstanceMember),(FieldSig s _ _ t)) <- M.toList ms
+                                         , F.symbol s /= F.symbol "__proto__" ]
                   | otherwise
                   = []
     
@@ -528,7 +530,6 @@ consClassElt g dfn (MemberMethDef l True x xs body)
 -- | Instance method
 consClassElt g (ID nm _ vs _ es) (MemberMethDef l False x xs body) 
   | Just (MethSig _ t) <- M.lookup (F.symbol x, InstanceMember) es
-        
   = -- 
     -- (1) Get the method type parts
     -- 
@@ -542,7 +543,6 @@ consClassElt g (ID nm _ vs _ es) (MemberMethDef l False x xs body)
   | otherwise
   = cgError  $ errorClassEltAnnot (srcPos l) nm x
   where
-
 
     procFT (vs,so,xs,y)   = (vs, Just this_T, s <$> xs, s y)
       where this_T        = slf so
@@ -700,15 +700,35 @@ consExpr g c@(CallExpr l em@(DotRef _ e f) es) _
              -- FIXME: 'this' should not appear in ft 
              --        Add check for this. 
              -- 
-             | Just (_,ft,_) <- getProp g FieldAccess f t, isTFun ft
+             | Just (_,ft,_) <- getProp g FieldAccess Nothing f t, isTFun ft
              = consCall g l c (args es) ft
 
              -- Invoking a method
-             | Just (_,ft,_) <- getProp g MethodAccess f t
+
+             | Just (_,ft,_) <- getProp g MethodAccess Nothing f t
              = consCall g l c (argsThis (vr x) es) ft
                                 
              | otherwise 
              = cgError $ errorCallNotFound (srcPos l) e f
+
+
+--     procFT (vs,so,xs,y)   = (vs, Just this_T, s <$> xs, s y)
+--       where this_T        = slf so
+--             s             = F.subst (substFieldSyms g this this_T)
+--             this          = builtinOpId BIThis
+-- 
+--     slf (Just (TSelf m))  = mkThis (toType m) vs
+--     slf (Just t)          = t
+--     slf Nothing           = mkThis t_readOnly vs
+-- 
+--     mkThis m (_:αs)       = TRef an (ofType m : map tVar αs) fTop
+--     mkThis _ _            = throw $ bug (srcPos l) "Liquid.Liquid.consClassElt MemberMethDef" 
+-- 
+--     an                    = QN AK_ (srcPos l) ss (F.symbol nm)
+-- 
+--     QP AK_ _ ss           = cge_path g
+-- 
+
 
     isVariadicCall f = F.symbol f == F.symbol "call"
     args vs          = FI Nothing            ((,Nothing) <$> vs)
@@ -734,7 +754,7 @@ consExpr g (CallExpr l e es) _
 consExpr g (DotRef l e f) to
   = mseq (consExpr g e Nothing) $ \(x,g') -> do
       te <- safeEnvFindTy x g'
-      case getProp g' FieldAccess f te of
+      case getProp g' FieldAccess Nothing f te of
         -- 
         -- Special-casing Array.length
         -- 
@@ -1171,12 +1191,12 @@ globals ts = [(x,s1,s2) | (x, s1@(_, WriteGlobal, Initialized), s2@(_, WriteGlob
 
 errorLiquid' = errorLiquid . srcPos
 
--- traceTypePP l msg act 
---   = do  z <- act
---         case z of
---           Just (x,g) -> do  t <- safeEnvFindTy x g 
---                             return $ Just $ trace (ppshow (srcPos l) ++ " " ++ msg ++ " : " ++ ppshow t) (x,g)
---           Nothing    ->  return Nothing 
+traceTypePP l msg act 
+  = do  z <- act
+        case z of
+          Just (x,g) -> do  t <- safeEnvFindTy x g 
+                            return $ Just $ trace (ppshow (srcPos l) ++ " " ++ msg ++ " : " ++ ppshow t) (x,g)
+          Nothing    ->  return Nothing 
     
 
 -- Local Variables:

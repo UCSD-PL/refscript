@@ -848,7 +848,7 @@ resolveType (QP AK_ _ ss) (ClassStmt l c _ _ cs)
                                      ClassKind 
                                      (m:vs) 
                                      (e,i) 
-                                     (typeMembers (tVar m) cs))
+                                     (typeMembers (TVar m fTop) cs))
     go _              = Nothing
     cc                = fmap ann c
 
@@ -862,27 +862,32 @@ resolveType _ _   = Nothing
 ---------------------------------------------------------------------------------------
 typeMembers :: Mutability -> [ClassElt (AnnR r)] -> TypeMembers r
 ---------------------------------------------------------------------------------------
-typeMembers dm                =  mkTypeMembers . concatMap go
+typeMembers dm                     = mkTypeMembers dm . concatMap go
   where
-    go (MemberVarDecl l s _ _)     = [(sk s, MemDefinition , fixFieldMut f) | FieldAnn f <- ann_fact l]
-    go (MemberMethDef l s _ _ _ )  = [(sk s, MemDefinition , f)             | MethAnn  f <- ann_fact l]
-    go (MemberMethDecl l s _ _ )   = [(sk s, MemDeclaration, f)             | MethAnn  f <- ann_fact l]
-    go (Constructor l _ _)         = [(sk False, MemDefinition , a)         | ConsAnn  a <- ann_fact l]
+    go (MemberVarDecl l s _ _)     = [(sk s, MemDefinition , f) | FieldAnn f <- ann_fact l]
+    go (MemberMethDef l s _ _ _ )  = [(sk s, MemDefinition , f) | MethAnn  f <- ann_fact l]
+    go (MemberMethDecl l s _ _ )   = [(sk s, MemDeclaration, f) | MethAnn  f <- ann_fact l]
+    go (Constructor l _ _)         = [(im  , MemDefinition , a) | ConsAnn  a <- ann_fact l]
+
     sk True                        = StaticMember 
     sk False                       = InstanceMember 
-    fixFieldMut (FieldSig s o m t) | isInheritedMutability m 
-                                   = FieldSig s o dm t
-    fixFieldMut f                  = f
+    im                             = InstanceMember
 
 ---------------------------------------------------------------------------------------
-mkTypeMembers :: Eq q => [(StaticKind, MemberKind, TypeMemberQ q r)] -> TypeMembersQ q r
+mkTypeMembers :: Eq q => MutabilityQ q 
+                      -> [(StaticKind, MemberKind, TypeMemberQ q r)] 
+                      -> TypeMembersQ q r
 ---------------------------------------------------------------------------------------
-mkTypeMembers        = M.map (g . f) . foldl merge M.empty
+mkTypeMembers dm                   = fixMut . M.map (g . f) . foldl merge M.empty
   where
-    merge ms (s,m,t) = M.insertWith (++) (F.symbol t,s) [(m,t)] ms
-    f                = mapPair (map snd) . partition ((== MemDefinition) . fst) 
-    g ([t],[])       = t
-    g ( _ ,ts)       = foldl1 joinElts ts
+    merge ms (s,m,t)               = M.insertWith (++) (F.symbol t,s) [(m,t)] ms
+    f                              = mapPair (map snd) . partition ((== MemDefinition) . fst) 
+    g ([t],[])                     = t
+    g ( _ ,ts)                     = foldl1 joinElts ts
+    fixMut                         = M.map fixFldMut
+    fixFldMut (FieldSig s o m t)   | isInheritedMutability m 
+                                   = FieldSig s o dm t
+    fixFldMut f                    = f
 
 joinElts (CallSig t1)           (CallSig t2)         = CallSig           $ joinTys t1 t2 
 joinElts (ConsSig t1)           (ConsSig t2)         = ConsSig           $ joinTys t1 t2 

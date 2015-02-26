@@ -50,9 +50,9 @@ declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 // TODO : add case for A<AssignsFields> or A<Unique> 
 
 /*@ builtin_BIBracketAssign :: 
-    /\ forall A   . (x_: IArray<A>, {idx:number | (0 <= idx && idx < (len x_))}, val: A) => void
-    /\ forall A M . (x_: Array<M,A>, idx:number, val: A) => void
-    /\ forall A   . ({[y: string]: A }, x:string, val: A) => void
+    /\ forall   A . (x_: IArray<A>, {idx:number | (0 <= idx && idx < (len x_))}, val: A) => void
+    /\ forall M A . (x_: Array<M,A>, idx:number, val: A) => void
+    /\ forall M A . ([M] {[y: string]: A }, x:string, val: A) => void
  */
 declare function builtin_BIBracketAssign<A>(a: A[], n: number, v: A): void;
 
@@ -356,13 +356,10 @@ declare var Object: {
 
 /**
  *  NUMBER 
- *
  * 
  *  TODO: 
  *
  *    - NaN =/= NaN
- *
- *    - all optional arguments have been changed to necessary
  *
  *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L430
  *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L457
@@ -378,7 +375,11 @@ declare var Object: {
 /*@  NaN :: { number | v = numeric_nan } */
 declare var NaN: number;
 
-
+/**
+ * 
+ *  All numberic values inherit from this type
+ *
+ */
 interface Number {
     toString(radix?: number): string;
 
@@ -618,7 +619,7 @@ interface Array<T> {
     // reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
 
     //TODO why does callbackfn have 4 args in the typescript annotation but only 3 in the refscript?
-
+ 
     /*@ reduce : forall U . (this: IArray<T>, callback: (x: U, y: T, n: {number | 0 <= v && v < len this}) => U, init: U): U */
     reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
@@ -747,6 +748,19 @@ declare var Console: {
     new(): Console;
 }
 declare var console: Console;
+
+
+
+/**
+ *
+ * An empty object -- not tobe referenced by client code 
+ * 
+ */
+
+interface EmptyObject { 
+    /*@ __proto__ : [Immutable] Object<Immutable> */
+    __proto__: Object; 
+}
 
 
 

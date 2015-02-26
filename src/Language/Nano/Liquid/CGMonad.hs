@@ -94,7 +94,7 @@ import           Language.Fixpoint.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -390,11 +390,11 @@ addObjectFieldsWithOK True  ok g (x,a,t)
               | otherwise
               = (F.subst (substFieldSyms g x t) tf, a, Initialized)
 
-    ms        | Just (TCons m ms _) <- flattenType g t = defMut m <$> M.elems ms
+    ms        | Just (TCons m ms _) <- expandType g t = defMut m <$> M.elems ms
               | otherwise                              = []
 
     defMut m (FieldSig f o m0 t) 
-              | isInheritedMutability m0 
+              | isInheritedMutability m0      -- FIXME: this shouldn't need to happen here  
               = FieldSig f o m  t
               | otherwise                
               = FieldSig f o m0 t
@@ -713,12 +713,7 @@ subType l err g t1 t2 =
       let xs  = [(symbolId l x,(t,a,i)) | (x, Just (t,a,i)) <- rNms t1' ++ rNms t2 ]
       let ys  = [(symbolId l x,(t,a,i)) | (x,      (t,a,i)) <- E.envToList $ cgeAllNames g ]
       ----  when (toType t1 /= toType t2) (errorstar (ppshow t1 ++ " VS " ++ ppshow t2))
-      -- g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++
-      --                                     ppshow "(" ++ ppshow t1 ++ " vs " ++ ppshow t2 ++ ppshow ")"
-      --                                     -- " Adding XS: " ++ ppshow (fst <$> xs) ++ 
-      --                                     -- " Adding YS: " ++ ppshow (fst <$> ys) ++
-      --                                     -- " FQ Binds : " ++ ppshow (cge_fenv g)
-      --                                    ) $ xs ++ ys) g
+      -- g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++ ppshow "\nLHS: " ++ ppshow t1 ++ "\nRHS: " ++ ppshow t2 ++ "\n") $ xs ++ ys) g
       g'     <- envAdds "subtype" (xs ++ ys) g
       modify  $ \st -> st {cs = c g' (t1', t2) : (cs st)}
   where
@@ -769,7 +764,7 @@ cgeAllNames g@(CGE { cge_parent = Nothing }) = cge_names g
 -- safeExtends l g (ID _ _ _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
 --   where
 --     sub t1 t2  = subType l g (zipType δ t1 t2) t2
---     (t1s, t2s) = unzip [ (t1,t2) | pe <- flatten True δ (findSymOrDie p δ, ts)
+--     (t1s, t2s) = unzip [ (t1,t2) | pe <- expand True δ (findSymOrDie p δ, ts)
 --                                  , ee <- es 
 --                                  , sameBinder pe ee 
 --                                  , let t1 = eltType ee
@@ -857,12 +852,13 @@ splitC :: SubC -> CGM [FixSubC]
 --
 splitC (Sub g i tf1@(TFun s1 xt1s t1 _) tf2@(TFun s2 xt2s t2 _))
   = do bcs       <- bsplitC g i tf1 tf2
-       g'        <- envTyAdds "splitC" i xt2s g 
+       g'        <- envTyAdds "splitC" i (thisB ++ xt2s) g 
        cs        <- splitOC g i s1 s2
        cs'       <- concatMapM splitC $ zipWith (Sub g' i) t2s t1s' 
        cs''      <- splitC $ Sub g' i (F.subst su t1) t2      
        return     $ bcs ++ cs ++ cs' ++ cs''
-    where 
+    where  
+       thisB      = B (F.symbol "this") <$> maybeToList s2
        t2s        = b_type <$> xt2s
        t1s'       = F.subst su (b_type <$> xt1s)
        su         = F.mkSubst $ zipWith bSub xt1s xt2s
@@ -951,12 +947,12 @@ splitC (Sub g i t1@(TApp c1 t1s _) t2@(TApp c2 t2s _))
 -- | These need to be here due to the lack of a folding operation
 --
 splitC (Sub g i t1@(TRef _ _ _) t2) = 
-  case flattenType g t1 of
+  case expandType g t1 of
     Just t1' -> splitC (Sub g i t1' t2)
     Nothing  -> cgError $ errorUnfoldType l t1 where l = srcPos i
 
 splitC (Sub g i t1 t2@(TRef _ _ _)) = 
-  case flattenType g t2 of
+  case expandType g t2 of
     Just t2' -> splitC (Sub g i t1 t2')
     Nothing  -> cgError $ errorUnfoldType l t2 where l = srcPos i
 
@@ -1008,23 +1004,22 @@ splitE g i _ _   (IndexSig _ _ t1) (IndexSig _ _ t2)
         cs'   <- splitC (Sub g i t2 t1)
         return $ cs ++ cs'
 
-splitE g i μ1 μ2 (FieldSig _ _ μf1 t1) (FieldSig _ _ μf2 t2)
-  = splitWithMut g i μ1 μ2 (μf1,t1) (μf2,t2)
+splitE g i _ _ (FieldSig _ _ μf1 t1) (FieldSig _ _ μf2 t2)
+  = splitWithMut g i (μf1,t1) (μf2,t2)
 
 splitE g i _ _ (MethSig _ t1) (MethSig _ t2)
   = splitC (Sub g i t1 t2)
+  -- = splitC (Sub g i (trace (ppshow t1 ++ "\nVS\n" ++ ppshow t2 ++ "\n" ) t1) t2)
 
 splitE _ _ _ _ _ _ = return []
 
 
-splitWithMut g i _ μ2 (_,t1) (μf2,t2)
-  | isImmutable m2 
+splitWithMut g i (_,t1) (μf2,t2)
+  | isImmutable μf2
   = splitC (Sub g i t1 t2)
   | otherwise 
   = (++) <$> splitC (Sub g i t1 t2)
          <*> splitC (Sub g i t2 t1)
-  where
-    m2 = combMut μ2 μf2
 
 
 -- splitMaybe g i (Just t1) (Just t2) = splitC (Sub g i t1 t2) 
@@ -1149,16 +1144,20 @@ splitCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 --------------------------------------------------------------------------------
 -- | zipType wrapper
 --
+--   FIXME: What is the purpose of this substitution ???
+-- 
+-- 
+-- 
 zipTypeUpM l g x t1 t2 = 
   case zipType l g x t1 t2 of
     Just (f, (F.Reft (s,ras))) -> let su  = F.mkSubst [(s, F.expr x)] in 
                                   let rs  = F.simplify $ F.Reft (s, F.subst su ras) `F.meet` F.uexprReft x in
                                   return  $ f rs
-                                    -- return $ ltracePP l ("\nUPCAST SUBST IN " ++ ppshow x ++ 
-                                    --                      "\nT1      " ++ ppshow t1 ++ 
-                                    --                      "\nT2      " ++ ppshow t2 ++ 
-                                    --                      "\nSU      " ++ show (F.toFix su) ++ 
-                                    --                      "\nIN      " ++ ppshow r) $ f rs
+                                  -- return $ ltracePP l ("\nUPCAST SUBST IN " ++ ppshow x ++ 
+                                  --                      "\nT1      " ++ ppshow t1 ++ 
+                                  --                      "\nT2      " ++ ppshow t2 ++ 
+                                  --                      "\nSU      " ++ show (F.toFix su) ++ 
+                                  --                      "\nIN      " ++ ppshow rs) $ f rs
     Nothing -> cgError $ bugZipType (srcPos l) t1 t2
 
 zipTypeDownM l g x t1 t2 = 

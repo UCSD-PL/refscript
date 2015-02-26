@@ -73,7 +73,7 @@ convert l γ t1 t2
           CDNo   -> return $ CNo
           CDUp   -> return $ CUp (rType t1) (rType t2)
           CDDn   -> return $ CDn (rType t1) (rType t2)
-          CDDead -> return $ CDead (errorDeadCast l t1 t2) (rType t1)
+          CDDead -> return $ CDead (errorDeadCast l (toType t1) (toType t2)) (rType t1)
   where
     rType = ofType . toType
     τ1    = toType t1
@@ -85,13 +85,13 @@ convert l γ t1 t2
 convert' :: (Functor g, EnvLike () g)
          => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convert' _ _ t1 t2 | toType t1 == toType t2    = Right CDNo
-convert' _ _ _  t2 | isTop t2                  = Right CDUp
-convert' l γ t1 t2 | any isUnion       [t1,t2] = convertUnion   l γ t1 t2
-convert' l γ t1 t2 | all isPrimitive   [t1,t2] = convertSimple  l γ t1 t2
-convert' l γ t1 t2 | all isFlattenable [t1,t2] = convertObj     l γ t1 t2
-convert' l γ t1 t2 | all isTFun        [t1,t2] = convertFun     l γ t1 t2
-convert' l γ t1 t2                             = convertSimple  l γ t1 t2
+convert' _ _ t1 t2 | toType t1 == toType t2   = Right CDNo
+convert' _ _ _  t2 | isTop t2                 = Right CDUp
+convert' l γ t1 t2 | any isUnion      [t1,t2] = convertUnion   l γ t1 t2
+convert' l γ t1 t2 | all isPrimitive  [t1,t2] = convertSimple  l γ t1 t2
+convert' l γ t1 t2 | all isExpandable [t1,t2] = convertObj     l γ t1 t2
+convert' l γ t1 t2 | all isTFun       [t1,t2] = convertFun     l γ t1 t2
+convert' l γ t1 t2                            = convertSimple  l γ t1 t2
 
 
 -- | `convertObj`
@@ -170,7 +170,7 @@ convertObj l γ (TEnum e1) (TEnum e2) = convertTEnum l γ e1 e2
 -- * Fall back to structural subtyping
 --
 convertObj l γ t1 t2 =
-  case (flattenType γ t1, flattenType γ t2) of 
+  case (expandType γ t1, expandType γ t2) of 
     (Just ft1, Just ft2) -> convertObj l γ ft1 ft2
     (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2
     (Nothing , _       ) -> Left $ errorUnresolvedType l t1 
@@ -185,8 +185,11 @@ covariantConvertObj l γ (μ1,e1s) (μ2,e2s)
   | otherwise                  = Left $ errorIncompatCovFields l e1s e2s
   where
     l2s                        = M.elems e2s
-    e1s'                       = (M.map (combMutInField μ1) . M.filter subtypeable) e1s
-    e2s'                       = (M.map (combMutInField μ2) . M.filter subtypeable) e2s
+    -- TODO: Remove comb...
+    -- e1s'                       = (M.map (combMutInField μ1) . M.filter subtypeable) e1s
+    -- e2s'                       = (M.map (combMutInField μ2) . M.filter subtypeable) e2s
+    e1s'                       = (M.filter subtypeable) e1s
+    e2s'                       = (M.filter subtypeable) e2s
     -- Optional fields should not take part in width subtyping
     (e1s'', e2s'')             = mapPair (M.filter requiredField) (e1s',e2s')
     -- Subtyping equivalent type-members
@@ -213,8 +216,11 @@ invariantConvertObj l γ (μ1,e1s) (μ2,e2s)
   | otherwise                  = Left $ errorIncompatInvFields l e1s e2s
   where
     l2s                        = M.elems e2s
-    e1s'                       = (M.map (combMutInField μ1) . M.filter subtypeable) e1s
-    e2s'                       = (M.map (combMutInField μ2) . M.filter subtypeable) e2s
+    -- TODO: The COMB MUT business should not need to happen 
+    -- e1s'                       = (M.map (combMutInField μ1) . M.filter subtypeable) e1s
+    -- e2s'                       = (M.map (combMutInField μ2) . M.filter subtypeable) e2s
+    e1s'                       = (M.filter subtypeable) e1s
+    e2s'                       = (M.filter subtypeable) e2s
     -- Optional fields should not take part in width subtyping
     (e1s'', e2s'')             = mapPair (M.filter requiredField) (e1s', e2s')
     -- Subtyping equivalent type-members

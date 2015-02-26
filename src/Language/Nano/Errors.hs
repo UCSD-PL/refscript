@@ -60,7 +60,7 @@ bug l s                       = mkErr l $ printf "BUG: %s" s
 impossible l s                = mkErr l $ printf "IMPOSSIBLE: %s" s 
 bugBadSubtypes l t1 t2        = mkErr l $ printf "BUG: Unexpected Subtyping Constraint\n%s <: %s" (ppshow t1) (ppshow t2)
 bugMalignedFields l s s'      = mkErr l $ printf "BUG: Fields not aligned: '%s' and '%s'" (ppshow s) (ppshow s')
-bugFlattenType l s            = mkErr l $ printf "BUG: Could not flatten type '%s'" (ppshow s)
+bugExpandType l s             = mkErr l $ printf "BUG: Could not expand type '%s'" (ppshow s)
 bugWeakenAncestors l x1 x2    = mkErr l $ printf "BUG: When weakeninig from '%s' to '%s' (or the inverse)." (ppshow x1) (ppshow x2)
 
 bugUnknownAlias l x           = mkErr l $ printf "BUG: Unknown definition for alias %s" (ppshow x)

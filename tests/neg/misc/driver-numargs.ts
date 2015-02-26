@@ -23,7 +23,7 @@ function driver(l0, newCount0, oldCount0){
   var newCount = newCount0;
   var oldCount = oldCount0;
   
-  if (newCount != oldCount){
+  if (newCount !== oldCount){
     l        = acquire(l0);
     oldCount = newCount0;
     if (0 < newCount){

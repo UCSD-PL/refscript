@@ -49,7 +49,11 @@ instance PP AccessKind where
   pp FieldAccess  = pp "FieldAccess"
 
 
--- | `getProp γ b s t`: returns  a triplet containing:
+-- | `getProp γ b x s t`: 
+
+--   Performs the access `x.f`, where γ |- x :: t 
+-- 
+--   Returns  a triplet containing:
 --
 --   * The subtype of @t@ for which the access of field @s@ is successful.
 --
@@ -60,80 +64,81 @@ instance PP AccessKind where
 --  FIXME: Fix visibility
 --
 -------------------------------------------------------------------------------
-getProp :: (PPRD r, EnvLike r g, F.Symbolic f, PP f) 
-        => g r -> AccessKind -> f -> RType r -> Maybe (RType r, RType r, Mutability)
+-- getProp :: (PPRD r, EnvLike r g, F.Symbolic f, PP f) 
+--         => g r -> AccessKind -> x -> f -> RType r -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
-getProp γ b s t@(TApp _ _ _  ) = getPropApp γ b s t
+getProp γ b x f t@(TApp _ _ _  ) = getPropApp γ b x f t
 
-getProp γ b s t@(TCons m es _) 
-  = do  (t',m')    <- accessMember True γ b InstanceMember s 
-                    $ M.union es objProto
-        return      $ (t,t',combMut m m')
-  where 
-  -- Add Object as the prototype type
-    objProto = M.singleton (protoSym, InstanceMember) 
-             $ FieldSig protoSym f_required t_immutable t_object
-    protoSym = F.symbol "prototype"
+-- 
+-- Raw object containing fields `es` plus a "__proto__" field linking to 'Object'
+-- 
+getProp γ b x f t@(TCons m es _)
+  = do  empty      <- resolveTypeInEnv γ emptyObjectInterface
+        (t',m')    <- accessMember γ b InstanceMember x f $ es `M.union` t_elts empty
+        return      $ (t,t',m')
     
-getProp γ b s t@(TRef x ts@(m:ts') r)  
-  = do  d          <- resolveTypeInEnv γ x
-        es         <- flatten Nothing InstanceMember γ (d,ts)
-        (t',m')    <- accessMember True γ b InstanceMember s es
+getProp γ b x f t@(TRef n ts@(m0:ts') r)  
+  = do  d          <- resolveTypeInEnv γ n
+        es         <- expand InstanceMember γ d ts
+        (t',m')    <- accessMember γ b InstanceMember x f es
         t''        <- fixMethType t'
-        return      $ (t, t'',combMut (toType m) m')
+        return      $ (t, t'',m')
   where
-    fixMethType ft | isTFun ft                  = mkAnd . (replaceSelf <$>) <$> bkFuns ft
-                   | otherwise                  = Just $ ft
-    replaceSelf (vs, Just (TSelf m'), bs, ot)   = mkFun (vs, Just (TRef x (m':ts') r), bs, ot)
-    replaceSelf a                               = mkFun a
+    m               = toType m0
+    fixMethType ft  | isTFun ft                  
+                    = mkAnd . (replaceSelf <$>) <$> bkFuns ft
+                    | otherwise                  
+                    = Just $ ft
+    replaceSelf (vs, Just (TSelf m'), bs, ot) = mkFun (vs, Just (TRef n (m':ts') r), bs, ot)
+    replaceSelf a                             = mkFun a
 
-getProp γ b s t@(TClass c) 
+getProp γ b x f t@(TClass c) 
   = do  d          <- resolveTypeInEnv γ c
-        es         <- flatten Nothing StaticMember γ (d,[])
-        (t', m)    <- accessMember True γ b StaticMember s es
+        es         <- expand StaticMember γ d []
+        (t', m)    <- accessMember γ b StaticMember x f es
         return      $ (t,t',m)
 
-getProp γ _ s t@(TModule m) 
+getProp γ _ _ f t@(TModule m) 
   = do  m'         <- resolveModuleInEnv γ m
-        (_,_,t',_) <- envFindTy s $ m_variables m'
+        (_,_,t',_) <- envFindTy f $ m_variables m'
         return      $ (t,t', t_readOnly) 
 
 -- FIXME: Instead of the actual integer value, assign unique symbolic values: 
 --        E.g. A_B_C_1 ... 
-getProp γ _ s t@(TEnum e     ) 
+getProp γ _ _ f t@(TEnum e     ) 
   = do e'         <- resolveEnumInEnv γ e
-       io         <- envFindTy (F.symbol s) (e_mapping e')
+       io         <- envFindTy f (e_mapping e')
        case io of
          IntLit _ i -> return (t, tInt `strengthen` exprReft i, t_immutable)
          -- XXX : is 32-bit going to be enough ???
          HexLit _ s -> return (t, tBV32 `strengthen` exprReft (BV.Bv BV.S32 s), t_immutable)
          _          -> Nothing
 
-getProp _ _ _ _                = Nothing
+getProp _ _ _ _ _ = Nothing
 
 
 -------------------------------------------------------------------------------
-getPropApp :: (PPRD r, EnvLike r g, F.Symbolic f, PP f) 
-           => g r 
-           -> AccessKind
-           -> f 
-           -> RType r 
-           -> Maybe (RType r, RType r, Mutability)
+-- getPropApp :: (PPRD r, EnvLike r g, F.Symbolic f, PP f) 
+--            => g r 
+--            -> AccessKind
+--            -> f 
+--            -> RType r 
+--            -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
-getPropApp γ b s t@(TApp c ts _) = 
+getPropApp γ b x f t@(TApp c ts _) = 
   case c of 
     TBool    -> Nothing
     TUndef   -> Nothing
     TNull    -> Nothing
-    TUn      -> getPropUnion γ b s ts
-    TInt     -> do  (t',m) <- lookupAmbientType γ b s "Number"
+    TUn      -> getPropUnion γ b x f ts
+    TInt     -> do  (t',m) <- lookupAmbientType γ b x f "Number"
                     return  $ (t,t',m)
-    TString  -> do  (t',m) <- lookupAmbientType γ b s "String"
+    TString  -> do  (t',m) <- lookupAmbientType γ b x f "String"
                     return  $ (t,t',m)
     TFPBool  -> Nothing
     TTop     -> Nothing
     TVoid    -> Nothing
-getPropApp _ _ _ _ = error "getPropApp should only be applied to TApp"
+getPropApp _ _ _ _ _ = error "getPropApp should only be applied to TApp"
 
 
 -------------------------------------------------------------------------------
@@ -141,7 +146,7 @@ extractCtor :: (PPRD r, EnvLike r g) => g r -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 extractCtor γ (TClass x) 
   = do  d        <- resolveTypeInEnv γ x
-        (vs, es) <- flatten'' Nothing InstanceMember γ d
+        (vs, es) <- expand'' InstanceMember γ d
         case M.lookup (ctorSymbol, InstanceMember) es of
           Just (ConsSig t) -> fixRet x vs t
           _                -> return $ defCtor x vs
@@ -149,7 +154,7 @@ extractCtor γ (TClass x)
 
 extractCtor γ (TRef x ts _) 
   = do  d        <- resolveTypeInEnv γ x
-        (vs, es) <- flatten'' Nothing InstanceMember γ d
+        (vs, es) <- expand'' InstanceMember γ d
         case M.lookup (ctorSymbol, InstanceMember) es of
           Just (ConsSig t) -> apply (fromList $ zip vs ts) <$> fixRet x vs t
           _                -> return $ apply (fromList $ zip vs ts) $ defCtor x vs
@@ -200,15 +205,12 @@ extractCall γ t             = uncurry mkAll <$> foo [] t
                             = foo αs t
                             | otherwise = []
 
--- | `accessMember b s es` extracts field @s@ from type members @es@. If @b@ is
---   True then this means that the extracted field is for a call, in which case
---   we allow extraction of methods, otherwise extracting methods is disallowed.
 -------------------------------------------------------------------------------
 accessMember :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
-             => Bool
-             -> g r
+             => g r
              -> AccessKind 
              -> StaticKind 
+             -> Maybe x
              -> f
              -> TypeMembers r 
              -> Maybe (RType r, Mutability)
@@ -216,39 +218,30 @@ accessMember :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
 -- 
 -- Only consider methods with `MethodAccess`
 --
-accessMember proto γ b@MethodAccess sk f es 
+accessMember γ b@MethodAccess sk x f es 
   | Just (MethSig _ t)              <- M.lookup (F.symbol f, sk) es
   = Just (t,t_immutable)
   | Just (IndexSig _ StringIndex t) <- M.lookup (stringIndexSymbol, sk) es
   , validFieldName f 
   = Just (t, t_mutable) 
-  | proto
-  = accessMemberProto γ b sk f es
   | otherwise 
-  = Nothing
+  = accessMemberProto γ b sk x f es
 -- 
 -- DO NOT consider methods with `FieldAccess`
 --
-accessMember proto γ b@FieldAccess sk f es
+accessMember γ b@FieldAccess sk x f es
   | Just f@(FieldSig _ _ m t) <- M.lookup (F.symbol f, sk) es
   = if optionalField f then Just (orUndef t,m) else Just (t,m)  
   | Just (IndexSig _ StringIndex t) <- M.lookup (stringIndexSymbol, sk) es 
   , validFieldName f 
   = Just (t, t_mutable) 
-  | proto
-  = accessMemberProto γ b sk f es
   | otherwise 
-  = Nothing
+  = accessMemberProto γ b sk x f es
 
-accessMemberProto γ b sk f es
-  | Just (FieldSig _ _ _ pt) <- M.lookup (F.symbol "prototype", sk) es
-  = (\(_,t,m) -> (t,m)) <$> getProp γ b f pt
-
-  -- Everybody inherits Object
-  | Just t               <- envLikeFindTy "Object" γ
-  , Just (TCons _ es' _) <- flattenType γ t
-  = accessMember False γ b sk f es'
-
+accessMemberProto γ b sk x f es
+  | Just (FieldSig _ _ _ pt) <- M.lookup (F.symbol "__proto__",sk) es
+  , Just (_,t,m) <- getProp γ b x f pt
+  = return (t,m)
   | otherwise 
   = Nothing
 
@@ -258,11 +251,11 @@ validFieldName  :: F.Symbolic f => f -> Bool
 validFieldName f = not $ F.symbol f `elem` excludedFieldSymbols
 
 -------------------------------------------------------------------------------
-lookupAmbientType :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s, PP f) 
-                  => g r -> AccessKind -> f -> s -> Maybe (RType r, Mutability)
+-- lookupAmbientType :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s, PP f) 
+--                   => g r -> AccessKind -> f -> s -> Maybe (RType r, Mutability)
 -------------------------------------------------------------------------------
-lookupAmbientType γ b fld amb
-  = t_elts <$> resolveTypeInEnv γ nm >>= accessMember True γ b InstanceMember fld
+lookupAmbientType γ b x f amb
+  = t_elts <$> resolveTypeInEnv γ nm >>= accessMember γ b InstanceMember x f
   where
     nm = mkAbsName [] (F.symbol amb)
 
@@ -270,15 +263,15 @@ lookupAmbientType γ b fld amb
 -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
-getPropUnion :: (PPRD r, EnvLike r g, F.Symbolic f, PP f) 
-             => g r 
-             -> AccessKind 
-             -> f 
-             -> [RType r] 
-             -> Maybe (RType r, RType r, Mutability)
+-- getPropUnion :: (PPRD r, EnvLike r g, F.Symbolic f, PP f) 
+--              => g r 
+--              -> AccessKind 
+--              -> f 
+--              -> [RType r] 
+--              -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
-getPropUnion γ b f ts = 
-  case unzip3 [ttm | Just ttm <- getProp γ b f <$> ts] of
+getPropUnion γ b x f ts = 
+  case unzip3 [ttm | Just ttm <- getProp γ b x f <$> ts] of
     ([],[] ,[])                           -> Nothing
     (ts,ts',ms)  | all isImmutable     ms -> Just (mkUnion ts, mkUnion ts', t_immutable)
                  | all isMutable       ms -> Just (mkUnion ts, mkUnion ts', t_mutable)

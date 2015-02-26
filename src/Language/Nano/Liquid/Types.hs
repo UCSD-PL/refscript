@@ -565,24 +565,26 @@ zipType l γ x t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _)
 zipType _ _ _ t1@(TRef _ [] _) _ = error $ "zipType l on " ++ ppshow t1  -- Invalid type
 zipType _ _ _ _ t2@(TRef _ [] _) = error $ "zipType l on " ++ ppshow t2  -- Invalid type
 
-zipType l γ x t1@(TRef _ _ _) t2 = do t1' <- flattenTypeWithSub γ x t1
-                                      zipType l γ x t1' t2
+zipType l γ x t1@(TRef _ _ _) t2 = do t1' <- expandTypeWithSub γ x t1
+                                      t2' <- expandTypeWithSub γ x t2 
+                                      zipType l γ x t1' t2'
 
-zipType l γ x t1 t2@(TRef _ _ _) = do t2' <- flattenTypeWithSub γ x t2 
-                                      zipType l γ x t1 t2'
+zipType l γ x t1 t2@(TRef _ _ _) = do t1' <- expandTypeWithSub γ x t1 
+                                      t2' <- expandTypeWithSub γ x t2 
+                                      zipType l γ x t1' t2'
 
 zipType l γ x t1@(TClass x1) t2@(TClass x2) 
   | x2 `elem` allAncestors γ x1
   = return $ (setRTypeR (TClass x2), fTop)
   | otherwise 
-  = do  t1' <- flattenTypeWithSub γ x t1 
-        t2' <- flattenTypeWithSub γ x t2
+  = do  t1' <- expandTypeWithSub γ x t1 
+        t2' <- expandTypeWithSub γ x t2
         zipType l γ x t1' t2'
 
-zipType l γ x t1@(TClass _) t2 = do t1' <- flattenTypeWithSub γ x t1
+zipType l γ x t1@(TClass _) t2 = do t1' <- expandTypeWithSub γ x t1
                                     zipType l γ x t1' t2
 
-zipType l γ x t1 t2@(TClass _) = do t2' <- flattenTypeWithSub γ x t2
+zipType l γ x t1 t2@(TClass _) = do t2' <- expandTypeWithSub γ x t2
                                     zipType l γ x t1 t2'
 
 zipType _ _ _ (TApp c [] r) (TApp c' [] _) | c == c'  = return (TApp c [], r)
@@ -665,10 +667,10 @@ zipElts _ _ _ _                   _                      = Nothing
 
 appZ (f,r) = f r
 
-flattenTypeWithSub g x t = F.subst (substFieldSyms g x t) <$> flattenType g t
+expandTypeWithSub g x t = F.subst (substFieldSyms g x t) <$> expandType g t
 
 ------------------------------------------------------------------------------------------
-substFieldSyms :: F.Symbolic a => CGEnv -> a -> RefType -> F.Subst
+-- substFieldSyms :: F.Symbolic a => CGEnv -> a -> RefType -> F.Subst
 ------------------------------------------------------------------------------------------
 substFieldSyms g x t 
   = F.mkSubst  $ [(s      , F.expr $ mkFieldB x s) | FieldSig s _ m _ <- ms t
@@ -677,7 +679,7 @@ substFieldSyms g x t
   where
     thisSym    = F.symbol "this" 
 
-    ms t       | Just (TCons m ms _) <- flattenType g t = defMut m <$> M.elems ms
+    ms t       | Just (TCons m ms _) <- expandType g t = defMut m <$> M.elems ms
                | otherwise                              = []
 
     defMut m (FieldSig f o m0 t) 

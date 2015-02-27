@@ -189,6 +189,9 @@ errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"
 errorWellFormed l             = mkErr l $ printf "Well-formedness Error" 
 errorForbiddenSyms l t xs     = mkErr l $ printf "Symbol(s): %s, is (are) not readonly, local, or an immutable field, so should not be appearing in the refinement of type '%s'." 
                                 (show $ intersperse comma $ map pp xs) (ppshow t)
+errorUnboundSyms l x t xs     = mkErr l $ printf "Symbol(s): %s, appearing in the refinement of type '%s' of '%s' is (are) unbound." 
+                                (show $ intersperse comma $ map pp xs) (ppshow t) (ppshow x)
+                              
  
 ---------------------------------------------------------------------------
 -- | Pervasive (typechecking TC and Liquid)

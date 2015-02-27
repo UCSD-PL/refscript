@@ -150,8 +150,9 @@ tr_inheritedMut  = mkRelMut "InheritedMut"
 isMutable        (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "Mutable"
 isMutable _                                 = False
  
-isImmutable      (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "Immutable"
-isImmutable _                               = False
+-- Ideally this would be a AK_ but meh... 
+isImmutable      (TRef (QN _ _ [] s) _ _) = s == F.symbol "Immutable"
+isImmutable _                             = False
 
 isUniqueMutable  (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "UniqueMutable"
 isUniqueMutable  (TApp TUn ts _ )           = any isUniqueMutable ts

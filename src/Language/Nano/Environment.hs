@@ -7,6 +7,7 @@
 
 module Language.Nano.Environment where
 
+import           Data.Maybe           (isJust)
 import           Language.Nano.Types
 import           Language.Nano.Env
 import           Language.Nano.Names
@@ -53,4 +54,6 @@ envLikeFindTy x γ =
     Nothing -> case parent γ of 
                  Just γ' -> envLikeFindTy x γ'
                  Nothing -> Nothing
+
+envLikeMember x = isJust . envLikeFindTy x
 

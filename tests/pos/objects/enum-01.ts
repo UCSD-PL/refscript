@@ -1,11 +1,5 @@
 
-enum Operator {
-  ADD,
-  DIV,
-  MUL,
-  SUB
-}
-
+enum Operator { ADD, DIV, MUL, SUB }
 
 assert(Operator.ADD === 0);
 

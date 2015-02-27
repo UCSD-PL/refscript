@@ -196,12 +196,10 @@ initModuleEnv g n s
 --    * Adds binder for the 'arguments' variable
 --
 initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
-    
-    --  Compute base environment @g'@, then add extra bindings
         envAdds ("init-func-" ++ ppshow f ++ "-0") varBinds g'
     >>= envAdds ("init-func-" ++ ppshow f ++ "-1") tyBinds 
     >>= envAdds ("init-func-" ++ ppshow f ++ "-3") argBind
-    >>= envAdds ("init-func-" ++ ppshow f ++ "-4") thisBind
+    >>= envAdds ("init-func-" ++ ppshow f ++ "-4") thisBind       -- FIXME: this might be included in varBinds
     >>= envAddReturn f t
     >>= freshenCGEnvM
   where
@@ -508,16 +506,22 @@ consClassElt _ _ (MemberVarDecl l True x Nothing)
   = cgError $ unsupportedStaticNoInit (srcPos l) x
 
 -- Instance variable
+--
+--
+--  XXX : No check here 
+--
+--
 consClassElt g dfn (MemberVarDecl _ False x Nothing)
-  = forM_ xts $ uncurry $ reftCheck "consClas" g imm_flds mut_flds
-  where
-    xts       = [ (x',t) | (FieldSig x' _ _ t) <- M.elems $ t_elts dfn, F.symbol x == x' ]
-    imm_flds  = HS.fromList 
-              $ [ s | ((_,InstanceMember), (FieldSig s _ m _)) <- M.toList $ t_elts dfn 
-                    , isImmutable m ]
-    mut_flds  = HS.fromList 
-              $ [ s | ((_,InstanceMember), (FieldSig s _ m _)) <- M.toList $ t_elts dfn 
-                    , not $ isImmutable m ]
+  = return () 
+--   = forM_ xts $ uncurry $ reftCheck "consClas" g imm_flds mut_flds
+--   where
+--     xts       = [ (x',t) | (FieldSig x' _ _ t) <- M.elems $ t_elts dfn, F.symbol x == x' ]
+--     imm_flds  = HS.fromList 
+--               $ [ s | ((_,InstanceMember), (FieldSig s _ m _)) <- M.toList $ t_elts dfn 
+--                     , isImmutable m ]
+--     mut_flds  = HS.fromList 
+--               $ [ s | ((_,InstanceMember), (FieldSig s _ m _)) <- M.toList $ t_elts dfn 
+--                     , not $ isImmutable m ]
 
 consClassElt _ _ (MemberVarDecl l False x _)
   = die $ bugClassInstVarInit (srcPos l) x
@@ -739,6 +743,7 @@ consExpr g c@(CallExpr l em@(DotRef _ e f) es) _
     vr               = VarRef $ getAnnotation e
 
 -- | e(es)
+--
 consExpr g (CallExpr l e es) _
   = mseq (consExpr g e Nothing) $ \(x, g') -> 
       safeEnvFindTy x g' >>= consCall g' l e (FI Nothing ((,Nothing) <$> es))
@@ -765,7 +770,9 @@ consExpr g (DotRef l e f) to
           | F.symbol "Array" == s && F.symbol "length" == F.symbol f -> 
               consExpr g' (CallExpr l (DotRef l (vr x) (Id l "_get_length_")) []) to
 
-        Just (_,t,m) -> Just   <$> envAddFresh l (mkTy m x te t,WriteLocal,Initialized) g'
+        -- Do not strengthen enumeration fields
+        Just (TEnum _,t,m) -> Just <$> envAddFresh l (t,ReadOnly,Initialized) g'
+        Just (_,t,m)       -> Just <$> envAddFresh l (mkTy m x te t,WriteLocal,Initialized) g'
 
         Nothing      -> cgError $  errorMissingFld (srcPos l) f te
   where

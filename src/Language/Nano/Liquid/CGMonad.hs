@@ -41,7 +41,7 @@ module Language.Nano.Liquid.CGMonad (
   , envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
 
-  , reftCheck
+  -- , reftCheck
 
   -- * Add Subtyping Constraints
   , subType, wellFormed -- , safeExtends
@@ -63,12 +63,11 @@ import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
 
-import           Data.Maybe                     (catMaybes, maybeToList, isNothing)
+import           Data.Maybe                     (catMaybes, maybeToList)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map.Strict                as M
 import qualified Data.List                      as L
-import qualified Data.HashSet                   as HS
 import           Data.Function                  (on)
 import           Text.PrettyPrint.HughesPJ
 import           Language.Nano.Types
@@ -298,7 +297,10 @@ envAdds' _ _ _ [] g
 envAdds' doChecks doFields msg xts g
   = do  -- 1. Check for unbound symbols in refinement
         -- 
-        when doChecks   $ zipWithM_ (unboundSyms g) xs ts 
+        --    Assuming that all @xts@ will be added to the env, we make 
+        --    all binders available to be referenced by all types.
+        -- 
+        when doChecks   $ zipWithM_ (unboundSyms msg g xss) xs ts 
 
         -- 2. Add invariants
         --
@@ -308,77 +310,75 @@ envAdds' doChecks doFields msg xts g
         -- 3. Add object field binders 
         --
         g'             <- foldM (addObjectFields doChecks doFields) g $ zip3 xs as ts'
-         
-        -- 4. More checks --- Included in unboundSyms ... 
+          
+        -- 4. Add fixpoint binds 
         --
-        -- zipWithM_         (reftCheck msg g' ok HS.empty) xs ts'
-         
-        -- 5. Add fixpoint binds 
-        --
-        is             <- catMaybes    <$> forM xtas addFixpointBind
+        is             <- catMaybes <$> forM xtas addFixpointBind
 
-        -- 6. Update environment @g@
+        -- 5. Update environment @g@
         --
         return          $ g' { cge_names = E.envAdds xtas       $ cge_names g'
                              , cge_fenv  = F.insertsIBindEnv is $ cge_fenv  g' }
   where
-    (xs,(ts,as,is))   = mapSnd unzip3 $ unzip xts
+    (xs,(ts,as,is))     = mapSnd unzip3 $ unzip xts
+    xss                 = map F.symbol xs
 
-    inv t Initialized = addInvariant g t
-    inv t _           = return t
+    inv t Initialized   = addInvariant g t
+    inv t _             = return t
 
 
-unboundSyms g x t   | not $ null uSyms
-                    = cgError $ errorUnboundSyms (srcPos x) x t uSyms 
-                    | otherwise 
-                    = return ()
+unboundSyms m g ok x t  | not $ null uSyms
+                        = cgError $ errorUnboundSyms (srcPos x) x t uSyms m
+                        | otherwise 
+                        = return ()
   where
-    uSyms           =  efoldRType h f F.emptySEnv [] t
+    uSyms               =  efoldRType h f F.emptySEnv [] t
     
-    h _             = ()
-    f γ t' s        = s ++ filter (not . isBound γ t') (F.syms $ noKVars $ rTypeReft t')
-    isBound γ t' s  = s == x_sym 
-                   || s == rTypeValueVar t'
-                   || s `F.memberSEnv` γ
-                   || s `F.memberSEnv` cge_consts g
-                   || s `envLikeMember` g 
-                   -- TODO: make sure the referenced variable is READONLY
-                   --       i.e. what reftCheck does
-                   || s `L.elem` biExtra
-    biExtra         = F.symbol <$> ["bvor", "bvand", "builtin_BINumArgs"]
-    x_sym           = F.symbol x
+    h _                 = ()
+    f γ t' s            = s ++ filter (not . isBound γ t') (F.syms $ noKVars $ rTypeReft t')
+    isBound γ t' s      = s == x_sym 
+                       || s == rTypeValueVar t'
+                       || s `L.elem` ok
+                       || s `F.memberSEnv` γ
+                       || s `F.memberSEnv` cge_consts g
+                       || s `envLikeMember` g 
+                       -- TODO: make sure the referenced variable is READONLY
+                       --       i.e. what reftCheck does
+                       || s `L.elem` biExtra
+    biExtra             = F.symbol <$> ["bvor", "bvand", "builtin_BINumArgs"]
+    x_sym               = F.symbol x
 
 
-reftCheck msg g ok bad x t  | Just its <- bkFuns t
-                            = mapM_ (reftCheckFun msg g ok bad x) its
-                            | otherwise 
-                            = reftCheck' msg g x t ok bad
-
-
-reftCheckFun msg g ok bad x (_,s,bs,t)     
-                            = mapM_ (reftCheck msg g (ok `HS.union` ss) bad x) ts
-  where
-    (ss,ts)                 = (HS.fromList $ map b_sym bs, maybeToList s ++ map b_type bs ++ [t])
-
-
-reftCheck' msg g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.insert` ok)
-                            = return ()
-                            | otherwise
-                            = cgError $ errorForbiddenSyms (srcPos x) t $ HS.toList forbiddenSet
-  where
-    x_sym                   = F.symbol x
-
-    allSyms                 = [ s | s <- foldReft rr [] t ]
-
-    forbiddenSyms           = [ s | s <- allSyms
-                                  , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g
-                                  , a `elem` [ReturnVar,WriteGlobal] ]
-                           ++ [ s | s <- allSyms, s `HS.member` bad ]
-    forbiddenSet            = HS.fromList forbiddenSyms
-
-    rr (F.Reft (_, ras)) xs = concatMap ra ras ++ xs
-    ra (F.RConc p)          = F.syms p
-    ra (F.RKvar _ su)       = F.targetSubstSyms su
+-- reftCheck msg g ok bad x t  | Just its <- bkFuns t
+--                             = mapM_ (reftCheckFun msg g ok bad x) its
+--                             | otherwise 
+--                             = reftCheck' msg g x t ok bad
+-- 
+-- 
+-- reftCheckFun msg g ok bad x (_,s,bs,t)     
+--                             = mapM_ (reftCheck msg g (ok `HS.union` ss) bad x) ts
+--   where
+--     (ss,ts)                 = (HS.fromList $ map b_sym bs, maybeToList s ++ map b_type bs ++ [t])
+-- 
+-- 
+-- reftCheck' msg g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.insert` ok)
+--                             = return ()
+--                             | otherwise
+--                             = cgError $ errorForbiddenSyms (srcPos x) t $ HS.toList forbiddenSet
+--   where
+--     x_sym                   = F.symbol x
+-- 
+--     allSyms                 = [ s | s <- foldReft rr [] t ]
+-- 
+--     forbiddenSyms           = [ s | s <- allSyms
+--                                   , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g
+--                                   , a `elem` [ReturnVar,WriteGlobal] ]
+--                            ++ [ s | s <- allSyms, s `HS.member` bad ]
+--     forbiddenSet            = HS.fromList forbiddenSyms
+-- 
+--     rr (F.Reft (_, ras)) xs = concatMap ra ras ++ xs
+--     ra (F.RConc p)          = F.syms p
+--     ra (F.RKvar _ su)       = F.targetSubstSyms su
 
 
 -- | `addObjectFieldsWithOK g (x,t)` when introducing an object @x@ in environment @g@
@@ -975,7 +975,7 @@ splitC (Sub g i t1 t2@(TRef _ _ _)) =
 
 -- | TCons
 --
-splitC (Sub g i t1@(TCons μ1 e1s r1) t2@(TCons μ2 e2s _))
+splitC (Sub g i t1@(TCons _ e1s r1) t2@(TCons _ e2s _))
   | F.isFalse (F.simplify r1)
   = return []
   | otherwise

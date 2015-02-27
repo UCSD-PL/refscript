@@ -422,7 +422,7 @@ efoldReft g f = go
 efoldExt g xt γ             = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
 
 -- The only type members that can appear in refinements are immutable fields 
-efoldExt' g (FieldSig f _ m t) γ | isImmutable m = F.insertSEnv f (g t) γ
+efoldExt' g (FieldSig f _ m t) γ | isImmutable (tracePP "MUTABILITY" m) = F.insertSEnv f (g t) γ
 efoldExt' _ _ γ = γ
 
 ------------------------------------------------------------------------------------------

@@ -931,8 +931,7 @@ consInstantiate l g fn ft ts xes
         let (ts2, its2)  = balance ts1 its1
         let (su, ts3)    = renameBinds (toList its2) (toList xes)
         _               <- zipWithM_ (subType l err g) (toList ts2) ts3
-        Just <$> envAddFreshWithOK (HS.fromList $ bSyms its1) l 
-                                   (F.subst su ot, WriteLocal, Initialized) g
+        Just <$> envAddFresh l (F.subst su ot, WriteLocal, Initialized) g
   where
     bSyms bs             = b_sym <$> toList bs
     toList (FI x xs)     = maybeToList x ++ xs

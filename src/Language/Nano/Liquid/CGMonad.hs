@@ -63,7 +63,7 @@ import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
 
-import           Data.Maybe                     (catMaybes, maybeToList)
+import           Data.Maybe                     (catMaybes, maybeToList, isNothing)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map.Strict                as M
@@ -76,6 +76,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Annots
 import qualified Language.Nano.Env              as E
 import           Language.Nano.Locations
+import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.CmdLine
 import           Language.Nano.Program
@@ -311,57 +312,86 @@ envAddsWithOK :: (IsLocated x, F.Symbolic x, PP x, PP [x])
               -> CGEnv 
               -> CGM CGEnv
 ---------------------------------------------------------------------------------------
+envAddsWithOK _ _ _ [] g 
+  = return g 
 envAddsWithOK doFields ok msg xts g
-  = do ts'            <- zipWithM inv ts is
-       let xtas        = zip xs $ zip3 ts' as is
+  = do  zipWithM_         (unboundSyms g) xs ts 
+        ts'            <- zipWithM inv ts is
+        let xtas        = zip xs $ zip3 ts' as is
 
-       g'             <- foldM (addObjectFieldsWithOK doFields ok) g $ zip3 xs as ts'
-       
-       zipWithM_         (reftCheck msg g' ok HS.empty) xs ts'
-       
-       is             <- catMaybes    <$> forM xtas addFixpointBind
+        g'             <- foldM (addObjectFieldsWithOK doFields ok) g $ zip3 xs as ts'
+         
+        zipWithM_         (reftCheck msg g' ok HS.empty) xs ts'
+         
+        is             <- catMaybes    <$> forM xtas addFixpointBind
 
-       return          $ g' { cge_names = E.envAdds xtas       $ cge_names g'
-                            , cge_fenv  = F.insertsIBindEnv is $ cge_fenv  g' }
+        return          $ g' { cge_names = E.envAdds xtas       $ cge_names g'
+                             , cge_fenv  = F.insertsIBindEnv is $ cge_fenv  g' }
   where
-     (xs,(ts,as,is))   = mapSnd unzip3 $ unzip xts
-     inv t Initialized = addInvariant g t
-     inv t _           = return t
+    (xs,(ts,as,is))   = mapSnd unzip3 $ unzip xts
+
+    inv t Initialized = addInvariant g t
+    inv t _           = return t
 
 
-reftCheck msg g ok bad x t | Just its <- bkFuns t
-                        = mapM_ check its
-                        | otherwise 
-                        = reftCheck' msg g x t ok bad
+unboundSyms g x t   | not $ null uSyms
+                    = cgError $ errorUnboundSyms (srcPos x) x t uSyms 
+                    | otherwise 
+                    = return ()
   where
-    break s bs t        = (HS.fromList $ map b_sym bs, maybeToList s ++ map b_type bs ++ [t])
-    check (_,s,bs,t)    | (ss,ts) <- break s bs t
-                        = mapM_ (reftCheck msg g (ok `HS.union` ss) bad x) ts
+    uSyms           =  efoldRType h f F.emptySEnv [] t
+    
+    h _             = ()
+    f γ t' s        = s ++ filter (not . isBound γ t') (F.syms $ noKVars $ rTypeReft t')
+    isBound γ t' s  = s == x_sym 
+                   || s == rTypeValueVar t'
+                   || s `F.memberSEnv` γ 
+                   || s `F.memberSEnv` cge_consts g
+                   || s `envLikeMember` g 
+                   || s `L.elem` biExtra
+    biExtra         = F.symbol <$> ["bvor", "bvand", "builtin_BINumArgs"]
+    x_sym           = F.symbol x
 
-reftCheck' :: (IsLocated a, F.Symbolic a) =>
-  t
-  -> CGEnv
-  -> a
-  -> RefType
-  -> HS.HashSet F.Symbol
-  -> HS.HashSet F.Symbol
-  -> ExceptT Error (State CGState) ()
 
-reftCheck' _ g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.insert` ok)
-                          = return ()
-                          | otherwise
-                          = cgError $ errorForbiddenSyms (srcPos x) t $ HS.toList forbiddenSet
+reftCheck msg g ok bad x t  | Just its <- bkFuns t
+                            = mapM_ (reftCheckFun msg g ok bad x) its
+                            | otherwise 
+                            = reftCheck' msg g x t ok bad
+
+
+reftCheckFun msg g ok bad x (_,s,bs,t)     
+                            = mapM_ (reftCheck msg g (ok `HS.union` ss) bad x) ts
+  where
+    (ss,ts)                 = (HS.fromList $ map b_sym bs, maybeToList s ++ map b_type bs ++ [t])
+
+
+reftCheck' msg g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.insert` ok)
+                            = return ()
+                            | otherwise
+                            = cgError $ errorForbiddenSyms (srcPos x) t $ HS.toList forbiddenSet
   where
     x_sym                   = F.symbol x
-    allSyms                 = [ s | s <- foldReft rr [] t ]    
+
+    allSyms                 = [ s | s <- foldReft rr [] t ]
+
     forbiddenSyms           = [ s | s <- allSyms
                                   , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g
                                   , a `elem` [ReturnVar,WriteGlobal] ]
                            ++ [ s | s <- allSyms, s `HS.member` bad ]
     forbiddenSet            = HS.fromList forbiddenSyms
+
     rr (F.Reft (_, ras)) xs = concatMap ra ras ++ xs
     ra (F.RConc p)          = F.syms p
     ra (F.RKvar _ su)       = F.targetSubstSyms su
+
+
+-- 
+-- reftCheckObject g x t
+--   | Just (TCons _ ms _ ) <- expandType g t = check $ M.to ms 
+-- 
+--   where 
+--     check ms = [ () | FieldSig _ _ _ _ <- ms ] 
+  
 
 
 -- | `addObjectFieldsWithOK g (x,t)` when introducing an object @x@ in environment @g@
@@ -1009,7 +1039,6 @@ splitE g i _ _ (FieldSig _ _ μf1 t1) (FieldSig _ _ μf2 t2)
 
 splitE g i _ _ (MethSig _ t1) (MethSig _ t2)
   = splitC (Sub g i t1 t2)
-  -- = splitC (Sub g i (trace (ppshow t1 ++ "\nVS\n" ++ ppshow t2 ++ "\n" ) t1) t2)
 
 splitE _ _ _ _ _ _ = return []
 

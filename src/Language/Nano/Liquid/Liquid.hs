@@ -147,7 +147,7 @@ consNano p@(Nano {code = Src fs})
 initGlobalEnv  :: NanoRefType -> CGM CGEnv
 -------------------------------------------------------------------------------
 initGlobalEnv pgm@(Nano { code = Src s }) 
-      = freshenCGEnvM (CGE nms bds grd ctx mod cha pth Nothing) 
+      = freshenCGEnvM (CGE nms bds grd ctx mod cha pth Nothing cst) 
     >>= envAdds "initGlobalEnv" extras
   where
     reshuffle1 = \(_,_,c,d,e) -> (d,c,e)
@@ -166,12 +166,13 @@ initGlobalEnv pgm@(Nano { code = Src s })
     mod        = pModules pgm
     ctx        = emptyContext
     pth        = mkAbsPath []
+    cst        = consts pgm
 
 -------------------------------------------------------------------------------
 initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> CGM CGEnv
 -------------------------------------------------------------------------------
 initModuleEnv g n s 
-  = freshenCGEnvM $ CGE nms bds grd ctx mod cha pth (Just g)
+  = freshenCGEnvM $ CGE nms bds grd ctx mod cha pth (Just g) cst
   where
     reshuffle1 = \(_,_,c,d,e) -> (d,c,e)
     reshuffle2 = \(_,c,d,e)   -> (d,c,e)
@@ -184,6 +185,7 @@ initModuleEnv g n s
     cha        = cge_cha g
     ctx        = emptyContext
     pth        = extendAbsPath (cge_path g) n
+    cst        = cge_consts g
 
 -- | `initFuncEnv l f i xs (αs, ts, t) g` 
 --
@@ -194,17 +196,17 @@ initModuleEnv g n s
 --    * Adds binder for the 'arguments' variable
 --
 initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
+    
     --  Compute base environment @g'@, then add extra bindings
-        envAdds "initFunc-0" varBinds g'
-    >>= envAdds "initFunc-1" tyBinds 
-    >>= envAdds "initFunc-3" argBind
-    >>= envAdds "initFunc-4" thisBind
+        envAdds ("init-func-" ++ ppshow f ++ "-0") varBinds g'
+    >>= envAdds ("init-func-" ++ ppshow f ++ "-1") tyBinds 
+    >>= envAdds ("init-func-" ++ ppshow f ++ "-3") argBind
+    >>= envAdds ("init-func-" ++ ppshow f ++ "-4") thisBind
     >>= envAddReturn f t
     >>= freshenCGEnvM
   where
-    g'        = CGE nms fenv grds ctx mod cha pth parent
-    nms       = E.envMap (\(_,_,c,d,e) -> (d,c,e)) 
-              $ mkVarEnv $ visibleVars s
+    g'        = CGE nms fenv grds ctx mod cha pth parent cst
+    nms       = E.envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv $ visibleVars s
     fenv      = cge_fenv g
     grds      = []
     mod       = cge_mod g
@@ -212,6 +214,7 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     ctx       = pushContext i (cge_ctx g)
     pth       = cge_path g
     parent    = Just g
+    cst       = cge_consts g
     tyBinds   = [(Loc (srcPos l) α, (tVar α, ReadOnly, Initialized)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) $ (,WriteLocal,Initialized) <$> ts
     argBind   = [(argId l, (argTy l ts (cge_names g), ReadOnly, Initialized))]
@@ -442,8 +445,8 @@ consClassElt :: CGEnv -> IfaceDef F.Reft -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body) 
   = do  g0       <- envAdd ctorExit (mkCtorExitTy,ReadOnly,Initialized) g
-        g1       <- envAdds "ctor-super" superInfo g0
-        g2       <- envAdds "ctor-this"  thisInfo  g1
+        g1       <- envAdds "classElt-ctor-1" superInfo g0
+        g2       <- envAdds "classElt-ctor-2" thisInfo  g1
         cTy      <- mkCtorTy
         ts       <- splitCtorTys l ctor cTy
         forM_ ts  $ consFun1 l g2 ctor xs body

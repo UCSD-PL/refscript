@@ -422,7 +422,7 @@ efoldReft g f = go
 efoldExt g xt γ             = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
 
 -- The only type members that can appear in refinements are immutable fields 
-efoldExt' g (FieldSig f _ m t) γ | isImmutable (tracePP "MUTABILITY" m) = F.insertSEnv f (g t) γ
+efoldExt' g (FieldSig f _ m t) γ | isImmutable m = F.insertSEnv f (g t) γ
 efoldExt' _ _ γ = γ
 
 ------------------------------------------------------------------------------------------
@@ -443,6 +443,11 @@ efoldRType g f                 = go
 
     go γ z t@(TCons _ bs _ )   = f γ t $ gos γ' z (f_type <$> M.elems bs) 
                                    where γ' = M.foldr (efoldExt' g) γ bs
+
+    go γ z t@(TClass _)        = f γ t z
+    go γ z t@(TModule _)       = f γ t z
+    go γ z t@(TEnum _)         = f γ t z
+    go γ z t@(TSelf t')        = f γ t $ go γ z t'
 
     go _ _ t                   = error $ "Not supported in efoldRType: " ++ ppshow t
 

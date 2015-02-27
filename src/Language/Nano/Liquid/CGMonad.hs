@@ -34,7 +34,7 @@ module Language.Nano.Liquid.CGMonad (
   , Freshable (..)
 
   -- * Environment API
-  , envAddFresh, envAddFreshWithOK, envAdds, envAddsWithOK, envAdd
+  , envAddFresh, envAdds, envAdd
   , envAddReturn, envAddGuard, envPopGuard
   , envFindTy, envFindTyWithAsgn, envFindTyForAsgn
   , safeEnvFindTy, safeEnvFindTyWithAsgn, safeEnvFindTyNoSngl
@@ -261,19 +261,9 @@ envAddFresh :: IsLocated l
             -> CGEnv 
             -> CGM (Id AnnTypeR, CGEnv) 
 ---------------------------------------------------------------------------------------
-envAddFresh = envAddFreshWithOK HS.empty
-
----------------------------------------------------------------------------------------
-envAddFreshWithOK :: IsLocated l 
-                  => HS.HashSet F.Symbol 
-                  -> l 
-                  -> (RefType, Assignability, Initialization) 
-                  -> CGEnv 
-                  -> CGM (Id AnnTypeR, CGEnv) 
----------------------------------------------------------------------------------------
-envAddFreshWithOK ok l (t,a,i) g
+envAddFresh l (t,a,i) g 
   = do x  <- freshId l
-       g' <- envAddsWithOK True ok "envAddFresh" [(x,(t,a,i))] g
+       g' <- envAdds "envAddFresh" [(x,(t,a,i))] g
        addAnnot l x t
        return (x, g')
    
@@ -286,45 +276,49 @@ freshenAnn l
        return $ Ann n (srcPos l) []
 
 
+envAdds = envAdds' True True
 
----------------------------------------------------------------------------------------
-envAdds :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
-        => String 
-        -> [(x, (RefType,Assignability,Initialization))] 
-        -> CGEnv 
-        -> CGM CGEnv
----------------------------------------------------------------------------------------
-envAdds = envAddsWithOK True HS.empty
 
 
 -- | No binders for WriteGlobal variables as they cannot appear in refinements.
 --
 --   doFields : add bindings for fields (True/False)
 --
---   ok : Symbols that are 'ok' to appear in refinements
---
 ---------------------------------------------------------------------------------------
-envAddsWithOK :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
-              => Bool
-              -> HS.HashSet F.Symbol
-              -> String 
-              -> [(x, (RefType,Assignability,Initialization))] 
-              -> CGEnv 
-              -> CGM CGEnv
+envAdds' :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
+         => Bool
+         -> Bool
+         -> String 
+         -> [(x, (RefType,Assignability,Initialization))] 
+         -> CGEnv 
+         -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAddsWithOK _ _ _ [] g 
+envAdds' _ _ _ [] g 
   = return g 
-envAddsWithOK doFields ok msg xts g
-  = do  zipWithM_         (unboundSyms g) xs ts 
+envAdds' doChecks doFields msg xts g
+  = do  -- 1. Check for unbound symbols in refinement
+        -- 
+        when doChecks   $ zipWithM_ (unboundSyms g) xs ts 
+
+        -- 2. Add invariants
+        --
         ts'            <- zipWithM inv ts is
         let xtas        = zip xs $ zip3 ts' as is
 
-        g'             <- foldM (addObjectFieldsWithOK doFields ok) g $ zip3 xs as ts'
+        -- 3. Add object field binders 
+        --
+        g'             <- foldM (addObjectFields doChecks doFields) g $ zip3 xs as ts'
          
-        zipWithM_         (reftCheck msg g' ok HS.empty) xs ts'
+        -- 4. More checks --- Included in unboundSyms ... 
+        --
+        -- zipWithM_         (reftCheck msg g' ok HS.empty) xs ts'
          
+        -- 5. Add fixpoint binds 
+        --
         is             <- catMaybes    <$> forM xtas addFixpointBind
 
+        -- 6. Update environment @g@
+        --
         return          $ g' { cge_names = E.envAdds xtas       $ cge_names g'
                              , cge_fenv  = F.insertsIBindEnv is $ cge_fenv  g' }
   where
@@ -345,9 +339,11 @@ unboundSyms g x t   | not $ null uSyms
     f γ t' s        = s ++ filter (not . isBound γ t') (F.syms $ noKVars $ rTypeReft t')
     isBound γ t' s  = s == x_sym 
                    || s == rTypeValueVar t'
-                   || s `F.memberSEnv` γ 
+                   || s `F.memberSEnv` γ
                    || s `F.memberSEnv` cge_consts g
                    || s `envLikeMember` g 
+                   -- TODO: make sure the referenced variable is READONLY
+                   --       i.e. what reftCheck does
                    || s `L.elem` biExtra
     biExtra         = F.symbol <$> ["bvor", "bvand", "builtin_BINumArgs"]
     x_sym           = F.symbol x
@@ -385,31 +381,22 @@ reftCheck' msg g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.
     ra (F.RKvar _ su)       = F.targetSubstSyms su
 
 
--- 
--- reftCheckObject g x t
---   | Just (TCons _ ms _ ) <- expandType g t = check $ M.to ms 
--- 
---   where 
---     check ms = [ () | FieldSig _ _ _ _ <- ms ] 
-  
-
-
 -- | `addObjectFieldsWithOK g (x,t)` when introducing an object @x@ in environment @g@
 --   also introduce bindings for all its IMMUTABLE fields. 
 ---------------------------------------------------------------------------------------
-addObjectFieldsWithOK :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
+addObjectFields :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
                       => Bool
-                      -> HS.HashSet F.Symbol 
+                      -> Bool
                       -> CGEnv 
                       -> (x,Assignability,RefType) 
                       -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-addObjectFieldsWithOK False _ g _ = return g
-addObjectFieldsWithOK True  ok g (x,a,t) 
+addObjectFields chk False g _ = return g
+addObjectFields chk True  g (x,a,t) 
               | a `elem` [WriteGlobal,ReturnVar] 
               = return g
               | otherwise
-              = envAddsWithOK False ok "addObjectFieldsWithOK" xts g
+              = envAdds' chk False "addObjectFieldsWithOK" xts g
   where
     xts       = [(fd f, ty o tf) | FieldSig f o m tf <- ms, isImmutable m ]
 
@@ -993,7 +980,7 @@ splitC (Sub g i t1@(TCons μ1 e1s r1) t2@(TCons μ2 e2s _))
   = return []
   | otherwise
   = do  cs    <- bsplitC g i t1 t2
-        cs'   <- splitEs g i μ1 μ2 e1s e2s
+        cs'   <- splitEs g i e1s e2s
         return $ cs ++ cs'
 
 splitC (Sub _ _ (TClass _) (TClass _)) = return []
@@ -1013,34 +1000,44 @@ splitIncompatC _ g i t1 _ = bsplitC g i t1 (mkBot t1)
 mkBot   :: (F.Reftable r) => RType r -> RType r
 mkBot t = setRTypeR t (F.bot r) where r = rTypeR t
 
--- FIXME: 
+-- 
+--  Gather the types of the LHS IMMUTABLE fields and add them to the
+--  environment with the relevant field symbol as binder
+--
+--  FIXME: 
+--
 --  * Add special cases: IndexSig ...
+--
 ---------------------------------------------------------------------------------------
 splitEs :: CGEnv 
         -> Cinfo 
-        -> Mutability         -> Mutability 
         -> TypeMembers F.Reft -> TypeMembers F.Reft 
         -> CGM [FixSubC]
 ---------------------------------------------------------------------------------------
-splitEs g i μ1 μ2 e1s e2s = concatMapM (uncurry $ splitE g i μ1 μ2) es 
+splitEs g i e1s e2s 
+  = do  g' <- envTyAdds "splitEs" i imms g
+        concatMapM (uncurry $ splitE g' i) es 
   where
     es     = M.elems $ M.intersectionWith (,) e1s e2s
+    imms   = [ B f t | (FieldSig f _ m t,_) <- es, isImmutable m ]
 
-splitE g i _  _ (CallSig t1) (CallSig t2) = splitC (Sub g i t1 t2)
-splitE g i _  _ (ConsSig t1) (ConsSig t2) = splitC (Sub g i t1 t2)
 
-splitE g i _ _   (IndexSig _ _ t1) (IndexSig _ _ t2) 
+
+splitE g i (CallSig t1) (CallSig t2) = splitC (Sub g i t1 t2)
+splitE g i (ConsSig t1) (ConsSig t2) = splitC (Sub g i t1 t2)
+
+splitE g i (IndexSig _ _ t1) (IndexSig _ _ t2) 
   = do  cs    <- splitC (Sub g i t1 t2)
         cs'   <- splitC (Sub g i t2 t1)
         return $ cs ++ cs'
 
-splitE g i _ _ (FieldSig _ _ μf1 t1) (FieldSig _ _ μf2 t2)
+splitE g i (FieldSig _ _ μf1 t1) (FieldSig _ _ μf2 t2)
   = splitWithMut g i (μf1,t1) (μf2,t2)
 
-splitE g i _ _ (MethSig _ t1) (MethSig _ t2)
+splitE g i (MethSig _ t1) (MethSig _ t2)
   = splitC (Sub g i t1 t2)
 
-splitE _ _ _ _ _ _ = return []
+splitE _ _ _ _ = return []
 
 
 splitWithMut g i (_,t1) (μf2,t2)
@@ -1138,8 +1135,12 @@ bsplitW g t i
   = []
   where r' = rTypeSortedReft t
 
+-- 
+-- TODO HEREHERE
+--
+-- Perhaps disable checks at envAdds ... 
 envTyAdds msg l xts 
-  = envAdds (msg ++ " - envTyAdds " ++ ppshow (srcPos l)) 
+  = envAdds' False True (msg ++ " - envTyAdds " ++ ppshow (srcPos l)) 
       [(symbolId l x,(t,WriteLocal,Initialized)) | B x t <- xts]
 
 

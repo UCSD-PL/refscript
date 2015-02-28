@@ -10,7 +10,7 @@ class Foo {
 
     constructor() { }
 
-    /*@ bar : (x: {v: IArray<number> | (len v) = size}) : void */
+    /*@ bar : (x: {v: IArray<number> | (len v) = this.size}) : void */
     bar(x) { 
 
       assert(this.size - 1 >= 0);

@@ -61,6 +61,10 @@ data CGEnvR r = CGE {
   -- ^ Parent namespace environment
   --
   , cge_parent  :: Maybe (CGEnvR r)
+  -- 
+  -- ^ Constants
+  --
+  , cge_consts  :: Env (RType r)
   
   } deriving (Functor)
 

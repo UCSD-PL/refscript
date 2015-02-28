@@ -12,8 +12,8 @@ module Language.Nano.Typecheck.Resolve (
     resolveTypeInEnv, resolveEnumInEnv, resolveModuleInEnv
   , resolveModuleInPgm, resolveTypeInPgm, resolveEnumInPgm
 
-  -- * Flatten a type definition applying subs
-  , flatten, flatten', flatten'', flattenType
+  -- * expand a type definition applying subs
+  , expand, expand', expand'', expandType
 
   -- * Ancestors
   , weaken, allAncestors, classAncestors, interfaceAncestors, isAncestor
@@ -25,6 +25,7 @@ module Language.Nano.Typecheck.Resolve (
 
   -- * Constructors
   , Constructor, {- toConstructor, isConstSubtype, -} sameTypeof, getTypeof
+  , emptyObjectInterface
 
   , isClassType
 
@@ -34,7 +35,7 @@ module Language.Nano.Typecheck.Resolve (
 import           Control.Applicative                 ((<$>), (<|>))
 import           Data.Generics
 import qualified Data.HashMap.Strict              as HM
-import           Data.Maybe                          (maybeToList)
+import           Data.Maybe                          (maybeToList, catMaybes)
 import           Data.Foldable                       (foldlM)
 import           Data.List                           (find)
 import qualified Data.HashSet                    as  HS
@@ -83,99 +84,122 @@ resolveModuleInPgm p s = qenvFindTy s $ pModules p
 --------------------------------------------------------------------------------
 isClassType :: EnvLike r g => g r -> RType r -> Bool
 --------------------------------------------------------------------------------
-isClassType γ (TRef x _ _ ) = 
-  case resolveTypeInEnv γ x of
-    Just (ID _ k _ _ _ ) -> k == ClassKind
-    _                    -> False
+isClassType γ (TRef x _ _ )
+  | Just (ID _ k _ _ _ ) <-resolveTypeInEnv γ x 
+  = k == ClassKind
+  | otherwise
+  = False
 isClassType _ _ = False
 
 
--- | Flattenning 
---
+-- | expandning 
+
+numberInterface      = mkAbsName [] $ F.symbol "Number"
+stringInterface      = mkAbsName [] $ F.symbol "String"
+booleanInterface     = mkAbsName [] $ F.symbol "Boolean"
+objectInterface      = mkAbsName [] $ F.symbol "Object"
+functionInterface    = mkAbsName [] $ F.symbol "Function"
+
+emptyObjectInterface = mkAbsName [] $ F.symbol "EmptyObject"
+
+
 -- 
--- | `flatten m b γ (d,ts)` epands a type reference to a structural type that 
---   includes all elements of the the named type and its ancestors. Argument
---   @b@ determines if static or non-static elements should be included.
---   @m@ is the top-level enforced mutability Top-level 
+-- | `expand m b γ d ts` 
+--
+--   * epands a type reference to a structural type 
+--
+--   * Output includes all elements of the the named type and its ancestors
+--
+--   * @b@ determines if static or non-static elements should be included
+-- 
+--   * @m@ is the top-level enforced mutability Top-level 
+--
+--   * When no parent is found 'Object' is used
 --
 ---------------------------------------------------------------------------
-flatten :: (EnvLike r g, PPR r) 
-        => Maybe Mutability 
-        -> StaticKind 
-        -> g r 
-        -> SIfaceDef r 
-        -> Maybe (TypeMembers r)
+expand :: (EnvLike r g, PPR r) 
+       => StaticKind -> g r -> IfaceDef r -> [RType r] -> Maybe (TypeMembers r)
 ---------------------------------------------------------------------------
-flatten m s γ (ID _ _ vs h es, ts) =  M.map (apply θ . fmut) 
-                                   .  M.unions 
-                                   .  (current:)
-                                  <$> heritage h
-  where 
-    current                        = M.filterWithKey (\(_,s') _ -> s == s') es
-    θ                              = fromList $ zip vs ts
-    fmut                           = maybe id setMut m
-    setMut m (FieldSig x o mf t)   | isInheritedMutability mf 
-                                   = FieldSig x o m t
-    setMut _ f                     = f
-    heritage (es,_)                = mapM fields es
-    fields (p,ts)                  = resolveTypeInEnv γ p >>= flatten m s γ . (,ts) 
+expand s γ (ID c _ vs h es) ts  =  M.map (apply θ) 
+                                .  M.unions 
+                                .  (current:)
+                               <$> heritage h
+  where
+    current                     = M.filterWithKey (\(_,s') _ -> s == s') es
 
--- | flatten' does not apply the top-level type substitution
----------------------------------------------------------------------------
-flatten' :: (PPR r, EnvLike r g) 
-         => Maybe Mutability 
-         -> StaticKind
-         -> g r 
-         -> IfaceDef r 
-         -> Maybe (TypeMembers r)
----------------------------------------------------------------------------
-flatten' m st γ d@(ID _ _ vs _ _) = flatten m st γ (d, tVar <$> vs)
+    θ                           = fromList $ zip vs ts
 
----------------------------------------------------------------------------
-flatten'' :: (PPR r, EnvLike r g) 
-          => Maybe Mutability 
-          -> StaticKind
-          -> g r 
-          -> IfaceDef r 
-          -> Maybe ([TVar], (TypeMembers r))
----------------------------------------------------------------------------
-flatten'' m st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten m st γ (d, tVar <$> vs)
+    -- All object-types inherit from the Object interface
+    heritage ([],_)             | c == objectInterface 
+                                -- The object does not have a __proto__ field 
+                                = Just []
+                                | otherwise
+                                -- Other objects have an Object-typed __proto__ field
+                                = Just [M.fromList [(proto_key,proto_fld)]] 
+                                -- = mapM fields [(objectInterface,[])]
+    heritage (es,_)             = mapM fields es
+
+    fields (p,ts)               = resolveTypeInEnv γ p >>= \d -> expand s γ d ts
+    
+    proto_sym                   = F.symbol "__proto__"
+    proto_key                   = (proto_sym, InstanceMember)
+    object_ty                   = TRef objectInterface [t_immutable] fTop
+    proto_fld                   = FieldSig proto_sym f_required t_immutable object_ty
 
 
--- | `flattenType` will flatten *any* type (including Mutability types!)
+-- | expand' does not apply the top-level type substitution
+expand' st γ d@(ID _ _ vs _ _)  = expand st γ d (tVar <$> vs)
+
+-- | expand'' also returns the interface's type parameters
+expand'' st γ d@(ID _ _ vs _ _) = (vs,) <$> expand st γ d (tVar <$> vs)
+
+
+-- | `expandType` will expand *any* type (including Mutability types!)
 --    It is not intended to be called with mutability types.
 --    Types with zero type parameters (missing mutability field) are considered
 --    invalid.
 --
---    Flatten pushes top-level enforced mutabilities down towards the fields,
+--    expand pushes top-level enforced mutabilities down towards the fields,
 --    i.e. if the top-level is 'AssignsFields' then fields get Mutable
 --    (overriding their current mutability).
 --
 ---------------------------------------------------------------------------
-flattenType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
+expandType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
-flattenType γ (TRef x [] r)    -- This case is for Mutability types 
+-- 
+-- Given an object literal type, @expandType@ returns an expanded TCons containing 
+-- the inherited (from Object) fields. 
+-- 
+expandType γ (TCons m es r) 
+  = do  empty   <- resolveTypeInEnv γ emptyObjectInterface
+        es'     <- expand' InstanceMember γ $ empty { t_elts = es }
+        return   $ TCons m es' r
+-- 
+-- FIXME: expandType for Mutability could easiliy return the same type 
+--
+expandType γ (TRef x [] r)
   = do  d       <- resolveTypeInEnv γ x
-        es      <- flatten Nothing InstanceMember γ (d, [])
+        es      <- expand' InstanceMember γ d
         return   $ TCons t_immutable es r
 
-flattenType γ (TRef x (mut:ts) r)
+expandType γ (TRef x ts@(m:_) r)
   = do  d       <- resolveTypeInEnv γ x
-        es      <- flatten (Just $ toType mut) InstanceMember γ (d,mut:ts) 
-        return   $ TCons (toType mut) es r
+        es      <- expand InstanceMember γ d ts
+        return   $ TCons (toType m) es r
 
-flattenType γ (TClass x)             
+expandType γ (TClass x)             
   = do  d       <- resolveTypeInEnv γ x
-        es      <- flatten' Nothing StaticMember γ d
+        es      <- expand' StaticMember γ d
         return   $ TCons t_immutable es fTop
 
-flattenType γ (TModule x)             
+expandType γ (TModule x)             
   = do  es      <- M.fromList . map mkField . envToList . m_variables <$> resolveModuleInEnv γ x
         return   $ TCons t_immutable es fTop
   where
-    mkField (k,(_,_,t,_)) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) f_required t_immutable t)
+    mkField (k,(_,_,t,_)) = (mod_key k, FieldSig (F.symbol k) f_required t_immutable t)
+    mod_key k             = (F.symbol k, InstanceMember)
 
-flattenType γ (TEnum x)
+expandType γ (TEnum x)
   = do  es      <- M.fromList . concatMap  mkField . envToList . e_mapping <$> resolveEnumInEnv γ x
         return   $ TCons t_immutable es fTop
   where
@@ -187,19 +211,24 @@ flattenType γ (TEnum x)
     fld k = FieldSig (F.symbol k) f_required t_immutable
     key   = (,InstanceMember) . F.symbol 
 
-flattenType γ (TApp TInt _ _)
-  = do  es      <- t_elts <$> resolveTypeInEnv γ (mkAbsName [] $ F.symbol "Number")
-        return   $ TCons t_immutable es fTop
 
-flattenType γ (TApp TString _ _)
-  = do  es      <- t_elts <$> resolveTypeInEnv γ (mkAbsName [] $ F.symbol "String")
-        return   $ TCons t_immutable es fTop
+-- FIXME: Even these should inherit from Object
+expandType γ (TApp TInt _ _)
+  = do  d     <- resolveTypeInEnv γ numberInterface 
+        es    <- expand' InstanceMember γ d
+        return $ TCons t_immutable es fTop
 
-flattenType γ (TApp TBool _ _) 
-  = do  es      <- t_elts <$> resolveTypeInEnv γ (mkAbsName [] $ F.symbol "Boolean")
-        return   $ TCons t_immutable es fTop
+expandType γ (TApp TString _ _)
+  = do  d     <- resolveTypeInEnv γ stringInterface 
+        es    <- expand' InstanceMember γ d
+        return $ TCons t_immutable es fTop
 
-flattenType _ t  = Just t
+expandType γ (TApp TBool _ _) 
+  = do  d     <- resolveTypeInEnv γ booleanInterface 
+        es    <- expand' InstanceMember γ d
+        return $ TCons t_immutable es fTop
+
+expandType _ t  = Just t
 
 -- | `weaken γ A B T..`: Given a relative type name @A@  distinguishes two
 --   cases:
@@ -306,9 +335,8 @@ isAncestor γ c p = p `elem` allAncestors γ c
 ---------------------------------------------------------------------------
 boundKeys :: (PPR r, EnvLike r g) => g r -> RType r -> [F.Symbol]
 ---------------------------------------------------------------------------
-boundKeys γ t@(TRef _ _ _) = case flattenType γ t of
-                               Just t  -> boundKeys γ t
-                               Nothing -> []
+boundKeys γ t@(TRef _ _ _) | Just t <- expandType γ t = boundKeys γ t
+                           | otherwise                = []
 boundKeys _ (TCons _ es _) = fst <$> M.keys es 
 boundKeys _ _              = []
 

@@ -140,14 +140,22 @@ optionP   = do _ <- many anyToken
                return "DEFAULT FLAG"
     
 iFaceP   :: Parser (Id SourceSpan, IfaceDefQ RK Reft)
-iFaceP   = do name   <- identifierP 
-              as     <- option [] tParP
-              h      <- heritageP
-              es     <- mkTypeMembers . ((InstanceMember, MemDeclaration,) <$>) 
-                    <$> braces propBindP
-              return (name, convertTvar as $ ID (mkrn name) InterfaceKind as h es)
+iFaceP   
+  = do  name   <- identifierP 
+        as     <- option [] tParP
+        case as of 
+          (m:_) -> do h  <- heritageP
+                      es <- mkTypeMembers (TVar m fTop) . ((InstanceMember, MemDeclaration,) <$>) 
+                        <$> braces propBindP
+                      return (name, convertTvar as $ ID (mkrn name) InterfaceKind as h es)
+          -- The mutability here shouldn't matter
+          _     -> do h  <- heritageP
+                      es <- mkTypeMembers defMut . ((InstanceMember, MemDeclaration,) <$>) 
+                        <$> braces propBindP
+                      return (name, convertTvar as $ ID (mkrn name) InterfaceKind as h es)
   where
-    mkrn = mkRelName [] . symbol
+    defMut = TRef (QN RK_ (srcPos dummySpan) [] (symbol "Immutable")) [] fTop
+    mkrn   = mkRelName [] . symbol
 
 
 extendsGenP :: String -> Parser [TypeReferenceQ RK Reft]
@@ -307,7 +315,7 @@ objLitP
       Just m    -> TCons m <$> typeMembersP
       Nothing   -> withSpan addMVar typeMembersP
   where
-    typeMembersP = mkTypeMembers . ((InstanceMember, MemDeclaration,) <$>) 
+    typeMembersP = mkTypeMembers defMut . ((InstanceMember, MemDeclaration,) <$>) 
                                 <$> braces propBindP
     addMVar _    = TCons defMut
     defMut       = TRef (QN RK_ (srcPos dummySpan) [] (symbol "Immutable")) [] fTop

@@ -94,7 +94,7 @@ import           Language.Fixpoint.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -1009,7 +1009,8 @@ splitEs g i e1s e2s
         concatMapM (uncurry $ splitE g' i) es 
   where
     es     = M.elems $ M.intersectionWith (,) e1s e2s
-    imms   = [ B f t | (FieldSig f _ m t,_) <- es, isImmutable m ]
+    imms   = [ B (qlf f) t | (FieldSig f _ m t,_) <- es, isImmutable m ]
+    qlf    = F.qualifySymbol $ F.symbol $ builtinOpId BIThis
 
 
 

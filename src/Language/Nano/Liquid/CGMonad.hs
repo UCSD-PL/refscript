@@ -300,25 +300,27 @@ envAdds' doChecks doFields msg xts g
         --    Assuming that all @xts@ will be added to the env, we make 
         --    all binders available to be referenced by all types.
         -- 
-        when doChecks   $ zipWithM_ (unboundSyms msg g xss) xs ts 
-
+        when doChecks   $ zipWithM_ (checkSyms msg g xss) xs ts 
+        --
         -- 2. Add invariants
         --
         ts'            <- zipWithM inv ts is
         let xtas        = zip xs $ zip3 ts' as is
-
-        -- 3. Add object field binders 
         --
-        g'             <- foldM (addObjectFields doChecks doFields) g $ zip3 xs as ts'
-          
-        -- 4. Add fixpoint binds 
+        -- 3. Add fixpoint binds 
         --
-        is             <- catMaybes <$> forM xtas addFixpointBind
-
-        -- 5. Update environment @g@
+        fpIds          <- catMaybes <$> forM xtas addFixpointBind
         --
-        return          $ g' { cge_names = E.envAdds xtas       $ cge_names g'
-                             , cge_fenv  = F.insertsIBindEnv is $ cge_fenv  g' }
+        -- 4. Update environment @g@
+        --
+        let g'          = g { cge_names = E.envAdds xtas          $ cge_names g
+                            , cge_fenv  = F.insertsIBindEnv fpIds $ cge_fenv  g }
+        --
+        -- 5. Add object field binders 
+        --
+        g''             <- foldM (addObjectFields msg doChecks doFields) g' $ zip3 xs as ts'
+        
+        return          $ g''
   where
     (xs,(ts,as,is))     = mapSnd unzip3 $ unzip xts
     xss                 = map F.symbol xs
@@ -327,78 +329,63 @@ envAdds' doChecks doFields msg xts g
     inv t _             = return t
 
 
-unboundSyms m g ok x t  | not $ null uSyms
-                        = cgError $ errorUnboundSyms (srcPos x) x t uSyms m
+
+-- | Valid symbols:
+--
+--   * The respective defined symbol @x@
+--   * The value variable (v)
+--   * Explicitly acceptable symbols (@ok@)
+--   * Internal binders
+--   * Constant measures
+--   * Additional builtin symbols
+--   * ReadOnly ... binders in the environment
+--
+checkSyms m g ok x t    | not $ null uSyms
+                        = cgError $ errorUnboundSyms (srcPos x) (F.symbol x) t uSyms m
                         | otherwise 
                         = return ()
   where
-    uSyms               =  efoldRType h f F.emptySEnv [] t
+    uSyms               = efoldRType h f F.emptySEnv [] t
     
     h _                 = ()
-    f γ t' s            = s ++ filter (not . isBound γ t') (F.syms $ noKVars $ rTypeReft t')
-    isBound γ t' s      = s == x_sym 
-                       || s == rTypeValueVar t'
-                       || s `L.elem` ok
-                       || s `F.memberSEnv` γ
-                       || s `F.memberSEnv` cge_consts g
-                       || s `envLikeMember` g 
-                       -- TODO: make sure the referenced variable is READONLY
-                       --       i.e. what reftCheck does
-                       || s `L.elem` biExtra
+    f γ t' s            = s ++ filter (not . valid γ t') (F.syms $ noKVars $ rTypeReft t')
+
+    valid γ t' s        | s == x_sym                                  = True                    
+                        | s == rTypeValueVar t'                       = True 
+                        | s `L.elem` ok                               = True 
+                        | s `F.memberSEnv` γ                          = True
+                        | s `F.memberSEnv` cge_consts g               = True
+                        | s `L.elem` biExtra                          = True
+                        | Just (_,a,_) <- envLikeFindTy' s g  
+                        , a `L.elem` [ReadOnly,ImportDecl,WriteLocal] = True
+                        | otherwise                                   = False
+
     biExtra             = F.symbol <$> ["bvor", "bvand", "builtin_BINumArgs"]
     x_sym               = F.symbol x
 
 
--- reftCheck msg g ok bad x t  | Just its <- bkFuns t
---                             = mapM_ (reftCheckFun msg g ok bad x) its
---                             | otherwise 
---                             = reftCheck' msg g x t ok bad
--- 
--- 
--- reftCheckFun msg g ok bad x (_,s,bs,t)     
---                             = mapM_ (reftCheck msg g (ok `HS.union` ss) bad x) ts
---   where
---     (ss,ts)                 = (HS.fromList $ map b_sym bs, maybeToList s ++ map b_type bs ++ [t])
--- 
--- 
--- reftCheck' msg g x t ok bad | HS.null $ forbiddenSet `HS.difference` (x_sym `HS.insert` ok)
---                             = return ()
---                             | otherwise
---                             = cgError $ errorForbiddenSyms (srcPos x) t $ HS.toList forbiddenSet
---   where
---     x_sym                   = F.symbol x
--- 
---     allSyms                 = [ s | s <- foldReft rr [] t ]
--- 
---     forbiddenSyms           = [ s | s <- allSyms
---                                   , (_,a,_) <- maybeToList $ envFindTyWithAsgn s g
---                                   , a `elem` [ReturnVar,WriteGlobal] ]
---                            ++ [ s | s <- allSyms, s `HS.member` bad ]
---     forbiddenSet            = HS.fromList forbiddenSyms
--- 
---     rr (F.Reft (_, ras)) xs = concatMap ra ras ++ xs
---     ra (F.RConc p)          = F.syms p
---     ra (F.RKvar _ su)       = F.targetSubstSyms su
-
-
--- | `addObjectFieldsWithOK g (x,t)` when introducing an object @x@ in environment @g@
---   also introduce bindings for all its IMMUTABLE fields. 
+-- | `addObjectFields g (x,t)`
+--   
+--   * Introduce bindings for all its IMMUTABLE fields. 
 ---------------------------------------------------------------------------------------
 addObjectFields :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
-                      => Bool
-                      -> Bool
-                      -> CGEnv 
-                      -> (x,Assignability,RefType) 
-                      -> CGM CGEnv
+                => String 
+                -> Bool
+                -> Bool
+                -> CGEnv 
+                -> (x,Assignability,RefType) 
+                -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-addObjectFields chk False g _ = return g
-addObjectFields chk True  g (x,a,t) 
+addObjectFields msg chk False g _ 
+              = return g
+
+addObjectFields msg chk True  g (x,a,t) 
               | a `elem` [WriteGlobal,ReturnVar] 
               = return g
               | otherwise
-              = envAdds' chk False "addObjectFieldsWithOK" xts g
+              = envAdds' chk False ("addObjectFields-" ++ msg) xts g
   where
-    xts       = [(fd f, ty o tf) | FieldSig f o m tf <- ms, isImmutable m ]
+    xts       = [ (fd f, ty o tf) | FieldSig f o m tf <- ms, isImmutable m ]
 
     fd        = mkFieldB x 
 
@@ -1176,33 +1163,19 @@ splitCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 --
 --   FIXME: What is the purpose of this substitution ???
 -- 
--- 
--- 
-zipTypeUpM l g x t1 t2 = 
-  case zipType l g x t1 t2 of
-    Just (f, (F.Reft (s,ras))) -> let su  = F.mkSubst [(s, F.expr x)] in 
-                                  let rs  = F.simplify $ F.Reft (s, F.subst su ras) `F.meet` F.uexprReft x in
-                                  return  $ f rs
-                                  -- return $ ltracePP l ("\nUPCAST SUBST IN " ++ ppshow x ++ 
-                                  --                      "\nT1      " ++ ppshow t1 ++ 
-                                  --                      "\nT2      " ++ ppshow t2 ++ 
-                                  --                      "\nSU      " ++ show (F.toFix su) ++ 
-                                  --                      "\nIN      " ++ ppshow rs) $ f rs
-    Nothing -> cgError $ bugZipType (srcPos l) t1 t2
+zipTypeUpM g x t1 t2 
+  | Just (f, (F.Reft (s,ras))) <- zipType g x t1 t2
+  = let su  = F.mkSubst [(s, F.expr x)] in 
+    let rs  = F.simplify $ F.Reft (s, F.subst su ras) `F.meet` F.uexprReft x in
+    return  $ f rs
+  | otherwise 
+  = cgError $ bugZipType (srcPos x) t1 t2
 
-zipTypeDownM l g x t1 t2 = 
-  case zipType l g x t1 t2 of
-    Just (f, r) -> return $ f r
---     Just (f, r@(F.Reft (s,ras))) -> let su  = F.mkSubst [(s, F.expr x)] in 
---                                     -- let rs  = F.simplify $ F.Reft (s, subK su <$> ras) `F.meet` F.uexprReft x in
---                                     return  $ f r
---                                     -- return $ ltracePP l ("\nDOWNCAST SUBST ON " ++ ppshow x ++
---                                     --                      "\nT1      " ++ ppshow t1 ++ 
---                                     --                      "\nT2      " ++ ppshow t2 ++ 
---                                     --                      "\nSU      " ++ show (F.toFix su) ++ 
---                                     --                      "\nIN      " ++ ppshow r ++ 
---                                     --                      "\nRESULT  " ++ ppshow rs) $ f rs
-    Nothing     -> cgError $ bugZipType (srcPos l) t1 t2
+zipTypeDownM g x t1 t2
+  | Just (f, r) <- zipType g x t1 t2
+  = return $ f r
+  | otherwise 
+  = cgError $ bugZipType (srcPos x) t1 t2
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

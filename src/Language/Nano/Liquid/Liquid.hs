@@ -435,16 +435,25 @@ consExprT l g e (Just t) = consCall  g l "consExprT" (FI Nothing [(e, Nothing)])
 ------------------------------------------------------------------------------------
 consClassElts :: CGEnv -> IfaceDef F.Reft -> [ClassElt AnnTypeR] -> CGM ()
 ------------------------------------------------------------------------------------
-consClassElts g = mapM_ . consClassElt g
+consClassElts g dfn es 
+  = do  g' <- envAdds "consClassElts" fs g  -- Add imm fields into scope beforehand
+        mapM_ (consClassElt g' dfn) es
+  where
+    fs = [ (s,(t,ro,ii)) | ((_,im), (FieldSig s _ m t)) <- M.toList (t_elts dfn)
+                        , isImmutable m ]
+    im = InstanceMember
+    ro = ReadOnly
+    ii = Initialized
 
-
+-- | Constructor
 ------------------------------------------------------------------------------------
 consClassElt :: CGEnv -> IfaceDef F.Reft -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body) 
-  = do  g0       <- envAdd ctorExit (mkCtorExitTy,ReadOnly,Initialized) g
-        g1       <- envAdds "classElt-ctor-1" superInfo g0
-        g2       <- envAdds "classElt-ctor-2" thisInfo  g1
+  = do  
+        g0       <- envAdds "classElt-ctor-2" thisInfo g
+        g1       <- envAdd ctorExit (mkCtorExitTy,ReadOnly,Initialized) g0
+        g2       <- envAdds "classElt-ctor-1" superInfo g1
         cTy      <- mkCtorTy
         ts       <- splitCtorTys l ctor cTy
         forM_ ts  $ consFun1 l g2 ctor xs body
@@ -455,10 +464,10 @@ consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body)
     this_T        = TRef nm (tVar <$> vs) fTop
     thisInfo      = [(this,(this_T,ReadOnly,Initialized))]
 
-    this          = builtinOpId BIThis
-    ctor          = builtinOpId BICtor
-    ctorExit      = builtinOpId BICtorExit
-    super         = builtinOpId BISuper
+    this          = Loc (srcPos l) $ builtinOpId BIThis
+    ctor          = Loc (srcPos l) $ builtinOpId BICtor
+    ctorExit      = Loc (srcPos l) $ builtinOpId BICtorExit
+    super         = Loc (srcPos l) $ builtinOpId BISuper
 
     superInfo     | Just t <- extractParent'' g d 
                   = [(super,(t,ReadOnly,Initialized))]
@@ -493,7 +502,7 @@ consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body)
                   | otherwise 
                   = Nothing
 
--- Static field
+-- | Static field
 consClassElt g dfn (MemberVarDecl l True x (Just e))
   | Just (FieldSig _ _ _ t) <- spec
   = void $ consCall g l "field init"  (FI Nothing [(e, Just t)]) (mkInitFldTy t)
@@ -505,23 +514,9 @@ consClassElt g dfn (MemberVarDecl l True x (Just e))
 consClassElt _ _ (MemberVarDecl l True x Nothing)
   = cgError $ unsupportedStaticNoInit (srcPos l) x
 
--- Instance variable
---
---
---  XXX : No check here 
---
---
-consClassElt g dfn (MemberVarDecl _ False x Nothing)
+-- | Instance variable (checked at ctor) 
+consClassElt g dfn (MemberVarDecl _ False _ Nothing)
   = return () 
---   = forM_ xts $ uncurry $ reftCheck "consClas" g imm_flds mut_flds
---   where
---     xts       = [ (x',t) | (FieldSig x' _ _ t) <- M.elems $ t_elts dfn, F.symbol x == x' ]
---     imm_flds  = HS.fromList 
---               $ [ s | ((_,InstanceMember), (FieldSig s _ m _)) <- M.toList $ t_elts dfn 
---                     , isImmutable m ]
---     mut_flds  = HS.fromList 
---               $ [ s | ((_,InstanceMember), (FieldSig s _ m _)) <- M.toList $ t_elts dfn 
---                     , not $ isImmutable m ]
 
 consClassElt _ _ (MemberVarDecl l False x _)
   = die $ bugClassInstVarInit (srcPos l) x
@@ -771,7 +766,8 @@ consExpr g (DotRef l e f) to
               consExpr g' (CallExpr l (DotRef l (vr x) (Id l "_get_length_")) []) to
 
         -- Do not strengthen enumeration fields
-        Just (TEnum _,t,m) -> Just <$> envAddFresh l (t,ReadOnly,Initialized) g'
+        Just (TEnum _,t,_) -> Just <$> envAddFresh l (t,ReadOnly,Initialized) g'
+
         Just (_,t,m)       -> Just <$> envAddFresh l (mkTy m x te t,WriteLocal,Initialized) g'
 
         Nothing      -> cgError $  errorMissingFld (srcPos l) f te
@@ -865,15 +861,15 @@ consDeadCode g l e t
 -- | UpCast(x, t1 => t2)
 consUpCast g l x _ t2
   = do (tx,a,i)  <- safeEnvFindTyWithAsgn x g
-       ztx       <- zipTypeUpM l g x tx t2
+       ztx       <- zipTypeUpM g x tx t2
        envAddFresh l (ztx,a,i) g
 
 -- | DownCast(x, t1 => t2)
 consDownCast g l x _ t2
   = do (tx,a,i)  <- safeEnvFindTyWithAsgn x g
-       txx       <- zipTypeUpM l g x tx tx
-       tx2       <- zipTypeUpM l g x t2 tx
-       ztx       <- zipTypeDownM l g x tx t2
+       txx       <- zipTypeUpM g x tx tx
+       tx2       <- zipTypeUpM g x t2 tx
+       ztx       <- zipTypeDownM g x tx t2
        subType l (errorDownCast (srcPos l) txx t2) g txx tx2
        envAddFresh l (ztx,a,i) g
 
@@ -1097,14 +1093,14 @@ consWhile g l cond body
 consWhileBase l xs tIs g    
   = do  xts_base           <- mapM (\x -> (x,) <$> safeEnvFindTy x g) xs 
         xts_base'          <- zipWithM (\(x,t) t' -> 
-                                zipTypeUpM (srcPos l) g x t t') xts_base tIs    -- (c)
+                                zipTypeUpM g x t t') xts_base tIs    -- (c)
         zipWithM_ (subType l err g) xts_base' tIs         
   where 
     err                      = errorLiquid' l
 
 consWhileStep l xs tIs gI'' 
   = do  xts_step           <- mapM (\x -> (x,) <$> safeEnvFindTy x gI'') xs' 
-        xts_step'          <- zipWithM (\(x,t) t' -> zipTypeUpM (srcPos l) gI'' x t t') xts_step tIs'
+        xts_step'          <- zipWithM (\(x,t) t' -> zipTypeUpM gI'' x t t') xts_step tIs'
         zipWithM_ (subType l err gI'') xts_step' tIs'                           -- (f)
   where 
     tIs'                    = F.subst su <$> tIs

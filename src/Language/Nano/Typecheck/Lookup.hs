@@ -25,6 +25,7 @@ import qualified Language.Fixpoint.Bitvector as BV
 import           Language.Nano.Names
 import           Language.Nano.Types
 import           Language.Nano.Env
+import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
@@ -105,13 +106,17 @@ getProp γ _ _ f t@(TModule m)
 
 -- FIXME: Instead of the actual integer value, assign unique symbolic values: 
 --        E.g. A_B_C_1 ... 
-getProp γ _ _ f t@(TEnum e     ) 
+getProp γ _ x f t@(TEnum e     ) 
   = do e'         <- resolveEnumInEnv γ e
        io         <- envFindTy f (e_mapping e')
        case io of
          IntLit _ i -> return (t, tInt `strengthen` exprReft i, t_immutable)
+         --
          -- XXX : is 32-bit going to be enough ???
-         HexLit _ s -> return (t, tBV32 `strengthen` exprReft (BV.Bv BV.S32 s), t_immutable)
+         --
+         -- XXX: Invalid BV values will be dropped
+         --
+         HexLit _ s -> bitVectorValue s >>= return . (t,,t_immutable) . (tBV32 `strengthen`)
          _          -> Nothing
 
 getProp _ _ _ _ _ = Nothing

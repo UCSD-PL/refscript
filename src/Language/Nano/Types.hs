@@ -355,7 +355,7 @@ data Assignability
   | WriteLocal  
   -- 
   -- ^ Local but not in current scope.
-  -- ^ Cannot appear in refinements, cannot be read at SSA
+  -- ^ CANNOT appear in refinements, cannot be read at SSA
   --
   | ForeignLocal
   -- 
@@ -364,9 +364,8 @@ data Assignability
   --
   | WriteGlobal 
   -- 
-  -- SPECIAL VALUES
-  -- 
   -- ^ Used to denote return variable
+  -- ^ CANNOT appear in refinements
   -- 
   | ReturnVar
   deriving (Show, Eq, Data, Typeable)

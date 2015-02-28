@@ -57,8 +57,8 @@ module Language.Nano.Liquid.Types (
   -- * Zip types
   , zipType
 
-  -- * Subst field syms
-  , substFieldSyms, mkFieldB
+  -- * 'this' related substitutions
+  , substThis, unqualifyThis, mkFieldB
 
 
   ) where
@@ -690,31 +690,49 @@ zipElts _ _ _                   _                      = Nothing
 
 appZ (f,r) = f r
 
-expandTypeWithSub g x t = F.subst (substFieldSyms g x t) <$> expandType g t
+expandTypeWithSub g x t = substThis g (x,t) <$> expandType g t
 
-------------------------------------------------------------------------------------------
--- substFieldSyms :: F.Symbolic a => CGEnv -> a -> RefType -> F.Subst
-------------------------------------------------------------------------------------------
-substFieldSyms g x t 
-  = F.mkSubst  $ [(s, F.expr $ F.symbol $ mkFieldB x s) | FieldSig s _ m _ <- ms t
-                                                        , isImmutable m            ]
-              ++ [(thisSym, F.expr $ F.symbol x  ) ]
+
+-- | Substitute occurences of 'this' in type @t'@, given that the receiver 
+--   object is bound to symbol @x@ and it has a type @t@ under @g@.
+-------------------------------------------------------------------------------
+substThis :: (IsLocated a, F.Symbolic a) 
+          => CGEnv -> (a, RefType) -> RefType -> RefType
+-------------------------------------------------------------------------------
+substThis g (x,t) = F.subst su
   where
-    thisSym    = F.symbol "this" 
+    su            = F.mkSubst $ (this, F.expr $ F.symbol x) : fieldSu
 
-    ms t       | Just (TCons m ms _) <- expandType g t = defMut m <$> M.elems ms
-               | otherwise                              = []
+    fieldSu       | Just (TCons m fs _) <- expandType g t 
+                  = [ subPair f | ((f,im), FieldSig _ _ m _) <- M.toList fs
+                                , isImmutable m ]
+                  | otherwise                              
+                  = []
 
-    defMut m (FieldSig f o m0 t) 
-               | isInheritedMutability m0 
-               = FieldSig f o m  t
-               | otherwise                
-               = FieldSig f o m0 t
+    this          = F.symbol $ builtinOpId BIThis 
+    im            = InstanceMember
+    qFld x f      = F.qualifySymbol (F.symbol x) f  
+    subPair f     = (qFld this f, F.expr $ qFld x f)
 
-    defMut _ f = f 
 
-mkFieldB x f = Loc l $ mconcat [s "field_",s x,s "_",s f] 
-  where 
-    s        = F.symbol
-    l        = srcPos x
+-- | Substitute occurences of 'this.f' in type @t'@, with 'f'
+-------------------------------------------------------------------------------
+unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
+-------------------------------------------------------------------------------
+unqualifyThis g t = F.subst $ F.mkSubst fieldSu
+  where
+    fieldSu       | Just (TCons m fs _) <- expandType g t 
+                  = [ subPair f | ((f,im), FieldSig _ _ m _) <- M.toList fs
+                                , isImmutable m ]
+                  | otherwise                              
+                  = []
+
+    this          = F.symbol $ builtinOpId BIThis 
+    im            = InstanceMember
+    qFld x f      = F.qualifySymbol (F.symbol x) f  
+    subPair f     = (qFld this f, F.expr f)
+
+
+
+mkFieldB x f = Loc (srcPos x) (F.qualifySymbol (F.symbol x) (F.symbol f))
 

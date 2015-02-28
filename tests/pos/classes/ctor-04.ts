@@ -4,7 +4,7 @@ class AA {
   /*@ k : [Immutable] number */
   public k: number;
   
-  /*@ l : [Immutable] { number | v = k } */
+  /*@ l : [Immutable] { number | v = this.k } */
   public l: number;
   
   constructor() {

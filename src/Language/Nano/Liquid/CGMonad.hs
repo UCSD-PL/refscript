@@ -389,10 +389,13 @@ addObjectFields msg chk True  g (x,a,t)
 
     fd        = mkFieldB x 
 
+    --
+    -- FIXME : Is substThis necessary here ???
+    --
     ty o tf   | optionalFieldType o 
-              = (orUndef $ F.subst (substFieldSyms g x t) tf, a, Initialized)
+              = (orUndef $ substThis g (x,t) tf, a, Initialized)
               | otherwise
-              = (F.subst (substFieldSyms g x t) tf, a, Initialized)
+              = (substThis g (x,t) tf, a, Initialized)
 
     ms        | Just (TCons m ms _) <- expandType g t = defMut m <$> M.elems ms
               | otherwise                              = []

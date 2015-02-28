@@ -1000,7 +1000,7 @@ builtinId       = mkId . ("builtin_" ++)
 
 -- | BitVectors
 
-bitVectorValue ('0':x) = Just $ exprReft (BV.Bv BV.S32  $ "#" ++ x)
+bitVectorValue ('0':x) = Just $ exprReft $ BV.Bv BV.S32  $ "#" ++ x
 bitVectorValue _       = Nothing
 
 

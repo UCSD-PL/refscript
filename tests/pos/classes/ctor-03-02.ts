@@ -4,7 +4,7 @@ class A {
   /*@ x: [Immutable] number */
   public x: number;
 
-  /*@ y : [Mutable] { number | v = x } */
+  /*@ y : [Mutable] { number | v = this.x } */
   public y: number;
 
   constructor(a: number) {

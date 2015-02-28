@@ -1,13 +1,13 @@
 
-enum Operator {
-  ADD,
-  SUB,
-  DIV,
-  MUL
-}
+enum Operator { ADD, SUB, DIV, MUL }
 
-/*@ compute :: (o: number, a: number, b: { v: number | ((o = 2) => (v != 0))}) => 
-      { number | (((o = 0) => (v = a + b)) && ((o = 1) => (v = a - b))) } */
+/*@ compute :: (o: number, 
+                a: number, 
+                b: { v: number | ((o = 2) => (v != 0))}
+               ) => 
+                { number | [(o = 0) => (v = a + b); 
+                            (o = 1) => (v = a - b)] 
+                } */
 function compute(op: Operator, a: number, b: number): number {
   if (op === Operator.ADD)
     return a + b;

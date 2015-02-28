@@ -60,7 +60,7 @@ bug l s                       = mkErr l $ printf "BUG: %s" s
 impossible l s                = mkErr l $ printf "IMPOSSIBLE: %s" s 
 bugBadSubtypes l t1 t2        = mkErr l $ printf "BUG: Unexpected Subtyping Constraint\n%s <: %s" (ppshow t1) (ppshow t2)
 bugMalignedFields l s s'      = mkErr l $ printf "BUG: Fields not aligned: '%s' and '%s'" (ppshow s) (ppshow s')
-bugFlattenType l s            = mkErr l $ printf "BUG: Could not flatten type '%s'" (ppshow s)
+bugExpandType l s             = mkErr l $ printf "BUG: Could not expand type '%s'" (ppshow s)
 bugWeakenAncestors l x1 x2    = mkErr l $ printf "BUG: When weakeninig from '%s' to '%s' (or the inverse)." (ppshow x1) (ppshow x2)
 
 bugUnknownAlias l x           = mkErr l $ printf "BUG: Unknown definition for alias %s" (ppshow x)
@@ -143,7 +143,9 @@ errorObjSubtype l t t'        = mkErr l $ printf "Object type '%s' is not a subt
 errorFuncSubtype l t t'       = mkErr l $ printf "Function type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
 
 -- Typechecking
-errorCallNotSup l fn ft es ts = mkErr l $ printf "Cannot call '%s' of type '%s' with argument(s) %s of type %s." (ppshow fn) (ppshow ft) (ppshow es) (ppshow ts)
+errorCallNotSup l fn ft es ts = mkErr l $ printf "Cannot call '%s' of type \n%s\nwith argument(s):\n%s\nof type:\n%s" (ppshow fn) (ppshow ft) 
+                                                  (show $ intersperse comma $ map pp es) 
+                                                  (show $ intersperse comma $ map pp ts) 
 errorCallNotFound l e f       = mkErr l $ printf "Cannot find callable property '%s' of object '%s'." (ppshow f) (ppshow e)
 errorCallMatch l fn ts        = mkErr l $ printf "Could not match call to '%s' to a particular signature. Argument(s) with types '%s' are invalid." (ppshow fn) (ppshow ts)
 errorCallReceiver l e f       = mkErr l $ printf "Could not call method '%s' of '%s'." (ppshow f) (ppshow e)
@@ -168,8 +170,8 @@ errorUnresolvedType l t       = mkErr l $ printf "Could not resolve type '%s'." 
 errorUnresolvedTypes l t1 t2  = mkErr l $ printf "Could not resolve types '%s' and '%s'." (ppshow t1) (ppshow t2)
 errorConsSigMissing l t       = mkErr l $ printf "Constructor signature for '%s' is missing." (ppshow t)
 errorModuleExport l m x       = mkErr l $ printf "Module '%s' does not export '%s'." (ppshow m) (ppshow x)
-
 errorDeadCast l t1 t2         = mkErr l $ printf "Cannot convert '%s' to '%s'" (ppshow t1) (ppshow t2)
+errorUqMutSubtyping l e t rt  = mkErr l $ printf "No subtyping allowed at unique mutability when returning expression '%s' of type '%s' to type '%s'." (ppshow e) (ppshow t) (ppshow rt)
 
 ---------------------------------------------------------------------------
 -- | LIQUID
@@ -187,6 +189,9 @@ errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"
 errorWellFormed l             = mkErr l $ printf "Well-formedness Error" 
 errorForbiddenSyms l t xs     = mkErr l $ printf "Symbol(s): %s, is (are) not readonly, local, or an immutable field, so should not be appearing in the refinement of type '%s'." 
                                 (show $ intersperse comma $ map pp xs) (ppshow t)
+errorUnboundSyms l x t xs m   = mkErr l $ printf "Symbol(s): %s, appearing in the refinement of type '%s' of '%s' is (are) either unbound or of invalid mutability [ERROR_CODE: %s]" 
+                                (show $ intersperse comma $ map pp xs) (ppshow t) (ppshow x) (ppshow m)
+                              
  
 ---------------------------------------------------------------------------
 -- | Pervasive (typechecking TC and Liquid)

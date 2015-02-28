@@ -338,11 +338,15 @@ tcClassElt γ d@(ID nm _ vs _ _ ) (Constructor l xs body)
 
     γ''           = tcEnvAdd ctorExit (mkCtorExitTy,ReadOnly,Initialized) γ'
 
-    -- XXX        : keep the right order of fields
+    -- XXX        : * Keep the right order of fields
+    --              * Make the return object immutable to avoid contra-variance
+    --                checks at the return from the constructor.
+    --              * Exclude __proto__ field 
     mkCtorExitTy  = mkFun (vs,Nothing,bs,tVoid)
       where 
-        bs        | Just (TCons _ ms _) <- flattenType γ (TRef nm (tVar <$> vs) fTop)
-                  = sortBy c_sym [ B s t | ((_,InstanceMember),(FieldSig s _ _ t)) <- M.toList ms ]
+        bs        | Just (TCons _ ms _) <- expandType γ (TRef nm (tVar <$> vs) fTop)
+                  = sortBy c_sym [ B s t | ((_,InstanceMember),(FieldSig s _ _ t)) <- M.toList ms 
+                                         , F.symbol s /= F.symbol "__proto__" ]
                   | otherwise
                   = []
     
@@ -468,7 +472,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 tcStmt γ e@(ExprStmt l (AssignExpr l2 OpAssign r@(LDot l1 e1 f) e2))
   = do  z               <- runFailM ( tcExpr γ e1l Nothing )
         case z of 
-          Right (_,te1) -> tcSetProp $ fmap snd3 $ getProp γ FieldAccess f te1
+          Right (_,te1) -> tcSetProp $ fmap snd3 $ getProp γ FieldAccess Nothing f te1
           Left _        -> tcSetProp $ Nothing
   where
     e1l = fmap (\a -> a { ann_fact = BypassUnique : ann_fact a }) e1
@@ -635,8 +639,9 @@ tcRetW γ l (Just e@(VarRef lv x))
   = tcRetW (newEnv t) l (Just (CallExpr l (VarRef l fn) [e'])) >>= \case 
       -- e' won't be cast
       (ReturnStmt _ (Just (CallExpr _ _ [e''])),eo) -> return (ReturnStmt l (Just e''),eo)
-      _ -> die $ bug (srcPos l) "tcRetW"
+      _ -> die $ errorUqMutSubtyping (srcPos l) e t retTy
   where 
+    retTy    = tcEnvFindReturn γ 
     newEnv t = tcEnvAdd fn (finalizeTy t,ReadOnly,Initialized) γ
     fn       = Id l "__finalize__"
     e'       = fmap (\a -> a { ann_fact = BypassUnique : ann_fact a }) e
@@ -692,12 +697,16 @@ tcExpr γ e@(ThisRef l) _
       Nothing -> tcError $ errorUnboundId (ann l) "this"
 
 tcExpr γ e@(VarRef l x) _
+  | Just t <- to, BypassUnique `elem` ann_fact l 
+  = return (e,t) 
+  | Just t <- to, isCastId x  -- Avoid TC added casts
+  = return (e,t)  
+  | Just t <- to, disallowed t       
+  = tcError $ errorAssignsFields (ann l) x t
   | Just t <- to
-  , BypassUnique `elem` (ann_fact l) = return (e,t)  -- HACK
-  | Just t <- to, isCastId x         = return (e,t)  -- HACK
-  | Just t <- to, disallowed t       = tcError $ errorAssignsFields (ann l) x t
-  | Just t <- to                     = return (e,t)
-  | otherwise                        = tcError $ errorUnboundId (ann l) x
+  = return (e,t)
+  | otherwise
+  = tcError $ errorUnboundId (ann l) x
   where 
     to = tcEnvFindTy x γ
     disallowed (TRef _ (m:_) _)      = isUniqueMutable m
@@ -832,7 +841,7 @@ tcCast γ l e tc
         let γ'               = tcEnvAdd (F.symbol cid) (tc, WriteLocal, Initialized) γ
         (FI _ [_, e'], t')  <- tcNormalCall γ' l "user-cast" 
                                (FI Nothing [(VarRef l cid, Nothing),(e, Just tc)]) opTy
-        return               $ (e', t')
+        return               $ (e',t')
 
 
 ---------------------------------------------------------------------------------------
@@ -878,8 +887,6 @@ tcCall γ e@(BracketRef l e1 e2)
   = runFailM (tcExpr γ e1 Nothing) >>= \case
       -- Enumeration
       Right (_, TEnum _) -> tcError $ unimplemented (srcPos l) msg e
-      -- Object literal
-      Right (_, TCons _ _ _) -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
       -- Default
       _ -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
   where 
@@ -925,7 +932,7 @@ tcCall γ (NewExpr l e es)
 tcCall γ ef@(DotRef l e f)
   = runFailM (tcExpr γ e Nothing) >>= \case 
       Right (_, te) -> 
-          case getProp γ FieldAccess f te of
+          case getProp γ FieldAccess Nothing f te of
             -- 
             -- Special-casing Array.length
             -- 
@@ -973,13 +980,13 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
            return                   $ (CallExpr l (DotRef l1 e' f) (v':vs'), t')
 
       -- Accessing and calling a function field
-      | Right (_, t) <- z, Just (o,ft,_) <- getProp γ FieldAccess f t, isTFun ft
+      | Right (_, t) <- z, Just (o,ft,_) <- getProp γ FieldAccess Nothing f t, isTFun ft
       = do e'                      <- castM γ e t o
            (FI _ es',t')           <- tcNormalCall γ l ex (args es) ft
            return                   $ (CallExpr l (DotRef l1 e' f) es', t')
 
       -- Invoking a method 
-      | Right (_, t) <- z, Just (o,ft,_) <- getProp γ MethodAccess f t, isTFun ft
+      | Right (_, t) <- z, Just (o,ft,_) <- getProp γ MethodAccess Nothing f t, isTFun ft
       = do e'                      <- castM γ e t o
            (FI (Just e'') es', t') <- tcNormalCall γ l  ex (argsThis e' es) ft
            return                   $ (CallExpr l (DotRef l1 e'' f) es', t')
@@ -1022,6 +1029,7 @@ tcNormalCall :: (PPRSF r, PP a)
              -> TCM r (FuncInputs (ExprSSAR r), RType r) 
 ------------------------------------------------------------------------------------------
 tcNormalCall γ l fn etos ft0 
+  -- = do ets            <- ltracePP l (ppshow fn ++ "  " ++ ppshow etos) <$> T.mapM (uncurry $ tcExprWD γ) etos
   = do ets            <- T.mapM (uncurry $ tcExprWD γ) etos
        z              <- resolveOverload γ l fn ets ft0
        case z of 
@@ -1288,12 +1296,12 @@ unifyPhiTypes l γ x t1 t2 θ =
 postfixStmt :: a -> [Statement a] -> Statement a -> Statement a 
 -------------------------------------------------------------------------------------
 postfixStmt _ [] s = s 
-postfixStmt l ss s = BlockStmt l $ flattenBlock $ [s] ++ ss
+postfixStmt l ss s = BlockStmt l $ expandBlock $ [s] ++ ss
 
 -------------------------------------------------------------------------------------
-flattenBlock :: [Statement t] -> [Statement t]
+expandBlock :: [Statement t] -> [Statement t]
 -------------------------------------------------------------------------------------
-flattenBlock = concatMap f
+expandBlock = concatMap f
   where
     f (BlockStmt _ ss) = ss
     f s                = [s ]

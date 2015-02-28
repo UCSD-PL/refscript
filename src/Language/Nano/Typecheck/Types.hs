@@ -44,14 +44,13 @@ module Language.Nano.Typecheck.Types (
   -- * Mutability primitives
   , t_mutable, t_uq_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly
   , tr_mutable, tr_immutable, tr_anyMutability, tr_inheritedMut, tr_readOnly
-  , combMut, combMutInField
   , isMutable, isImmutable, isUniqueMutable, isInheritedMutability
 
   , finalizeTy
 
   -- * Primitive Types
   , tInt, tBV32, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
-  , isTVar, isTObj, isFlattenable, isPrimitive, isConstr, subtypeable, isTUndef, isTNull, isTVoid
+  , isTVar, isTObj, isExpandable, isPrimitive, isConstr, subtypeable, isTUndef, isTNull, isTVoid
   , isTFun, fTop, orNull, isArr
 
   -- * Element ops 
@@ -151,25 +150,16 @@ tr_inheritedMut  = mkRelMut "InheritedMut"
 isMutable        (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "Mutable"
 isMutable _                                 = False
  
-isImmutable      (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "Immutable"
-isImmutable _                               = False
+-- Ideally this would be a AK_ but meh... 
+isImmutable      (TRef (QN _ _ [] s) _ _) = s == F.symbol "Immutable"
+isImmutable _                             = False
 
 isUniqueMutable  (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "UniqueMutable"
 isUniqueMutable  (TApp TUn ts _ )           = any isUniqueMutable ts
 isUniqueMutable  _                          = False
 
-isInheritedMutability  (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "InheritedMut"
-isInheritedMutability  _                          = False
- 
-combMut container element | isInheritedMutability element = container
-combMut _         element | otherwise                     = element
-
-combMutInField _ f@(CallSig _)        = f
-combMutInField _ f@(ConsSig _)        = f
-combMutInField _ f@(IndexSig _ _ _ )  = f
-combMutInField μ   (FieldSig x o m t) = FieldSig x o (combMut μ m) t
-combMutInField _ f@(MethSig  _ _ )    = f 
-
+isInheritedMutability  (TRef (QN _ _ [] s) _ _) = s == F.symbol "InheritedMut"
+isInheritedMutability  _                        = False
 
 
 ---------------------------------------------------------------------
@@ -385,7 +375,7 @@ isTObj _                   = False
  
 isPrimitive v = isUndef v || isNull v || isTString v || isTBool v || isTNum v 
 
-isFlattenable v = isTObj v || isTNum v || isTBool v || isTString v
+isExpandable v = isTObj v || isTNum v || isTBool v || isTString v
 
 isTString (TApp TString _ _) = True
 isTString _                  = False
@@ -1010,7 +1000,7 @@ builtinId       = mkId . ("builtin_" ++)
 
 -- | BitVectors
 
-bitVectorValue ('0':x) = Just $ exprReft (BV.Bv BV.S32  $ "#" ++ x)
+bitVectorValue ('0':x) = Just $ exprReft $ BV.Bv BV.S32  $ "#" ++ x
 bitVectorValue _       = Nothing
 
 

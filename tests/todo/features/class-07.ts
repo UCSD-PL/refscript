@@ -11,7 +11,7 @@ class A<T> {
 
 class B<S,R> extends A<R> {
   
-  /*@ bgo : (x:S, y:R ): void */
+  /*@ bgo : (x:S, y:R ): { void | true } */
   public bgo(x:S, y:R) {
     super.ago(y);
   }
@@ -21,7 +21,7 @@ class B<S,R> extends A<R> {
 
 class C <M,L,K> extends B<M,K> {
 
-  /*@ cgo : (x:M, y:L, z:K): void */
+  /*@ cgo : (x:M, y:L, z:K): { void | true } */
   public cgo(x:M, y:L, z:K) {
     super.bgo(x,z);
   }

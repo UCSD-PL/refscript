@@ -8,7 +8,7 @@ function values<T>(map:{[k:string]:T}): T[] {
   var values:T[] = [];
   
   for (var key in map) { 
-    values.push(map[key]);
+    values.push(<T>(map[key]));
   }
   
   return values;

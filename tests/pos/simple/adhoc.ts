@@ -8,13 +8,7 @@ interface NumberGenerator {
 
 /*@ foo :: () => {NumberGenerator<Immutable> | true} */
 function foo() {
-
   return {
-
-    generate: function() 
-    /*@ <anonymous>  () => { number | true } */
-    { return 3; }
-
+    generate: function() /*@ <anonymous>  () => { number | true } */ { return 3; }
   }
-
 }

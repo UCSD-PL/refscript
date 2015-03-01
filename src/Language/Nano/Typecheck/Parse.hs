@@ -19,7 +19,7 @@ import           Data.Either                             (partitionEithers)
 import           Data.Default
 import           Data.Traversable                        (mapAccumL)
 import           Data.Monoid                             (mconcat)
-import           Data.Maybe                              (listToMaybe, catMaybes, maybeToList)
+import           Data.Maybe                              (listToMaybe, catMaybes, maybeToList, fromMaybe)
 import           Data.Generics                    hiding (Generic)
 import           Data.Aeson                              (eitherDecode)
 import           Data.Aeson.Types                 hiding (Parser, Error, parse)
@@ -144,16 +144,19 @@ iFaceP
   = do  name   <- identifierP 
         as     <- option [] tParP
         case as of 
-          (m:_) -> do h  <- heritageP
-                      es <- mkTypeMembers (TVar m fTop) . ((InstanceMember, MemDeclaration,) <$>) 
-                        <$> braces propBindP
-                      return (name, convertTvar as $ ID (mkrn name) InterfaceKind as h es)
+          (m:_) -> do h   <- heritageP
+                      withSpan (mkTm1 m) (braces propBindP) >>= \case
+                        Left err -> fail $ ppshow err
+                        Right es -> return (name, convertTvar as $ ID (mkrn name) InterfaceKind as h es)
           -- The mutability here shouldn't matter
-          _     -> do h  <- heritageP
-                      es <- mkTypeMembers defMut . ((InstanceMember, MemDeclaration,) <$>) 
-                        <$> braces propBindP
-                      return (name, convertTvar as $ ID (mkrn name) InterfaceKind as h es)
+          _     -> do h   <- heritageP
+                      withSpan mkTm2 (braces propBindP) >>= \case
+                        Left err -> fail $ ppshow err
+                        Right es -> return (name, convertTvar as $ ID (mkrn name) InterfaceKind as h es)
   where
+    mkTm1 m l = mkTypeMembers (TVar m fTop) . map (mkTup l)
+    mkTm2   l = mkTypeMembers defMut        . map (mkTup l)
+    mkTup l e = (l,symbol e,InstanceMember,MemDeclaration,e)
     defMut = TRef (QN RK_ (srcPos dummySpan) [] (symbol "Immutable")) [] fTop
     mkrn   = mkRelName [] . symbol
 
@@ -311,16 +314,14 @@ bbaseP
 objLitP :: Parser (Reft -> RTypeQ RK Reft)
 ----------------------------------------------------------------------------------
 objLitP 
-  = optionMaybe (toType <$> mutP) >>= \case 
-      Just m    -> TCons m <$> typeMembersP
-      Nothing   -> withSpan addMVar typeMembersP
+  = do  m <- fromMaybe defMut <$> optionMaybe (toType <$> mutP)
+        withSpan (mkTm m) (braces propBindP) >>= \case 
+          Left err -> fail   $ ppshow err
+          Right ms -> return $ TCons m ms 
   where
-    typeMembersP = mkTypeMembers defMut . ((InstanceMember, MemDeclaration,) <$>) 
-                                <$> braces propBindP
-    addMVar _    = TCons defMut
-    defMut       = TRef (QN RK_ (srcPos dummySpan) [] (symbol "Immutable")) [] fTop
-    -- addMVar l t r = TAll v (TCons (TVar v fTop) t r) where v = tvar l ms
-    -- ms            = symbol "_M_"  -- A hard-to-guess symbol
+    defMut     = TRef (QN RK_ (srcPos dummySpan) [] (symbol "Immutable")) [] fTop
+    mkTm m l   = mkTypeMembers m . map (mkTup l)
+    mkTup l e  = (l,symbol e,InstanceMember,MemDeclaration,e)
 
 ----------------------------------------------------------------------------------
 selfP :: Parser (Reft -> RTypeQ RK Reft)
@@ -634,12 +635,9 @@ instance FromJSON RawSpec
 parseNanoFromFiles :: [FilePath] -> IO (Either (FixResult Error) (NanoBareR Reft))
 --------------------------------------------------------------------------------------
 parseNanoFromFiles fs = 
-  do  sa <- partitionEithers <$> mapM parseScriptFromJSON fs
-      case sa of
-        ([],ps) -> case parseAnnots $ concat ps of
-                     Right ps -> return $ Right $ mkCode ps
-                     Left e   -> return $ Left  $ e
-        (es,_ ) -> return $ Left  $ mconcat es 
+  partitionEithers <$> mapM parseScriptFromJSON fs >>= \case
+    ([],ps) -> return $ either Left mkCode $ parseAnnots $ concat ps
+    (es,_ ) -> return $ Left $ mconcat es 
 
 --------------------------------------------------------------------------------------
 getJSON :: MonadIO m => FilePath -> m B.ByteString
@@ -658,17 +656,16 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 
 
 ---------------------------------------------------------------------------------
-mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
+mkCode :: [Statement (SourceSpan, [Spec])] -> Either (FixResult Error) (NanoBareR Reft)
 ---------------------------------------------------------------------------------
-mkCode = --debugTyBinds
-         buildCHA
-       . fixEnums
-       . scrapeModules
-       . scrapeQuals 
-       . replaceAbsolute
-       . expandAliases
-       . visitNano convertTvarVisitor []
-       . mkCode'
+mkCode ss = return   (mkCode' ss)
+        >>= return . visitNano convertTvarVisitor []
+        >>= return . expandAliases
+        >>= return . replaceAbsolute
+        >>= return . scrapeQuals 
+        >>=          scrapeModules
+        >>= return . fixEnums
+        >>= return . buildCHA
     
 ---------------------------------------------------------------------------------
 mkCode' :: [Statement (SourceSpan, [Spec])] -> NanoBareRelR Reft
@@ -811,7 +808,9 @@ parse _ (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
     failLeft (Right (s, r))  = ((s, errs), r)
 
     -- Slight change from this one:
+    --
     -- http://hackage.haskell.org/package/parsec-3.1.5/docs/src/Text-Parsec-Error.html#ParseError
+    --
     showErr = showErrorMessages "or" "unknown parse error" "expecting" 
                 "unexpected" "end of input" . errorMessages
     fromError err = mkErr ss   $ showErr err 

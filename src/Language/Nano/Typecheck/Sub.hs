@@ -108,7 +108,7 @@ convertObj l γ t1 t2
   = Left $ errorObjectType l t1 t2
 
 convertObj l γ t1@(TCons μ1 e1s _) t2@(TCons μ2 e2s _)
-  | mutabilitySub && isImmutable μ2 = covariantConvertObj l γ (μ1,e1s) (μ2,e2s)
+  | mutabilitySub && isImmutable μ2 = covariantConvertObj l γ (t1,μ1,e1s) (t2,μ2,e2s)
   | mutabilitySub                   = invariantConvertObj l γ (μ1,e1s) (μ2,e2s)
   | otherwise                       = Left $ errorIncompMutTy l t1 t2
   where
@@ -177,11 +177,26 @@ convertObj l γ t1 t2 =
     (_       , Nothing ) -> Left $ errorUnresolvedType l t2
 
 
-covariantConvertObj l γ (μ1,e1s) (μ2,e2s)
-  | M.null uq1s && M.null uq2s = mconcat           <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn'}
-  |                M.null uq2s = mconcat . (CDUp:) <$> subEs  -- {x1:t1,..,xn:tn,..,xm:tm} ?? {x1:t1',..,xn:tn'}
-  | M.null uq1s                = mconcat . (CDDn:) <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn',..,xm:tm'}
+covariantConvertObj l γ (t1,μ1,e1s) (t2,μ2,e2s)
+  -- 
+  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn'}
+  --
+  | M.null uq1s && M.null uq2s = mconcat           <$> subEs  
+  --
+  -- {x1:t1,..,xn:tn,..,xm:tm} ?? {x1:t1',..,xn:tn'}
+  --
+  |                M.null uq2s = mconcat . (CDUp:) <$> subEs  
+  -- 
+  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn',..,xm:tm'}
+  --
+  -- There is no point in adding a DownCast here -- no way to prove it currently.
+  --
+  | M.null uq1s                = Left $ errorObjSubtype l t1 t2 (fst <$> M.keys uq2s)
+  -- 
+  -- String Indexer
+  --
   | hasStringIndexer l2s       = mconcat . (CDUp:) <$> subStringIndexer
+
   | otherwise                  = Left $ errorIncompatCovFields l e1s e2s
   where
     l2s                        = M.elems e2s

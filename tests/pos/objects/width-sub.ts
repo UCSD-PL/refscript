@@ -1,6 +1,12 @@
 //adapted from transducers
-class Bar { }
+class Bar { 
+  constructor() {}
+}
 /*@ foo :: (IArray<number>) => void */
 declare function foo(a);
+
 declare var x:Bar;
-if (false) { foo(x); }
+
+if (false) { 
+  foo(x); 
+}

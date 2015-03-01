@@ -1,18 +1,18 @@
-{-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE TupleSections          #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE RankNTypes             #-}
-{-# LANGUAGE ConstraintKinds        #-}
-{-# LANGUAGE DeriveDataTypeable     #-}
-{-# LANGUAGE DeriveTraversable      #-}
-{-# LANGUAGE StandaloneDeriving     #-}
-{-# LANGUAGE TypeSynonymInstances   #-}
-{-# LANGUAGE DeriveFoldable         #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE DeriveFunctor          #-}
-{-# LANGUAGE ImpredicativeTypes     #-}
-{-# LANGUAGE NoMonomorphismRestriction          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE DeriveTraversable          #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
+{-# LANGUAGE DeriveFoldable             #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE ImpredicativeTypes         #-}
+{-# LANGUAGE NoMonomorphismRestriction  #-}
 
 module Language.Nano.Visitor (
     Transformable (..)
@@ -56,25 +56,31 @@ import           Data.List                      (partition)
 import qualified Data.Map.Strict                as M
 import           Data.Maybe                     (maybeToList, listToMaybe)
 import qualified Data.IntMap                    as I
-import           Data.Traversable               (traverse)
+import qualified Data.Traversable               as T
 import           Control.Applicative            ((<$>), (<*>))
 import           Control.Exception              (throw)
 import           Control.Monad.Trans.State      (modify, runState, StateT, runStateT)
 import           Control.Monad.Trans.Class      (lift)
+import           Control.Monad
 import           Language.Nano.Misc             (mapSndM)
 import           Language.Nano.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
+import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Env
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Names
 import           Language.Nano.Locations
-import           Language.Nano.Annots
+import           Language.Nano.Annots           hiding (err)
 import           Language.Nano.Program
 import           Language.Nano.Typecheck.Resolve
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc hiding ((<$$>))
 import qualified Language.Fixpoint.Types        as F
+
+import           Text.Printf 
+import           Text.PrettyPrint.HughesPJ 
 
 --------------------------------------------------------------------------------
 -- | Top-down visitors
@@ -166,7 +172,7 @@ type VisitT m acc = StateT acc m
 accum :: (Monoid a, Monad m) => a -> VisitT m a ()
 accum = modify . mappend
 
-f <$$> x = traverse f x
+f <$$> x = T.traverse f x
 
 
 visitNanoM :: (Monad m, Functor m, Monoid a, IsLocated b) 
@@ -461,6 +467,7 @@ ntransFact f g = go
     go (AmbVarAnn t)     = AmbVarAnn     $ ntrans f g t  
     go (ExportedElt)     = ExportedElt
     go (ReadOnlyVar)     = ReadOnlyVar
+    go (BypassUnique)    = BypassUnique
     go (FieldAnn m)      = FieldAnn      $ ntrans f g m
     go (MethAnn  m)      = MethAnn       $ ntrans f g m
     go (StatAnn  m)      = StatAnn       $ ntrans f g m 
@@ -745,15 +752,27 @@ fixEnumsInModule p m@(ModuleDef { m_variables = mv, m_types = mt })
 --    * m_types with: classes and interfaces
 --
 ---------------------------------------------------------------------------------------
-scrapeModules :: PPR r => NanoBareR r -> NanoBareR r
+scrapeModules :: PPR r => NanoBareR r -> Either (F.FixResult Error) (NanoBareR r)
 ---------------------------------------------------------------------------------------
 scrapeModules pgm@(Nano { code = Src stmts }) 
-                                   = pgm { pModules = qenvFromList $ map mkMod $ collectModules stmts }
+  = do  mods  <- return $ collectModules stmts
+        mods' <- mapM mkMod mods
+        
+        return $ pgm { pModules = qenvFromList mods' }
   where
-    mkMod (p, m)      = (p, ModuleDef (varEnv p m) (typeEnv p m) (enumEnv m) p)
+
+    mkMod :: PPR r => (AbsPath, [Statement (AnnR r)]) -> Either (F.FixResult Error) (AbsPath, ModuleDefQ AK r) 
+    mkMod (p,ss)      = do  ve <- return $ varEnv p ss
+                            te <- typeEnv p ss
+                            ee <- return $ enumEnv ss
+                            return (p, ModuleDef ve te ee p)
+
     drop1 (_,b,c,d,e) = (b,c,d,e)
+
     varEnv p          = envMap drop1 . mkVarEnv . vStmts p
-    typeEnv p         = envFromList  . tStmts p
+
+    typeEnv p ss      = tStmts p ss >>= return . envFromList
+
     enumEnv           = envFromList  . eStmts
 
     vStmts                         = concatMap . vStmt
@@ -784,11 +803,11 @@ scrapeModules pgm@(Nano { code = Src stmts })
     ui   = Uninitialized
     ii   = Initialized
 
-    tStmts                   = concatMap . tStmt 
+    tStmts                   = concatMapM . tStmt
 
-    tStmt ap c@ClassStmt{}   = maybeToList $ resolveType ap c
-    tStmt ap c@IfaceStmt{}   = maybeToList $ resolveType ap c
-    tStmt _ _                = [ ]
+    tStmt ap c@ClassStmt{}   = single <$> resolveType ap c
+    tStmt ap c@IfaceStmt{}   = single <$> resolveType ap c
+    tStmt _ _                = return $ [ ]
 
     eStmts                   = concatMap eStmt
 
@@ -839,55 +858,87 @@ mergeVarInfo _ (ModuleDefKind, v1, a1, t1, i1) (ModuleDefKind, v2, a2, t2, i2)
 mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
 
 ---------------------------------------------------------------------------------------
-resolveType :: AbsPath -> Statement (AnnR r) -> Maybe (Id SourceSpan, IfaceDef r)
+resolveType :: PPR r => AbsPath 
+                     -> Statement (AnnR r) 
+                     -> Either (F.FixResult Error) (Id SourceSpan, IfaceDef r)
 ---------------------------------------------------------------------------------------
 resolveType (QP AK_ _ ss) (ClassStmt l c _ _ cs) 
-                      = go [ t | ClassAnn t <- ann_fact l ] 
+  | [(m:vs,e,i)]     <- classAnns
+  = do  ts           <- typeMembers (TVar m fTop) cs
+        return        $ (cc, ID (QN AK_ (srcPos l) ss (F.symbol c)) ClassKind (m:vs) (e,i) ts)
+  | otherwise 
+  = Left              $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where
-    go [(m:vs,e,i)]   = Just (cc, ID (QN AK_ (srcPos l) ss (F.symbol c)) 
-                                     ClassKind 
-                                     (m:vs) 
-                                     (e,i) 
-                                     (typeMembers (TVar m fTop) cs))
-    go _              = Nothing
+    classAnns         = [ t | ClassAnn t <- ann_fact l ] 
     cc                = fmap ann c
+    errMsg            = "Invalid class annotation: " 
+                     ++ show (intersperse comma (map pp classAnns))
 
 resolveType _ (IfaceStmt l c) 
-                  = listToMaybe [ (cc, t) | IfaceAnn t <- ann_fact l ]
+  | [t] <- ifaceAnns  = Right (fmap ann c,t)
+  | otherwise         = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where
-    cc            = fmap ann c
+    ifaceAnns         = [ t | IfaceAnn t <- ann_fact l ] 
+    errMsg            = "Invalid interface annotation: " 
+                     ++ show (intersperse comma (map pp ifaceAnns))
 
-resolveType _ _   = Nothing 
+resolveType _ s       = Left $ F.Unsafe $ single 
+                      $ err (sourceSpanSrcSpan $ getAnnotation s) 
+                      $ "Statement\n" ++ ppshow s ++ "\ncannot have a type annotation." 
 
 ---------------------------------------------------------------------------------------
-typeMembers :: Mutability -> [ClassElt (AnnR r)] -> TypeMembers r
+typeMembers :: PPR r => Mutability -> [ClassElt (AnnR r)] -> Either (F.FixResult Error) (TypeMembers r)
 ---------------------------------------------------------------------------------------
 typeMembers dm                     = mkTypeMembers dm . concatMap go
   where
-    go (MemberVarDecl l s _ _)     = [(sk s, MemDefinition , f) | FieldAnn f <- ann_fact l]
-    go (MemberMethDef l s _ _ _ )  = [(sk s, MemDefinition , f) | MethAnn  f <- ann_fact l]
-    go (MemberMethDecl l s _ _ )   = [(sk s, MemDeclaration, f) | MethAnn  f <- ann_fact l]
-    go (Constructor l _ _)         = [(im  , MemDefinition , a) | ConsAnn  a <- ann_fact l]
+    go (MemberVarDecl l  s x _)    = [(l,ss x ,sk s,MemDefinition ,f) | FieldAnn f <- ann_fact l]
+    go (MemberMethDef l  s x _ _ ) = [(l,ss x ,sk s,MemDefinition ,f) | MethAnn  f <- ann_fact l]
+    go (MemberMethDecl l s x _ )   = [(l,ss x ,sk s,MemDeclaration,f) | MethAnn  f <- ann_fact l]
+    go (Constructor l _ _)         = [(l,cs   ,im  ,MemDefinition ,a) | ConsAnn  a <- ann_fact l]
 
     sk True                        = StaticMember 
     sk False                       = InstanceMember 
     im                             = InstanceMember
+    cs                             = ctorSymbol
+    ss                             = F.symbol
 
 ---------------------------------------------------------------------------------------
-mkTypeMembers :: Eq q => MutabilityQ q 
-                      -> [(StaticKind, MemberKind, TypeMemberQ q r)] 
-                      -> TypeMembersQ q r
+mkTypeMembers :: (Eq q, IsLocated l, PPR r) 
+              => MutabilityQ q 
+              -> [(l,F.Symbol,StaticKind, MemberKind, TypeMemberQ q r)] 
+              -> Either (F.FixResult Error) (TypeMembersQ q r)
 ---------------------------------------------------------------------------------------
-mkTypeMembers dm                   = fixMut . M.map (g . f) . foldl merge M.empty
+mkTypeMembers dm l0       = do m  <- foldM addTm M.empty l0
+                               l  <- T.mapM (join . prtn) $ M.toList m
+                               return $ fixMut $ M.fromList l
   where
-    merge ms (s,m,t)               = M.insertWith (++) (F.symbol t,s) [(m,t)] ms
-    f                              = mapPair (map snd) . partition ((== MemDefinition) . fst) 
-    g ([t],[])                     = t
-    g ( _ ,ts)                     = foldl1 joinElts ts
-    fixMut                         = M.map fixFldMut
-    fixFldMut (FieldSig s o m t)   | isInheritedMutability m 
-                                   = FieldSig s o dm t
-    fixFldMut f                    = f
+
+    addTm ms (l,s,k,m,t)  | s == F.symbol t 
+                          = Right $ M.insertWith (++) (s,k) [Loc (srcPos l) (m,t)] ms
+                          | otherwise 
+                          = Left  $ F.Unsafe $ single 
+                          $ err (sourceSpanSrcSpan l) 
+                          $ printf "Member '%s' does not match with annotation: %s" 
+                              (ppshow s) (ppshow t)
+
+    prtn (k,v)            = (k,) . mapPair (map $ fmap snd)
+                          $ partition ((== MemDefinition) . fst . val) v
+
+    join (k,([t],[]))     = Right $ (k,val t)                   -- Single definition
+    join (k,(ds ,ts))     | length ts > 0  
+                          = Right $ (k,foldl1 joinElts $ val <$> ts)
+                          | otherwise      
+                          = Left  $ F.Unsafe 
+                          $ map (\(Loc l v) -> err (sourceSpanSrcSpan l)
+                          $ msg l (fst k) v) $ ds ++ ts
+
+    msg l k v             = printf "The following annotation for member '%s' is invalid:\n%s" 
+                              (ppshow k)  (ppshow v)
+                                    
+    fixMut                = M.map fixFldMut
+
+    fixFldMut (FieldSig s o m t) | isInheritedMutability m = FieldSig s o dm t
+    fixFldMut f                  = f
 
 joinElts (CallSig t1)           (CallSig t2)         = CallSig           $ joinTys t1 t2 
 joinElts (ConsSig t1)           (ConsSig t2)         = ConsSig           $ joinTys t1 t2 

@@ -41,8 +41,6 @@ module Language.Nano.Liquid.CGMonad (
   , envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
 
-  -- , reftCheck
-
   -- * Add Subtyping Constraints
   , subType, wellFormed -- , safeExtends
   
@@ -340,28 +338,39 @@ envAdds' doChecks doFields msg xts g
 --   * Additional builtin symbols
 --   * ReadOnly ... binders in the environment
 --
-checkSyms m g ok x t    | not $ null uSyms
-                        = cgError $ errorUnboundSyms (srcPos x) (F.symbol x) t uSyms m
-                        | otherwise 
-                        = return ()
+checkSyms m g ok x t = mapM_ cgError errs 
   where
-    uSyms               = efoldRType h f F.emptySEnv [] t
+    errs             = efoldRType h f F.emptySEnv [] t
     
-    h _                 = ()
-    f γ t' s            = s ++ filter (not . valid γ t') (F.syms $ noKVars $ rTypeReft t')
+    h _              = ()
+    f γ t' s         = s ++ catMaybes (chk γ t' <$> F.syms (noKVars $ rTypeReft t'))
 
-    valid γ t' s        | s == x_sym                                  = True                    
-                        | s == rTypeValueVar t'                       = True 
-                        | s `L.elem` ok                               = True 
-                        | s `F.memberSEnv` γ                          = True
-                        | s `F.memberSEnv` cge_consts g               = True
-                        | s `L.elem` biExtra                          = True
-                        | Just (_,a,_) <- envLikeFindTy' s g  
-                        , a `L.elem` [ReadOnly,ImportDecl,WriteLocal] = True
-                        | otherwise                                   = False
+    chk γ t' s       | s `L.elem` biReserved              
+                     = Just $ unimplementedReservedSyms l
+                     | s == x_sym                         
+                     = Nothing
+                     | s == rTypeValueVar t'              
+                     = Nothing  
+                     | s `L.elem` ok                      
+                     = Nothing 
+                     | s `F.memberSEnv` γ                 
+                     = Nothing
+                     | s `F.memberSEnv` cge_consts g      
+                     = Nothing
+                     | s `L.elem` biExtra                 
+                     = Nothing
+                     | Just (_,a,_) <- envLikeFindTy' s g 
+                     = if a `L.elem` validAsgn
+                         then Nothing
+                         else Just $ errorAsgnInRef l x t a 
+                     | otherwise                          
+                     = Just $ errorUnboundSyms l (F.symbol x) t s m
 
-    biExtra             = F.symbol <$> ["bvor", "bvand", "builtin_BINumArgs"]
-    x_sym               = F.symbol x
+    l                = srcPos x
+    biReserved       = F.symbol <$> ["func", "obj"]
+    biExtra          = F.symbol <$> ["bvor", "bvand", "builtin_BINumArgs"]
+    x_sym            = F.symbol x
+    validAsgn        = [ReadOnly,ImportDecl,WriteLocal] 
 
 
 -- | `addObjectFields g (x,t)`

@@ -1,6 +1,19 @@
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE DeriveDataTypeable     #-}
-{-# LANGUAGE OverlappingInstances   #-}
+{-# LANGUAGE OverlappingInstances       #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE DeriveTraversable          #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
+{-# LANGUAGE DeriveFoldable             #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE ImpredicativeTypes         #-}
+{-# LANGUAGE NoMonomorphismRestriction  #-}
 
 
 module Language.Nano.Locations (
@@ -97,13 +110,13 @@ instance IsLocated (SourceSpan, r) where
 instance Eq a => Eq (Located a) where 
   x == y = val x == val y
 
+instance Ord a => Ord (Located a) where 
+  x `compare` y = val x `compare` val y
+
 instance F.Fixpoint SourceSpan where
   toFix = pp 
 
-
-
-
-sourceSpanSrcSpan sp = SS (sp_begin sp) (sp_end sp)
+sourceSpanSrcSpan sp = SS (sp_begin sp') (sp_end sp') where sp' = srcPos sp
 
 
 --------------------------------------------------------------------------------

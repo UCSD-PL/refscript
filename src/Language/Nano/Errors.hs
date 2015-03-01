@@ -190,9 +190,9 @@ errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"
 errorWellFormed l             = mkErr l $ printf "Well-formedness Error" 
 errorForbiddenSyms l t xs     = mkErr l $ printf "Symbol(s): %s, is (are) not readonly, local, or an immutable field, so should not be appearing in the refinement of type '%s'." 
                                 (show $ intersperse comma $ map pp xs) (ppshow t)
-errorUnboundSyms l x t xs m   = mkErr l $ printf "Symbol(s): %s, appearing in the refinement of type '%s' of '%s' is (are) either unbound or of invalid mutability [ERROR_CODE: %s]" 
-                                (show $ intersperse comma $ map pp xs) (ppshow t) (ppshow x) (ppshow m)
-                              
+errorUnboundSyms l x t s m    = mkErr l $ printf "Symbol '%s', appearing in type '%s' of '%s' is unbound [ERROR_CODE: %s]." (ppshow s) (ppshow t) (ppshow x) (ppshow m)
+unimplementedReservedSyms l   = mkErr l $ printf "Please avoid using 'func' and 'obj' as symbols in refinements."       
+errorAsgnInRef l x t a        = mkErr l $ printf "Only readonly variables can be used in refinements. In type '%s' symbol '%s' is %s." (ppshow t) (ppshow x) (ppshow a)
  
 ---------------------------------------------------------------------------
 -- | Pervasive (typechecking TC and Liquid)

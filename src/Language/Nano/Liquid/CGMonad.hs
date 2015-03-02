@@ -1021,7 +1021,6 @@ splitEs g i e1s e2s
     qlf    = F.qualifySymbol $ F.symbol $ builtinOpId BIThis
 
 
-
 splitE g i (CallSig t1) (CallSig t2) = splitC (Sub g i t1 t2)
 splitE g i (ConsSig t1) (ConsSig t2) = splitC (Sub g i t1 t2)
 
@@ -1134,10 +1133,8 @@ bsplitW g t i
   = []
   where r' = rTypeSortedReft t
 
--- 
--- TODO HEREHERE
---
--- Perhaps disable checks at envAdds ... 
+
+-- TODO: Perhaps disable checks at envAdds ... 
 envTyAdds msg l xts 
   = envAdds' False True (msg ++ " - envTyAdds " ++ ppshow (srcPos l)) 
       [(symbolId l x,(t,WriteLocal,Initialized)) | B x t <- xts]
@@ -1186,22 +1183,6 @@ subNoCapture l yts xs t   = (,) <$> mapM (mapReftM ff) ts <*> mapReftM ff t
     ts                    = [ t | B _ t <- yts ]
 
     fSub yt x             = (b_sym yt, F.eVar x)
-
-
--- ------------------------------------------------------------------------------
--- splitCtorTys :: (PP a) 
---              => AnnTypeR 
---              -> a 
---              -> RefType
---              -> CGM [(Int, ([TVar], Maybe RefType, [RefType], RefType))]
--- ------------------------------------------------------------------------------
--- splitCtorTys l f t = zip [0..] <$> mapM tys (bkAnd t)
---   where
---     tys ft0        | Just (vs,s,bs,t) <- remThisBinding ft0
---                    = return  $ (vs,s,b_type <$> bs,t)
---                    | otherwise
---                    = cgError $ errorNonFunction (srcPos l) f ft0 
-
 
 
 --------------------------------------------------------------------------------

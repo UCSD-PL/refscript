@@ -623,7 +623,10 @@ zipType _ _ (TVar v r) (TVar v' _)       | v == v'  = return (TVar v, r)
 -- 
 -- Function types
 --
--- (Si)=>S || (Ti)=>T = (Si||Ti)=>S||T
+-- (Si) => S # (Ti) => T  =  (Si#Ti) => S#T
+--
+-- * Keep the LHS binders as they might appear in the 
+--   refinements which will belong to the LHS
 --
 zipType γ x (TFun (Just s1) x1s t1 r1) (TFun (Just s2) x2s t2 _) = do
   s   <- appZ <$> zipType γ x s1 s2
@@ -682,7 +685,7 @@ zipType _ x t1 t2 = errorstar $ printf "BUG[zipType] Unsupported:\n\t%s\n\t%s\na
                         (ppshow $ srcPos x) (ppshow t1) (ppshow t2)
 
 
-zipBind γ x (B _ t1) (B s2 t2) = B s2 <$> appZ <$> zipType γ x t1 t2 
+zipBind γ x (B s1 t1) (B _ t2) = B s1 <$> appZ <$> zipType γ x t1 t2 
 
 ------------------------------------------------------------------------------------------
 zipElts :: (F.Symbolic x, IsLocated x) 

@@ -69,6 +69,7 @@ import           Text.Parsec                      hiding (parse, State)
 import           Text.Parsec.Pos                         (newPos)
 import           Text.Parsec.Error                       (errorMessages, showErrorMessages)
 import qualified Text.Parsec.Token                as     T
+import qualified Data.Text                        as     DT
 import           Text.Parsec.Token                       (identStart, identLetter)
 import           Text.Parsec.Prim                        (stateUser)
 import           Text.Parsec.Language                    (emptyDef)
@@ -181,19 +182,29 @@ heritageP = (,) <$> extendsP <*> implementsP
 
 
 qnameP  :: Parser RelName
-qnameP   = withSpan qname $ optionMaybe (char '#') >> sepBy1 qSymbolP (char '.')
+qnameP   = do optionMaybe (char '#')    -- backwards-compatibility fix
+              withSpan qname $ sepBy1 qSymbolP (char '.') 
   where
     qname s x = QN RK_ s (init x) (last x)
 
 -- | Redefining some stuff to make the Qualified names parse right
 qSymbolP    :: Parser Symbol
 qSymbolP    = symbol <$> qSymCharsP
-qSymCharsP  = condIdP qSymChars (`notElem` keyWordSyms)
+qSymCharsP  = condIdP' qSymChars (`notElem` keyWordSyms)
+
 keyWordSyms = ["if", "then", "else", "mod"]
 qSymChars   = ['a' .. 'z'] ++
               ['A' .. 'Z'] ++
               ['0' .. '9'] ++
-              ['_', '%', '#'] -- omitting the the '.'
+              ['_', '%', '#'] -- omitting '.'
+
+condIdP'  :: [Char] -> (String -> Bool) -> Parser Symbol
+condIdP' chars f 
+  = do c  <- try letter <|> oneOf ['_']
+       cs <- many (satisfy (`elem` chars))
+       blanks
+       if f (c:cs) then return (symbol $ DT.pack $ c:cs) else parserZero
+
 
 -- [A,B,C...]
 tParP    = angles $ sepBy tvarP comma

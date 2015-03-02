@@ -1035,7 +1035,9 @@ tcNormalCall γ l fn etos ft0
        case z of 
          Just (θ, ft) -> do addAnn (ann_id l) $ Overload (tce_ctx γ) ft
                             addSubst l θ
-                            tcCallCase γ l fn ets ft
+                            tcWrap (tcCallCase γ l fn ets ft) >>= \case 
+                              Right ets -> return ets
+                              Left  err -> (,tNull) <$> T.mapM (deadcastM (tce_ctx γ) err . fst) ets 
          Nothing      -> tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) $ toLists ets
                          -- do tcWrap $ tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) $ toLists ets
                          --    return (fst <$> ets, tNull)

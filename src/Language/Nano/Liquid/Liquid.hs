@@ -907,9 +907,9 @@ consInstantiate l g fn ft ts xes
   = do  (_,its1,ot)     <- instantiateFTy l g fn ft
         ts1             <- idxMapFI (instantiateTy l g) 1 ts
         let (ts2, its2)  = balance ts1 its1
-        let (su, ts3)    = renameBinds (toList its2) (toList xes)
+        (ts3, ot')      <- subNoCapture l (toList its2) (toList xes) ot
         _               <- zipWithM_ (subType l err g) (toList ts2) ts3
-        Just <$> envAddFresh l (F.subst su ot, WriteLocal, Initialized) g
+        Just           <$> envAddFresh l (ot', WriteLocal, Initialized) g
   where
     bSyms bs             = b_sym <$> toList bs
     toList (FI x xs)     = maybeToList x ++ xs

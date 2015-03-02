@@ -39,6 +39,7 @@ module Language.Nano.Visitor (
   , extractQualifiedNames
   , replaceAbsolute
   , fixEnums
+  , fixFunBinders
 
   , mkTypeMembers
   , mkVarEnv
@@ -76,6 +77,7 @@ import           Language.Nano.Annots           hiding (err)
 import           Language.Nano.Program
 import           Language.Nano.Typecheck.Resolve
 import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Names        (symSepName)
 import           Language.Fixpoint.Misc hiding ((<$$>))
 import qualified Language.Fixpoint.Types        as F
 
@@ -724,7 +726,7 @@ replaceAbsolute pgm@(Nano { code      = Src ss
 fixEnums :: PPR r => NanoBareR r -> NanoBareR r 
 ---------------------------------------------------------------------------------------
 fixEnums p@(Nano { code = Src ss, pModules = m }) 
-               = p { code = Src $ (tr <$>) <$> ss
+               = p { code     = Src $ (tr <$>) <$> ss
                    , pModules = qenvMap (fixEnumsInModule p) m}
   where
     tr         = transAnnR f []
@@ -742,6 +744,38 @@ fixEnumsInModule p m@(ModuleDef { m_variables = mv, m_types = mt })
    f (v,a,t,i) = (v,a,fixEnumInType p t,i)
    mt'         = envMap (transIFD g [] []) mt
    g _ _       = fixEnumInType p
+
+
+
+
+fixFunBinders p@(Nano { code = Src ss, pModules = m }) 
+               = p { code     = Src $ (tr <$>) <$> ss
+                   , pModules = qenvMap fixFunBindersInModule m }
+  where
+    tr         = transAnnR f []
+    f _ _      = fixFunBindersInType
+
+fixFunBindersInType t | Just is <- bkFuns t = mkAnd $ map (mkFun . f) is
+                      | otherwise           = t 
+  where 
+    f (vs,s,yts,t)    = (vs,ssm s,ssb yts,ss t)
+      where
+        ks            = [ y | B y _ <- yts ] 
+        ks'           = (F.eVar . (`mappend` F.symbol [symSepName])) <$> ks
+        su            = F.mkSubst $ zip ks ks'
+        ss            = F.subst su
+        ssb bs        = [ B (ss s) (ss t) | B s t <- bs ]
+        ssm           = (ss <$>)
+
+
+fixFunBindersInModule m@(ModuleDef { m_variables = mv, m_types = mt })
+               = m { m_variables = mv', m_types = mt' }
+  where
+   mv'         = envMap f mv
+   f (v,a,t,i) = (v,a,fixFunBindersInType t,i)
+   mt'         = envMap (transIFD g [] []) mt
+   g _ _       = fixFunBindersInType
+
 
 
 -- | `scrapeModules ss` creates a module store from the statements in @ss@

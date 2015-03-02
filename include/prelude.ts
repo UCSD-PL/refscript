@@ -37,11 +37,11 @@ declare function isNaN(x:any) : boolean;
  ************************************************************************/
 
 /*@ builtin_BIBracketRef ::
-    /\ forall   A . (x_: IArray<A>, {v: number | (0 <= v && v < (len x_))}) => A
+    /\ forall   A . (x: IArray<A>, { number | [ 0 <= v; v < len x ] }) => A
     /\ forall   A . (MArray<A> , idx: number) => A + undefined
     /\ forall M A . (Array<M,A>, idx: number + undefined) => A + undefined
     /\ forall M A . (Array<M,A>, idx: undefined) => undefined
-    /\ forall   A . (o_: [Immutable] {[y: string]: A }, x_: string) => { A | hasProperty(x_,o_) } + { undefined | (not (hasProperty(x_,o_))) }
+    /\ forall   A . (o: [Immutable] {[y: string]: A }, x: string) => { A | hasProperty(x,o) } + { undefined | not (hasProperty(x,o)) }
     /\ forall M A . ([M] {[y: string]: A }, string) => A + undefined
     /\              ({ }, string) => top
  */
@@ -50,9 +50,9 @@ declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 // TODO : add case for A<AssignsFields> or A<Unique> 
 
 /*@ builtin_BIBracketAssign :: 
-    /\ forall   A . (x_: IArray<A>, {idx:number | (0 <= idx && idx < (len x_))}, val: A) => void
-    /\ forall M A . (x_: Array<M,A>, idx:number, val: A) => void
-    /\ forall M A . ([M] {[y: string]: A }, x:string, val: A) => void
+    /\ forall   A . (x: IArray<A>, { number | (0 <= v && v < (len x))}, val: A) => void
+    /\ forall M A . (Array<M,A>, number, A) => void
+    /\ forall M A . ([M] {[y: string]: A }, string, A) => void
  */
 declare function builtin_BIBracketAssign<A>(a: A[], n: number, v: A): void;
 

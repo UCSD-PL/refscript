@@ -665,6 +665,7 @@ mkCode ss = return   (mkCode' ss)
         >>= return . scrapeQuals 
         >>=          scrapeModules
         >>= return . fixEnums
+        >>= return . fixFunBinders
         >>= return . buildCHA
     
 ---------------------------------------------------------------------------------

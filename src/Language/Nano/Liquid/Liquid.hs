@@ -451,15 +451,14 @@ consClassElts l g d@(ID nm _ vs _ es) cs
     thisInfo  = [(this,(this_t,ReadOnly,Initialized))]
     this      = Loc (srcPos l) $ builtinOpId BIThis
 
--- | Constructor
+-- | nonstructor
 ------------------------------------------------------------------------------------
 consClassElt :: CGEnv -> IfaceDef F.Reft -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body) 
   = do  g0       <- envAdd ctorExit (mkCtorExitTy,ReadOnly,Initialized) g
         g1       <- envAdds "classElt-ctor-1" superInfo g0
-        cTy      <- mkCtorTy
-        ts       <- splitCtorTys l ctor cTy
+        ts       <- cgFunTys l ctor xs =<< remThisBinding <$> mkCtorTy
         forM_ ts  $ consFun1 l g1 ctor xs body
   where 
 

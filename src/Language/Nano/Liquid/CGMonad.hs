@@ -49,7 +49,7 @@ module Language.Nano.Liquid.CGMonad (
   , addAnnot
 
   -- * Function Types
-  , cgFunTys, splitCtorTys, subNoCapture 
+  , cgFunTys, subNoCapture 
 
   -- * Zip type wrapper
   , zipTypeUpM, zipTypeDownM
@@ -286,8 +286,8 @@ envAdds = envAdds' True True
 --
 ---------------------------------------------------------------------------------------
 envAdds' :: (IsLocated x, F.Symbolic x, PP x, PP [x]) 
-         => Bool
-         -> Bool
+         => Bool      -- Do check (Yes/No)
+         -> Bool      -- Add field bindings (Yes/No)
          -> String 
          -> [(x, (RefType,Assignability,Initialization))] 
          -> CGEnv 
@@ -1188,19 +1188,19 @@ subNoCapture l yts xs t   = (,) <$> mapM (mapReftM ff) ts <*> mapReftM ff t
     fSub yt x             = (b_sym yt, F.eVar x)
 
 
-------------------------------------------------------------------------------
-splitCtorTys :: (PP a) 
-             => AnnTypeR 
-             -> a 
-             -> RefType
-             -> CGM [(Int, ([TVar], Maybe RefType, [RefType], RefType))]
-------------------------------------------------------------------------------
-splitCtorTys l f t = zip [0..] <$> mapM tys (bkAnd t)
-  where
-    tys ft0        | Just (vs,s,bs,t) <- remThisBinding ft0
-                   = return  $ (vs,s,b_type <$> bs,t)
-                   | otherwise
-                   = cgError $ errorNonFunction (srcPos l) f ft0 
+-- ------------------------------------------------------------------------------
+-- splitCtorTys :: (PP a) 
+--              => AnnTypeR 
+--              -> a 
+--              -> RefType
+--              -> CGM [(Int, ([TVar], Maybe RefType, [RefType], RefType))]
+-- ------------------------------------------------------------------------------
+-- splitCtorTys l f t = zip [0..] <$> mapM tys (bkAnd t)
+--   where
+--     tys ft0        | Just (vs,s,bs,t) <- remThisBinding ft0
+--                    = return  $ (vs,s,b_type <$> bs,t)
+--                    | otherwise
+--                    = cgError $ errorNonFunction (srcPos l) f ft0 
 
 
 

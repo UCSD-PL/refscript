@@ -747,7 +747,8 @@ fixEnumsInModule p m@(ModuleDef { m_variables = mv, m_types = mt })
 
 
 
-
+-- | Add a '#' at the end of every function binder (to avoid capture)
+--
 fixFunBinders p@(Nano { code = Src ss, pModules = m }) 
                = p { code     = Src $ (tr <$>) <$> ss
                    , pModules = qenvMap fixFunBindersInModule m }

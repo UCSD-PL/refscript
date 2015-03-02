@@ -491,20 +491,18 @@ f_requiredR = TRef (QN RK_ (srcPos dummySpan) [] (F.symbol "RequiredField")) [] 
 -- Typemembers that take part in subtyping
 subtypeable e = not (isConstr e)
 
-setThisBinding m@(MethSig _ t) t'   = m { f_type = mapAnd bkTy t }
+setThisBinding m@(MethSig _ t) t' = m { f_type = mapAnd bkTy t }
   where
-    bkTy ty = 
-      case bkFun ty of
-        Just (vs, Just t , bs, ot) -> mkFun (vs, Just t , bs, ot)
-        Just (vs, Nothing, bs, ot) -> mkFun (vs, Just t', bs, ot)
-        _                          -> ty
+    bkTy ty | Just (vs,to,bs,ot) <- bkFun ty
+            = mkFun (vs, maybe (Just t') Just to, bs, ot)
+            | otherwise 
+            = ty
+setThisBinding m _ = m
 
-setThisBinding m _        = m
-
-remThisBinding t =
-  case bkFun t of
-    Just (vs, Just _, bs,ot) -> Just (vs, Nothing, bs, ot)
-    ft                       -> ft
+remThisBinding t | Just ts <- bkFuns t = mkAnd $ mkFun . go <$> ts
+                 | otherwise           = t
+  where 
+    go (vs, _, bs, ot) = (vs, Nothing, bs, ot)
 
 
 instance F.Symbolic IndexKind where

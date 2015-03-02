@@ -2,6 +2,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE ViewPatterns              #-}
+{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE TupleSections             #-}
@@ -48,7 +49,7 @@ module Language.Nano.Liquid.CGMonad (
   , addAnnot
 
   -- * Function Types
-  , cgFunTys, cgMethTys, splitCtorTys
+  , cgFunTys, splitCtorTys, subNoCapture 
 
   -- * Zip type wrapper
   , zipTypeUpM, zipTypeDownM
@@ -61,8 +62,9 @@ import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
 
+import           Data.Either                    (partitionEithers)
 import           Data.Maybe                     (catMaybes, maybeToList)
-import           Data.Monoid                    (mempty)
+import           Data.Monoid                    (mempty, mappend)
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map.Strict                as M
 import qualified Data.List                      as L
@@ -87,6 +89,7 @@ import           Language.Nano.Liquid.Types
 
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Names        (symSepName)
 import           Language.Fixpoint.Errors
 
 import           Language.ECMAScript3.Syntax
@@ -624,10 +627,6 @@ envFindReturn = fst3 . E.envFindReturn . cge_names
 ---------------------------------------------------------------------------------------
 
 -- | Instantiate Fresh Type (at Function-site)
---
--- XXX: Removing addInvariant
---
---
 ---------------------------------------------------------------------------------------
 freshTyFun :: (IsLocated l) => CGEnv -> l -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
@@ -1145,30 +1144,64 @@ envTyAdds msg l xts
 
 
 ------------------------------------------------------------------------------
-cgFunTys :: (PPR r, F.Symbolic s, PP a) 
-         => AnnSSA r -> a -> [s] -> RType r 
-         -> CGM [(Int, ([TVar], Maybe (RType r), [RType r], RType r))]
+cgFunTys :: (IsLocated l, F.Symbolic b, PP x, PP [b])
+         => l 
+         -> x
+         -> [b] 
+         -> RefType 
+         -> CGM [(Int, ([TVar], Maybe (RefType), [RefType], RefType))]
 ------------------------------------------------------------------------------
-cgFunTys l f xs ft = either cgError return $ funTys l f xs ft 
+cgFunTys l f xs ft        | Just ts <- bkFuns ft 
+                          = zip ([0..] :: [Int]) <$> mapM fTy ts
+                          | otherwise            
+                          = cgError $ errorNonFunction (srcPos l) f ft 
+  where
+    fTy (αs, s, yts, t)   | Just yts' <- padUndefineds xs yts 
+                          = uncurry (αs,s,,) <$> subNoCapture l yts' xs t
+                          | otherwise
+                          = cgError $ errorArgMismatch (srcPos l)
+
+
+-- | Avoids capture of function binders by existing value variables
+subNoCapture l yts xs t   = (,) <$> mapM (mapReftM ff) ts <*> mapReftM ff t
+  where 
+    -- 
+    -- If the symbols we are about to introduce are already capture by some 
+    -- value variable, then (1) create a fresh value var. and (2) proceed with 
+    -- the substitution after replacing with the new val. var.
+    --
+    ff r@(F.Reft (v,ras)) | v `L.elem` xss
+                          = do v' <- freshVV 
+                               return $ F.subst su $ F.Reft . (v',) 
+                                      $ F.subst (F.mkSubst [(v, F.expr v')]) ras
+                          | otherwise
+                          = return $ F.subst su r
+
+    freshVV               = F.vv . Just <$> fresh
+    xss                   = F.symbol <$> xs
+
+    su                    = F.mkSubst $ safeZipWith "subNoCapture" fSub yts xs 
+
+    ks                    = [ y | B y _ <- yts ] 
+    ts                    = [ t | B _ t <- yts ]
+
+    fSub yt x             = (b_sym yt, F.eVar x)
+
 
 ------------------------------------------------------------------------------
-cgMethTys :: (PP a) 
-          => AnnTypeR -> a -> (Mutability, RefType)
-          -> CGM [(Int, Mutability, ([TVar], Maybe RefType, [RefType], RefType))]
+splitCtorTys :: (PP a) 
+             => AnnTypeR 
+             -> a 
+             -> RefType
+             -> CGM [(Int, ([TVar], Maybe RefType, [RefType], RefType))]
 ------------------------------------------------------------------------------
-cgMethTys l f (m,t) 
-   = zip3 [0..] (repeat m) <$> mapM (methTys l f) (bkAnd t)
+splitCtorTys l f t = zip [0..] <$> mapM tys (bkAnd t)
+  where
+    tys ft0        | Just (vs,s,bs,t) <- remThisBinding ft0
+                   = return  $ (vs,s,b_type <$> bs,t)
+                   | otherwise
+                   = cgError $ errorNonFunction (srcPos l) f ft0 
 
-methTys l f ft0
-  = case remThisBinding ft0 of
-      Nothing          -> cgError $ errorNonFunction (srcPos l) f ft0 
-      Just (vs,s,bs,t) -> return  $ (vs,s,b_type <$> bs,t)
-
-------------------------------------------------------------------------------
-splitCtorTys :: (PP a) => AnnTypeR -> a -> RefType
-                    -> CGM [(Int, ([TVar], Maybe RefType, [RefType], RefType))]
-------------------------------------------------------------------------------
-splitCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 
 
 --------------------------------------------------------------------------------

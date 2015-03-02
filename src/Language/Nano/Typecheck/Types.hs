@@ -35,7 +35,7 @@ module Language.Nano.Typecheck.Types (
   , mkUnion, mkUnionR, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy, flattenUnions, mkTCons
 
   -- * Deconstructing Types
-  , bkFun, bkFunBinds, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion, orUndef, funTys
+  , bkFun, bkFunBinds, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion, orUndef, funTys, padUndefineds
   
   , rUnion, rTypeR, rTypeROpt, setRTypeR
 
@@ -224,7 +224,8 @@ padUndefineds xs yts
 
 renameBinds yts xs    = (su, [F.subst su ty | B _ ty <- yts])
   where 
-    su                = F.mkSubst $ safeZipWith "renameBinds" fSub yts xs 
+    su                = F.mkSubst suL 
+    suL               = safeZipWith "renameBinds" fSub yts xs 
     fSub yt x         = (b_sym yt, F.eVar x)
 
 

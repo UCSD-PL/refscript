@@ -341,7 +341,7 @@ instance (PPR r, F.Subable r) => F.Subable (RTypeQ q r) where
 ------------------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------------------
-emapReft  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> RTypeQ q a -> RTypeQ q b
+emapReft  :: PPR r => ([F.Symbol] -> r -> r') -> [F.Symbol] -> RTypeQ q r -> RTypeQ q r'
 ------------------------------------------------------------------------------------------
 emapReft f γ (TVar α r)        = TVar α (f γ r)
 emapReft f γ (TApp c ts r)     = TApp c (emapReft f γ <$> ts) (f γ r)
@@ -359,9 +359,12 @@ emapReft _ _ _                 = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)       = B x $ emapReft f γ t
 
-emapReftElt  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> TypeMemberQ q a -> TypeMemberQ q b
 emapReftElt f γ e              = fmap (f γ) e
 
+------------------------------------------------------------------------------------------
+mapReftM :: (F.Reftable r, PP r, Applicative f, Monad f)
+         => (r -> f r') -> RTypeQ q r -> f (RTypeQ q r')
+------------------------------------------------------------------------------------------
 mapReftM f (TVar α r)          = TVar α  <$> f r
 mapReftM f (TApp c ts r)       = TApp c  <$> mapM (mapReftM f) ts <*> f r
 mapReftM f (TRef c ts r)       = TRef c  <$> mapM (mapReftM f) ts <*> f r
@@ -369,7 +372,9 @@ mapReftM f (TSelf m)           = TSelf   <$> mapReftM f m
 mapReftM f (TFun s xts t r)    = TFun    <$> T.mapM (mapReftM f) s 
                                          <*> mapM (mapReftBindM f) xts 
                                          <*> mapReftM f t 
-                                         <*> return (F.top r)
+                                         <*> f r
+                                         -- XXX : What is this about ??? 
+                                         -- <*> return (F.top r)
 mapReftM f (TAll α t)          = TAll α  <$> mapReftM f t
 mapReftM f (TAnd ts)           = TAnd    <$> mapM (mapReftM f) ts
 mapReftM f (TCons m bs r)      = TCons m <$> T.mapM (mapReftEltM f) bs <*> f r

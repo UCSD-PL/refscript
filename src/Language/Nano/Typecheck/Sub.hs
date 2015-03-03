@@ -89,7 +89,7 @@ convert' _ _ t1 t2 | toType t1 == toType t2   = Right CDNo
 convert' _ _ _  t2 | isTop t2                 = Right CDUp
 convert' l γ t1 t2 | any isUnion      [t1,t2] = convertUnion   l γ t1 t2
 convert' l γ t1 t2 | all isPrimitive  [t1,t2] = convertSimple  l γ t1 t2
-convert' l γ t1 t2 | all isExpandable [t1,t2] = convertObj     l γ t1 t2
+convert' l γ t1 t2 | all isTObj       [t1,t2] = convertObj     l γ t1 t2
 convert' l γ t1 t2 | all isTFun       [t1,t2] = convertFun     l γ t1 t2
 convert' l γ t1 t2                            = convertSimple  l γ t1 t2
 
@@ -170,11 +170,11 @@ convertObj l γ (TEnum e1) (TEnum e2) = convertTEnum l γ e1 e2
 -- * Fall back to structural subtyping
 --
 convertObj l γ t1 t2 =
-  case (expandType γ t1, expandType γ t2) of 
+  case (expandType NonCoercive γ t1, expandType NonCoercive γ t2) of 
     (Just ft1, Just ft2) -> convertObj l γ ft1 ft2
     (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2
-    (Nothing , _       ) -> Left $ errorUnresolvedType l t1 
-    (_       , Nothing ) -> Left $ errorUnresolvedType l t2
+    (Nothing , _       ) -> Left $ errorNonObjectType l t1 
+    (_       , Nothing ) -> Left $ errorNonObjectType l t2
 
 
 covariantConvertObj l γ (t1,μ1,e1s) (t2,μ2,e2s)

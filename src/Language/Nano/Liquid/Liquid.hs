@@ -483,7 +483,7 @@ consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body)
     --              * Exclude __proto__ field 
     mkCtorExitTy  = mkFun (vs,Nothing,bs,tVoid)
       where 
-        bs        | Just (TCons _ ms _) <- expandType g this_t
+        bs        | Just (TCons _ ms _) <- expandType Coercive g this_t
                   = sortBy c_sym [ B f t' | ((_,InstanceMember),(FieldSig f _ m t)) <- M.toList ms
                                           , F.symbol f /= F.symbol "__proto__" 
                                           , let t' = unqualifyThis g this_t t ]

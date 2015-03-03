@@ -13,7 +13,7 @@ module Language.Nano.Typecheck.Resolve (
   , resolveModuleInPgm, resolveTypeInPgm, resolveEnumInPgm
 
   -- * expand a type definition applying subs
-  , expand, expand', expand'', expandType
+  , expand, expand', expand'', CoercionKind(..), expandType
 
   -- * Ancestors
   , weaken, allAncestors, classAncestors, interfaceAncestors, isAncestor
@@ -154,6 +154,8 @@ expand' st γ d@(ID _ _ vs _ _)  = expand st γ d (tVar <$> vs)
 expand'' st γ d@(ID _ _ vs _ _) = (vs,) <$> expand st γ d (tVar <$> vs)
 
 
+data CoercionKind = Coercive | NonCoercive
+ 
 -- | `expandType` will expand *any* type (including Mutability types!)
 --    It is not intended to be called with mutability types.
 --    Types with zero type parameters (missing mutability field) are considered
@@ -164,42 +166,43 @@ expand'' st γ d@(ID _ _ vs _ _) = (vs,) <$> expand st γ d (tVar <$> vs)
 --    (overriding their current mutability).
 --
 ---------------------------------------------------------------------------
-expandType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
+expandType :: (PPR r, EnvLike r g, Data r)
+           => CoercionKind -> g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
 -- 
 -- Given an object literal type, @expandType@ returns an expanded TCons containing 
 -- the inherited (from Object) fields. 
 -- 
-expandType γ (TCons m es r) 
+expandType _ γ (TCons m es r) 
   = do  empty   <- resolveTypeInEnv γ emptyObjectInterface
         es'     <- expand' InstanceMember γ $ empty { t_elts = es }
         return   $ TCons m es' r
 -- 
 -- FIXME: expandType for Mutability could easiliy return the same type 
 --
-expandType γ (TRef x [] r)
+expandType _ γ (TRef x [] r)
   = do  d       <- resolveTypeInEnv γ x
         es      <- expand' InstanceMember γ d
         return   $ TCons t_immutable es r
 
-expandType γ (TRef x ts@(m:_) r)
+expandType _ γ (TRef x ts@(m:_) r)
   = do  d       <- resolveTypeInEnv γ x
         es      <- expand InstanceMember γ d ts
         return   $ TCons (toType m) es r
 
-expandType γ (TClass x)             
+expandType _ γ (TClass x)             
   = do  d       <- resolveTypeInEnv γ x
         es      <- expand' StaticMember γ d
         return   $ TCons t_immutable es fTop
 
-expandType γ (TModule x)             
+expandType _ γ (TModule x)             
   = do  es      <- M.fromList . map mkField . envToList . m_variables <$> resolveModuleInEnv γ x
         return   $ TCons t_immutable es fTop
   where
     mkField (k,(_,_,t,_)) = (mod_key k, FieldSig (F.symbol k) f_required t_immutable t)
     mod_key k             = (F.symbol k, InstanceMember)
 
-expandType γ (TEnum x)
+expandType _ γ (TEnum x)
   = do  es      <- M.fromList . concatMap  mkField . envToList . e_mapping <$> resolveEnumInEnv γ x
         return   $ TCons t_immutable es fTop
   where
@@ -211,24 +214,25 @@ expandType γ (TEnum x)
     fld k = FieldSig (F.symbol k) f_required t_immutable
     key   = (,InstanceMember) . F.symbol 
 
+expandType NonCoercive γ t = Nothing
 
 -- FIXME: Even these should inherit from Object
-expandType γ (TApp TInt _ _)
+expandType _ γ (TApp TInt _ _)
   = do  d     <- resolveTypeInEnv γ numberInterface 
         es    <- expand' InstanceMember γ d
         return $ TCons t_immutable es fTop
 
-expandType γ (TApp TString _ _)
+expandType _ γ (TApp TString _ _)
   = do  d     <- resolveTypeInEnv γ stringInterface 
         es    <- expand' InstanceMember γ d
         return $ TCons t_immutable es fTop
 
-expandType γ (TApp TBool _ _) 
+expandType _ γ (TApp TBool _ _) 
   = do  d     <- resolveTypeInEnv γ booleanInterface 
         es    <- expand' InstanceMember γ d
         return $ TCons t_immutable es fTop
 
-expandType _ t  = Just t
+expandType _ _ t  = Just t
 
 -- | `weaken γ A B T..`: Given a relative type name @A@  distinguishes two
 --   cases:
@@ -335,8 +339,8 @@ isAncestor γ c p = p `elem` allAncestors γ c
 ---------------------------------------------------------------------------
 boundKeys :: (PPR r, EnvLike r g) => g r -> RType r -> [F.Symbol]
 ---------------------------------------------------------------------------
-boundKeys γ t@(TRef _ _ _) | Just t <- expandType γ t = boundKeys γ t
-                           | otherwise                = []
+boundKeys γ t@(TRef _ _ _) | Just t <- expandType Coercive γ t = boundKeys γ t
+                           | otherwise                         = []
 boundKeys _ (TCons _ es _) = fst <$> M.keys es 
 boundKeys _ _              = []
 

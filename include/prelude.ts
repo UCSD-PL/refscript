@@ -466,6 +466,10 @@ declare var Math: Math;
  */
 
 interface String {
+
+    /*@ __proto__ : [Immutable] StringConstructor<Immutable> */
+    __proto__: StringConstructor;
+
     toString(): string;
 
     charAt(pos: number): string;
@@ -522,7 +526,10 @@ interface String {
     // [index: number]: string;
 }
 
-declare var String: {
+/*@ String :: StringConstructor<Immutable> */
+declare var String /*@ readonly */: StringConstructor;
+
+interface StringConstructor {
     new (value?: any): String;
     (value?: any): string;
     prototype: String;

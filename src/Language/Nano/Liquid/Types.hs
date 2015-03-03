@@ -700,7 +700,7 @@ zipElts _ _ _                   _                      = Nothing
 
 appZ (f,r) = f r
 
-expandTypeWithSub g x t = substThis g (x,t) <$> expandType g t
+expandTypeWithSub g x t = substThis g (x,t) <$> expandType Coercive g t
 
 
 -- | Substitute occurences of 'this' in type @t'@, given that the receiver 
@@ -713,7 +713,7 @@ substThis g (x,t) = F.subst su
   where
     su            = F.mkSubst $ (this, F.expr $ F.symbol x) : fieldSu
 
-    fieldSu       | Just (TCons m fs _) <- expandType g t 
+    fieldSu       | Just (TCons m fs _) <- expandType Coercive g t 
                   = [ subPair f | ((f,im), FieldSig _ _ m _) <- M.toList fs
                                 , isImmutable m ]
                   | otherwise                              
@@ -731,7 +731,7 @@ unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
 -------------------------------------------------------------------------------
 unqualifyThis g t = F.subst $ F.mkSubst fieldSu
   where
-    fieldSu       | Just (TCons m fs _) <- expandType g t 
+    fieldSu       | Just (TCons m fs _) <- expandType Coercive g t 
                   = [ subPair f | ((f,im), FieldSig _ _ m _) <- M.toList fs
                                 , isImmutable m ]
                   | otherwise                              

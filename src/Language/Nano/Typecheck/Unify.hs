@@ -104,11 +104,11 @@ unify _ _ θ t1 t2 | all isPrimitive [t1,t2] = return θ
 
 -- "Object"-ify types that can be expanded to an object literal type
 unify l γ θ t1 t2 | all isExpandable [t1,t2]
-  = case (expandType γ t1, expandType γ t2) of 
+  = case (expandType NonCoercive γ t1, expandType NonCoercive γ t2) of 
       (Just ft1, Just ft2) -> unify l γ θ ft1 ft2
       (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2
-      (Nothing , _       ) -> Left $ errorUnresolvedType l t1 
-      (_       , Nothing ) -> Left $ errorUnresolvedType l t2
+      (Nothing , _       ) -> Left $ errorNonObjectType l t1 
+      (_       , Nothing ) -> Left $ errorNonObjectType l t2
    
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ

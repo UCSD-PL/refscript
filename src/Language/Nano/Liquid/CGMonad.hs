@@ -409,8 +409,10 @@ addObjectFields msg chk True  g (x,a,t)
               | otherwise
               = (substThis g (x,t) tf, a, Initialized)
 
-    ms        | Just (TCons m ms _) <- expandType g t = defMut m <$> M.elems ms
-              | otherwise                              = []
+    ms        | Just (TCons m ms _) <- expandType Coercive g t 
+              = defMut m <$> M.elems ms
+              | otherwise
+              = []
 
     defMut m (FieldSig f o m0 t) 
               | isInheritedMutability m0      -- FIXME: this shouldn't need to happen here  
@@ -962,12 +964,12 @@ splitC (Sub g i t1@(TApp c1 t1s _) t2@(TApp c2 t2s _))
 -- | These need to be here due to the lack of a folding operation
 --
 splitC (Sub g i t1@(TRef _ _ _) t2) = 
-  case expandType g t1 of
+  case expandType Coercive g t1 of
     Just t1' -> splitC (Sub g i t1' t2)
     Nothing  -> cgError $ errorUnfoldType l t1 where l = srcPos i
 
 splitC (Sub g i t1 t2@(TRef _ _ _)) = 
-  case expandType g t2 of
+  case expandType Coercive g t2 of
     Just t2' -> splitC (Sub g i t1 t2')
     Nothing  -> cgError $ errorUnfoldType l t2 where l = srcPos i
 

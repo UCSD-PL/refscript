@@ -344,7 +344,7 @@ tcClassElt γ d@(ID nm _ vs _ _ ) (Constructor l xs body)
     --              * Exclude __proto__ field 
     mkCtorExitTy  = mkFun (vs,Nothing,bs,tVoid)
       where 
-        bs        | Just (TCons _ ms _) <- expandType γ (TRef nm (tVar <$> vs) fTop)
+        bs        | Just (TCons _ ms _) <- expandType Coercive γ (TRef nm (tVar <$> vs) fTop)
                   = sortBy c_sym [ B s t | ((_,InstanceMember),(FieldSig s _ _ t)) <- M.toList ms 
                                          , F.symbol s /= F.symbol "__proto__" ]
                   | otherwise

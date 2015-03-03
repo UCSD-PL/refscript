@@ -55,7 +55,7 @@ import           Data.Generics
 import qualified Data.HashSet                   as H
 import           Data.List                      (partition)
 import qualified Data.Map.Strict                as M
-import           Data.Maybe                     (maybeToList, listToMaybe)
+import           Data.Maybe                     (maybeToList)
 import qualified Data.IntMap                    as I
 import qualified Data.Traversable               as T
 import           Control.Applicative            ((<$>), (<*>))
@@ -964,10 +964,9 @@ mkTypeMembers dm l0       = do m  <- foldM addTm M.empty l0
                           = Right $ (k,foldl1 joinElts $ val <$> ts)
                           | otherwise      
                           = Left  $ F.Unsafe 
-                          $ map (\(Loc l v) -> err (sourceSpanSrcSpan l)
-                          $ msg l (fst k) v) $ ds ++ ts
+                          $ map (\(Loc l v) -> err (sourceSpanSrcSpan l) $ msg (fst k) v) $ ds ++ ts
 
-    msg l k v             = printf "The following annotation for member '%s' is invalid:\n%s" 
+    msg  k v              = printf "The following annotation for member '%s' is invalid:\n%s" 
                               (ppshow k)  (ppshow v)
                                     
     fixMut                = M.map fixFldMut

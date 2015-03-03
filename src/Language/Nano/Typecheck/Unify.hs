@@ -103,7 +103,7 @@ unify _ _ θ (TEnum   e1) (TEnum   e2) | e1 == e2 = return θ
 unify _ _ θ t1 t2 | all isPrimitive [t1,t2] = return θ
 
 -- "Object"-ify types that can be expanded to an object literal type
-unify l γ θ t1 t2 | all isExpandable [t1,t2]
+unify l γ θ t1 t2 | all isTObj [t1,t2]
   = case (expandType NonCoercive γ t1, expandType NonCoercive γ t2) of 
       (Just ft1, Just ft2) -> unify l γ θ ft1 ft2
       (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2

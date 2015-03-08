@@ -30,14 +30,11 @@ install a newer version from the following PPA:
 Suppose you want to work in a directory `$ROOT`. First `cd $ROOT`, and then:
 
     git clone https://github.com/ucsd-progsys/liquid-fixpoint
-    git clone https://github.com/UCSD-PL/language-ecmascript
-    cd language-ecmascript && git checkout RefScript && cd ..
     git clone https://github.com/UCSD-PL/RefScript
     cd RefScript
     cabal sandbox init
     cabal sandbox add-source ../liquid-fixpoint
-    cabal sandbox add-source ../language-ecmascript
-    make
+    cabal installl
 	
 
 ### Building typescript (optional) 
@@ -51,7 +48,6 @@ translation phase, as an alternative to using the precompiled scripts in
 After acquiring the code you should have the following folder structure:
 
     ROOT
-      ├── language-ecmascript
       ├── liquid-fixpoint
       ├── RefScript
       └── typescript
@@ -103,8 +99,7 @@ Then repeat the first steps of installation:
 
     cabal sandbox init
     cabal sandbox add-source ../liquid-fixpoint
-    cabal sandbox add-source ../language-ecmascript
-    
+
 This will create fresh `.cabal-sandbox` and `cabal.sandbox.config`
 
 But before building, add the following option in `cabal.sandbox.config`:

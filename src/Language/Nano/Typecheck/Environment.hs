@@ -13,8 +13,9 @@ import           Language.Nano.Env
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Program
+import           Language.Nano.Syntax
+import           Language.Nano.Syntax.PrettyPrint
 
-import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types        as F
 import           Text.PrettyPrint.HughesPJ 
 

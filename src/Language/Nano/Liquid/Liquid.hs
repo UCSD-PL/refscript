@@ -22,9 +22,9 @@ import qualified Data.HashSet                       as HS
 import           Data.Maybe                         (maybeToList, fromMaybe, catMaybes)
 import           Data.List                          (sortBy)
 
-import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Syntax.Annotations
-import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Syntax
+import           Language.Nano.Syntax.Annotations
+import           Language.Nano.Syntax.PrettyPrint
 
 import qualified Language.Fixpoint.Config           as C
 import qualified Language.Fixpoint.Types            as F
@@ -980,7 +980,7 @@ consScan f g (FI Nothing xs)
  
 
 ---------------------------------------------------------------------------------
-consCondExprArgs :: SourceSpan 
+consCondExprArgs :: SrcSpan 
                  -> CGEnv 
                  -> FuncInputs (Expression AnnTypeR, Maybe RefType) 
                  -> CGM (Maybe (FuncInputs (Id AnnTypeR), CGEnv))

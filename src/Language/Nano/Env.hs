@@ -54,8 +54,8 @@ import qualified Data.HashMap.Strict as M
 import           Data.Data
 import qualified Data.List               as L
 
-import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Syntax
+import           Language.Nano.Syntax.PrettyPrint
 import           Language.Nano.Locations
 import           Language.Nano.Errors
 import           Language.Nano.Names

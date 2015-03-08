@@ -80,9 +80,9 @@ import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Errors
 
-import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Syntax.Annotations
+import           Language.Nano.Syntax
+import           Language.Nano.Syntax.PrettyPrint
+import           Language.Nano.Syntax.Annotations
 
 -- import           Debug.Trace                      (trace)
 --
@@ -311,7 +311,7 @@ isCastId (Id _ s) = castPrefix `isPrefixOf` s
 --------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------
-unifyTypesM :: PPR r => SourceSpan -> TCEnv r -> FuncInputs (RType r) 
+unifyTypesM :: PPR r => SrcSpan -> TCEnv r -> FuncInputs (RType r) 
                      -> FuncInputs (RType r) -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
 unifyTypesM l γ t1s t2s 
@@ -325,7 +325,7 @@ unifyTypesM l γ t1s t2s
     toList (FI to ts)                  = maybeToList to ++ ts
 
 ----------------------------------------------------------------------------------
-unifyTypeM :: PPR r => SourceSpan -> TCEnv r -> RType r -> RType r -> TCM r (RSubst r)
+unifyTypeM :: PPR r => SrcSpan -> TCEnv r -> RType r -> RType r -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
 unifyTypeM l γ t t' = unifyTypesM l γ (FI Nothing [t]) (FI Nothing [t'])
 
@@ -372,7 +372,7 @@ runMaybeM a = runFailM a >>= \case
 
 -- | subTypeM will throw error if subtyping fails
 --------------------------------------------------------------------------------
-subtypeM :: PPR r => SourceSpan -> TCEnv r -> RType r -> RType r -> TCM r ()
+subtypeM :: PPR r => SrcSpan -> TCEnv r -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 subtypeM l γ t1 t2 
   = case convert l γ t1 t2 of

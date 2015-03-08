@@ -65,7 +65,7 @@ import           Language.Nano.Names
 import           Language.Nano.Locations
 import           Language.Nano.Program
 import           Language.Nano.Types
-import           Language.ECMAScript3.Syntax
+import           Language.Nano.Syntax
 
 import           Language.Fixpoint.Errors
 

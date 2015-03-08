@@ -42,7 +42,7 @@ import           Data.Function                  (on)
 -- definition environment @γ@.
 -----------------------------------------------------------------------------
 unify :: (Data r, PPR r) 
-      => SourceSpan 
+      => SrcSpan 
       -> TCEnv r
       -> RSubst r 
       -> RType r 
@@ -115,7 +115,7 @@ unify _ _ θ _  _ = return θ
 
 -----------------------------------------------------------------------------
 unifyUnions :: PPR r
-            => SourceSpan
+            => SrcSpan
             -> TCEnv r
             -> RSubst r
             -> RType r
@@ -153,7 +153,7 @@ unifyVar l _ _ ts  _  = Left $ unsupportedUnionTVar (srcPos l) $ mkUnion ts
    
 -----------------------------------------------------------------------------
 unifys :: PPR r
-       => SourceSpan 
+       => SrcSpan 
        -> TCEnv r 
        -> RSubst r 
        -> [RType r] -> [RType r] 
@@ -168,7 +168,7 @@ unifys l γ θ ts ts'
 
 
 -----------------------------------------------------------------------------
-varEql :: PPR r => SourceSpan -> RSubst r -> TVar -> TVar -> Either Error (RSubst r)
+varEql :: PPR r => SrcSpan -> RSubst r -> TVar -> TVar -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 varEql l θ α β =  
   case varAsn l θ α $ tVar β of
@@ -180,7 +180,7 @@ varEql l θ α β =
 
 
 -----------------------------------------------------------------------------
-varAsn ::  PPR r => SourceSpan -> RSubst r -> TVar -> RType r -> Either Error (RSubst r)
+varAsn ::  PPR r => SrcSpan -> RSubst r -> TVar -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 varAsn l θ α t 
   | on (==) toType t (apply θ (tVar α))       = Right $ θ 

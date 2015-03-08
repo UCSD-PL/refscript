@@ -11,7 +11,7 @@ module Language.Nano.Liquid.Environment where
 
 import           Text.PrettyPrint.HughesPJ
 
-import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Syntax.PrettyPrint
 
 import           Language.Nano.Annots()
 import           Language.Nano.Env

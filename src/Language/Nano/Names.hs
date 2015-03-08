@@ -45,8 +45,8 @@ import           Data.Hashable
 import           Data.Data
 import           Data.Traversable
 import           Data.Foldable                      (Foldable()) 
-import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Syntax
+import           Language.Nano.Syntax.PrettyPrint
 import           Language.Nano.Locations
 import           Language.Nano.Errors()
 import qualified Language.Fixpoint.Types as F
@@ -71,10 +71,10 @@ data AK = AK_ deriving (Eq, Data, Typeable, Show)
 data RK = RK_ deriving (Eq, Data, Typeable, Show)
 
 -- Qualified Name
-data QN l = QN l SourceSpan NameSpacePath F.Symbol deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
+data QN l = QN l SrcSpan NameSpacePath F.Symbol deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
 
 -- Qualified Path
-data QP l = QP l SourceSpan NameSpacePath deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
+data QP l = QP l SrcSpan NameSpacePath deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
 
 instance Eq l => Eq (QN l) where
   QN k1 _ n1 s1 == QN k2 _ n2 s2 = (k1,n1,s1) == (k2,n2,s2)

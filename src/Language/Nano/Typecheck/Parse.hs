@@ -61,9 +61,9 @@ import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.Qualifiers
 import           Language.Nano.Typecheck.Resolve
 
-import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Syntax.Annotations
+import           Language.Nano.Syntax
+import           Language.Nano.Syntax.PrettyPrint
+import           Language.Nano.Syntax.Annotations
 
 import           Text.Parsec                      hiding (parse, State)
 import           Text.Parsec.Pos                         (newPos)
@@ -90,19 +90,19 @@ identifier = T.identifier jsLexer
 -- | Type Binders 
 ----------------------------------------------------------------------------------
 
-idBindP :: Parser (Id SourceSpan, RTypeQ RK Reft)
+idBindP :: Parser (Id SrcSpan, RTypeQ RK Reft)
 idBindP = withinSpacesP $ xyP identifierP dcolon bareTypeP
 
 anonFuncP :: Parser (RTypeQ RK Reft)
 anonFuncP = funcSigP
 
-identifierP :: Parser (Id SourceSpan)
+identifierP :: Parser (Id SrcSpan)
 identifierP = withSpan Id identifier 
 
 binderP     = withSpan Id $  try identifier
                          <|> try (show <$> integer)
                           
-pAliasP :: Parser (Id SourceSpan, PAlias) 
+pAliasP :: Parser (Id SrcSpan, PAlias) 
 pAliasP = do name <- identifierP
              πs   <- pAliasVarsP 
              reservedOp "="
@@ -112,7 +112,7 @@ pAliasP = do name <- identifierP
 pAliasVarsP = try (parens $ sepBy symbolP comma)
            <|> many symbolP
 
-tAliasP :: Parser (Id SourceSpan, TAlias (RTypeQ RK Reft))
+tAliasP :: Parser (Id SrcSpan, TAlias (RTypeQ RK Reft))
 tAliasP = do name      <- identifierP
              (αs, πs)  <- mapEither aliasVarT <$> aliasVarsP 
              reservedOp "="
@@ -127,7 +127,7 @@ aliasVarsP =  try (brackets avarsP)
     
 aliasVarP     = withSpan (,) (wordP $ \_ -> True)
 
-aliasVarT :: (SourceSpan, Symbol) -> Either TVar Symbol
+aliasVarT :: (SrcSpan, Symbol) -> Either TVar Symbol
 aliasVarT (l, x)      
   | isTvar x' = Left  $ tvar l x
   | otherwise = Right $ x 
@@ -140,7 +140,7 @@ aliasVarT (l, x)
 optionP   = do _ <- many anyToken 
                return "DEFAULT FLAG"
     
-iFaceP   :: Parser (Id SourceSpan, IfaceDefQ RK Reft)
+iFaceP   :: Parser (Id SrcSpan, IfaceDefQ RK Reft)
 iFaceP   
   = do  name   <- identifierP 
         as     <- option [] tParP
@@ -212,7 +212,7 @@ tParP    = angles $ sepBy tvarP comma
 withSpan f p = do pos   <- getPosition
                   x     <- p
                   pos'  <- getPosition
-                  return $ f (Span pos pos') x
+                  return $ f (SS pos pos') x
 
 
 xyP lP sepP rP
@@ -481,7 +481,7 @@ withinSpacesP :: Parser a -> Parser a
 withinSpacesP p = do { spaces; a <- p; spaces; return a } 
              
 ----------------------------------------------------------------------------------
-classDeclP :: Parser (Id SourceSpan, ClassSigQ RK Reft)
+classDeclP :: Parser (Id SrcSpan, ClassSigQ RK Reft)
 ----------------------------------------------------------------------------------
 classDeclP = do
     reserved "class"
@@ -496,23 +496,23 @@ classDeclP = do
 ---------------------------------------------------------------------------------
 
 data RawSpec
-  = RawMeas     (SourceSpan, String)   -- Measure
-  | RawBind     (SourceSpan, String)   -- Named function or var bindings
-  | RawAmbBind  (SourceSpan, String)   -- Ambient bamed function or var bindings
-  | RawFunc     (SourceSpan, String)   -- Anonymouns function type
-  | RawIface    (SourceSpan, String)   -- Interface annots
-  | RawClass    (SourceSpan, String)   -- Class annots
-  | RawField    (SourceSpan, String)   -- Field annots
-  | RawMethod   (SourceSpan, String)   -- Method annots
-  | RawConstr   (SourceSpan, String)   -- Constructor annots
-  | RawTAlias   (SourceSpan, String)   -- Type aliases
-  | RawPAlias   (SourceSpan, String)   -- Predicate aliases
-  | RawQual     (SourceSpan, String)   -- Qualifiers
-  | RawOption   (SourceSpan, String)   -- Options
-  | RawInvt     (SourceSpan, String)   -- Invariants
-  | RawCast     (SourceSpan, String)   -- Casts
-  | RawExported (SourceSpan, String)   -- Exported
-  | RawReadOnly (SourceSpan, String)   -- ReadOnly
+  = RawMeas     (SrcSpan, String)   -- Measure
+  | RawBind     (SrcSpan, String)   -- Named function or var bindings
+  | RawAmbBind  (SrcSpan, String)   -- Ambient bamed function or var bindings
+  | RawFunc     (SrcSpan, String)   -- Anonymouns function type
+  | RawIface    (SrcSpan, String)   -- Interface annots
+  | RawClass    (SrcSpan, String)   -- Class annots
+  | RawField    (SrcSpan, String)   -- Field annots
+  | RawMethod   (SrcSpan, String)   -- Method annots
+  | RawConstr   (SrcSpan, String)   -- Constructor annots
+  | RawTAlias   (SrcSpan, String)   -- Type aliases
+  | RawPAlias   (SrcSpan, String)   -- Predicate aliases
+  | RawQual     (SrcSpan, String)   -- Qualifiers
+  | RawOption   (SrcSpan, String)   -- Options
+  | RawInvt     (SrcSpan, String)   -- Invariants
+  | RawCast     (SrcSpan, String)   -- Casts
+  | RawExported (SrcSpan, String)   -- Exported
+  | RawReadOnly (SrcSpan, String)   -- ReadOnly
   deriving (Show,Eq,Ord,Data,Typeable,Generic)
 
 data PSpec l r
@@ -539,7 +539,7 @@ data PSpec l r
   | ErrorSpec
   deriving (Eq, Show, Data, Typeable)
 
-type Spec = PSpec SourceSpan Reft
+type Spec = PSpec SrcSpan Reft
 
 parseAnnot :: RawSpec -> Parser Spec
 parseAnnot = go
@@ -614,25 +614,25 @@ instance FromJSON SourcePos where
     return $ newPos v0 v1 v2
   parseJSON _ = error "SourcePos should only be an A.Array" 
 
-instance FromJSON (Expression (SourceSpan, [RawSpec]))
-instance FromJSON (Statement (SourceSpan, [RawSpec]))
-instance FromJSON (EnumElt (SourceSpan, [RawSpec]))
-instance FromJSON (LValue (SourceSpan, [RawSpec]))
-instance FromJSON (JavaScript (SourceSpan, [RawSpec]))
-instance FromJSON (ClassElt (SourceSpan, [RawSpec]))
-instance FromJSON (CaseClause (SourceSpan, [RawSpec]))
-instance FromJSON (CatchClause (SourceSpan, [RawSpec]))
-instance FromJSON (ForInit (SourceSpan, [RawSpec]))
-instance FromJSON (ForInInit (SourceSpan, [RawSpec]))
-instance FromJSON (VarDecl (SourceSpan, [RawSpec]))
-instance FromJSON (Id (SourceSpan, [RawSpec]))
-instance FromJSON (Prop (SourceSpan, [RawSpec]))
-instance FromJSON (SourceSpan, [RawSpec])
+instance FromJSON (Expression (SrcSpan, [RawSpec]))
+instance FromJSON (Statement (SrcSpan, [RawSpec]))
+instance FromJSON (EnumElt (SrcSpan, [RawSpec]))
+instance FromJSON (LValue (SrcSpan, [RawSpec]))
+instance FromJSON (JavaScript (SrcSpan, [RawSpec]))
+instance FromJSON (ClassElt (SrcSpan, [RawSpec]))
+instance FromJSON (CaseClause (SrcSpan, [RawSpec]))
+instance FromJSON (CatchClause (SrcSpan, [RawSpec]))
+instance FromJSON (ForInit (SrcSpan, [RawSpec]))
+instance FromJSON (ForInInit (SrcSpan, [RawSpec]))
+instance FromJSON (VarDecl (SrcSpan, [RawSpec]))
+instance FromJSON (Id (SrcSpan, [RawSpec]))
+instance FromJSON (Prop (SrcSpan, [RawSpec]))
+instance FromJSON (SrcSpan, [RawSpec])
 instance FromJSON InfixOp
 instance FromJSON AssignOp
 instance FromJSON PrefixOp
 instance FromJSON UnaryAssignOp
-instance FromJSON SourceSpan
+instance FromJSON SrcSpan
 instance FromJSON RawSpec
 
 
@@ -656,18 +656,18 @@ getJSON :: MonadIO m => FilePath -> m B.ByteString
 getJSON = liftIO . B.readFile
 
 --------------------------------------------------------------------------------------
-parseScriptFromJSON :: FilePath -> IO (Either (FixResult a) [Statement (SourceSpan, [RawSpec])])
+parseScriptFromJSON :: FilePath -> IO (Either (FixResult a) [Statement (SrcSpan, [RawSpec])])
 --------------------------------------------------------------------------------------
 parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
   where 
     decodeOrDie s =
-      case eitherDecode s :: Either String [Statement (SourceSpan, [RawSpec])] of
+      case eitherDecode s :: Either String [Statement (SrcSpan, [RawSpec])] of
         Left msg -> Left  $ Crash [] $ "JSON decode error:\n" ++ msg
         Right p  -> Right $ p
 
 
 ---------------------------------------------------------------------------------
-mkCode :: [Statement (SourceSpan, [Spec])] -> Either (FixResult Error) (NanoBareR Reft)
+mkCode :: [Statement (SrcSpan, [Spec])] -> Either (FixResult Error) (NanoBareR Reft)
 ---------------------------------------------------------------------------------
 mkCode ss = return   (mkCode' ss)
         >>= return . visitNano convertTvarVisitor []
@@ -680,7 +680,7 @@ mkCode ss = return   (mkCode' ss)
         >>= return . buildCHA
     
 ---------------------------------------------------------------------------------
-mkCode' :: [Statement (SourceSpan, [Spec])] -> NanoBareRelR Reft
+mkCode' :: [Statement (SrcSpan, [Spec])] -> NanoBareRelR Reft
 ---------------------------------------------------------------------------------
 mkCode' ss = Nano { 
         code          = Src (checkTopStmt <$> ss')
@@ -697,7 +697,7 @@ mkCode' ss = Nano {
       , pCHA          = def
     } 
   where
-    toBare            :: Int -> (SourceSpan, [Spec]) -> AnnRel Reft 
+    toBare            :: Int -> (SrcSpan, [Spec]) -> AnnRel Reft 
     toBare n (l,αs)    = Ann n l $ catMaybes $ extractFact <$> αs 
     f (QN RK_ l ss s)  = QN AK_ l ss s
     g (QP RK_ l ss)    = QP AK_ l ss
@@ -794,8 +794,8 @@ instance PP Integer where
 
 
 --------------------------------------------------------------------------------------
-parseAnnots :: [Statement (SourceSpan, [RawSpec])] 
-             -> Either (FixResult Error) [Statement (SourceSpan, [Spec])]
+parseAnnots :: [Statement (SrcSpan, [RawSpec])] 
+             -> Either (FixResult Error) [Statement (SrcSpan, [Spec])]
 --------------------------------------------------------------------------------------
 parseAnnots ss = 
   case mapAccumL (mapAccumL f) (0,[]) ss of
@@ -805,7 +805,7 @@ parseAnnots ss =
     f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
 
 --------------------------------------------------------------------------------------
-parse :: SourceSpan -> (PState, [Error]) -> RawSpec -> ((PState, [Error]), Spec)
+parse :: SrcSpan -> (PState, [Error]) -> RawSpec -> ((PState, [Error]), Spec)
 --------------------------------------------------------------------------------------
 parse _ (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
   where
@@ -829,7 +829,7 @@ parse _ (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
                               ++ "\n\nWhile parsing: " 
                               ++ show (getSpecString c)
     ss = srcPos c
-    f = sourceName $ sp_begin ss
+    f = sourceName $ sp_start ss
 
 
 instance PP (RawSpec) where

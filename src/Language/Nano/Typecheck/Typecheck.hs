@@ -50,9 +50,9 @@ import           Language.Nano.Visitor
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc             as FM 
-import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Syntax.Annotations
+import           Language.Nano.Syntax
+import           Language.Nano.Syntax.PrettyPrint
+import           Language.Nano.Syntax.Annotations
 
 -- import           Debug.Trace                        hiding (traceShow)
 

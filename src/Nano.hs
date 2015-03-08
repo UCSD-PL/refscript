@@ -32,7 +32,7 @@ import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Files
 import           Text.PrettyPrint.HughesPJ
-import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Syntax.PrettyPrint
 import qualified Data.ByteString.Lazy.Char8   as    B
 
 
@@ -85,9 +85,6 @@ instance ToJSON (F.FixResult Error)
 
 instance FromJSON Error
 instance ToJSON Error 
-
-instance FromJSON SrcSpan
-instance ToJSON SrcSpan
 
 
 run verifyFile cfg 

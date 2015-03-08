@@ -26,7 +26,7 @@ import           Control.Monad.State
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
 
-import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Syntax.PrettyPrint
 
 import           Language.Nano.Annots
 import           Language.Nano.Types
@@ -65,7 +65,7 @@ isConvertible γ t1 t2 =
 -- | `convert`
 --------------------------------------------------------------------------------
 convert :: (PPR r, Functor g, EnvLike () g) 
-        => SourceSpan -> g r -> RType r -> RType r -> Either Error (Cast r)
+        => SrcSpan -> g r -> RType r -> RType r -> Either Error (Cast r)
 --------------------------------------------------------------------------------
 convert l γ t1 t2  
   =  do c <- convert' l γ' τ1 τ2
@@ -83,7 +83,7 @@ convert l γ t1 t2
 
 --------------------------------------------------------------------------------
 convert' :: (Functor g, EnvLike () g)
-         => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
+         => SrcSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convert' _ _ t1 t2 | toType t1 == toType t2   = Right CDNo
 convert' _ _ _  t2 | isTop t2                 = Right CDUp
@@ -97,7 +97,7 @@ convert' l γ t1 t2                            = convertSimple  l γ t1 t2
 -- | `convertObj`
 --------------------------------------------------------------------------------
 convertObj :: (Functor g, EnvLike () g)
-           => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
+           => SrcSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
 
 -- | Cannot convert a structural object type to a nominal class type. 
@@ -309,7 +309,7 @@ convertStringIndexer l γ False e1 e2
 --
 --------------------------------------------------------------------------------
 convertFun :: (Functor g, EnvLike () g)
-           => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
+           => SrcSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertFun l γ (TFun s1 b1s o1 _) (TFun s2 b2s o2 _) 
   = mappend lengthSub <$> 
@@ -339,7 +339,7 @@ convertFun l _ t1 t2 = Left $ unsupportedConvFun l t1 t2
 -- | `convertTClass`
 --------------------------------------------------------------------------------
 convertTClass :: (Functor g, EnvLike () g)
-              => SourceSpan -> g () -> AbsName -> AbsName -> Either Error CastDirection
+              => SrcSpan -> g () -> AbsName -> AbsName -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertTClass l _ c1 c2 | c1 == c2  = Right CDNo  
                         | otherwise = Left  $ errorTClassSubtype l c1 c2
@@ -347,7 +347,7 @@ convertTClass l _ c1 c2 | c1 == c2  = Right CDNo
 -- | `convertTModule`
 --------------------------------------------------------------------------------
 convertTModule :: (Functor g, EnvLike () g)
-              => SourceSpan -> g () -> AbsPath -> AbsPath -> Either Error CastDirection
+              => SrcSpan -> g () -> AbsPath -> AbsPath -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertTModule l _ c1 c2 | c1 == c2  = Right CDNo
                          | otherwise = Left $ errorTModule l c1 c2
@@ -355,7 +355,7 @@ convertTModule l _ c1 c2 | c1 == c2  = Right CDNo
 -- | `convertTEnum`
 --------------------------------------------------------------------------------
 convertTEnum :: (Functor g, EnvLike () g)
-              => SourceSpan -> g () -> AbsName -> AbsName -> Either Error CastDirection
+              => SrcSpan -> g () -> AbsName -> AbsName -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertTEnum l _ e1 e2 | e1 == e2  = Right CDNo  
                        | otherwise = Left  $ errorTEnumSubtype l e1 e2
@@ -363,7 +363,7 @@ convertTEnum l _ e1 e2 | e1 == e2  = Right CDNo
 -- | `convertSimple`
 --------------------------------------------------------------------------------
 convertSimple :: (Functor g, EnvLike () g)
-              => SourceSpan -> g r -> Type -> Type -> Either Error CastDirection
+              => SrcSpan -> g r -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertSimple _ _ t1 t2 | t1 == t2  = Right CDNo
                         | otherwise = Right CDDead 
@@ -371,7 +371,7 @@ convertSimple _ _ t1 t2 | t1 == t2  = Right CDNo
 -- | `convertUnion`
 --------------------------------------------------------------------------------
 convertUnion :: (Functor g, EnvLike () g)
-             => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
+             => SrcSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertUnion _ γ t1 t2  
   | upcast    = Right CDUp 

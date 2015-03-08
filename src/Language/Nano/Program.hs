@@ -54,8 +54,8 @@ import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Types
 
-import           Language.ECMAScript3.Syntax 
-import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Syntax 
+import           Language.Nano.Syntax.PrettyPrint
 
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types        as F
@@ -207,11 +207,11 @@ instance PP (ClassHierarchy r) where
   
 
 ---------------------------------------------------------------------
--- | Wrappers around `Language.ECMAScript3.Syntax` ------------------
+-- | Wrappers around `Language.Nano.Syntax` ------------------
 ---------------------------------------------------------------------
 
 -- | `IsNano` is a predicate that describes the **syntactic subset** 
---   of ECMAScript3 that comprises `Nano`.
+--   of Nano that comprises `Nano`.
 
 class IsNano a where 
   isNano :: a -> Bool

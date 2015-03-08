@@ -16,8 +16,8 @@ module Language.Nano.Typecheck.Lookup (
 import           Data.Generics
 import qualified Data.Map.Strict as M
 
-import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Syntax
+import           Language.Nano.Syntax.PrettyPrint
+import           Language.Nano.Syntax
 
 import qualified Language.Fixpoint.Types as F
 import qualified Language.Fixpoint.Bitvector as BV

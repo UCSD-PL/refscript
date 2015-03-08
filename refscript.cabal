@@ -56,7 +56,6 @@ Executable rsc
                   , text-format
                   , array
                   , attoparsec
-                  , language-ecmascript-pp
                   , RefScript
 
 --   extensions:       ExistentialQuantification

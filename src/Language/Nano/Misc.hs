@@ -59,7 +59,7 @@ import qualified Data.List                            as L
 
 import qualified Language.Fixpoint.Types              as F
 import           Language.Fixpoint.Misc
-import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Syntax.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 
 -------------------------------------------------------------------------------

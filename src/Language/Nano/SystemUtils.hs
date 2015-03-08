@@ -33,7 +33,7 @@ import           Language.Fixpoint.Files()
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc             (inserts)
 import qualified Language.Fixpoint.Types    as F
-import           Language.ECMAScript3.PrettyPrint   
+import           Language.Nano.Syntax.PrettyPrint   
 import           Text.Parsec.Pos                   
 import           Language.Nano.Types()
 import           Language.Nano.Locations
@@ -49,7 +49,7 @@ data AnnBind t        = AnnBind { ann_bind :: F.Symbol,
 
 {-@ type NonNull a = {v: [a] | 0 < (len v)} @-}
 type    NonEmpty a  = [a] 
-newtype UAnnInfo a  = AI (M.HashMap SourceSpan (NonEmpty (AnnBind a)))
+newtype UAnnInfo a  = AI (M.HashMap SrcSpan (NonEmpty (AnnBind a)))
 data    UAnnSol  a  = NoAnn 
                     | SomeAnn (UAnnInfo a) (UAnnInfo a -> UAnnInfo a)
 
@@ -79,14 +79,14 @@ instance PP a => PP (UAnnInfo a) where
 -- | Adding New Annotations --------------------------------------------------
 ------------------------------------------------------------------------------
 
-addAnnot :: (F.Symbolic x) => SourceSpan -> x -> a -> UAnnInfo a -> UAnnInfo a
+addAnnot :: (F.Symbolic x) => SrcSpan -> x -> a -> UAnnInfo a -> UAnnInfo a
 addAnnot l x t (AI m) = AI (inserts l (AnnBind (F.symbol x) t) m)
 
 ------------------------------------------------------------------------------
 -- | Dumping Annotations To Disk ---------------------------------------------
 ------------------------------------------------------------------------------
 
--- writeAnnotations :: (PP t) => FilePath -> F.FixResult SourceSpan -> UAnnInfo t -> IO ()
+-- writeAnnotations :: (PP t) => FilePath -> F.FixResult SrcSpan -> UAnnInfo t -> IO ()
 -- writeAnnotations f res a = B.writeFile f annJson 
 --   where  
 --     annJson              = encode $ mkAnnMap res a
@@ -103,7 +103,7 @@ annotVimString res a  = toVim $ mkAnnMap res a
 
 data AnnMap  = AnnMap { 
     status :: String
-  , types  :: M.HashMap SourceSpan (String, String)  -- ^ SourceSpan -> (Var, Type)
+  , types  :: M.HashMap SrcSpan (String, String)     -- ^ SrcSpan -> (Var, Type)
   , errors :: AnnErrors                              -- ^ List of errors
   } 
 
@@ -142,7 +142,7 @@ lineCol sp      = (srcSpanStartLine sp, srcSpanStartCol sp)
 
 data Assoc k a = Asc (M.HashMap k a)
 type AnnTypes  = Assoc Int (Assoc Int Annot1)
-type AnnErrors = [(SourceSpan, String)]
+type AnnErrors = [(SrcSpan, String)]
 data Annot1    = A1 String String Int Int 
                     --  { ident :: String
                     --  , ann   :: String
@@ -167,14 +167,14 @@ instance ToJSON SourcePos where
       l              = sourceLine   z
       c              = sourceColumn z 
  
-instance ToJSON SourceSpan where
+instance ToJSON SrcSpan where
   toJSON = object . sourceSpanBinds  
 
 instance ToJSON AnnErrors where 
   toJSON = Array . V.fromList . fmap (\(sp, str) -> object $ ("message" .= str) : sourceSpanBinds sp)
 
 
-sourceSpanBinds (Span l l') = [ ("start" .= toJSON l), ("stop"  .= toJSON l') ]
+sourceSpanBinds (SS l l') = [ ("start" .= toJSON l), ("stop"  .= toJSON l') ]
 
 instance (Show k, ToJSON a) => ToJSON (Assoc k a) where
   toJSON (Asc kas) = object [ (tshow k) .= (toJSON a) | (k, a) <- M.toList kas ]

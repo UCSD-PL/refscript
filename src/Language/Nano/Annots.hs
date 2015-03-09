@@ -41,9 +41,9 @@ import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Typecheck.Types
 
-import           Language.ECMAScript3.Syntax 
-import           Language.ECMAScript3.Syntax.Annotations
-import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Syntax 
+import           Language.Nano.Syntax.Annotations
+import           Language.Nano.Syntax.PrettyPrint
 
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
@@ -158,7 +158,7 @@ data Annot b a = Ann { ann_id   :: NodeId
                      , ann      ::  a
                      , ann_fact :: [b] } deriving (Show, Data, Typeable)
 
-type AnnQ q  r = Annot (FactQ q r) SourceSpan
+type AnnQ q  r = Annot (FactQ q r) SrcSpan
 type AnnR    r = AnnQ AK r                      -- absolute paths,  
 type AnnRel  r = AnnQ RK r                      -- relative paths, NO facts, parsed versioin
 type AnnBare r = AnnR r                         -- absolute paths, NO facts
@@ -191,16 +191,16 @@ instance HasAnnotation (Annot b) where
 instance Default a => Default (Annot b a) where
   def = Ann def def []
 
-instance Default SourceSpan where
+instance Default SrcSpan where
   def = srcPos dummySpan
   
 instance Ord (AnnSSA  r) where 
   compare (Ann i1 s1 _) (Ann i2 s2 _) = compare (i1,s1) (i2,s2)
 
-instance Eq (Annot a SourceSpan) where 
+instance Eq (Annot a SrcSpan) where 
   (Ann i1 s1 _) == (Ann i2 s2 _) = (i1,s1) == (i2,s2)
 
-instance IsLocated (Annot a SourceSpan) where 
+instance IsLocated (Annot a SrcSpan) where 
   srcPos = ann
 
 instance (F.Reftable r, PP r) => PP (Fact r) where

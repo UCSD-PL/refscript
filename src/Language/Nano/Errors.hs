@@ -9,7 +9,7 @@ import Debug.Trace
 import Text.Printf 
 import Text.PrettyPrint.HughesPJ
 import Language.Nano.Locations
-import Language.ECMAScript3.PrettyPrint
+import Language.Nano.Syntax.PrettyPrint
 import Language.Fixpoint.Errors
 import Language.Fixpoint.Misc
 import Language.Fixpoint.PrettyPrint

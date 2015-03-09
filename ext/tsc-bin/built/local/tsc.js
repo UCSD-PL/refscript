@@ -59503,8 +59503,8 @@ var TypeScript;
         }
         RsSourceSpan.prototype.toObject = function () {
             return {
-                "sp_begin": [this.file, this.start.line() + 1, this.start.character() + 1],
-                "sp_end": [this.file, this.stop.line() + 1, this.stop.character() + 1]
+                "sp_start": [this.file, this.start.line() + 1, this.start.character() + 1],
+                "sp_stop": [this.file, this.stop.line() + 1, this.stop.character() + 1]
             };
         };
 

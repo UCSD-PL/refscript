@@ -20,8 +20,8 @@ import           Data.Generics                      (Data)
 import           Data.List                          ((\\))
 import           Data.Traversable            hiding (sequence, mapM) 
 import           Data.Foldable                      (Foldable()) 
-import           Language.ECMAScript3.Syntax 
-import           Language.ECMAScript3.PrettyPrint   (PP (..))
+import           Language.Nano.Syntax 
+import           Language.Nano.Syntax.PrettyPrint          (PP (..))
 
 import qualified Language.Fixpoint.Types         as F
 
@@ -42,7 +42,7 @@ data TVar = TV {
 
     tv_sym :: F.Symbol
 
-  , tv_loc :: SourceSpan 
+  , tv_loc :: SrcSpan 
 
   } deriving (Show, Data, Typeable)
 
@@ -574,7 +574,7 @@ instance PP Initialization where
 -----------------------------------------------------------------------
 
 data Alias a s t = Alias {
-    al_name   :: Id SourceSpan  -- ^ alias name
+    al_name   :: Id SrcSpan  -- ^ alias name
   , al_tyvars :: ![a]           -- ^ type  parameters  
   , al_syvars :: ![s]           -- ^ value parameters 
   , al_body   :: !t             -- ^ alias body

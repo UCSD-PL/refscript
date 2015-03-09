@@ -25,8 +25,8 @@ module Language.Nano.Typecheck.Subst (
 
 import           Data.Maybe (maybeToList)
 import           Text.PrettyPrint.HughesPJ
-import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Syntax
+import           Language.Nano.Syntax.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Annots
 import           Language.Nano.Env

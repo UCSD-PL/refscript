@@ -18,9 +18,9 @@ import qualified Data.IntMap.Strict                      as IM
 import qualified Data.HashSet                            as S
 import           Data.Typeable                           ()
 
-import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Syntax.Annotations
+import           Language.Nano.Syntax
+import           Language.Nano.Syntax.Annotations
+import           Language.Nano.Syntax.PrettyPrint
 
 import qualified Language.Fixpoint.Errors                as E
 import           Language.Fixpoint.Misc

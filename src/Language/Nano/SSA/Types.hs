@@ -24,7 +24,7 @@ import           Data.Either (partitionEithers)
 
 import           Language.Nano.Annots
 
-import           Language.ECMAScript3.Syntax 
+import           Language.Nano.Syntax 
 
 
 -- | `hoistReadOnly` returns all the ReadOnly variables that are visible in the 

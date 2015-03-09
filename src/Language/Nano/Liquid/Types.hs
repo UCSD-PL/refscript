@@ -577,9 +577,6 @@ zipType γ x t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _)
   | Just (_, [m2']) <- weaken γ (x2,m2:t2s) x1
   = return (TRef x2 [m2'], r1)
 
-  | otherwise
-  = Nothing
-  -- 
   -- DO NOT UNFOLD TO STRUCTURES
   --
   -- DANGER OF INFINITE LOOPS BECAUSE OF RECURSIVE TYPES

@@ -92,8 +92,8 @@ import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Names        (symSepName)
 import           Language.Fixpoint.Errors
 
-import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Syntax
+import           Language.Nano.Syntax.PrettyPrint
 
 -- import           Debug.Trace                        (trace)
 
@@ -777,7 +777,7 @@ cgeAllNames g@(CGE { cge_parent = Nothing }) = cge_names g
 
 -- FIXME: Restore this check !!!
 -- ---------------------------------------------------------------------------------------
--- safeExtends :: SourceSpan -> CGEnv -> IfaceDef F.Reft -> CGM ()
+-- safeExtends :: SrcSpan -> CGEnv -> IfaceDef F.Reft -> CGM ()
 -- ---------------------------------------------------------------------------------------
 -- safeExtends l g (ID _ _ _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
 --   where
@@ -993,7 +993,7 @@ splitC x@(Sub g i t1 t2)
 splitOC g i (Just t) (Just t') = splitC (Sub g i t t') 
 splitOC _ _ _        _         = return []
 
--- splitIncompatC :: SourceSpan -> RefType -> RefType -> a
+-- splitIncompatC :: SrcSpan -> RefType -> RefType -> a
 splitIncompatC _ g i t1 _ = bsplitC g i t1 (mkBot t1)
   
 -- splitIncompatC l t1 t2 = cgError l $ bugBadSubtypes l t1 t2

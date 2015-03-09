@@ -53,7 +53,7 @@ import           Language.Nano.Program
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 
-import           Language.ECMAScript3.Syntax
+import           Language.Nano.Syntax
 
 
 -- import           Debug.Trace

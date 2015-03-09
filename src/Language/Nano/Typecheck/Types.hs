@@ -89,8 +89,9 @@ import           Data.Maybe                     (fromMaybe, isJust, fromJust)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.Map.Strict                as M
 import           Data.Typeable                  ()
-import           Language.ECMAScript3.Syntax 
-import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Syntax 
+import           Language.Nano.Syntax.PrettyPrint
+import           Language.Nano.Syntax.Annotations
 import qualified Language.Nano.Env              as E
 import           Language.Nano.Misc
 import           Language.Nano.Types

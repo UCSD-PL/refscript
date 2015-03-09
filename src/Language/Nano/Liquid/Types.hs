@@ -75,8 +75,8 @@ import           Text.Printf
 import           Control.Applicative 
 import           Control.Monad          (zipWithM)
 
-import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Syntax
+import           Language.Nano.Syntax.PrettyPrint
 
 import           Language.Nano.Annots
 import           Language.Nano.Errors
@@ -111,7 +111,7 @@ type AnnTypeR    = AnnType F.Reft
 ----------------------------------------------------------------------------
 
 data Cinfo = Ci { ci_info    :: !Error
-                , ci_srcspan :: !SourceSpan
+                , ci_srcspan :: !SrcSpan
                 } deriving (Eq, Ord, Show) 
 
 ci   :: (IsLocated a) => Error -> a -> Cinfo
@@ -173,7 +173,7 @@ type FixWfC  = F.WfC  Cinfo
 
 
 ------------------------------------------------------------------
--- | Converting `ECMAScript3` values into `Fixpoint` values, 
+-- | Converting `Nano` values into `Fixpoint` values, 
 --   i.e. *language* level entities into *logic* level entities.
 ------------------------------------------------------------------
 
@@ -480,7 +480,7 @@ rawStringFTycon = F.symbolFTycon . F.Loc (F.dummyPos "RSC.Types.rawStringFTycon"
 
 
 -----------------------------------------------------------------------------------
--- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 
+-- | Helpers for extracting specifications from @Nano@ @Statement@ 
 -----------------------------------------------------------------------------------
 
 getInvariant :: Statement a -> F.Pred 

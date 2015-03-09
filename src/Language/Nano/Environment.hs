@@ -14,6 +14,7 @@ import           Language.Nano.Names
 import           Language.Nano.Program
 import           Language.Fixpoint.Names
 import           Language.Fixpoint.Misc
+import           Language.Nano.Syntax.PrettyPrint ()
 
 -------------------------------------------------------------------------------
 -- | Typecheck Environment

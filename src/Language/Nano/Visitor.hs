@@ -65,9 +65,9 @@ import           Control.Monad.Trans.Class      (lift)
 import           Control.Monad
 import           Language.Nano.Misc             (mapSndM)
 import           Language.Nano.Errors
-import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Syntax.Annotations
-import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Syntax
+import           Language.Nano.Syntax.Annotations
+import           Language.Nano.Syntax.PrettyPrint
 import           Language.Nano.Env
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
@@ -662,7 +662,7 @@ collectModules ss = topLevel : rest ss
 
 -- Not including class, module, enum names
 ---------------------------------------------------------------------------------------
-visibleVars :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, VarInfo r)]
+visibleVars :: Data r => [Statement (AnnSSA r)] -> [(Id SrcSpan, VarInfo r)]
 ---------------------------------------------------------------------------------------
 visibleVars s = [ (ann <$> n,(k,v,a,t,i)) | (n,l,k,a,i) <- hoistBindings s
                                            , f           <- ann_fact l
@@ -895,7 +895,7 @@ mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
 ---------------------------------------------------------------------------------------
 resolveType :: PPR r => AbsPath 
                      -> Statement (AnnR r) 
-                     -> Either (F.FixResult Error) (Id SourceSpan, IfaceDef r)
+                     -> Either (F.FixResult Error) (Id SrcSpan, IfaceDef r)
 ---------------------------------------------------------------------------------------
 resolveType (QP AK_ _ ss) (ClassStmt l c _ _ cs) 
   | [(m:vs,e,i)]     <- classAnns

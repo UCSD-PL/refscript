@@ -119,7 +119,7 @@ data Nano a r = Nano {
   --
   -- ^ Options
   --
-  , pOptions  :: [String]
+  , pOptions  :: [RscOption]
 
   } deriving (Functor) -- , Data, Typeable)
 

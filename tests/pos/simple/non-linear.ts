@@ -1,4 +1,6 @@
 
+/*@ option REALS */
+
 /*@ alias nat = {number | v >= 0} */
 
 /*@ foo :: (x:nat, y:nat) => {void | true} */

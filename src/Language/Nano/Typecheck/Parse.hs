@@ -137,9 +137,8 @@ aliasVarT (l, x)
 -- 
 -- PV: Insert your option parser here
 --
-optionP   = do _ <- many anyToken 
-               return "DEFAULT FLAG"
-    
+optionP   = string "REALS" >> return RealOption
+
 iFaceP   :: Parser (Id SrcSpan, IfaceDefQ RK Reft)
 iFaceP   
   = do  name   <- identifierP 
@@ -529,7 +528,7 @@ data PSpec l r
   | TAlias  (Id l, TAlias (RTypeQ RK r))
   | PAlias  (Id l, PAlias) 
   | Qual    Qualifier
-  | Option  String
+  | Option  RscOption
   | Invt    l (RTypeQ RK r) 
   | CastSp  l (RTypeQ RK r)
   | Exported l

@@ -5,9 +5,6 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE OverlappingInstances   #-}
 
-
-
-
 module Language.Nano.Annots (
 
   -- * SSA 
@@ -25,6 +22,9 @@ module Language.Nano.Annots (
 
   -- * Deconstructing Facts
   , factRTypes
+
+  -- Options
+  , RscOption (..)
                                   
 ) where
 
@@ -114,6 +114,11 @@ castDirection (CNo  {}) = CDNo
 castDirection (CDead{}) = CDDead
 castDirection (CUp  {}) = CDUp
 castDirection (CDn  {}) = CDDn
+
+
+-----------------------------------------------------------------------------
+-- | Facts
+-----------------------------------------------------------------------------
 
 data FactQ q r
   -- SSA
@@ -255,4 +260,12 @@ factRTypes = go
     go (IfaceAnn ifd)     = f_type . snd <$> M.toList (t_elts ifd)
     go (ClassAnn (_,e,i)) = concatMap snd e ++ concatMap snd i
     go f                  = error ("factRTypes: TODO :" ++ show f)
+
+
+-----------------------------------------------------------------------------
+-- | RSC Options
+-----------------------------------------------------------------------------
+
+data RscOption = RealOption
+    deriving (Eq, Show, Data, Typeable)
 

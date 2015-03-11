@@ -86,7 +86,7 @@ tc cfg next p
 
 refTc cfg f p
   = do donePhase Loud "Generate Constraints"
-       solveConstraints f cgi
+       solveConstraints p f cgi
   where
     -- cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
     cgi = generateConstraints cfg p
@@ -101,20 +101,20 @@ ppCasts (Nano { code = Src fs }) =
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
 --------------------------------------------------------------------------------
-solveConstraints :: FilePath -> CGInfo -> IO (A.UAnnSol RefType, F.FixResult Error) 
+solveConstraints :: NanoRefType 
+                 -> FilePath 
+                 -> CGInfo 
+                 -> IO (A.UAnnSol RefType, F.FixResult Error) 
 --------------------------------------------------------------------------------
-solveConstraints f cgi 
-  = do (r, s)  <- solve fixpointConfig f [] $ cgi_finfo cgi
+solveConstraints p f cgi 
+  = do (r, s)  <- solve fpConf f [] $ cgi_finfo cgi
        let r'   = fmap (ci_info . F.sinfo) r
        let ann  = cgi_annot cgi
        let sol  = applySolution s 
        return (A.SomeAnn ann sol, r') 
-
-fixpointConfig  = cfg2 --  C.withUEqAllSorts def True
   where
-    cfg0        = def
-    cfg1        = cfg0 { C.real = True }
-    cfg2        = C.withUEqAllSorts cfg1 True
+    fpConf      = C.withUEqAllSorts def { C.real = real } True 
+    real        = RealOption `elem` pOptions p 
 
 --------------------------------------------------------------------------------
 applySolution :: F.FixSolution -> A.UAnnInfo RefType -> A.UAnnInfo RefType 

@@ -701,9 +701,8 @@ consExpr g c@(CallExpr l em@(DotRef _ e f) es) _
              = consCall g l c (args es) ft
 
              -- Invoking a method
-
              | Just (_,ft,_) <- getProp g MethodAccess Nothing f t
-             = consCall g l c (argsThis (vr x) es) ft
+             = consCall g l c (argsThis (vr x) es) $ substThis g (x,t) ft
                                 
              | otherwise 
              = cgError $ errorCallNotFound (srcPos l) e f

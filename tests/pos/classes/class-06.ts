@@ -1,7 +1,7 @@
 
 class A<T> {
 
-  /*@ new(x:T) => void */
+  /*@ new(x:T) => A<M,T> */
   constructor (x:T) {
   
   }
@@ -14,7 +14,7 @@ class A<T> {
 
 }
 
-/*@ a :: #A[#Mutable,number] */
+/*@ a :: A<Mutable,number> */
 var a : A<number> = new A(1);
 
 assert(a.n > 0);

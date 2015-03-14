@@ -6,6 +6,8 @@ module K {
       export class A {
         public x0 = "";
         public y0 = "";
+
+        /*@ new () => { A<M> | true } */
         constructor() {}
       }
 
@@ -19,6 +21,7 @@ module Mod {
     /*@ k : [Immutable] { string | v = "K" } */
     public k = "";  
 
+    /*@ new () => { AA<M> | true } */
     constructor() {
       super();
     }
@@ -31,6 +34,8 @@ module N {
     public l: string;
     /*@ k : [Immutable] { string | v = "KK" } */
     public k: string;
+
+    /*@ new () => { BB<M> | true } */
     constructor() {
       super();
       this.k = "KK";

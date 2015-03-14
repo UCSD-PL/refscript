@@ -31,11 +31,14 @@ module Language.Nano.Liquid.CGMonad (
   , freshTyFun, freshenType, freshTyInst, freshTyPhis, freshTyPhis'
   , freshTyObj, freshenCGEnvM
 
+  -- * Strengthen (optimized)
+  , nubstrengthen
+
   -- * Freshable
   , Freshable (..)
 
   -- * Environment API
-  , envAddFresh, envAdds, envAdd
+  , envAddFresh, envAdds, envAdd -- , envAddNoChecksNoFields
   , envAddReturn, envAddGuard, envPopGuard
   , envFindTy, envFindTyWithAsgn, envFindTyForAsgn
   , safeEnvFindTy, safeEnvFindTyWithAsgn, safeEnvFindTyNoSngl
@@ -91,11 +94,12 @@ import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Names        (symSepName)
 import           Language.Fixpoint.Errors
+import qualified Language.Fixpoint.Visitor as V
 
 import           Language.Nano.Syntax
 import           Language.Nano.Syntax.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -280,6 +284,7 @@ envAdds = envAdds' True True
 
 
 
+
 -- | No binders for WriteGlobal variables as they cannot appear in refinements.
 --
 --   doFields : add bindings for fields (True/False)
@@ -293,7 +298,7 @@ envAdds' :: (IsLocated x, F.Symbolic x, PP x, PP [x])
          -> CGEnv 
          -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAdds' _ _ _ [] g 
+envAdds' _        _        _   []  g 
   = return g 
 envAdds' doChecks doFields msg xts g
   = do  -- 1. Check for unbound symbols in refinement
@@ -307,19 +312,21 @@ envAdds' doChecks doFields msg xts g
         --
         ts'            <- zipWithM inv ts is
         let xtas        = zip xs $ zip3 ts' as is
+        let ts''        = map replaceOffset xtas
+        let xtas'       = zip xs $ zip3 ts'' as is
         --
         -- 3. Add fixpoint binds 
         --
-        fpIds          <- catMaybes <$> forM xtas addFixpointBind
+        fpIds          <- catMaybes <$> forM xtas' addFixpointBind
         --
         -- 4. Update environment @g@
         --
-        let g'          = g { cge_names = E.envAdds xtas          $ cge_names g
+        let g'          = g { cge_names = E.envAdds xtas'         $ cge_names g
                             , cge_fenv  = F.insertsIBindEnv fpIds $ cge_fenv  g }
         --
         -- 5. Add object field binders 
         --
-        g''             <- foldM (addObjectFields msg doChecks doFields) g' $ zip3 xs as ts'
+        g''             <- foldM (addObjectFields msg doChecks doFields) g' $ zip3 xs as ts''
         
         return          $ g''
   where
@@ -329,6 +336,23 @@ envAdds' doChecks doFields msg xts g
     inv t Initialized   = addInvariant g t
     inv t _             = return t
 
+
+-- offset(v,"f") --> x.f
+--
+--  XXX: this introduces a lot of replication in refinements
+--
+replaceOffset (x,(t,a,i)) = app (V.trans vis () ()) t
+  where
+    v                     = rTypeValueVar t
+    vis                   = V.defaultVisitor { V.txExpr = te }
+    te _ e@(F.EApp offset [F.EVar v',F.ESym (F.SL f)]) 
+                          | F.symbol "offset" == F.symbol offset
+                          , v == v'
+                          = F.eVar $ F.qualifySymbol (F.symbol x) (F.symbol f)
+    te _ e                = e
+    app f (TRef c xs r)   = TRef c xs (r `F.meet` f r)
+    app f (TCons m xs r)  = TCons m xs ( r `F.meet` f r)
+    app _ f               = t
 
 
 -- | Valid symbols:
@@ -356,24 +380,32 @@ checkSyms m g ok x t = mapM_ cgError errs
                      = Nothing  
                      | s `L.elem` ok                      
                      = Nothing 
-                     | s `F.memberSEnv` γ                 
+                     | s `F.memberSEnv` γ 
                      = Nothing
                      | s `F.memberSEnv` cge_consts g      
                      = Nothing
                      | s `L.elem` biExtra                 
                      = Nothing
+--                      | s `L.elem` (tracePP ("IMMFILDS of " ++ ppshow t') (immFlds t'))
+--                      = Nothing
                      | Just (_,a,_) <- envLikeFindTy' s g 
-                     = if a `L.elem` validAsgn
-                         then Nothing
-                         else Just $ errorAsgnInRef l x t a 
+                     = if a `L.elem` validAsgn then Nothing
+                                               else Just $ errorAsgnInRef l x t a 
                      | otherwise                          
                      = Just $ errorUnboundSyms l (F.symbol x) t s m
 
     l                = srcPos x
     biReserved       = F.symbol <$> ["func", "obj"]
-    biExtra          = F.symbol <$> ["bvor", "bvand", "builtin_BINumArgs"]
+    biExtra          = F.symbol <$> ["bvor", "bvand", "builtin_BINumArgs", "offset"]
     x_sym            = F.symbol x
     validAsgn        = [ReadOnly,ImportDecl,WriteLocal] 
+
+--     immFlds tt       | Just (TCons m ms _) <- expandType NonCoercive g tt 
+--                      = [ F.qualifySymbol (rTypeValueVar tt) f 
+--                             | ((f,InstanceMember), FieldSig _ _ m _) <- M.toList ms
+--                             , isImmutable m ]
+--                      | otherwise 
+--                      = []
 
 
 -- | `addObjectFields g (x,t)`
@@ -399,7 +431,8 @@ addObjectFields msg chk True  g (x,a,t)
   where
     xts       = [ (fd f, ty o tf) | FieldSig f o m tf <- ms, isImmutable m ]
 
-    fd        = mkFieldB x 
+    -- This should remain as is: x.f bindings are not going to change
+    fd        = mkQualSym x 
 
     --
     -- FIXME : Is substThis necessary here ???
@@ -423,7 +456,8 @@ addObjectFields msg chk True  g (x,a,t)
     defMut _ f = f 
 
 
-envAdd x t g = envAdds "envAdd" [(x,t)] g
+envAdd x t g                 = envAdds "envAdd" [(x,t)] g
+-- envAddNoChecksNoFields x t g = envAdds' False False "envAdd" [(x,t)] g
 
 
 instance PP F.IBindEnv where
@@ -458,17 +492,17 @@ addInvariant g t
   where
     -- | typeof 
     typeof t@(TApp tc _ o)  i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup tc i
-    typeof t@(TRef _ _ _) _   = t `strengthen` F.Reft ((vv t,) [ F.RConc $ typeofExpr $ F.symbol "object" ])
-    typeof t@(TCons _ _ _) _  = t `strengthen` F.Reft ((vv t,) [ F.RConc $ typeofExpr $ F.symbol "object" ])
+    typeof t@(TRef _ _ _) _   = t `nubstrengthen` F.Reft ((vv t,) [ F.RConc $ typeofExpr $ F.symbol "object" ])
+    typeof t@(TCons _ _ _) _  = t `nubstrengthen` F.Reft ((vv t,) [ F.RConc $ typeofExpr $ F.symbol "object" ])
     typeof   (TFun a b c _) _ = TFun a b c typeofReft
     typeof t                _ = t
     -- | Truthy
     truthy t                  | isTObj t
-                              = t `strengthen` F.Reft ((vv t,) [ F.RConc $ F.eProp $ vv t ])
+                              = t `nubstrengthen` F.Reft ((vv t,) [ F.RConc $ F.eProp $ vv t ])
                               | otherwise          = t
 
     strengthenOp t o r        | L.elem r (ofRef o) = t
-    strengthenOp t _ r        | otherwise          = t `strengthen` r
+    strengthenOp t _ r        | otherwise          = t `nubstrengthen` r
     typeofReft                = F.Reft $ (vv t,) [ F.RConc $ typeofExpr $ F.symbol "function"
                                                  , F.RConc $ F.eProp    $ vv t                ]
     typeofExpr s              = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t]) 
@@ -477,7 +511,7 @@ addInvariant g t
     ofRef (F.Reft (s, as))    = (F.Reft . (s,) . single) <$> as
 
     -- | { f: T } --> hasProperty("f", v)
-    hasProp t                   = t `strengthen` keyReft (boundKeys g t) 
+    hasProp t                   = t `nubstrengthen` keyReft (boundKeys g t) 
 
     keyReft                   = F.Reft . (vv t,) . (F.RConc . F.PBexp . hasPropExpr <$>) 
     hasPropExpr s             = F.EApp (F.dummyLoc (F.symbol "hasProperty")) 
@@ -485,9 +519,9 @@ addInvariant g t
 
     -- | extends class / interface
     hierarchy t@(TRef c _ _)  | isClassType g t 
-                              = t `strengthen` rExtClass t (name <$> classAncestors g c)
+                              = t `nubstrengthen` rExtClass t (name <$> classAncestors g c)
                               | otherwise
-                              = t `strengthen` rExtIface t (name <$> interfaceAncestors g c)
+                              = t `nubstrengthen` rExtIface t (name <$> interfaceAncestors g c)
     hierarchy t               = t
 
     name (QN AK_ _ _ s)       = s
@@ -499,6 +533,26 @@ addInvariant g t
                               $ [ F.expr $ rTypeValueVar t, F.expr $ F.symbolText c ]
     vv                        = rTypeValueVar
     sym s                     = F.dummyLoc $ F.symbol s
+
+
+----------------------------------------------------------------------------------------
+nubstrengthen                   :: RefType -> F.Reft -> RefType
+----------------------------------------------------------------------------------------
+nubstrengthen (TApp c ts r) r'  = TApp c ts  $ r' `meetReft` r 
+nubstrengthen (TRef c ts r) r'  = TRef c ts  $ r' `meetReft` r 
+nubstrengthen (TCons ts m r) r' = TCons ts m $ r' `meetReft` r 
+nubstrengthen (TVar α r)    r'  = TVar α     $ r' `meetReft` r 
+nubstrengthen (TFun a b c r) r' = TFun a b c $ r' `meetReft` r
+nubstrengthen t _               = t                         
+
+meetReft r@(F.Reft (v, ras)) r'@(F.Reft (v', ras'))
+  | v == v'            = F.Reft (v , L.nubBy cmp $ ras  ++ ras')
+  | v == F.dummySymbol = F.Reft (v', L.nubBy cmp $ ras' ++ (ras `F.subst1`  (v , F.EVar v')))
+  | otherwise          = F.Reft (v , L.nubBy cmp $ ras  ++ (ras' `F.subst1` (v', F.EVar v )))
+  where
+    cmp = (==) `on` (show . F.toFix)
+
+
 
 
 ---------------------------------------------------------------------------------------
@@ -701,7 +755,7 @@ freshenCGEnvM g
 
 freshenModuleDefM g (a, m)
   = do  vars     <- E.envFromList <$> mapM f (E.envToList $ m_variables m)
-        types    <- E.envFromList <$> mapM h (E.envToList $ m_types m)        
+        types    <- E.envFromList <$> mapM h (E.envToList $ m_types m)
         return (a,m { m_variables = vars, m_types = types })
   where
     f (x, (v,w,t,i)) =
@@ -731,7 +785,7 @@ subType l err g t1 t2 =
       let xs  = [(symbolId l x,(t,a,i)) | (x, Just (t,a,i)) <- rNms t1' ++ rNms t2 ]
       let ys  = [(symbolId l x,(t,a,i)) | (x,      (t,a,i)) <- E.envToList $ cgeAllNames g ]
       ----  when (toType t1 /= toType t2) (errorstar (ppshow t1 ++ " VS " ++ ppshow t2))
-      -- g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++ ppshow "\nLHS: " ++ ppshow t1 ++ "\nRHS: " ++ ppshow t2 ++ "\n") $ xs ++ ys) g
+      -- g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++ ppshow "\nLHS: " ++ ppshow t1 ++ "\nRHS: " ++ ppshow t2 ++ "\n" ++ "Adding binders: " ++ ppshow (fst <$> (xs ++ ys))) $ xs ++ ys) g
       g'     <- envAdds "subtype" (xs ++ ys) g
       modify  $ \st -> st {cs = c g' (t1', t2) : (cs st)}
   where

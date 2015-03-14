@@ -165,6 +165,9 @@ data CoercionKind = Coercive | NonCoercive
 --    i.e. if the top-level is 'AssignsFields' then fields get Mutable
 --    (overriding their current mutability).
 --
+--    if CoercionKind == Coercive, then primitive types will be treated as their
+--    object counterparts, i.e. String, Number, Boolean. 
+--
 ---------------------------------------------------------------------------
 expandType :: (PPR r, EnvLike r g, Data r)
            => CoercionKind -> g r -> RType r -> Maybe (RType r)

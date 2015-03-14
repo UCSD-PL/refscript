@@ -978,6 +978,10 @@ interface InheritedMut {
 } 
 
 
+// TRY OUT offset
+/*@ measure offset :: forall A B C . (x:A, y:B) => C */
+
+
 /*************************************************************************
  *
  *      OPTIONAL FIELDS

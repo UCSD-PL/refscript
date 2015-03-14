@@ -153,7 +153,8 @@ extractCtor γ (TClass x)
   = do  d        <- resolveTypeInEnv γ x
         (vs, es) <- expand'' InstanceMember γ d
         case M.lookup (ctorSymbol, InstanceMember) es of
-          Just (ConsSig t) -> fixRet x vs t
+        -- XXX : disabling fixret for now
+          Just (ConsSig t) -> return $ mkAll vs t -- fixRet x vs t
           _                -> return $ defCtor x vs
   where
 

@@ -1,7 +1,7 @@
 class Foo {
   public x:number;
 
-  /*@ new () => void */
+  /*@ new () => Foo<M> */
   constructor() { this.x = 3; }
 
   /*@ bar: (this: Foo<Mutable>): { void | true } */

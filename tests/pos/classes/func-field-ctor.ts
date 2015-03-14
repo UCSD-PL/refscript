@@ -2,7 +2,7 @@
 class Foo {
 
   public bar: () => number;
-  /*@ new () => { void | true } */
+  /*@ new () => { Foo<M> | true } */
   constructor() {
     this.bar = function() 
     /*@ <anonymous> () => number */

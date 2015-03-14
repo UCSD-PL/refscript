@@ -2,10 +2,10 @@
 /*@ class Foo<M,A> */
 class Foo<A> { 
 
-	/*@ f : [#Mutable] A */ 
+	/*@ f : [Mutable] A */ 
 	public f;
   
-	/*@ new(x:A) => void */
+  /*@ new(x:A) => Foo<M,A> */
 	constructor(x) {
 		this.f = x;
 	}

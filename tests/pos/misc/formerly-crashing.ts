@@ -15,6 +15,5 @@ function foo(x, y) {
 }
 
 class Node {
-  /*@ new () => void */
   constructor() { }
 }

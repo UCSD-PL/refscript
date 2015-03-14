@@ -40,11 +40,11 @@ module Language.Nano.Liquid.Types (
   -- * Predicates On RefType 
   , isTrivialRefType
 
-  -- * Monadic map 
-  , mapReftM
-
   -- * Useful Operations
-  , foldReft, efoldRType, AnnTypeR
+  , foldReft, efoldRType, emapReft, mapReftM
+  
+  -- * Annotations
+  , AnnTypeR
 
   -- * Accessing Spec Annotations
   , getSpec, getRequires, getEnsures, getAssume, getAssert
@@ -58,7 +58,7 @@ module Language.Nano.Liquid.Types (
   , zipType
 
   -- * 'this' related substitutions
-  , substThis, unqualifyThis, mkFieldB
+  , substThis, unqualifyThis, mkQualSym, mkOffset
 
 
   ) where
@@ -67,6 +67,8 @@ import           Data.Maybe              (fromMaybe, catMaybes, maybeToList)
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as HM
 import qualified Data.Map.Strict         as M
+import qualified Data.Text               as Text
+
 -- import qualified Data.HashSet            as S
 import           Data.Monoid                        (mconcat)
 import qualified Data.Traversable        as T
@@ -96,6 +98,7 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Errors
+import qualified Language.Fixpoint.Visitor as V
   
 -- import           Debug.Trace                        (trace)
 
@@ -416,6 +419,7 @@ efoldReft g f = go
                                 where γ' = foldr (efoldExt g) γ xts
     go γ z (TAnd ts)        = gos γ z ts 
     go γ z (TCons _ bs r)   = f γ' r $ gos γ' z (f_type <$> M.elems bs)
+                                -- PV: using the offset(x,"f") at the moment
                                 where γ' = foldr (efoldExt' g) γ $ M.elems bs
     go _ z (TClass _)       = z
     go _ z (TModule _)      = z
@@ -450,7 +454,7 @@ efoldRType g f                 = go
                                           
     go γ z   (TAnd ts)         = gos γ z ts 
 
-    go γ z t@(TCons _ bs _ )   = f γ t $ gos γ' z (f_type <$> M.elems bs) 
+    go γ z t@(TCons _ bs _ )   = f γ' t $ gos γ' z (f_type <$> M.elems bs) 
                                    where γ' = M.foldr (efoldExt' g) γ bs
 
     go γ z t@(TClass _)        = f γ t z
@@ -709,6 +713,7 @@ substThis :: (IsLocated a, F.Symbolic a)
 substThis g (x,t) = F.subst su
   where
     su            = F.mkSubst $ (this, F.expr $ F.symbol x) : fieldSu
+    this          = F.symbol $ builtinOpId BIThis 
 
     fieldSu       | Just (TCons m fs _) <- expandType Coercive g t 
                   = [ subPair f | ((f,im), FieldSig _ _ m _) <- M.toList fs
@@ -716,12 +721,15 @@ substThis g (x,t) = F.subst su
                   | otherwise                              
                   = []
 
-    this          = F.symbol $ builtinOpId BIThis 
     im            = InstanceMember
     qFld x f      = F.qualifySymbol (F.symbol x) f  
     subPair f     = (qFld this f, F.expr $ qFld x f)
 
 
+mkOffset :: F.Symbolic k => k -> String -> F.Expr
+mkOffset k v      = F.EApp (F.dummyLoc $ F.symbol "offset") [F.eVar k, F.expr $ Text.pack v]
+
+ 
 -- | Substitute occurences of 'this.f' in type @t'@, with 'f'
 -------------------------------------------------------------------------------
 unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
@@ -738,8 +746,25 @@ unqualifyThis g t = F.subst $ F.mkSubst fieldSu
     im            = InstanceMember
     qFld x f      = F.qualifySymbol (F.symbol x) f  
     subPair f     = (qFld this f, F.expr f)
+ 
 
 
+-- -- 
+-- -- Substitute in t : offset(this,"f") --> f
+-- --
+-- -------------------------------------------------------------------------------
+-- unqualifyThis :: CGEnv -> RefType -> RefType
+-- -------------------------------------------------------------------------------
+-- unqualifyThis g   = emapReft (\_ -> V.trans vv () ()) [] 
+--   where
+--     vv            = V.defaultVisitor { V.txExpr = te }
+-- 
+--     te _ e@(F.EApp o [F.EVar k,F.ESym (F.SL v)]) 
+--                   | F.symbol "offset" == F.symbol o
+--                   , F.symbol "this"   == F.symbol k
+--                   = F.eVar v
+--     te _ e        = e
 
-mkFieldB x f = Loc (srcPos x) (F.qualifySymbol (F.symbol x) (F.symbol f))
+
+mkQualSym    x f = F.qualifySymbol (F.symbol x) (F.symbol f)
 

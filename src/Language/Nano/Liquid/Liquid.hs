@@ -28,6 +28,7 @@ import           Language.Nano.Syntax.PrettyPrint
 
 import qualified Language.Fixpoint.Config           as C
 import qualified Language.Fixpoint.Types            as F
+import qualified Language.Fixpoint.Names            as N
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Interface        (solve)
@@ -398,7 +399,7 @@ consStmt _ s
 consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consVarDecl g v@(VarDecl l x (Just e))
-  = case  scrapeVarDecl v of
+  = case scrapeVarDecl v of
       -- WriteLocal 
       [ ]     ->  mseq (consExpr g e Nothing) $ \(y,gy) -> do
                     t       <- safeEnvFindTy y gy
@@ -443,7 +444,9 @@ consClassElts l g d@(ID nm _ vs _ es) cs
     fs = [ (ql f,(t,ro,ii)) | ((_,im), (FieldSig f _ m t)) <- M.toList es
                             , isImmutable m ]
     -- TODO: Make location more precise
-    ql f      = Loc (srcPos l) $ F.qualifySymbol (F.symbol $ builtinOpId BIThis) f
+    --
+    -- PV: qualified name here used as key -> ok 
+    ql        = mkQualSym $ F.symbol $ builtinOpId BIThis
     im        = InstanceMember
     ro        = ReadOnly
     ii        = Initialized
@@ -451,21 +454,21 @@ consClassElts l g d@(ID nm _ vs _ es) cs
     thisInfo  = [(this,(this_t,ReadOnly,Initialized))]
     this      = Loc (srcPos l) $ builtinOpId BIThis
 
--- | nonstructor
 ------------------------------------------------------------------------------------
 consClassElt :: CGEnv -> IfaceDef F.Reft -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
-consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body) 
-  = do  g0       <- envAdd ctorExit (mkCtorExitTy,ReadOnly,Initialized) g
+consClassElt g d@(ID nm _ vs _ ms) (Constructor l xs body) 
+  = do  g0       <- envAdd ctorExit (mkCtorExitTy, ReadOnly, Initialized) g
         g1       <- envAdds "classElt-ctor-1" superInfo g0
-        ts       <- cgFunTys l ctor xs =<< remThisBinding <$> mkCtorTy
+        ts       <- cgFunTys l ctor xs ctorTy
         forM_ ts  $ consFun1 l g1 ctor xs body
   where 
-
-    -- XXX        : 'this' will not appear in the code but it might appear in
-    --              refinements, so add it in scope here.
+    -- 
+    -- 'this' will not appear in the code but it might 
+    -- appear in refinements so add in scope 
+    --
     this_t        = TRef nm (tVar <$> vs) fTop
-    thisInfo      = [(this,(this_t,ReadOnly,Initialized))]
+    thisInfo      = [(this, (this_t, ReadOnly, Initialized))]
 
     this          = Loc (srcPos l) $ builtinOpId BIThis
     ctor          = Loc (srcPos l) $ builtinOpId BICtor
@@ -476,35 +479,37 @@ consClassElt g d@(ID nm _ vs _ _) (Constructor l xs body)
                   = [(super,(t,ReadOnly,Initialized))]
                   | otherwise
                   = []
-
-    -- XXX        : * Keep the right order of fields
-    --              * Make the return object immutable to avoid contra-variance
-    --                checks at the return from the constructor.
-    --              * Exclude __proto__ field 
-    mkCtorExitTy  = mkFun (vs,Nothing,bs,tVoid)
-      where 
+    --
+    -- * Keep the right order of fields
+    -- 
+    -- * Make the return object immutable to avoid contra-variance
+    --   checks at the return from the constructor.
+    -- 
+    -- * Exclude __proto__ field 
+    -- 
+    mkCtorExitTy  = mkFun (vs, Nothing, bs, 
+                           this_t `nubstrengthen` F.Reft (F.vv Nothing, fbind <$> out))
+      where
         bs        | Just (TCons _ ms _) <- expandType Coercive g this_t
                   = sortBy c_sym [ B f t' | ((_,InstanceMember),(FieldSig f _ m t)) <- M.toList ms
                                           , F.symbol f /= F.symbol "__proto__" 
                                           , let t' = unqualifyThis g this_t t ]
                   | otherwise
                   = []
+        out       | Just (TCons _ ms _) <- expandType Coercive g this_t
+                  = [ f | ((_,InstanceMember),(FieldSig f _ m t)) <- M.toList ms
+                        , isImmutable m, F.symbol f /= F.symbol "__proto__" ]
+                  | otherwise
+                  = []
 
+    fbind f       = F.RConc $ F.PAtom F.Eq (mkOffset v_sym $ F.symbolString f) (F.eVar f)
+    -- fbind f       = F.RConc $ F.PAtom F.Eq (F.eVar $ F.symbol "this" `F.qualifySymbol` f) (F.eVar f)
+
+    v_sym         = F.symbol $ F.vv Nothing
     c_sym         = on compare b_sym
 
-    -- FIXME      : Do case of mutliple overloads 
-    mkCtorTy      | [ConsAnn (ConsSig t)] <- ann_fact l,
-                    Just t'               <- fixRet $ mkAll vs t
-                  = return t'
-                  | otherwise 
-                  = die $ unsupportedNonSingleConsTy (srcPos l)
-
-    -- FIXME      : Do case of mutliple overloads 
-    --              Making the return type immutable.
-    fixRet t      | Just (vs,Nothing,bs,_)  <- bkFun t
-                  = Just $ mkFun (vs, Nothing , bs, tVoid)
-                  | otherwise 
-                  = Nothing
+    -- This works now cause each class is required to have a constructor 
+    ctorTy        = mkAnd [mkAll vs $ remThisBinding t | ConsSig t <- M.elems ms ]
 
 -- | Static field
 consClassElt g dfn (MemberVarDecl l True x (Just e))
@@ -607,7 +612,7 @@ consExpr g (IntLit l i) _
 -- Assuming by default 32-bit BitVector
 consExpr g (HexLit l x) _
   | Just e <- bitVectorValue x
-  = Just <$> envAddFresh l (tBV32 `strengthen` e, WriteLocal, Initialized) g
+  = Just <$> envAddFresh l (tBV32 `nubstrengthen` e, WriteLocal, Initialized) g
   | otherwise
   = Just <$> envAddFresh l (tBV32, WriteLocal, Initialized) g
 
@@ -738,7 +743,7 @@ consExpr g (DotRef l e f) to
           | F.symbol "Array" == s && F.symbol "length" == F.symbol f -> 
               consExpr g' (CallExpr l (DotRef l (vr x) (Id l "_get_length_")) []) to
 
-        -- Do not strengthen enumeration fields
+        -- Do not nubstrengthen enumeration fields
         Just (TEnum _,t,_) -> Just <$> envAddFresh l (t,ReadOnly,Initialized) g'
 
         Just (_,t,m)       -> Just <$> envAddFresh l (mkTy m x te t,WriteLocal,Initialized) g'
@@ -747,7 +752,7 @@ consExpr g (DotRef l e f) to
   where
     vr         = VarRef $ getAnnotation e
 
-    mkTy m x te t | isImmutable m  = fmap F.top t `strengthen` F.usymbolReft (mkFieldB x f)
+    mkTy m x te t | isImmutable m  = fmap F.top t `nubstrengthen` F.usymbolReft (mkQualSym x f)
                   | otherwise      = substThis g (x,te) t
 
 -- | e1[e2]
@@ -780,7 +785,7 @@ consExpr g (ObjectLit l bs) _
 -- | new C(e, ...)
 consExpr g (NewExpr l e es) _
   = mseq (consExpr g e Nothing) $ \(x,g') -> do
-      t       <- safeEnvFindTy x g'
+      t <- safeEnvFindTy x g'
       case extractCtor g t of
         Just ct -> consCall g l "constructor" (FI Nothing ((,Nothing) <$> es)) ct
         Nothing -> cgError $ errorConstrMissing (srcPos l) t 
@@ -829,7 +834,7 @@ consDeadCode g l e t
   = do subType l e g t tBot
        return Nothing
     where
-       tBot = t `strengthen` F.bot (rTypeR t)
+       tBot = t `nubstrengthen` F.bot (rTypeR t)
 
 -- | UpCast(x, t1 => t2)
 consUpCast g l x _ t2

@@ -1,5 +1,5 @@
 
-/*@ qualif Add(v: number, n: number, m: number): v = m + n */
+/*@ qualif Add(v: number, n: number, m: number): v < m + n */
 
 /*@ lin_solve :: () => void */
 function lin_solve() {

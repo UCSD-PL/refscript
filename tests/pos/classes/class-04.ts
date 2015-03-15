@@ -19,7 +19,7 @@ class CP extends P implements ICPoint {
   /*@ c : { string | v = "red" } */
   public c: string;
    
-  /*@ new (c: { string | v = "red" }) => void */
+  /*@ new (c: { string | v = "red" }) => CP<M> */
   constructor (c: string) { super(1); this.c = c; }
 }
 

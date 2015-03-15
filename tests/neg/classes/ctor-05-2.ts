@@ -8,6 +8,8 @@ module K {
 
         /*@ y0 : [Immutable] { string | v = "" } */
         public y0 = "";
+
+        /*@ new () => { A<M> | true } */
         constructor() {}
       }
 
@@ -21,6 +23,7 @@ module Mod {
     /*@ k : [Immutable] { string | v = "K" } */
     public k = "K";  
 
+    /*@ new () => { AA<M> | true } */
     constructor() {
       super();
     }
@@ -34,6 +37,7 @@ module N {
     /*@ k : [Immutable] { string | v = "KK" } */
     public k: string;
 
+    /*@ new () => BB<M> */
     constructor() {
       super();
       this.l = "L";

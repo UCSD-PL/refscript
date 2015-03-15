@@ -6,7 +6,7 @@ class BankAccount {
 	/*@  g : { string | v = "a" } */
 	public g : string = "a";
   
-	/*@ new (x: { number | v > 0 } ) => void */
+  /*@ new (x: { number | v > 0 } ) => BankAccount<M> */
 	constructor(x : number) {
 		assert( x > 0 );
 		// assert(this.g === "a");

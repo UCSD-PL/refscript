@@ -3,7 +3,7 @@
 interface Foo {}
 
 class FooImpl implements Foo {
-  /*@ new() => {void | true} */
+/*@ new() => { Foo<M> | true} */
   constructor() { }
 }
 

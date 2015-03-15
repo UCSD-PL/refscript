@@ -118,7 +118,9 @@ declare function builtin_OpAdd(a: any, b: any): any;
 declare function builtin_OpSub(a: number, b: number): number;
 
 /*@ builtin_OpMul :: 
-    (x: number, y: number) => { v:number | v = x * y } 
+    (x: number, y: number) => { v:number | [ v = x * y ;
+                                             (x >= 0 && y >= 0) => v >= 0 ;
+                                             (x <= 0 && y <= 0) => v >= 0 ] } 
  */
 declare function builtin_OpMul(a: number, b: number): number;
 
@@ -451,6 +453,7 @@ interface Math {
     random(): number;
     round(x: number): number;
     sin(x: number): number;
+    /*@ sqrt : (x:{number | v >= 0}) : {number | v = 0 <=> x = 0} */
     sqrt(x: number): number;
     tan(x: number): number;
 }

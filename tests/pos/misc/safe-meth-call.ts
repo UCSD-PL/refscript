@@ -1,5 +1,5 @@
 class Tree {
-  /*@ new() => {void | true} */
+/*@ new() => {Tree<M> | true} */
   constructor() {}
 
   /*@ root : TreeNode<Immutable> + null */

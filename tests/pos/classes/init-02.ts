@@ -1,7 +1,7 @@
 
 class Foo {
   public f: number;
-  /*@ new (id: number) => { void | true } */
+  /*@ new (id: number) => { Foo<M> | true } */
   constructor(a: number) { this.f = a; }
 }
 

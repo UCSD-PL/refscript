@@ -321,15 +321,16 @@ tcClassElt :: PPRSF r
            -> ClassElt (AnnSSA r) 
            -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
-tcClassElt γ d@(ID nm _ vs _ _ ) (Constructor l xs body) 
-  = do  cTy      <- mkCtorTy
-        its      <- tcFunTys l ctor xs cTy
+tcClassElt γ d@(ID nm _ vs _ ms) (Constructor l xs body) 
+  = do  its      <- tcFunTys l ctor xs ctorTy
         body'    <- foldM (tcFun1 γ'' l ctor xs) body its
         return    $ Constructor l xs body'
   where 
     ctor          = builtinOpId BICtor
     ctorExit      = builtinOpId BICtorExit
     super         = builtinOpId BISuper
+
+    this_t        = TRef nm (tVar <$> vs) fTop
 
     γ'            | Just t <- extractParent'' γ d 
                   = tcEnvAdd super (t,ReadOnly,Initialized) γ
@@ -342,9 +343,9 @@ tcClassElt γ d@(ID nm _ vs _ _ ) (Constructor l xs body)
     --              * Make the return object immutable to avoid contra-variance
     --                checks at the return from the constructor.
     --              * Exclude __proto__ field 
-    mkCtorExitTy  = mkFun (vs,Nothing,bs,tVoid)
+    mkCtorExitTy  = mkFun (vs, Nothing, bs, this_t) -- tVoid)
       where 
-        bs        | Just (TCons _ ms _) <- expandType Coercive γ (TRef nm (tVar <$> vs) fTop)
+        bs        | Just (TCons _ ms _) <- expandType Coercive γ this_t
                   = sortBy c_sym [ B s t | ((_,InstanceMember),(FieldSig s _ _ t)) <- M.toList ms 
                                          , F.symbol s /= F.symbol "__proto__" ]
                   | otherwise
@@ -352,18 +353,21 @@ tcClassElt γ d@(ID nm _ vs _ _ ) (Constructor l xs body)
     
     c_sym         = on compare b_sym
 
-    -- FIXME      : Do case of mutliple overloads 
-    mkCtorTy      | [ConsAnn (ConsSig t)] <- ann_fact l,
-                    Just t'               <- fixRet $ mkAll vs t
-                  = return t'
-                  | otherwise 
-                  = die $ unsupportedNonSingleConsTy (srcPos l)
-                              
-    -- FIXME      : Do case of mutliple overloads 
-    fixRet t      | Just (vs,Nothing,bs,_)  <- bkFun t
-                  = Just $ mkFun (vs, Nothing , bs, tVoid)
-                  | otherwise 
-                  = Nothing
+    -- This works now cause each class is required to have a constructor 
+    ctorTy        = mkAnd [mkAll vs $ remThisBinding t | ConsSig t <- M.elems ms ]
+-- 
+--     -- FIXME      : Do case of mutliple overloads 
+--     mkCtorTy      | [ConsAnn (ConsSig t)] <- ann_fact l,
+--                     Just t'               <- {- fixRet $ -} Just $ mkAll vs t
+--                   = return t'
+--                   | otherwise 
+--                   = die $ unsupportedNonSingleConsTy (srcPos l)
+--                               
+-- --     -- FIXME      : Do case of mutliple overloads 
+-- --     fixRet t      | Just (vs,Nothing,bs,_)  <- bkFun t
+-- --                   = Just $ mkFun (vs, Nothing , bs, tVoid)
+-- --                   | otherwise 
+-- --                   = Nothing
 
 -- | Static field
 --

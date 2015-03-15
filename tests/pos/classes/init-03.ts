@@ -4,7 +4,7 @@ class Foo {
   /*@ f : { number | v = 4 } */
   public f: number;
 
-  /*@ new (id: { number | v = 4 }) => void */
+  /*@ new (id: { number | v = 4 }) => Foo<M> */
   constructor(a: number) { this.f = a; }
 
 }

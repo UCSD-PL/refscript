@@ -485,10 +485,10 @@ ctorVisitor ms            = defaultVisitor { endStmt = es } { endExpr = ee }
     ts r@(ReturnStmt l _) = BlockStmt <$> fr_ l <*> ((:[r]) <$> ctorExit l ms)
     ts r                  = return $ r
 
-ctorExit l ms =  ExprStmt  <$> fr 
-             <*> (CallExpr <$> fr
-                           <*> (VarRef <$> fr <*> freshenIdSSA (builtinOpId BICtorExit))
-                           <*> mapM ((VarRef <$> fr <*>) . return . mkCtorId l) ms)
+ctorExit l ms 
+  = do  m     <- VarRef <$> fr <*> freshenIdSSA (builtinOpId BICtorExit)
+        es    <- mapM ((VarRef <$> fr <*>) . return . mkCtorId l) ms
+        ReturnStmt <$> fr <*> (Just <$> (CallExpr <$> fr <*> return m <*> return es))
   where
     fr = fr_ l
 
@@ -514,7 +514,7 @@ ctorExit l ms =  ExprStmt  <$> fr
 --    if () { _ctor_x_2 = 2; }
 --    // _ctor_x_3 = φ(_ctor_x_2,_ctor_x_0);
 --    
---    _ctor_exit(_ctor_x_3,_ctor_y_1);
+--    return _ctor_exit(_ctor_x_3,_ctor_y_1);
 --
 --  }
 --

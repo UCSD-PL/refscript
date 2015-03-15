@@ -7,7 +7,7 @@ function foo(x: Node) {
 }
 
 class Node {
-  /*@ new () => void */
+  /*@ new () => Node<M> */
   constructor() { }
 
   /*@ field : [Mutable] number */

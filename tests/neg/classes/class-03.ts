@@ -1,6 +1,8 @@
 
 class Foo<A> { 
 	public f:A;
+
+  /*@ new (x: A) => { Foo<M,A> | true } */
 	constructor(x: A) { this.f = x; }
 }
 

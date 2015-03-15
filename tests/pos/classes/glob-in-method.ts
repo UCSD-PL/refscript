@@ -1,5 +1,5 @@
 class Blah {
-  /*@ new () => void */
+  /*@ new () => Blah<M> */
   constructor() { }
 
   public state = 3;

@@ -17,4 +17,4 @@ class Foo {
 
 var z = new Foo(5)
 
-z.bar(6);
+z.bar(5);

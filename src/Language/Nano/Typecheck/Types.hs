@@ -70,7 +70,7 @@ module Language.Nano.Typecheck.Types (
   -- , enumTy
 
   -- * Builtin: Binders
-  , mkId, argId, argTy, returnTy
+  , mkId, argId, mkArgTy, returnTy
 
   -- * Symbols
   , ctorSymbol, callSymbol, stringIndexSymbol, numericIndexSymbol 
@@ -861,7 +861,8 @@ instance F.Symbolic (Prop a) where
 -- | @argBind@ returns a dummy type binding `arguments :: T `
 --   where T is an object literal containing the non-undefined `ts`.
     
-argTy l ts g   = {- tracePP ("argTy: " ++ ppshow ts) $ -} immObjectLitTy l g (pLen : ps') (tLen : ts')
+mkArgTy l ts g   = -- tracePP ("mkArgTy: " ++ ppshow ts) $
+                 immObjectLitTy l g (pLen : ps') (tLen : ts')
   where
     ts'        = take k ts
     ps'        = PropNum l . toInteger <$> [0 .. k-1]

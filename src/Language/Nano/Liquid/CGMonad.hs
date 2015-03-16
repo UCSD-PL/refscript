@@ -429,7 +429,10 @@ addObjectFields msg chk True  g (x,a,t)
               | otherwise
               = envAdds' chk False ("addObjectFields-" ++ msg) xts g
   where
-    xts       = [ (fd f, ty o tf) | FieldSig f o m tf <- ms, isImmutable m ]
+    xts       = [ (fd f, ty o tf) | FieldSig f o m tf <- ms
+                                  , isImmutable m 
+                                  , f /= F.symbol "__proto__" 
+                ]
 
     -- This should remain as is: x.f bindings are not going to change
     fd        = mkQualSym x 

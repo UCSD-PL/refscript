@@ -18,10 +18,10 @@ module Language.Nano.Typecheck.Resolve (
   -- * Ancestors
   , weaken, allAncestors, classAncestors, interfaceAncestors, isAncestor
   , onlyInheritedFields
-  , allFields
+  , fieldSymbols
 
-  -- * Keys
-  , boundKeys
+  -- * Field Access
+  , boundKeys, immFields
 
   -- * Constructors
   , Constructor, {- toConstructor, isConstSubtype, -} sameTypeof, getTypeof
@@ -306,9 +306,9 @@ classAncestorsFromPgm p s = [ t_name l | cur <- maybeToList (HM.lookup s m)
   where ClassHierarchy g m        = pCHA p
 
 ---------------------------------------------------------------------------
-allFields :: StaticKind -> NanoBareR r -> AbsName -> [F.Symbol]
+fieldSymbols :: StaticKind -> NanoBareR r -> AbsName -> [F.Symbol]
 ---------------------------------------------------------------------------
-allFields k p a = HS.toList . HS.unions 
+fieldSymbols k p a = HS.toList . HS.unions 
                 $ HS.fromList . flds <$> classAncestorsFromPgm p a 
   where
     flds a = [ s | ID _ _ _ _ es    <- maybeToList $ resolveTypeInPgm p a
@@ -347,6 +347,17 @@ boundKeys γ t@(TRef _ _ _) | Just t <- expandType Coercive γ t = boundKeys γ 
 boundKeys _ (TCons _ es _) = fst <$> M.keys es 
 boundKeys _ _              = []
 
+---------------------------------------------------------------------------
+immFields :: (PPR r, EnvLike r g) => g r -> RType r -> [(F.Symbol, RType r)]
+---------------------------------------------------------------------------
+immFields γ t 
+  | Just (TCons _ es _) <- expandType Coercive γ t 
+  = [ (x,t) | (_, FieldSig x o m t) <- M.toList es
+            , isImmutable m 
+            , x /= F.symbol "__proto__" 
+    ]
+  | otherwise
+  = []
 
 -----------------------------------------------------------------------
 -- | Constructors

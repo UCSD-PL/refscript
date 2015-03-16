@@ -216,7 +216,11 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     cst       = cge_consts g
     tyBinds   = [(Loc (srcPos l) α, (tVar α, ReadOnly, Initialized)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) $ (,WriteLocal,Initialized) <$> ts
-    argBind   = [(argId l, (argTy l ts (cge_names g), ReadOnly, Initialized))]
+    argBind   = ( argSym, (argTy, ReadOnly, Initialized))
+              : [ (mkQualSym argSym f, (t,ReadOnly, Initialized)) | (f,t) <- immFields g argTy ]
+    argSym    = F.symbol $ argId l
+    argTy     = mkArgTy l ts $ cge_names g
+
     thisBind  = (builtinOpId BIThis,) . (, ReadOnly, Initialized) <$> maybeToList thisTO
 
 

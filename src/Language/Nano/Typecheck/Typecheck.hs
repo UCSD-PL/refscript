@@ -294,7 +294,7 @@ tcFun1 g l f xs body fty
     g1 					         = initFuncEnv g f i vs s xs ts t arg body
     (i, (vs,s,ts,t))     = fty
     arg                  = [(argId $ srcPos l, (aTy, ReadOnly, Initialized))]
-    aTy                  = argTy l ts $ tce_names g
+    aTy                  = mkArgTy l ts $ tce_names g
 
 
 addReturnStmt l t body | isTVoid t 

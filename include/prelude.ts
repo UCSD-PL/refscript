@@ -983,7 +983,7 @@ interface InheritedMut {
 
 
 // TRY OUT offset
-/*@ measure offset :: forall A B C . (x:A, y:B) => C */
+/*@ measure offset :: forall A B . (x:A, y:string) => B */
 
 
 /*************************************************************************

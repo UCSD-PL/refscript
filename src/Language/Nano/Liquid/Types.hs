@@ -748,23 +748,8 @@ unqualifyThis g t = F.subst $ F.mkSubst fieldSu
     subPair f     = (qFld this f, F.expr f)
  
 
-
--- -- 
--- -- Substitute in t : offset(this,"f") --> f
--- --
--- -------------------------------------------------------------------------------
--- unqualifyThis :: CGEnv -> RefType -> RefType
--- -------------------------------------------------------------------------------
--- unqualifyThis g   = emapReft (\_ -> V.trans vv () ()) [] 
---   where
---     vv            = V.defaultVisitor { V.txExpr = te }
--- 
---     te _ e@(F.EApp o [F.EVar k,F.ESym (F.SL v)]) 
---                   | F.symbol "offset" == F.symbol o
---                   , F.symbol "this"   == F.symbol k
---                   = F.eVar v
---     te _ e        = e
-
-
+-------------------------------------------------------------------------------
+mkQualSym :: (F.Symbolic x, F.Symbolic f) => x -> f -> F.Symbol
+-------------------------------------------------------------------------------
 mkQualSym    x f = F.qualifySymbol (F.symbol x) (F.symbol f)
 

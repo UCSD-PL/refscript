@@ -1,5 +1,6 @@
 
-var arr /*@ readonly */ : string[] = [ "a" ];
+/*@ readonly arr :: # */
+var arr = [ "a" ];
 
 /*@ baz :: () => string */
 function baz() : string {  

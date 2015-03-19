@@ -20,7 +20,8 @@ function reduce(me, callback, init) {
 /*@ minIndex :: (arrrr:IArray<number>) => {number | true} */
 function minIndex(arrrr) {
 
-    var arr /*@ readonly */ = arrrr;
+    /*@ readonly arr :: # */
+    var arr = arrrr;
 
     if (arr.length <= 0) return -1;
     

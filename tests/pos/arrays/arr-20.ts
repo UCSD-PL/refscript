@@ -1,4 +1,6 @@
-var garr /*@ readonly */ : number[] = [1,2,3,4];
+
+/*@ readonly garr :: # */
+var garr  : number[] = [1,2,3,4];
 
 /*@ foo :: () => void */
 function foo() : void {

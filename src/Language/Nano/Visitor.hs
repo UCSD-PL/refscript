@@ -359,7 +359,7 @@ transIFDBase f as xs (es,is) = (transClassAnn1 f as xs <$> es, transClassAnn1 f 
 
 transFact f = go
   where
-    go as xs (VarAnn (a,t))    = VarAnn . (a,) $ trans f as xs t  
+    go as xs (VarAnn (a,t))    = VarAnn        $ (a,trans f as xs <$> t)
     go as xs (AmbVarAnn t)     = AmbVarAnn     $ trans f as xs t  
     go as xs (FieldAnn m)      = FieldAnn      $ trans f as xs m
     go as xs (MethAnn  m)      = MethAnn       $ trans f as xs m
@@ -466,7 +466,7 @@ ntransFact f g = go
     go (PhiVarTC v)      = PhiVarTC      $ v
     go (PhiPost v)       = PhiPost       $ v
     go (PhiVarTy (v,t))  = PhiVarTy      $ (v, ntrans f g t)
-    go (VarAnn (a,t))    = VarAnn . (a,) $ ntrans f g t  
+    go (VarAnn (a, t))   = VarAnn        $ (a, ntrans f g <$> t)
     go (AmbVarAnn t)     = AmbVarAnn     $ ntrans f g t  
     go (ExportedElt)     = ExportedElt
     go (ReadOnlyVar)     = ReadOnlyVar
@@ -673,8 +673,8 @@ visibleVars s = [ (ann <$> n,(k,v,a,t,i))   | (n,l,k,a,i) <- hoistBindings s
                                             , t          <- annToType (ann l) n a f
                                             , let v       = visibility l ]
   where
-    annToType _ _ ReadOnly   (VarAnn (_,t)) = [t] -- Hoist ReadOnly vars (i.e. function defs)
-    annToType _ _ ImportDecl (VarAnn (_,t)) = [t] -- Hoist ImportDecl (i.e. function decls)
+    annToType _ _ ReadOnly   (VarAnn (_,t)) = maybeToList t -- Hoist ReadOnly vars (i.e. function defs)
+    annToType _ _ ImportDecl (VarAnn (_,t)) = maybeToList t -- Hoist ImportDecl (i.e. function decls)
     annToType _ _ ReadOnly   (AmbVarAnn t)  = [t] -- Hoist ReadOnly vars (i.e. function defs)
     annToType _ _ ImportDecl (AmbVarAnn t)  = [t] -- Hoist ImportDecl (i.e. function decls)
     annToType _ _ _          _              = [ ]
@@ -816,13 +816,13 @@ scrapeModules pgm@(Nano { code = Src stmts })
     vStmts                         = concatMap . vStmt
 
     vStmt _ (VarDeclStmt _ vds)    = [(ss x,(vdk, vis l, a , t, ui)) | VarDecl l x _ <- vds
-                                                                     , VarAnn (a,t)  <- ann_fact l ]
+                                                                     , VarAnn (a, Just t) <- ann_fact l ]
                                   ++ [(ss x,(vdk, vis l, wg, t, ii)) | VarDecl l x _ <- vds
-                                                                     , AmbVarAnn t   <- ann_fact l ]
+                                                                     , AmbVarAnn t <- ann_fact l ]
     -- The Assignabilities below are overwitten to default values
-    vStmt _ (FunctionStmt l x _ _) = [(ss x,(fdk, vis l, ro, t, ii)) | VarAnn (_,t)  <- ann_fact l ]
-    vStmt _ (FuncAmbDecl l x _)    = [(ss x,(fak, vis l, id, t, ii)) | VarAnn (_,t)  <- ann_fact l ]
-    vStmt _ (FuncOverload l x _)   = [(ss x,(fok, vis l, id, t, ii)) | VarAnn (_,t)   <- ann_fact l ]
+    vStmt _ (FunctionStmt l x _ _) = [(ss x,(fdk, vis l, ro, t, ii)) | VarAnn (_,Just t) <- ann_fact l ]
+    vStmt _ (FuncAmbDecl l x _)    = [(ss x,(fak, vis l, id, t, ii)) | VarAnn (_,Just t) <- ann_fact l ]
+    vStmt _ (FuncOverload l x _)   = [(ss x,(fok, vis l, id, t, ii)) | VarAnn (_,Just t) <- ann_fact l ]
     vStmt p (ClassStmt l x _ _ _)  = [(ss x,(cdk, vis l, ro, TClass  $ nameInPath l p x, ii)) ]
     vStmt p (ModuleStmt l x _)     = [(ss x,(mdk, vis l, ro, TModule $ pathInPath l p x, ii)) ]
     vStmt p (EnumStmt l x _)       = [(ss x,(edk, vis l, ro, TEnum   $ nameInPath l p x, ii)) ]
@@ -1007,7 +1007,7 @@ writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
 scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, Assignability, RType r)]
 ----------------------------------------------------------------------------------
 scrapeVarDecl (VarDecl l _ _) 
-  = [ (VarDeclKind   , a       , t) | VarAnn (a,t)                <- ann_fact l ] 
+  = [ (VarDeclKind   , a       , t) | VarAnn (a, Just t)          <- ann_fact l ] 
  ++ [ (AmbVarDeclKind, ReadOnly, t) | AmbVarAnn t                 <- ann_fact l ] 
  ++ [ (FieldDefKind  , ReadOnly, t) | FieldAnn (FieldSig _ _ _ t) <- ann_fact l ]
  -- The last Assignability value is dummy

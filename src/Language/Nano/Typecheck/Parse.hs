@@ -93,9 +93,12 @@ identifier = T.identifier jsLexer
 idBindP :: Parser (Id SrcSpan, RTypeQ RK Reft)
 idBindP = withinSpacesP $ xyP identifierP dcolon bareTypeP
 
+idBindP' :: Parser (Id SrcSpan, Assignability, Maybe (RTypeQ RK Reft))
+idBindP' = withinSpacesP $ axyP identifierP dcolon typeOrHashP
+  where
+    typeOrHashP = try (Just <$> bareTypeP) 
+               <|>    (char '#' >> return Nothing)
 
-idBindP' :: Parser (Id SrcSpan, Assignability, RTypeQ RK Reft)
-idBindP' = withinSpacesP $ axyP identifierP dcolon bareTypeP
 
 anonFuncP :: Parser (RTypeQ RK Reft)
 anonFuncP = funcSigP
@@ -533,7 +536,7 @@ data RawSpec
 
 data PSpec l r
   = Meas    (Id l, RTypeQ RK r)
-  | Bind    (Id l, Assignability, RTypeQ RK r) 
+  | Bind    (Id l, Assignability, Maybe (RTypeQ RK r))
   | AmbBind (Id l, RTypeQ RK r) 
   | AnFunc  (RTypeQ RK r) 
   | Field   (TypeMemberQ RK r)
@@ -560,9 +563,9 @@ type Spec = PSpec SrcSpan Reft
 parseAnnot :: RawSpec -> Parser Spec
 parseAnnot = go
   where
-    go (RawMeas     (ss, _)) = Meas    <$> patch2  ss <$> idBindP
-    go (RawBind     (ss, _)) = Bind    <$> patch3  ss <$> idBindP'
-    go (RawAmbBind  (ss, _)) = AmbBind <$> patch3' ss <$> idBindP'
+    go (RawMeas     (ss, _)) = Meas    <$> patch2 ss <$> idBindP
+    go (RawBind     (ss, _)) = Bind    <$> patch3 ss <$> idBindP'
+    go (RawAmbBind  (ss, _)) = AmbBind <$> patch2 ss <$> idBindP
     go (RawFunc     (_ , _)) = AnFunc  <$>               anonFuncP
     go (RawField    (_ , _)) = Field   <$>               fieldEltP 
     go (RawMethod   (_ , _)) = Method  <$>               methEltP
@@ -581,7 +584,6 @@ parseAnnot = go
 
 patch2 ss (id,t)   = (fmap (const ss) id ,t)
 patch3 ss (id,a,t) = (fmap (const ss) id ,a,t)
-patch3' ss (id,_,t) = (fmap (const ss) id ,t)
 
 getSpecString :: RawSpec -> String 
 getSpecString = go
@@ -729,7 +731,7 @@ extractFact :: PSpec t r -> Maybe (FactQ RK r)
 ---------------------------------------------------------------------------------
 extractFact = go
   where
-    go (Bind    (_,a,t)) = Just $ VarAnn (a,t)   
+    go (Bind    (_,a,t)) = Just $ VarAnn (a,t)
     go (AmbBind (_,t)  ) = Just $ AmbVarAnn t
     go (Constr  c      ) = Just $ ConsAnn   c   
     go (Field   f      ) = Just $ FieldAnn  f
@@ -759,10 +761,10 @@ mkUq                  = zipWith tx ([0..] :: [Int])
 
 stmtTypeBindings _                = go
   where
-    go (FunctionStmt l f _ _)     = [(f, t) | FuncAnn t     <- ann_fact l ] ++
-                                    [(f, t) | VarAnn  (_,t) <- ann_fact l ]
+    go (FunctionStmt l f _ _)     = [(f, t) | FuncAnn t <- ann_fact l ] ++
+                                    [(f, t) | VarAnn  (_,Just t) <- ann_fact l ]
     go (VarDeclStmt _ vds)        = [(x, t) | VarDecl l x _ <- vds
-                                            , VarAnn  (_,t) <- ann_fact l ]
+                                            , VarAnn  (_, Just t) <- ann_fact l ]
     go _                          = []
 
 celtTypeBindings _                = (mapSnd eltType <$>) . go 
@@ -911,7 +913,7 @@ factTvars = go
     foldUnions (α:αs)       = foldl HS.intersection α αs
     foldUnions _            = HS.empty
 
-    go (VarAnn (_,t))       = tvars t
+    go (VarAnn (_, Just t)) = tvars t
     go (FuncAnn t)          = tvars t
     go (FieldAnn m)         = tvars $ f_type m
     go (MethAnn m)          = tvars $ f_type m

@@ -133,7 +133,7 @@ data FactQ q r
   | EltOverload !IContext  !(TypeMemberQ q r)
   | Overload    !IContext  !(RTypeQ q r)
   -- Type annotations
-  | VarAnn      !(Assignability, RTypeQ q r)
+  | VarAnn      !(Assignability, Maybe (RTypeQ q r))
   | AmbVarAnn   !(RTypeQ q r)
   -- Class member annotations
   | FieldAnn    !(TypeMemberQ q r)
@@ -245,20 +245,21 @@ phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
 factRTypes :: (Show r) => Fact r -> [RType r]
 factRTypes = go
   where
-    go (TypInst _ _ ts)   = ts
-    go (EltOverload _ m)  = [f_type m]
-    go (Overload _ t)     = [t] 
-    go (VarAnn (_,t))     = [t]
-    go (AmbVarAnn t)      = [t]
-    go (UserCast t)       = [t]
-    go (FuncAnn t)        = [t]
-    go (FieldAnn m)       = [f_type m]
-    go (MethAnn m)        = [f_type m]
-    go (StatAnn m)        = [f_type m]
-    go (ConsAnn m)        = [f_type m]
-    go (IfaceAnn ifd)     = f_type . snd <$> M.toList (t_elts ifd)
-    go (ClassAnn (_,e,i)) = concatMap snd e ++ concatMap snd i
-    go f                  = error ("factRTypes: TODO :" ++ show f)
+    go (TypInst _ _ ts)    = ts
+    go (EltOverload _ m)   = [f_type m]
+    go (Overload _ t)      = [t] 
+    go (VarAnn (_,Just t)) = [t]
+    go (VarAnn (_,_))      = [ ]
+    go (AmbVarAnn t)       = [t]
+    go (UserCast t)        = [t]
+    go (FuncAnn t)         = [t]
+    go (FieldAnn m)        = [f_type m]
+    go (MethAnn m)         = [f_type m]
+    go (StatAnn m)         = [f_type m]
+    go (ConsAnn m)         = [f_type m]
+    go (IfaceAnn ifd)      = f_type . snd <$> M.toList (t_elts ifd)
+    go (ClassAnn (_,e,i))  = concatMap snd e ++ concatMap snd i
+    go f                   = error ("factRTypes: TODO :" ++ show f)
 
 
 -----------------------------------------------------------------------------

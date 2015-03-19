@@ -13,11 +13,9 @@ function forloop<A>(lo: number, hi: number, body: (x: number, y:A) => A, accum: 
 /*@ minIndex :: ({a: IArray<number> | 0 < (len a)}) => {v:number | within(v,a) } */ 
 function minIndex(a:number[]):number{
 
-  var aa /*@ readonly */ = a; 
+  /*@ readonly aa :: # */
+  var aa = a; 
 	
-  /* step :: (i: { number | within(v,a) }, min: { number | within(v,a) }) 
-          => { number | within(v,a) } 
-   */
 	function step(i: number, min: number) {
 		if (aa[i] < aa[min]) { 
 			return i;

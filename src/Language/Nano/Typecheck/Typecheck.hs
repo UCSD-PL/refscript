@@ -526,11 +526,14 @@ tcStmt γ (WhileStmt l c b)
          Just t  -> do unifyTypeM (srcPos l) γ t tBool
                        pTys         <- mapM (safeTcEnvFindTy l γ) phis
                        (b', γl)     <- tcStmt (tcEnvAdds (zip xs ((,WriteLocal,Initialized) <$> pTys)) γ) b
-                       γout         <- envLoopJoin l γ γl
-                       return        $ (WhileStmt l c' b', γout)  
-    where 
-       xs            = [ mkNextId x | x <- phis ]
-       phis          = [ x | x <- phiVarsAnnot l ]
+                       z            <- tcWA γ dummyExpr (envLoopJoin l γ γl)
+                       case z of
+                         Left e     -> return $ (ExprStmt  l e    , γl)
+                         Right γout -> return $ (WhileStmt l c' b', γout)  
+  where 
+    dummyExpr     = StringLit l "DUMMY_LOOP_REPLACEMENT"
+    xs            = [ mkNextId x | x <- phis ]
+    phis          = [ x | x <- phiVarsAnnot l ]
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt γ (VarDeclStmt l ds)
@@ -576,19 +579,36 @@ tcVarDecl ::  PPRSF r => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e))
   = case scrapeVarDecl v of
-      [ ]     -> do (e', to)   <- tcExprW γ e
-                    return      $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,WriteLocal,Initialized) <$> to)
-      [(_,t)] -> f WriteGlobal <$> tcCast γ l e t
-      _       -> tcError        $ errorVarDeclAnnot (srcPos l) x
-  where
-    f a = (VarDecl l x . Just *** Just . (`tcEnvAdds` γ) . single . (x,) . (,a, Initialized)) 
+      [ ] -> 
+        do  (e', to) <- tcExprW γ e
+            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,WriteLocal,Initialized) <$> to)
+
+      [(_,WriteGlobal,t)] -> 
+        do  (e',t') <- tcCast γ l e t
+            return $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x,(t',WriteGlobal, Initialized))] γ)
+
+      [(_,WriteLocal,t)] -> 
+        do  ([e'], t') <- tcNormalCallW γ l "VarDecl" [e] (localTy t)
+            return      $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (t,WriteLocal,Initialized) γ)
+      [(_,ReadOnly,t)]   -> 
+        do  ([e'], t') <- tcNormalCallW γ l "VarDecl" [e] (localTy t)
+            return      $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (t,ReadOnly,Initialized) γ)
+      -- TODO : more cases
 
 tcVarDecl γ v@(VarDecl l x Nothing)
   = case scrapeVarDecl v of
-      [ ]                   -> tcVarDecl γ $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
-      [(AmbVarDeclKind, t)] -> return      $ (v, Just $ tcEnvAdds [(x, (t,WriteGlobal, Initialized))] γ)
-      [(_, t)]              -> return      $ (v, Just $ tcEnvAdds [(x, (t,WriteGlobal, Uninitialized))] γ)
-      _                     -> tcError     $ errorVarDeclAnnot (srcPos l) x
+      [ ]                    -> tcVarDecl γ $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
+      -- 
+      --
+      --
+      -- TODO 
+      --
+      --
+      --
+      --
+      [(AmbVarDeclKind,_,t)] -> return      $ (v, Just $ tcEnvAdds [(x, (t,WriteGlobal, Initialized))] γ)
+      [(_, _,t)]             -> return      $ (v, Just $ tcEnvAdds [(x, (t,WriteGlobal, Uninitialized))] γ)
+      _                      -> tcError     $ errorVarDeclAnnot (srcPos l) x
 
 -------------------------------------------------------------------------------
 tcAsgn :: PPRSF r 
@@ -668,6 +688,10 @@ tcRetW' γ l Nothing
 tcEW :: PPRSF r => TCEnv r -> ExprSSAR r -> Either Error ((ExprSSAR r), b) -> TCM r ((ExprSSAR r), Maybe b)
 tcEW _ _ (Right (e', t')) = return $  (e', Just t')
 tcEW γ e (Left err)       = (, Nothing) <$> deadcastM (tce_ctx γ) err e 
+
+-- Execute a and if it fails wrap e in a deadcast
+tcWA γ e a = tcWrap a >>= \x -> case x of Right r -> return $ Right r
+                                          Left  l -> Left <$> deadcastM (tce_ctx γ) l e
 
 -------------------------------------------------------------------------------
 tcExprT :: PPRSF r => AnnSSA r -> TCEnv r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
@@ -840,12 +864,12 @@ tcExpr _ e _
 tcCast :: PPRSF r => TCEnv r -> AnnSSA r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
 ---------------------------------------------------------------------------------------
 tcCast γ l e tc 
-  = do  opTy                <- safeTcEnvFindTy l γ (builtinOpId BICastExpr)
-        cid                 <- freshCastId l
-        let γ'               = tcEnvAdd (F.symbol cid) (tc, WriteLocal, Initialized) γ
-        (FI _ [_, e'], t')  <- tcNormalCall γ' l "user-cast" 
-                               (FI Nothing [(VarRef l cid, Nothing),(e, Just tc)]) opTy
-        return               $ (e',t')
+  = do  opTy             <- safeTcEnvFindTy l γ (builtinOpId BICastExpr)
+        cid              <- freshCastId l
+        let γ'            = tcEnvAdd (F.symbol cid) (tc, WriteLocal, Initialized) γ
+        -- (FI _ [_,e'],t') <- tcNormalCall γ' l "user-cast" (FI Nothing [(VarRef l cid, Nothing),(e, Nothing)]) opTy
+        (FI _ [_,e'],t') <- tcNormalCall γ' l "user-cast" (FI Nothing [(VarRef l cid, Nothing),(e, Just tc)]) opTy
+        return            $ (e', t')
 
 
 ---------------------------------------------------------------------------------------
@@ -1274,20 +1298,27 @@ getLoopNextPhiType l γ γl x =
 unifyPhiTypes :: PPRSF r => AnnSSA r -> TCEnv r -> Var r 
                        -> RType r -> RType r -> RSubst r -> TCM r (RType r)
 ----------------------------------------------------------------------------------
-unifyPhiTypes l γ x t1 t2 θ = 
-  case unifys (srcPos l) γ θ [t1] [t2] of  
-    Left  _  -> tcError $ errorEnvJoinUnif (srcPos l) x t1 t2
-    Right θ' | isTUndef t1 -> setSubst θ' >> return (apply θ' $ orUndef t2)
-             | isTUndef t2 -> setSubst θ' >> return (apply θ' $ orUndef t1)
-             | isTNull  t1 -> setSubst θ' >> return (apply θ' $ orNull  t2)
-             | isTNull  t2 -> setSubst θ' >> return (apply θ' $ orNull  t1)
-             -- | isSubtype γ (apply θ' t2) (apply θ' t1) -> setSubst θ' >> return (apply θ' t1)
-             | on (==) (apply θ') t1 t2   -> setSubst θ' >> return (apply θ' t1)
-             | on (==) (apply θ') t1' t2' -> setSubst θ' 
-                                          >> return (apply θ' $ fillNullOrUndef t1 t2 t1)
-             | otherwise   -> tcError $ errorEnvJoin (srcPos l) x (toType t1) (toType t2)
+unifyPhiTypes l γ x t1 t2 θ 
+  | Left _ <- substE
+  = tcError $ errorEnvJoinUnif (srcPos l) x t1 t2
+
+  | Right θ' <- substE 
+  , on (==) (apply θ') t1 t2   
+  = setSubst θ' >> return (apply θ' t1)
+
+  | otherwise 
+  = tcError $ errorEnvJoin (srcPos l) x (toType t1) (toType t2)
+
+    -- Right θ' | isTUndef t1 -> setSubst θ' >> return (apply θ' $ orUndef t2)
+    --          | isTUndef t2 -> setSubst θ' >> return (apply θ' $ orUndef t1)
+    --          | isTNull  t1 -> setSubst θ' >> return (apply θ' $ orNull  t2)
+    --          | isTNull  t2 -> setSubst θ' >> return (apply θ' $ orNull  t1)
+    --          | on (==) (apply θ') t1 t2   -> setSubst θ' >> return (apply θ' t1)
+    --          | on (==) (apply θ') t1' t2' -> setSubst θ' 
+    --                                       >> return (apply θ' $ fillNullOrUndef t1 t2 t1)
+    --          | otherwise   -> tcError $ errorEnvJoin (srcPos l) x (toType t1) (toType t2)
   where
-    -- t12                     = mkUnion [t1,t2]
+    substE                  = unifys (srcPos l) γ θ [t1] [t2]
     (t1', t2')              = mapPair (mkUnion . clear . bkUnion) (t1, t2)
     fillNullOrUndef t1 t2 t | any isMaybeNull  [t1,t2] = fillUndef t1 t2 $ orNull t
                             | otherwise                = t

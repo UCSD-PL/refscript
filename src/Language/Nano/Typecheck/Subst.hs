@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE TupleSections         #-}
 
 module Language.Nano.Typecheck.Subst ( 
   
@@ -112,7 +113,7 @@ instance Free (Fact r) where
   free (Overload _ t)       = free t
   free (EltOverload _ t)    = free t
   free (TCast _ c)          = free c
-  free (VarAnn t)           = free t
+  free (VarAnn (_,t))       = free t
   free (AmbVarAnn t)        = free t
   free (FieldAnn f)         = free f
   free (MethAnn m)          = free m
@@ -186,7 +187,7 @@ instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   apply θ (Overload ξ t)     = Overload ξ    $ apply θ t
   apply θ (EltOverload ξ t)  = EltOverload ξ $ apply θ t
   apply θ (TCast   ξ c)      = TCast ξ       $ apply θ c
-  apply θ (VarAnn t)         = VarAnn        $ apply θ t
+  apply θ (VarAnn (a,t))     = VarAnn . (a,) $ apply θ t
   apply θ (FieldAnn f)       = FieldAnn      $ apply θ f
   apply θ (MethAnn t)        = MethAnn       $ apply θ t
   apply θ (StatAnn t)        = StatAnn       $ apply θ t

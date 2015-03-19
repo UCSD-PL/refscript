@@ -405,25 +405,45 @@ consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv)
 consVarDecl g v@(VarDecl l x (Just e))
   = case scrapeVarDecl v of
       -- WriteLocal 
-      [ ]     ->  mseq (consExpr g e Nothing) $ \(y,gy) -> do
-                    t       <- safeEnvFindTy y gy
-                    Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal,Initialized))] gy
+      [ ] ->  
+        mseq (consExpr g e Nothing) $ \(y,gy) -> do
+          t       <- safeEnvFindTy y gy
+          Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal,Initialized))] gy
 
-      -- WriteGlobal
-      [(_,t)] -> mseq (consExpr g e $ Just t) $ \(y, gy) -> do
-                  ty      <- safeEnvFindTy y gy
-                  fta     <- freshenType WriteGlobal gy l t
-                  _       <- subType l (errorLiquid' l) gy ty  fta
-                  _       <- subType l (errorLiquid' l) gy fta t
-                  Just   <$> envAdd x (fta, WriteGlobal,Initialized) g
+      [(_,WriteGlobal,t)] -> 
+        mseq (consExpr g e $ Just t) $ \(y, gy) -> do
+          ty      <- safeEnvFindTy y gy
+          fta     <- freshenType WriteGlobal gy l t
+          _       <- subType l (errorLiquid' l) gy ty  fta
+          _       <- subType l (errorLiquid' l) gy fta t
+          Just   <$> envAdd x (fta, WriteGlobal,Initialized) g
 
-      _       -> cgError $ errorVarDeclAnnot (srcPos l) x
+      [(_,ReadOnly,t)] -> 
+        mseq (consCall g l "consVarDecl" (FI Nothing [(e, Nothing)]) $ localTy t) $ \(y,gy) -> do
+          t       <- safeEnvFindTy y gy
+          Just   <$> envAdds "consVarDecl" [(x, (t, ReadOnly, Initialized))] gy
+          
+
+      [(_,WriteLocal,t)] -> 
+        mseq (consCall g l "consVarDecl" (FI Nothing [(e, Nothing)]) $ localTy t) $ \(y,gy) -> do
+          t       <- safeEnvFindTy y gy
+          Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal, Initialized))] gy
+
+      _ -> cgError $ errorVarDeclAnnot (srcPos l) x
  
 consVarDecl g v@(VarDecl l x Nothing)
   = case scrapeVarDecl v of
       [ ]                   -> consVarDecl g $ VarDecl l x (Just $ undef l)
-      [(AmbVarDeclKind, t)] -> Just <$> envAdds "consVarDecl" [(x, (t, WriteGlobal, Initialized))] g
-      [(_, t)]              -> Just <$> envAdds "consVarDecl" [(x, (t, WriteGlobal, Uninitialized))] g
+      [(AmbVarDeclKind, _,t)] -> Just <$> envAdds "consVarDecl" [(x, (t, WriteGlobal, Initialized))] g
+      -- 
+      --
+      --
+      -- TODO 
+      --
+      --
+      --
+      --
+      [(_, _,t)]              -> Just <$> envAdds "consVarDecl" [(x, (t, WriteGlobal, Uninitialized))] g
       _                     -> cgError $ errorVarDeclAnnot (srcPos l) x
 
   where
@@ -882,6 +902,7 @@ consCall :: PP a
 
 consCall g l fn ets ft0 
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
+      -- ts <- ltracePP l ("LQ " ++ ppshow fn) <$> T.mapM (`safeEnvFindTy` g') xes 
       ts <- T.mapM (`safeEnvFindTy` g') xes 
       case ol of 
         -- If multiple are valid, pick the first one
@@ -1074,8 +1095,7 @@ consWhile g l cond body
 
 consWhileBase l xs tIs g    
   = do  xts_base           <- mapM (\x -> (x,) <$> safeEnvFindTy x g) xs 
-        xts_base'          <- zipWithM (\(x,t) t' -> 
-                                zipTypeUpM g x t t') xts_base tIs    -- (c)
+        xts_base'          <- zipWithM (\(x,t) t' -> zipTypeUpM g x t t') xts_base tIs    -- (c)
         zipWithM_ (subType l err g) xts_base' tIs         
   where 
     err                      = errorLiquid' l
@@ -1116,18 +1136,12 @@ envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 -- 4. return the extended environment
 --
 envJoin' l g g1 g2 
-  = do  let (t1s, t2s) = unzip $ catMaybes $ getPhiTypes l g1 g2 <$> xs
-
-        -- t1s : the types of the phi vars in the 1st branch 
-        -- t2s : the types of the phi vars in the 2nd branch 
-
-        let (xls, l1s, l2s) = unzip3 $ locals (zip3 xs t1s t2s)
-
+  = do  -- 
         -- LOCALS: as usual
-
+        --
         g1'       <- envAdds "envJoin-0" (zip xls l1s) g1 
         g2'       <- envAdds "envJoin-1" (zip xls l2s) g2
-
+        -- 
         -- t1s and t2s should have the same raw type, otherwise they wouldn't
         -- pass TC (we don't need to pad / fix them before joining).
         -- So we can use the raw type from one of the two branches and freshen
@@ -1139,25 +1153,27 @@ envJoin' l g g1 g2
         l2s'      <- mapM (`safeEnvFindTy` g2') xls
         _         <- zipWithM_ (subType l err g1') l1s' ls 
         _         <- zipWithM_ (subType l err g2') l2s' ls
-
+        -- 
         -- GLOBALS: 
-        
+        --
         let (xgs, gl1s, _) = unzip3 $ globals (zip3 xs t1s t2s)
         (g'',gls) <- freshTyPhis' l g' xgs $ mapFst3 toType <$> gl1s
         gl1s'     <- mapM (`safeEnvFindTy` g1') xgs
         gl2s'     <- mapM (`safeEnvFindTy` g2') xgs
         _         <- zipWithM_ (subType l err g1') gl1s' gls
         _         <- zipWithM_ (subType l err g2') gl2s' gls
-
-        -- PARTIALLY UNINITIALIZED
-        
-        -- let (xps, ps) = unzip $ partial $ zip3 xs t1s t2s
-        
+        -- 
+        -- PARTIALLY UNINITIALIZED        
+        --
+        -- let (xps, ps) = unzip $ partial $ zip3 xs t1s t2s        
         -- If the variable was previously uninitialized, it will continue to be
         -- so; we don't have to update the environment in this case.
-
         return     $ g''
     where
+        (t1s, t2s) = unzip $ catMaybes $ getPhiTypes l g1 g2 <$> xs
+        -- t1s : the types of the phi vars in the 1st branch 
+        -- t2s : the types of the phi vars in the 2nd branch 
+        (xls, l1s, l2s) = unzip3 $ locals (zip3 xs t1s t2s)
         xs    = [ xs | PhiVarTC xs <- ann_fact l] 
         err   = errorLiquid' l 
 

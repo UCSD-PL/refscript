@@ -35,6 +35,7 @@ module Language.Nano.SSA.SSAMonad (
    -- * Access Annotations
    , addAnn, getAnns
    , setGlobs, getGlobs
+   , getAsgn
    , setMeas, getMeas
    , getProgram
 
@@ -45,13 +46,17 @@ module Language.Nano.SSA.SSAMonad (
 
    -- * Tracking Assignability
    , getAssignability
-   , withAssignabilities, withAssignability
+   , withAssignabilities
+   , withAsgnEnv
 
    ) where 
 
 import           Control.Applicative                ((<$>),(<*>))
 import           Control.Monad.State                
 import           Control.Monad.Trans.Except
+
+import           Data.Generics                   
+import           Data.Either (partitionEithers)
 
 import           Data.Maybe                         (fromMaybe) 
 import qualified Data.HashSet                       as S
@@ -154,21 +159,25 @@ setSsaEnvGlob    :: SsaEnv r -> SSAM r ()
 setSsaEnvGlob θ = modify $ \st -> st { glob_names = θ } 
 
 ------------------------------------------------------------------------------------
-withAssignabilities :: IsLocated l => [(Assignability, [Id l])] -> SSAM r a -> SSAM r a 
+withAsgnEnv :: Env Assignability -> SSAM r a -> SSAM r a 
 ------------------------------------------------------------------------------------
-withAssignabilities l act
+withAsgnEnv γ act
   = do zOld  <- assign <$> get
-       modify $ \st -> st { assign = zNew `envUnion` zOld } 
+       modify $ \st -> st { assign = γ `envUnion` zOld } 
        ret   <- act
        modify $ \st -> st { assign = zOld }
        return $ ret
-    where 
-       zNew   = envFromList' [ (x, m) | (m, xs) <- l, x <- xs ]
 
--------------------------------------------------------------------------------------
-withAssignability :: IsLocated l => Assignability -> [Id l] -> SSAM r a -> SSAM r a 
--------------------------------------------------------------------------------------
-withAssignability m xs = withAssignabilities [(m,xs)]
+
+------------------------------------------------------------------------------------
+withAssignabilities :: IsLocated l => [(Id l, Assignability)] -> SSAM r a -> SSAM r a 
+------------------------------------------------------------------------------------
+withAssignabilities l act
+  = do zOld  <- assign <$> get
+       modify $ \st -> st { assign = envFromList' l `envUnion` zOld } 
+       ret   <- act
+       modify $ \st -> st { assign = zOld }
+       return $ ret
 
 -------------------------------------------------------------------------------------
 withinClass :: F.Symbolic x => x -> SSAM r a -> SSAM r a 
@@ -275,6 +284,8 @@ getMeas   = ssa_meas <$> get
 
 getProgram = ssa_pgm <$> get
 
+getAsgn    = assign <$> get
+
 
 -------------------------------------------------------------------------------------
 ssaError :: Error -> SSAM r a
@@ -306,5 +317,4 @@ initState p = SsaST p
                     (max_id p) 
                     Nothing
                     (mkAbsPath [])
-
 

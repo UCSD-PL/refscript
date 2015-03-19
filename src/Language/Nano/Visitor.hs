@@ -32,6 +32,7 @@ module Language.Nano.Visitor (
   -- * Traversals / folds / maps
   , hoistTypes
   , hoistGlobals
+  , hoistBindings
   , visibleVars
   , scrapeModules
   , writeGlobalVars
@@ -55,7 +56,7 @@ import           Data.Generics
 import qualified Data.HashSet                   as H
 import           Data.List                      (partition)
 import qualified Data.Map.Strict                as M
-import           Data.Maybe                     (maybeToList)
+import           Data.Maybe                     (maybeToList, listToMaybe, fromMaybe)
 import qualified Data.IntMap                    as I
 import qualified Data.Traversable               as T
 import           Control.Applicative            ((<$>), (<*>))
@@ -358,7 +359,7 @@ transIFDBase f as xs (es,is) = (transClassAnn1 f as xs <$> es, transClassAnn1 f 
 
 transFact f = go
   where
-    go as xs (VarAnn   t)      = VarAnn        $ trans f as xs t  
+    go as xs (VarAnn (a,t))    = VarAnn . (a,) $ trans f as xs t  
     go as xs (AmbVarAnn t)     = AmbVarAnn     $ trans f as xs t  
     go as xs (FieldAnn m)      = FieldAnn      $ trans f as xs m
     go as xs (MethAnn  m)      = MethAnn       $ trans f as xs m
@@ -465,7 +466,7 @@ ntransFact f g = go
     go (PhiVarTC v)      = PhiVarTC      $ v
     go (PhiPost v)       = PhiPost       $ v
     go (PhiVarTy (v,t))  = PhiVarTy      $ (v, ntrans f g t)
-    go (VarAnn   t)      = VarAnn        $ ntrans f g t  
+    go (VarAnn (a,t))    = VarAnn . (a,) $ ntrans f g t  
     go (AmbVarAnn t)     = AmbVarAnn     $ ntrans f g t  
     go (ExportedElt)     = ExportedElt
     go (ReadOnlyVar)     = ReadOnlyVar
@@ -530,21 +531,21 @@ ntransAnnR f g ann = ann { ann_fact = ntrans f g <$> ann_fact ann}
 -- | AST Traversals
 ---------------------------------------------------------------------------
 
+type BindInfo r = (Id (AnnType r), AnnType r, SyntaxKind, Assignability, Initialization)
 
--- | Find all language level bindings whose scope reaches the current scope. 
+-- | Find all language level bindings in the scope of @s@.
 --   This includes: 
+--
 --    * function definitions/declarations, 
---    * classes, 
+--    * classes,
 --    * modules,
---    * global (annotated) variables
+--    * variables
 --
 --   E.g. declarations in the If-branch of a conditional expression. Note how 
 --   declarations do not escape module or function blocks.
 --
 -------------------------------------------------------------------------------
-hoistBindings :: Data r 
-              => [Statement (AnnType r)] 
-              -> [(Id (AnnType r), AnnType r, SyntaxKind, Assignability, Initialization)]
+hoistBindings :: Data r => [Statement (AnnType r)] -> [BindInfo r]
 -------------------------------------------------------------------------------
 hoistBindings = everythingBut (++) myQ
   where
@@ -561,14 +562,17 @@ hoistBindings = everythingBut (++) myQ
     fSt (EnumStmt l n _)        = ([(n, l { ann_fact = enumAnn n l }, edk, ro, ii)], True)
     fSt _                       = ([], False)
 
-    fExp :: Expression (AnnType r) 
-         -> ([(Id (AnnType r), AnnType r, SyntaxKind, Assignability, Initialization)], Bool)
+    fExp :: Expression (AnnType r) -> ([BindInfo r], Bool)
     fExp _                      = ([], True)
 
-    fVd :: VarDecl (AnnType r) 
-        -> ([(Id (AnnType r), AnnType r, SyntaxKind, Assignability, Initialization)], Bool)
-    fVd (VarDecl l n Nothing)   = ([(n, l, vdk, wg, ui) | VarAnn _    <- ann_fact l], True)
-    fVd (VarDecl l n (Just _))  = ([(n, l, vdk, wg, ii) | AmbVarAnn _ <- ann_fact l], True)
+    fVd :: VarDecl (AnnType r) -> ([BindInfo r], Bool)
+    fVd (VarDecl l n init)      = ([(n, l, vdk, varAsgn l, fromInit init)] ++
+                                   [(n, l, vdk, wg, fromInit init) | AmbVarAnn _  <- ann_fact l], True)
+
+    fromInit (Just _) = ii
+    fromInit _        = ui
+    varAsgn l         = fromMaybe WriteLocal 
+                      $ listToMaybe [ a | VarAnn (a,_) <- ann_fact l ] 
 
     vdk  = VarDeclKind
     fdk  = FuncDefKind
@@ -629,8 +633,8 @@ hoistGlobals = everythingBut (++) myQ
     fExp _              = ([ ], True)
 
     fVd                :: VarDecl (AnnType r) -> ([Id (AnnType r)], Bool)
-    fVd (VarDecl l x _) = ([ x | VarAnn _    <- ann_fact l ] 
-                        ++ [ x | AmbVarAnn _ <- ann_fact l ], True)
+    fVd (VarDecl l x _) = ([ x | VarAnn (WriteGlobal,_) <- ann_fact l ] 
+                        ++ [ x | AmbVarAnn _            <- ann_fact l ], True)
 
 -- | Summarise all nodes in top-down, left-to-right order, carrying some state
 --   down the tree during the computation, but not left-to-right to siblings,
@@ -664,17 +668,16 @@ collectModules ss = topLevel : rest ss
 ---------------------------------------------------------------------------------------
 visibleVars :: Data r => [Statement (AnnSSA r)] -> [(Id SrcSpan, VarInfo r)]
 ---------------------------------------------------------------------------------------
-visibleVars s = [ (ann <$> n,(k,v,a,t,i)) | (n,l,k,a,i) <- hoistBindings s
-                                           , f           <- ann_fact l
-                                           , t           <- annToType (ann l) n a f
-                                           , let v        = visibility l ]
+visibleVars s = [ (ann <$> n,(k,v,a,t,i))   | (n,l,k,a,i) <- hoistBindings s
+                                            , f          <- ann_fact l
+                                            , t          <- annToType (ann l) n a f
+                                            , let v       = visibility l ]
   where
-    annToType _ _ ReadOnly   (VarAnn t)    = [t] -- Hoist ReadOnly vars (i.e. function defs)
-    annToType _ _ ImportDecl (VarAnn t)    = [t] -- Hoist ImportDecl (i.e. function decls)
-    annToType _ _ ReadOnly   (AmbVarAnn t) = [t] -- Hoist ReadOnly vars (i.e. function defs)
-    annToType _ _ ImportDecl (AmbVarAnn t) = [t] -- Hoist ImportDecl (i.e. function decls)
-    annToType _ _ _          _             = [ ]
-
+    annToType _ _ ReadOnly   (VarAnn (_,t)) = [t] -- Hoist ReadOnly vars (i.e. function defs)
+    annToType _ _ ImportDecl (VarAnn (_,t)) = [t] -- Hoist ImportDecl (i.e. function decls)
+    annToType _ _ ReadOnly   (AmbVarAnn t)  = [t] -- Hoist ReadOnly vars (i.e. function defs)
+    annToType _ _ ImportDecl (AmbVarAnn t)  = [t] -- Hoist ImportDecl (i.e. function decls)
+    annToType _ _ _          _              = [ ]
 
 ---------------------------------------------------------------------------------------
 extractQualifiedNames :: PPR r => [Statement (AnnRel r)] 
@@ -812,13 +815,14 @@ scrapeModules pgm@(Nano { code = Src stmts })
 
     vStmts                         = concatMap . vStmt
 
-    vStmt _ (VarDeclStmt _ vds)    = [(ss x,(vdk, vis l, wg, t, ui)) | VarDecl l x _ <- vds
-                                                                     , VarAnn t      <- ann_fact l ]
+    vStmt _ (VarDeclStmt _ vds)    = [(ss x,(vdk, vis l, a , t, ui)) | VarDecl l x _ <- vds
+                                                                     , VarAnn (a,t)  <- ann_fact l ]
                                   ++ [(ss x,(vdk, vis l, wg, t, ii)) | VarDecl l x _ <- vds
                                                                      , AmbVarAnn t   <- ann_fact l ]
-    vStmt _ (FunctionStmt l x _ _) = [(ss x,(fdk, vis l, ro, t, ii)) | VarAnn t      <- ann_fact l ]
-    vStmt _ (FuncAmbDecl l x _)    = [(ss x,(fak, vis l, id, t, ii)) | VarAnn t      <- ann_fact l ]
-    vStmt _ (FuncOverload l x _)   = [(ss x,(fok, vis l, id, t, ii)) | VarAnn t      <- ann_fact l ]
+    -- The Assignabilities below are overwitten to default values
+    vStmt _ (FunctionStmt l x _ _) = [(ss x,(fdk, vis l, ro, t, ii)) | VarAnn (_,t)  <- ann_fact l ]
+    vStmt _ (FuncAmbDecl l x _)    = [(ss x,(fak, vis l, id, t, ii)) | VarAnn (_,t)  <- ann_fact l ]
+    vStmt _ (FuncOverload l x _)   = [(ss x,(fok, vis l, id, t, ii)) | VarAnn (_,t)   <- ann_fact l ]
     vStmt p (ClassStmt l x _ _ _)  = [(ss x,(cdk, vis l, ro, TClass  $ nameInPath l p x, ii)) ]
     vStmt p (ModuleStmt l x _)     = [(ss x,(mdk, vis l, ro, TModule $ pathInPath l p x, ii)) ]
     vStmt p (EnumStmt l x _)       = [(ss x,(edk, vis l, ro, TEnum   $ nameInPath l p x, ii)) ]
@@ -1000,9 +1004,11 @@ writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
 
 -- | scrapeVarDecl: Scrape a variable declaration for annotations
 ----------------------------------------------------------------------------------
-scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, RType r)]
+scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, Assignability, RType r)]
 ----------------------------------------------------------------------------------
-scrapeVarDecl (VarDecl l _ _) = [ (VarDeclKind,    t) | VarAnn                   t  <- ann_fact l ] 
-                             ++ [ (AmbVarDeclKind, t) | AmbVarAnn                t  <- ann_fact l ] 
-                             ++ [ (FieldDefKind,   t) | FieldAnn (FieldSig _ _ _ t) <- ann_fact l ]
+scrapeVarDecl (VarDecl l _ _) 
+  = [ (VarDeclKind   , a       , t) | VarAnn (a,t)                <- ann_fact l ] 
+ ++ [ (AmbVarDeclKind, ReadOnly, t) | AmbVarAnn t                 <- ann_fact l ] 
+ ++ [ (FieldDefKind  , ReadOnly, t) | FieldAnn (FieldSig _ _ _ t) <- ann_fact l ]
+ -- The last Assignability value is dummy
 

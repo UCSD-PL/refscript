@@ -796,15 +796,17 @@ ssaVarDecl :: Data r
            -> SSAM r ([Statement (AnnSSA r)], VarDecl (AnnSSA r))
 -------------------------------------------------------------------------------------
 ssaVarDecl (VarDecl l x (Just e)) = do
-
     (s, e') <- ssaExpr e
     x'      <- initSsaEnv l x
-
     return    (s, VarDecl l x' (Just e'))
 
-ssaVarDecl (VarDecl l x Nothing) = do
-    x' <- updSsaEnv l x
-    return    ([], VarDecl l x' Nothing)
+ssaVarDecl v@(VarDecl l x Nothing) 
+  | not $ null [ () | (AmbVarDeclKind,_,_) <- scrapeVarDecl v ]
+  = return ([], VarDecl l x Nothing)
+  | otherwise
+  = do x' <- updSsaEnv l x
+       ([],) <$> (VarDecl l <$> updSsaEnv l x 
+                            <*> (Just <$> (VarRef <$> fr_ l <*> (Id <$> fr_ l <*> return "undefined"))))
 
 ------------------------------------------------------------------------------------------
 ssaVarRef ::  Data r => AnnSSA r -> Id (AnnSSA r) -> SSAM r (Expression (AnnSSA r))

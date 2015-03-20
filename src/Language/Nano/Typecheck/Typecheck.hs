@@ -524,8 +524,8 @@ tcStmt γ (WhileStmt l c b)
        case to of
          Nothing -> return (WhileStmt l c' b, Nothing)
          Just t  -> do unifyTypeM (srcPos l) γ t tBool
-                       pTys         <- mapM (safeTcEnvFindTy l γ) phis
-                       (b', γl)     <- tcStmt (tcEnvAdds (zip xs ((,WriteLocal,Initialized) <$> pTys)) γ) b
+                       phiTys       <- mapM (safeTcEnvFindTy l γ) phis
+                       (b', γl)     <- tcStmt (tcEnvAdds (zip xs ((,WriteLocal,Initialized) <$> phiTys)) γ) b
                        z            <- tcWA γ dummyExpr (envLoopJoin l γ γl)
                        case z of
                          Left e     -> return $ (ExprStmt  l e    , γl)
@@ -588,27 +588,23 @@ tcVarDecl γ v@(VarDecl l x (Just e))
             return $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x,(t',WriteGlobal, Initialized))] γ)
 
       [(_,WriteLocal,t)] -> 
-        do  ([e'], t') <- tcNormalCallW γ l "VarDecl" [e] (localTy t)
-            return      $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (t,WriteLocal,Initialized) γ)
+        do  ([e'], Just t') <- tcNormalCallW γ l "VarDecl" [e] (localTy t)
+            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (t',WriteLocal,Initialized) γ)
+
       [(_,ReadOnly,t)]   -> 
-        do  ([e'], t') <- tcNormalCallW γ l "VarDecl" [e] (localTy t)
-            return      $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (t,ReadOnly,Initialized) γ)
+        do  ([e'], Just t') <- tcNormalCallW γ l "VarDecl" [e] (localTy t)
+            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (t',ReadOnly,Initialized) γ)
       -- TODO : more cases
 
+-- XXX: Not using Initilation status for the moment
 tcVarDecl γ v@(VarDecl l x Nothing)
   = case scrapeVarDecl v of
-      [ ]                    -> tcVarDecl γ $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
-      -- 
-      --
-      --
-      -- TODO 
-      --
-      --
-      --
-      --
-      [(AmbVarDeclKind,_,t)] -> return      $ (v, Just $ tcEnvAdds [(x, (t,WriteGlobal, Initialized))] γ)
-      [(_, _,t)]             -> return      $ (v, Just $ tcEnvAdds [(x, (t,WriteGlobal, Uninitialized))] γ)
-      _                      -> tcError     $ errorVarDeclAnnot (srcPos l) x
+      -- special case ambient vars
+      [(AmbVarDeclKind,_,t)] -> return $ (v, Just $ tcEnvAdds [(x, (t,WriteGlobal, Initialized))] γ)
+      -- the rest can fall under the 'undefined' initialization case
+      _ -> error "TC-tcVarDecl: this shouldn't happen" 
+           -- do (v, γ') <- tcVarDecl γ $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
+           --    return (VarDecl l x Nothing, γ')
 
 -------------------------------------------------------------------------------
 tcAsgn :: PPRSF r 
@@ -1253,14 +1249,14 @@ envLoopJoin :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
 ----------------------------------------------------------------------------------
 envLoopJoin _ γ Nothing   = return $ Just γ
 envLoopJoin l γ (Just γl) = 
-  do  ts      <- mapM (getLoopNextPhiType l γ γl) xs
-      let xts  = [ (x,t) | (x, Just t) <- zip xs ts ]
-      mapM_      (addAnn (ann_id l) . PhiVarTy) (mapSnd (toType . fst3) <$> xts)
-      γ'      <- (`substNames` γ) <$> getSubst
-      return   $ Just $ tcEnvAdds xts γ'
+  do  xts      <- toXts <$> mapM (getLoopNextPhiType l γ γl) xs
+      _        <- mapM_ mkPhiAnn $ mapSnd (toType . fst3) <$> xts
+      Just . tcEnvAdds xts . (`substNames` γ) <$> getSubst
   where 
       xs             = phiVarsAnnot l 
       substNames θ γ = γ { tce_names = apply θ (tce_names γ) }
+      toXts ts       = [ (x,t) | (x, Just t) <- zip xs ts ]
+      mkPhiAnn       = addAnn (ann_id l) . PhiVarTy
 
 -- 
 -- Using @tcEnvFindTyForAsgn@ here as the initialization status is 

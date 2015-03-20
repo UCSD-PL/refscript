@@ -20,10 +20,6 @@ class CanvasElt extends HTMLElt {
   constructor() { super(); } 
 }
 
-//function createElt(tagName: "div"): HTMLDivElt;
-//function createElt(tagName: "span"): HTMLSpanElt;
-//function createElt(tagName: "canvas"): HTMLCanvasElt;
-
 /*@ predicate TT v x n e = (x = n => extends_class(v, e)) */
 
 /*@ createElt :: (tagName: string) => {v: HTML |  TT(v, tagName, "div", "DivElt")
@@ -31,23 +27,15 @@ class CanvasElt extends HTMLElt {
                                                && TT(v, tagName, "canvas", "CanvasElt") } */
 
 function createElt(tagName: string): HTMLElt {
-
-  /*@ res :: HTML */
-  var res:HTMLElt;
  
-  if (tagName === "div")
-      res = new DivElt();
-
-  else if (tagName === "span")
-      res = new SpanElt();
-
-  else if (tagName === "canvas")
-      res = new CanvasElt();
-  
-  else
-      res = new HTMLElt();
-
-  return res;
+    /*@ local res :: HTML + undefined */
+    var res:HTMLElt;
+   
+    if (tagName === "div") res = <HTMLElt>new DivElt();
+    else if (tagName === "span") res = <HTMLElt>new SpanElt();
+    else if (tagName === "canvas") res = <HTMLElt>new CanvasElt();
+    else res = <HTMLElt> new HTMLElt();
+    return res;
 
 }
 

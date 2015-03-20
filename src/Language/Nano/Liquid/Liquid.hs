@@ -404,40 +404,58 @@ consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv)
 ------------------------------------------------------------------------------------
 consVarDecl g v@(VarDecl l x (Just e))
   = case scrapeVarDecl v of
-      -- WriteLocal 
+      -- | Local 
       [ ] ->  
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           t       <- safeEnvFindTy y gy
-          Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal,Initialized))] gy
+          Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal, Initialized))] gy
 
-      [(_,WriteGlobal,t)] -> 
+      [(_, WriteLocal, Just t)] -> 
+        mseq (consCall g l "consVarDecl" (FI Nothing [(e, Nothing)]) $ localTy t) $ \(y,gy) -> do
+          t       <- safeEnvFindTy y gy
+          Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal, Initialized))] gy
+
+      [(_, WriteLocal, Nothing)] -> 
+        mseq (consExpr g e Nothing) $ \(y,gy) -> do
+          t       <- safeEnvFindTy y gy
+          Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal, Initialized))] gy
+
+      -- | Global
+      [(_, WriteGlobal, Just t)] -> 
         mseq (consExpr g e $ Just t) $ \(y, gy) -> do
           ty      <- safeEnvFindTy y gy
           fta     <- freshenType WriteGlobal gy l t
           _       <- subType l (errorLiquid' l) gy ty  fta
           _       <- subType l (errorLiquid' l) gy fta t
-          Just   <$> envAdd x (fta, WriteGlobal,Initialized) g
+          Just   <$> envAdd x (fta, WriteGlobal, Initialized) gy
 
-      [(_,ReadOnly,t)] -> 
+      [(_, WriteGlobal, Nothing)] -> 
+        mseq (consExpr g e Nothing) $ \(y, gy) -> do
+          ty      <- safeEnvFindTy y gy
+          fta     <- refresh ty >>= wellFormed l g
+          _       <- subType l (errorLiquid' l) gy ty fta
+          Just   <$> envAdd x (fta, WriteGlobal, Initialized) gy
+
+      -- | ReadOnly
+      [(_, ReadOnly, Just t)] -> 
         mseq (consCall g l "consVarDecl" (FI Nothing [(e, Nothing)]) $ localTy t) $ \(y,gy) -> do
           t       <- safeEnvFindTy y gy
           Just   <$> envAdds "consVarDecl" [(x, (t, ReadOnly, Initialized))] gy
-          
-
-      [(_,WriteLocal,t)] -> 
-        mseq (consCall g l "consVarDecl" (FI Nothing [(e, Nothing)]) $ localTy t) $ \(y,gy) -> do
+ 
+      [(_, ReadOnly, Nothing)] -> 
+        mseq (consExpr g e Nothing) $ \(y,gy) -> do
           t       <- safeEnvFindTy y gy
-          Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal, Initialized))] gy
-
+          Just   <$> envAdds "consVarDecl" [(x, (t, ReadOnly ,Initialized))] gy
+         
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
  
 consVarDecl g v@(VarDecl l x Nothing)
   = case scrapeVarDecl v of
       -- special case ambient vars
-      [(AmbVarDeclKind, _,t)] -> Just <$> envAdds "consVarDecl" [(x, (t, WriteGlobal, Initialized))] g      
-      -- the rest can fall under the 'undefined' initialization case
+      [(AmbVarDeclKind, _, Just t)] -> 
+        Just <$> envAdds "consVarDecl" [(x, (t, ReadOnly, Initialized))] g      
+      -- The rest should have fallen under the 'undefined' initialization case
       _ -> error "LQ: consVarDecl this shouldn't happen" 
-          -- consVarDecl g $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
 
 ------------------------------------------------------------------------------------
 consExprT :: AnnTypeR -> CGEnv -> Expression AnnTypeR -> Maybe RefType 

@@ -579,32 +579,48 @@ tcVarDecl ::  PPRSF r => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e))
   = case scrapeVarDecl v of
+      -- | Local 
       [ ] -> 
         do  (e', to) <- tcExprW γ e
             return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,WriteLocal,Initialized) <$> to)
 
-      [(_,WriteGlobal,t)] -> 
+      [(_, WriteLocal, Just t)] -> 
+        do  ([e'], Just t') <- tcNormalCallW γ l "VarDecl-WL" [e] (localTy t)
+            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (t',WriteLocal,Initialized) γ)
+
+      [(_, WriteLocal, Nothing)] -> 
+        do  (e', to)   <- tcExprW γ e
+            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,WriteLocal,Initialized) <$> to)
+
+      -- | Global 
+      [(_, WriteGlobal, Just t)] -> 
         do  (e',t') <- tcCast γ l e t
             return $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x,(t',WriteGlobal, Initialized))] γ)
 
-      [(_,WriteLocal,t)] -> 
-        do  ([e'], Just t') <- tcNormalCallW γ l "VarDecl" [e] (localTy t)
-            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (t',WriteLocal,Initialized) γ)
+      [(_, WriteGlobal, Nothing)] -> 
+        do  (e',to) <- tcExprW γ e
+            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,WriteGlobal, Initialized) <$> to)
 
-      [(_,ReadOnly,t)]   -> 
-        do  ([e'], Just t') <- tcNormalCallW γ l "VarDecl" [e] (localTy t)
+      -- | ReadOnly
+      [(_, ReadOnly, Just t)]   -> 
+        do  ([e'], Just t') <- tcNormalCallW γ l "VarDecl-RO" [e] (localTy t)
             return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (t',ReadOnly,Initialized) γ)
+
+      [(_, ReadOnly, Nothing)] -> 
+        do  (e', to)   <- tcExprW γ e
+            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,ReadOnly,Initialized) <$> to)
+
       -- TODO : more cases
 
 -- XXX: Not using Initilation status for the moment
 tcVarDecl γ v@(VarDecl l x Nothing)
   = case scrapeVarDecl v of
       -- special case ambient vars
-      [(AmbVarDeclKind,_,t)] -> return $ (v, Just $ tcEnvAdds [(x, (t,WriteGlobal, Initialized))] γ)
-      -- the rest can fall under the 'undefined' initialization case
+      [(AmbVarDeclKind,_, Just t)] -> 
+        return $ (v, Just $ tcEnvAdds [(x, (t, ReadOnly, Initialized))] γ)
+      -- The rest should have fallen under the 'undefined' initialization case
       _ -> error "TC-tcVarDecl: this shouldn't happen" 
-           -- do (v, γ') <- tcVarDecl γ $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
-           --    return (VarDecl l x Nothing, γ')
+
 
 -------------------------------------------------------------------------------
 tcAsgn :: PPRSF r 

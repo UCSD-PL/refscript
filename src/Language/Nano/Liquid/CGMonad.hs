@@ -788,7 +788,7 @@ subType l err g t1 t2 =
       let xs  = [(symbolId l x,(t,a,i)) | (x, Just (t,a,i)) <- rNms t1' ++ rNms t2 ]
       let ys  = [(symbolId l x,(t,a,i)) | (x,      (t,a,i)) <- E.envToList $ cgeAllNames g ]
       ----  when (toType t1 /= toType t2) (errorstar (ppshow t1 ++ " VS " ++ ppshow t2))
-      -- g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++ ppshow "\nLHS: " ++ ppshow t1 ++ "\nRHS: " ++ ppshow t2 ++ "\n" ++ "Adding binders: " ++ ppshow (fst <$> (xs ++ ys))) $ xs ++ ys) g
+      -- g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++ ppshow "\nLHS: " ++ ppshow t1 ++ "\nRHS: " ++ ppshow t2) $ xs ++ ys) g
       g'     <- envAdds "subtype" (xs ++ ys) g
       modify  $ \st -> st {cs = c g' (t1', t2) : (cs st)}
   where
@@ -956,7 +956,7 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   | α1 == α2
   = bsplitC g i t1 t2
   | otherwise
-  = splitIncompatC l g i t1 t2 where l = srcPos i
+  = splitIncompatC g i t1 where l = srcPos i
 
 -- | Unions
 --
@@ -969,6 +969,13 @@ splitC (Sub g i t1@(TApp TUn t1s r1) t2@(TApp TUn t2s _))
     where 
        s1s = L.sortBy (compare `on` toType) t1s
        s2s = L.sortBy (compare `on` toType) t2s
+
+splitC (Sub g i t1@(TApp TUn t1s r1) t2)
+  | [t1] <- L.filter (on (==) toType t2) t1s
+  , t1s' <- L.filter (on (/=) toType t2) t1s
+  = (++) <$> splitC (Sub g i t1 t2) <*> concatMapM (splitIncompatC g i) t1s'
+  | otherwise
+  = splitIncompatC g i t1 
 
 -- |Type references
 --  
@@ -984,7 +991,7 @@ splitC (Sub g i t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) r2))
   -- * Incompatible mutabilities
   --
   | not (isSubtype g m1 m2) 
-  = splitIncompatC l g i t1 t2
+  = splitIncompatC g i t1
   --  
   -- * Both immutable, same name, non arrays: Co-variant subtyping
   --
@@ -1005,10 +1012,7 @@ splitC (Sub g i t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) r2))
   = bsplitC g i t1 t2
 
   | otherwise 
-  = splitIncompatC l g i t1 t2
-
-  where
-    l = srcPos i
+  = splitIncompatC g i t1
 
 -- | Rest of TApp
 --
@@ -1017,7 +1021,7 @@ splitC (Sub g i t1@(TApp c1 t1s _) t2@(TApp c2 t2s _))
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- concatMapM splitC ((safeZipWith "splitc-5") (Sub g i) t1s t2s)
         return $ cs ++ cs'
-  | otherwise = splitIncompatC l g i t1 t2 where l = srcPos i
+  | otherwise = splitIncompatC g i t1 
 
 -- | These need to be here due to the lack of a folding operation
 --
@@ -1045,17 +1049,19 @@ splitC (Sub _ _ (TClass _) (TClass _)) = return []
 splitC (Sub _ _ (TModule _) (TModule _)) = return []
   
 splitC x@(Sub g i t1 t2)
-  = splitIncompatC l g i t1 t2 where l = srcPos x
+  = splitIncompatC g i t1 
 
 splitOC g i (Just t) (Just t') = splitC (Sub g i t t') 
 splitOC _ _ _        _         = return []
 
--- splitIncompatC :: SrcSpan -> RefType -> RefType -> a
-splitIncompatC _ g i t1 _ = bsplitC g i t1 (mkBot t1)
-  
--- splitIncompatC l t1 t2 = cgError l $ bugBadSubtypes l t1 t2
+---------------------------------------------------------------------------------------
+splitIncompatC :: CGEnv -> a -> RefType -> CGM [F.SubC a]
+---------------------------------------------------------------------------------------
+splitIncompatC g i t = bsplitC g i t (mkBot t)
     
+---------------------------------------------------------------------------------------
 mkBot   :: (F.Reftable r) => RType r -> RType r
+---------------------------------------------------------------------------------------
 mkBot t = setRTypeR t (F.bot r) where r = rTypeR t
 
 -- 

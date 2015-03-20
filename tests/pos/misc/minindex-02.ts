@@ -22,7 +22,8 @@ function foldl(f, acc, xs){
 /*@ minIndex :: ({a: IArray<number> | 0 < (len a)}) => {v:number | (0 <= v && v < (len a)  )} */ 
 function minIndex(a){
   
-  var aa /*@ readonly */ = a;
+  /*@ readonly aa :: # */
+  var aa = a;
 	
 	function step(i: number, min: number) {
 		if (aa[i] < aa[min]) { 

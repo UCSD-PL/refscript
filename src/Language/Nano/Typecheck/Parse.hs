@@ -93,6 +93,13 @@ identifier = T.identifier jsLexer
 idBindP :: Parser (Id SrcSpan, RTypeQ RK Reft)
 idBindP = withinSpacesP $ xyP identifierP dcolon bareTypeP
 
+idBindP' :: Parser (Id SrcSpan, Assignability, Maybe (RTypeQ RK Reft))
+idBindP' = withinSpacesP $ axyP identifierP dcolon typeOrHashP
+  where
+    typeOrHashP = try (Just <$> bareTypeP) 
+               <|>    (char '#' >> return Nothing)
+
+
 anonFuncP :: Parser (RTypeQ RK Reft)
 anonFuncP = funcSigP
 
@@ -217,6 +224,19 @@ withSpan f p = do pos   <- getPosition
 xyP lP sepP rP
   = (\x _ y -> (x, y)) <$> lP <*> (spaces >> sepP) <*> rP
 
+axyP lP sepP rP
+  = do  a <- assignabilityP
+        i <- withinSpacesP lP
+        spaces >> sepP 
+        r <- rP 
+        return (i,a,r) 
+        -- (\a x _ y -> (x, a, y)) <$> aP <*> lP <*> (spaces >> sepP) <*> rP
+  
+assignabilityP 
+  =  try (withinSpacesP (reserved "global"  ) >> return WriteGlobal)
+ <|> try (withinSpacesP (reserved "local"   ) >> return WriteLocal )
+ <|> try (withinSpacesP (reserved "readonly") >> return ReadOnly   )
+ <|>     (return WriteGlobal)
 
 postP p post 
   = (\x _ -> x) <$> p <*> post
@@ -516,7 +536,7 @@ data RawSpec
 
 data PSpec l r
   = Meas    (Id l, RTypeQ RK r)
-  | Bind    (Id l, RTypeQ RK r) 
+  | Bind    (Id l, Assignability, Maybe (RTypeQ RK r))
   | AmbBind (Id l, RTypeQ RK r) 
   | AnFunc  (RTypeQ RK r) 
   | Field   (TypeMemberQ RK r)
@@ -544,7 +564,7 @@ parseAnnot :: RawSpec -> Parser Spec
 parseAnnot = go
   where
     go (RawMeas     (ss, _)) = Meas    <$> patch2 ss <$> idBindP
-    go (RawBind     (ss, _)) = Bind    <$> patch2 ss <$> idBindP
+    go (RawBind     (ss, _)) = Bind    <$> patch3 ss <$> idBindP'
     go (RawAmbBind  (ss, _)) = AmbBind <$> patch2 ss <$> idBindP
     go (RawFunc     (_ , _)) = AnFunc  <$>               anonFuncP
     go (RawField    (_ , _)) = Field   <$>               fieldEltP 
@@ -562,7 +582,8 @@ parseAnnot = go
     go (RawReadOnly (ss, _)) = return  $ RdOnly ss
 
 
-patch2 ss (id, t)    = (fmap (const ss) id , t)
+patch2 ss (id,t)   = (fmap (const ss) id ,t)
+patch3 ss (id,a,t) = (fmap (const ss) id ,a,t)
 
 getSpecString :: RawSpec -> String 
 getSpecString = go
@@ -710,19 +731,19 @@ extractFact :: PSpec t r -> Maybe (FactQ RK r)
 ---------------------------------------------------------------------------------
 extractFact = go
   where
-    go (Bind    (_,t)) = Just $ VarAnn    t   
-    go (AmbBind (_,t)) = Just $ AmbVarAnn t
-    go (Constr  c    ) = Just $ ConsAnn   c   
-    go (Field   f    ) = Just $ FieldAnn  f
-    go (Method  m    ) = Just $ MethAnn   m
-    go (Static  m    ) = Just $ StatAnn   m
-    go (Class   (_,t)) = Just $ ClassAnn  t
-    go (Iface   (_,t)) = Just $ IfaceAnn  t
-    go (CastSp  _ t  ) = Just $ UserCast  t
-    go (Exported  _  ) = Just $ ExportedElt
-    go (RdOnly  _    ) = Just $ ReadOnlyVar
-    go (AnFunc  t    ) = Just $ FuncAnn   t
-    go _               = Nothing
+    go (Bind    (_,a,t)) = Just $ VarAnn (a,t)
+    go (AmbBind (_,t)  ) = Just $ AmbVarAnn t
+    go (Constr  c      ) = Just $ ConsAnn   c   
+    go (Field   f      ) = Just $ FieldAnn  f
+    go (Method  m      ) = Just $ MethAnn   m
+    go (Static  m      ) = Just $ StatAnn   m
+    go (Class   (_,t)  ) = Just $ ClassAnn  t
+    go (Iface   (_,t)  ) = Just $ IfaceAnn  t
+    go (CastSp  _ t    ) = Just $ UserCast  t
+    go (Exported  _    ) = Just $ ExportedElt
+    go (RdOnly  _      ) = Just $ ReadOnlyVar
+    go (AnFunc  t      ) = Just $ FuncAnn   t
+    go _                 = Nothing
 
 ---------------------------------------------------------------------------------
 scrapeQuals     :: NanoBareR Reft -> NanoBareR Reft
@@ -740,10 +761,10 @@ mkUq                  = zipWith tx ([0..] :: [Int])
 
 stmtTypeBindings _                = go
   where
-    go (FunctionStmt l f _ _)     = [(f, t) | FuncAnn t     <- ann_fact l ] ++
-                                    [(f, t) | VarAnn  t     <- ann_fact l ]
+    go (FunctionStmt l f _ _)     = [(f, t) | FuncAnn t <- ann_fact l ] ++
+                                    [(f, t) | VarAnn  (_,Just t) <- ann_fact l ]
     go (VarDeclStmt _ vds)        = [(x, t) | VarDecl l x _ <- vds
-                                            , VarAnn  t     <- ann_fact l ]
+                                            , VarAnn  (_, Just t) <- ann_fact l ]
     go _                          = []
 
 celtTypeBindings _                = (mapSnd eltType <$>) . go 
@@ -892,7 +913,7 @@ factTvars = go
     foldUnions (α:αs)       = foldl HS.intersection α αs
     foldUnions _            = HS.empty
 
-    go (VarAnn t)           = tvars t
+    go (VarAnn (_, Just t)) = tvars t
     go (FuncAnn t)          = tvars t
     go (FieldAnn m)         = tvars $ f_type m
     go (MethAnn m)          = tvars $ f_type m

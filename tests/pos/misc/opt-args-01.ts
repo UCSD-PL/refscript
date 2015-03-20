@@ -1,12 +1,20 @@
 
 /*@ foo :: /\ () => {void | true}            
-           /\ (lo: {number | 0 <= v}) => {void | true} */
-function foo(lo?: number) 
+           /\ (l: {number | 0 <= v}) => {void | true} */
+function foo(l?: number) 
 {
-  if (arguments.length < 1)
-    lo = 0;
 
-  var lo1 = <number>lo;
+  /*@ local loc :: number + undefined */
+  var loc = l;
 
-  assert(0 <= lo1);
+  if (arguments.length < 1) {
+
+    /*@ local zero :: number + undefined */
+    var zero = 0;
+    loc = zero;
+  }
+
+  var l1 = <number>loc;
+
+  assert(0 <= l1);
 }

@@ -5,7 +5,8 @@
 function inc1(n: number) { return n + 1; }
 function inc2(n: number) { return n + 2; }
 
-var x /*@ readonly */ = { f: inc1 };
+/*@ readonly x :: # */ 
+var x = { f: inc1 };
 
 function foo() :number {
   return (x.f)(5);

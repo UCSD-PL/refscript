@@ -6,7 +6,8 @@ function inc(n:number) :number{
   return n + 1;
 }
 
-var gobj /*@ readonly */ = { a: 5, b: "String", f: inc };
+/*@ readonly gobj :: # */
+var gobj = { a: 5, b: "String", f: inc };
 
 /*@ foo :: () => { number | v = 6 } */
 function foo ():number {

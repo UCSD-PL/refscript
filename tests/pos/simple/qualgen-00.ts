@@ -5,7 +5,8 @@
 /* junk :: { number | (0 < v && v < 40) } */
 var junk = 0;
 
-var arr /*@ readonly */ =  [1, 2];
+/*@ readonly arr :: # */
+var arr =  [1, 2];
 
 /*@ foo :: () => { number | v < 4 } */
 function foo(): number {

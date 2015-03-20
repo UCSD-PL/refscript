@@ -129,7 +129,7 @@ envFromListWithKey merge = L.foldl' step envEmpty
 envIntersectWith  :: (a -> b -> c) -> Env a -> Env b -> Env c
 envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))
 
--- | Favors the bindings in the second environment
+-- | Favors environment on the left
 envUnion          :: Env a -> Env a -> Env a
 envUnion           = envAdds . envToList
 

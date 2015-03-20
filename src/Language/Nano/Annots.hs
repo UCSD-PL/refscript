@@ -37,6 +37,7 @@ import           Data.Generics
 import           Text.PrettyPrint.HughesPJ 
 
 import           Language.Nano.Types
+import           Language.Nano.Env
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Typecheck.Types
@@ -132,7 +133,7 @@ data FactQ q r
   | EltOverload !IContext  !(TypeMemberQ q r)
   | Overload    !IContext  !(RTypeQ q r)
   -- Type annotations
-  | VarAnn      !(RTypeQ q r)
+  | VarAnn      !(Assignability, Maybe (RTypeQ q r))
   | AmbVarAnn   !(RTypeQ q r)
   -- Class member annotations
   | FieldAnn    !(TypeMemberQ q r)
@@ -205,33 +206,31 @@ instance Ord (AnnSSA  r) where
 instance Eq (Annot a SrcSpan) where 
   (Ann i1 s1 _) == (Ann i2 s2 _) = (i1,s1) == (i2,s2)
 
-instance IsLocated (Annot a SrcSpan) where 
-  srcPos = ann
 
 instance (F.Reftable r, PP r) => PP (Fact r) where
-  pp (PhiVar x)       = text "phi"                    <+> pp x
-  pp (PhiVarTy x)     = text "phi-ty"                 <+> pp x
-  pp (PhiVarTC x)     = text "phi-tc"                 <+> pp x
-  pp (PhiPost _)      = text "phi-post"
-  pp (TypInst i ξ ts) = text "inst"                   <+> pp i <+> pp ξ <+> pp ts 
-  pp (Overload ξ i)   = text "overload"               <+> pp ξ <+> pp i
-  pp (EltOverload ξ i)= text "elt_overload"           <+> pp ξ <+> pp i
-  pp (TCast  ξ c)     = text "cast"                   <+> pp ξ <+> pp c
-  pp (VarAnn t)       = text "Var Annotation"         <+> pp t
-  pp (AmbVarAnn t)    = text "Amb Var Annotation"     <+> pp t
-  pp (ConsAnn c)      = text "Constructor Annotation" <+> pp c
-  pp (UserCast c)     = text "Cast Annotation"        <+> pp c
-  pp (ExportedElt)    = text "Exported"
-  pp (ReadOnlyVar)    = text "ReadOnlyVar"
-  pp (FuncAnn t)      = text "Func Annotation"        <+> pp t
-  pp (FieldAnn f)     = text "Field Annotation"       <+> pp f
-  pp (MethAnn m)      = text "Method Annotation"      <+> pp m
-  pp (StatAnn s)      = text "Static Annotation"      <+> pp s
-  pp (ClassAnn _)     = text "UNIMPLEMENTED:pp:ClassAnn"
-  pp (IfaceAnn _)     = text "UNIMPLEMENTED:pp:IfaceAnn"
-  pp (ModuleAnn s)    = text "module"                 <+> pp s
-  pp (EnumAnn s)      = text "enum"                   <+> pp s
-  pp (BypassUnique)   = text "BypassUnique" 
+  pp (PhiVar x)        = text "phi"                    <+> pp x
+  pp (PhiVarTy x)      = text "phi-ty"                 <+> pp x
+  pp (PhiVarTC x)      = text "phi-tc"                 <+> pp x
+  pp (PhiPost _)       = text "phi-post"
+  pp (TypInst i ξ ts)  = text "inst"                   <+> pp i <+> pp ξ <+> pp ts 
+  pp (Overload ξ i)    = text "overload"               <+> pp ξ <+> pp i
+  pp (EltOverload ξ i) = text "elt_overload"           <+> pp ξ <+> pp i
+  pp (TCast  ξ c)      = text "cast"                   <+> pp ξ <+> pp c
+  pp (VarAnn (_,t))    = text "Var Annotation"         <+> pp t
+  pp (AmbVarAnn t)     = text "Amb Var Annotation"     <+> pp t
+  pp (ConsAnn c)       = text "Constructor Annotation" <+> pp c
+  pp (UserCast c)      = text "Cast Annotation"        <+> pp c
+  pp (ExportedElt)     = text "Exported"
+  pp (ReadOnlyVar)     = text "ReadOnlyVar"
+  pp (FuncAnn t)       = text "Func Annotation"        <+> pp t
+  pp (FieldAnn f)      = text "Field Annotation"       <+> pp f
+  pp (MethAnn m)       = text "Method Annotation"      <+> pp m
+  pp (StatAnn s)       = text "Static Annotation"      <+> pp s
+  pp (ClassAnn _)      = text "UNIMPLEMENTED:pp:ClassAnn"
+  pp (IfaceAnn _)      = text "UNIMPLEMENTED:pp:IfaceAnn"
+  pp (ModuleAnn s)     = text "module"                 <+> pp s
+  pp (EnumAnn s)       = text "enum"                   <+> pp s
+  pp (BypassUnique)    = text "BypassUnique" 
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
   pp             = vcat . (ppB <$>) . I.toList 
@@ -246,20 +245,21 @@ phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
 factRTypes :: (Show r) => Fact r -> [RType r]
 factRTypes = go
   where
-    go (TypInst _ _ ts)   = ts
-    go (EltOverload _ m)  = [f_type m]
-    go (Overload _ t)     = [t] 
-    go (VarAnn t)         = [t]
-    go (AmbVarAnn t)      = [t]
-    go (UserCast t)       = [t]
-    go (FuncAnn t)        = [t]
-    go (FieldAnn m)       = [f_type m]
-    go (MethAnn m)        = [f_type m]
-    go (StatAnn m)        = [f_type m]
-    go (ConsAnn m)        = [f_type m]
-    go (IfaceAnn ifd)     = f_type . snd <$> M.toList (t_elts ifd)
-    go (ClassAnn (_,e,i)) = concatMap snd e ++ concatMap snd i
-    go f                  = error ("factRTypes: TODO :" ++ show f)
+    go (TypInst _ _ ts)    = ts
+    go (EltOverload _ m)   = [f_type m]
+    go (Overload _ t)      = [t] 
+    go (VarAnn (_,Just t)) = [t]
+    go (VarAnn (_,_))      = [ ]
+    go (AmbVarAnn t)       = [t]
+    go (UserCast t)        = [t]
+    go (FuncAnn t)         = [t]
+    go (FieldAnn m)        = [f_type m]
+    go (MethAnn m)         = [f_type m]
+    go (StatAnn m)         = [f_type m]
+    go (ConsAnn m)         = [f_type m]
+    go (IfaceAnn ifd)      = f_type . snd <$> M.toList (t_elts ifd)
+    go (ClassAnn (_,e,i))  = concatMap snd e ++ concatMap snd i
+    go f                   = error ("factRTypes: TODO :" ++ show f)
 
 
 -----------------------------------------------------------------------------

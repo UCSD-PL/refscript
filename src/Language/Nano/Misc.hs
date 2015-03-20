@@ -1,6 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable     #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE Rank2Types             #-} 
+{-# LANGUAGE Rank2Types             #-} 
+{-# LANGUAGE LambdaCase             #-}
 
 module Language.Nano.Misc (
   -- * Helper functions
@@ -42,6 +44,8 @@ module Language.Nano.Misc (
   , dup
 
   , mappendM
+
+  , case1, case2, case3
 
 ) where
 
@@ -228,3 +232,10 @@ dup f1 f2 a = (f1 a,f2 a)
 
 mappendM :: (Monoid r, Monad m) => m r -> m r -> m r
 mappendM = liftM2 mappend
+
+
+-- | Auxiliary functions
+case1 g f e        = g (\case [e']            -> f e'         ) [e]
+case2 g f e1 e2    = g (\case [e1', e2']      -> f e1' e2'    ) [e1, e2]
+case3 g f e1 e2 e3 = g (\case [e1', e2', e3'] -> f e1' e2' e3') [e1, e2, e3]
+

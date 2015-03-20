@@ -67,7 +67,7 @@ module Language.Nano.Typecheck.Types (
   , arrayLitTy
   , objLitTy
   , setPropTy
-  -- , enumTy
+  , localTy
 
   -- * Builtin: Binders
   , mkId, argId, mkArgTy, returnTy
@@ -924,6 +924,12 @@ finalizeTy t
   where 
     tV   = tVar mV
     mV   = TV (F.symbol "V") (srcPos dummySpan)
+
+
+
+localTy t = mkFun ([], Nothing, [B sx t], t `strengthen` uexprReft sx)
+  where 
+    sx    = F.symbol "x_"
 
 
 -- | `mkEltFunTy`: Creates a function type that corresponds to an invocation 

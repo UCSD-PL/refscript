@@ -91,9 +91,6 @@ instance IsLocated SourcePos where
 instance IsLocated (F.Located a) where
   srcPos = srcPos . F.loc
 
--- instance IsLocated a => IsLocated (Id a) where 
---   srcPos (Id x _) = srcPos x
-
 instance (HasAnnotation thing, IsLocated a) => IsLocated (thing a) where 
   srcPos  = srcPos . getAnnotation  
 

@@ -63,7 +63,7 @@ declare function builtin_BIBracketAssign<A>(a: A[], n: number, v: A): void;
 declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
 /*@ builtin_BIArrayLit :: 
-    forall M A. (A) => {v: Array<M,A> | [ (len v) = builtin_BINumArgs; not (null v) ] }
+    forall M A. (A) => {v: Array<M,A> | (len v) = builtin_BINumArgs }
  */
 declare function builtin_BIArrayLit<A>(a: A): A[];
 
@@ -653,16 +653,16 @@ interface Array<T> {
 
 declare var Array: {
 
-    /*@ forall M T . () => { v: Array<M, T> | [ (len v) = 0; (not (null v))] } */
+    /*@ forall M T . () => { v: Array<M, T> | (len v) = 0 } */
     (): any[];
 
-    /*@ forall M T. (arrayLength: number) => { v: Array<M, T> | [ (len v) = arrayLength; (not (null v))] } */
+    /*@ forall M T. (arrayLength: number) => { v: Array<M, T> | (len v) = arrayLength } */
     <T>(arrayLength: number): T[];
 
-    /*@ new forall M T . () => { v: Array<M, T> | [ (len v) = 0; (not (null v))] } */
+    /*@ new forall M T . () => { v: Array<M, T> | (len v) = 0 } */
     new (): any[];
 
-    /*@ new forall M T. (arrayLength: number) => { v: Array<M, T> | [ (len v) = arrayLength; (not (null v))] } */
+    /*@ new forall M T. (arrayLength: number) => { v: Array<M, T> | (len v) = arrayLength } */
     new <T>(arrayLength: number): T[];
 
     // new <T>(...items: T[]): T[];
@@ -790,8 +790,6 @@ interface EmptyObject {
 
 /*@ measure Prop :: forall A . (A) => bool */
 
-/*@ measure null :: forall A . (A) => bool */
-
 /*@ builtin_PrefixTypeof :: 
     forall A. (x:A) => {v:string | (ttag x) = v }                
  */
@@ -810,7 +808,7 @@ declare function builtin_BIFalsy<A>(x: A): boolean;
 
 /*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]} */
 
-/*@ invariant {v:null | [(ttag(v) = "object"); not (Prop(v)); null(v) ]} */
+/*@ invariant {v:null | [(ttag(v) = "object"); not (Prop v) ]} */
 
 /*@ invariant {v:boolean | [(ttag(v) = "boolean")]} */ 
 

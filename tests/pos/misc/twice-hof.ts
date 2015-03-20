@@ -10,7 +10,8 @@ function twice<A>(f:(a:A)=>A, x0:A): A{
 function main(x:number,y:boolean):number{
 	var yr = idt(y);
 	var xr = idt(x);
-  var z  /*@ readonly */ = (yr) ? 1 : 10; 
+  /*@ readonly z :: # */
+  var z = (yr) ? 1 : 10; 
 	
 	assert (z > 0);
 

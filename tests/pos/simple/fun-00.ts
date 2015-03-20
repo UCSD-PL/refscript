@@ -1,10 +1,12 @@
 
-var bar /*@ readonly */ = 
+/*@ readonly bar :: # */ 
+var bar = 
   function (x: number): number
   /*@ <anonymous> (x:number) => {number | v = x + 1} */
   { return x + 1; }
 
-var foo /*@ readonly */ = 
+/*@ readonly foo :: # */
+var foo = 
   function (x: number): number
   /*@ <anonymous> (x:number) => {number | v = x + 2} */
   {

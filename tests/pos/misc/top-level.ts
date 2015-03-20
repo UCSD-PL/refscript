@@ -1,4 +1,6 @@
-var a /*@ readonly */ :number = 1; 
+
+/*@ readonly a :: # */
+var a = 1; 
 
 
 /*@ foo :: () => { number | v > 0 } */

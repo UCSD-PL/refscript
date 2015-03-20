@@ -471,3 +471,4 @@ instance PP SyntaxKind where
 data MemberKind = MemDefinition | MemDeclaration deriving ( Eq )
 
 type VarInfo r = (SyntaxKind, Visibility, Assignability, RType r, Initialization)
+

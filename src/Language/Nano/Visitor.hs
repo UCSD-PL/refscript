@@ -1004,11 +1004,11 @@ writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
 
 -- | scrapeVarDecl: Scrape a variable declaration for annotations
 ----------------------------------------------------------------------------------
-scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, Assignability, RType r)]
+scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, Assignability, Maybe (RType r))]
 ----------------------------------------------------------------------------------
 scrapeVarDecl (VarDecl l _ _) 
-  = [ (VarDeclKind   , a       , t) | VarAnn (a, Just t)          <- ann_fact l ] 
- ++ [ (AmbVarDeclKind, ReadOnly, t) | AmbVarAnn t                 <- ann_fact l ] 
- ++ [ (FieldDefKind  , ReadOnly, t) | FieldAnn (FieldSig _ _ _ t) <- ann_fact l ]
+  = [ (VarDeclKind   , a       , t) | VarAnn (a, t) <- ann_fact l ] 
+ ++ [ (AmbVarDeclKind, ReadOnly, Just t) | AmbVarAnn t <- ann_fact l ] 
+ ++ [ (FieldDefKind  , ReadOnly, Just t) | FieldAnn (FieldSig _ _ _ t) <- ann_fact l ]
  -- The last Assignability value is dummy
 

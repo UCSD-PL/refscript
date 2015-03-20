@@ -433,21 +433,11 @@ consVarDecl g v@(VarDecl l x (Just e))
  
 consVarDecl g v@(VarDecl l x Nothing)
   = case scrapeVarDecl v of
-      [ ]                   -> consVarDecl g $ VarDecl l x (Just $ undef l)
-      [(AmbVarDeclKind, _,t)] -> Just <$> envAdds "consVarDecl" [(x, (t, WriteGlobal, Initialized))] g
-      -- 
-      --
-      --
-      -- TODO 
-      --
-      --
-      --
-      --
-      [(_, _,t)]              -> Just <$> envAdds "consVarDecl" [(x, (t, WriteGlobal, Uninitialized))] g
-      _                     -> cgError $ errorVarDeclAnnot (srcPos l) x
-
-  where
-    undef l = VarRef l $ Id l "undefined"
+      -- special case ambient vars
+      [(AmbVarDeclKind, _,t)] -> Just <$> envAdds "consVarDecl" [(x, (t, WriteGlobal, Initialized))] g      
+      -- the rest can fall under the 'undefined' initialization case
+      _ -> error "LQ: consVarDecl this shouldn't happen" 
+          -- consVarDecl g $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
 
 ------------------------------------------------------------------------------------
 consExprT :: AnnTypeR -> CGEnv -> Expression AnnTypeR -> Maybe RefType 

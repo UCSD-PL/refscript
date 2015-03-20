@@ -1,5 +1,5 @@
 
-/*@ readonnly a :: # */
+/*@ readonly a :: # */
 var a = 1; 
 
 

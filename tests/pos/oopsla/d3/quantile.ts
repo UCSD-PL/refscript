@@ -1,5 +1,5 @@
 // R-7 per <http://en.wikipedia.org/wiki/Quantile>
-/// <reference path="../../../d3.d.ts" />
+/// <reference path="include/d3.d.ts" />
 
 /*@ qualif RemoveMe(v:a): 0 < len(v) */
 

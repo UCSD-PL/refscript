@@ -1,5 +1,5 @@
-/// <reference path="../../../d3.d.ts" />
-/// <reference path="../../../d3.rsc.ts" />
+/// <reference path="include/d3.d.ts" />
+/// <reference path="include/d3.rsc.ts" />
 
 // d3.shuffle = function<T>(array: T[]):T[] {
 

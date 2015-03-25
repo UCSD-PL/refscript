@@ -1,5 +1,5 @@
-/// <reference path="../../../d3.d.ts" />
-/// <reference path="../../math/number.ts" />
+/// <reference path="include/d3.d.ts" />
+/// <reference path="include/number.ts" />
 
 d3.median = function(array0, f?) 
 /*@ <anonymous> /\ forall T. (array : IArray<T>, f: (T) => number) => {number + undefined | true}

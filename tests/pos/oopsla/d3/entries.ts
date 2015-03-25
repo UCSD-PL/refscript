@@ -1,4 +1,4 @@
-/// <reference path="../../../d3.d.ts" />
+/// <reference path="include/d3.d.ts" />
 
 /*@ d3_entries :: forall T . ([Immutable]{[k:string]:T}) => {MArray<{key:string; value:T}> | true} */ 
 function d3_entries<T>(map) {

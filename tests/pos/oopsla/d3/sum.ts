@@ -1,4 +1,4 @@
-/// <reference path="../../../d3.d.ts" />
+/// <reference path="include/d3.d.ts" />
 
 
 /*@ d3_sum :: /\ (array : IArray<number>) => {number | true} 

@@ -1,4 +1,4 @@
-/// <reference path="../../../d3.d.ts" />
+/// <reference path="include/d3.d.ts" />
 
 d3.descending = function(a, b)
 /*@ <anonymous> /\ (a: number, b: number) => { number | [ (a > b => v = -1);

@@ -1,4 +1,4 @@
-/// <reference path="../../../d3.d.ts" />
+/// <reference path="include/d3.d.ts" />
 
 d3.keys = function(map:{ }): string[] 
 /*@ <anonymous> (map: [Immutable]{ }) => MArray<{string | hasProperty(v, map) && enumProp(v, map)}> */

@@ -1,4 +1,4 @@
-/// <reference path="../../../d3.d.ts" />
+/// <reference path="include/d3.d.ts" />
 
 /*@ d3_merge :: forall T . (map: IArray<IArray<T>>) => {v: IArray<T> | true}*/
 

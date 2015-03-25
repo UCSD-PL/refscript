@@ -1,4 +1,4 @@
-/// <reference path="../../../d3.d.ts" />
+/// <reference path="include/d3.d.ts" />
 
 // RJ: dramatically simplifying this as rsc 
 //     ensures that no 'undefined' or 'null' 

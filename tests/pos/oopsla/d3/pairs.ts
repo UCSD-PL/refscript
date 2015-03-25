@@ -1,5 +1,5 @@
-/// <reference path="../../../d3.d.ts" />
-/// <reference path="../../../d3.rsc.ts" />
+/// <reference path="include/d3.d.ts" />
+/// <reference path="include/d3.rsc.ts" />
 
 /*@ d3_pairs :: forall T. ({v:IArray<T> | len(v) > 0}) => IArray<{IArray<T> | len(v) = 2}> */
 function d3_pairs <T> (array: T[]) {

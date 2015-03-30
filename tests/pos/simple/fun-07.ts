@@ -1,5 +1,4 @@
 
-
 /*@ foo :: /\ (() => number) => { number | true } 
            /\ (number)       => { number | true }
  */
@@ -8,8 +7,6 @@ function foo(f) {
     return f();
   }
   else {
-    return f;
+    return f + 1;
   }
 }
-
-

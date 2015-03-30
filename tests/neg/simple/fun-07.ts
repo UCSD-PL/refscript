@@ -1,5 +1,4 @@
 
-
 /*@ foo :: /\ (() => number) => { number | true } 
            /\ (number)       => { number | true }
  */

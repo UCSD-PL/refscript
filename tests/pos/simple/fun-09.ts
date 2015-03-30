@@ -1,4 +1,5 @@
 
+
 /*@ bar :: /\ (() => number) => { number | true } 
            /\ (number)       => { number | true }
  */

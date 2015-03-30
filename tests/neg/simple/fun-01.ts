@@ -1,13 +1,15 @@
 
-/* qualif PlusOne(v:number, x: number): v = x + 1 */
-/* qualif PlusTwo(v:number, x: number): v = x + 2 */
+/*@ qualif PlusOne(v:number, x: number): v = x + 1 */
+/*@ qualif PlusTwo(v:number, x: number): v = x + 2 */
 
+/*@ readonly bar :: # */
 var bar = function (x: number): number 
 /*@ <anonymous> (x: number) => number */
 {
   return x + 1;
 }
 
+/*@ readonly foo :: # */
 var foo = function (x: number): number 
 /*@ <anonymous> (x: number) => number */
 {

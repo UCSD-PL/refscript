@@ -1,5 +1,5 @@
 
-/*@ emp :: #Array[#Immutable, number] */
+/*@ emp :: IArray<number> */
 var emp = [];
 
 assert(emp === null);

@@ -1,8 +1,8 @@
 
-/*@ check_undefined :: forall T.(T + undefined) => T */
-function check_undefined<T>(x:any) : T{
+/*@ check_undefined :: forall T . (T + undefined) => T */
+function check_undefined<T>(x:any) : T {
     if (typeof x === "undefined") 
-	return crash();
+        return crash();
     return <T>x;
 }
 
@@ -13,9 +13,7 @@ function bob(x:number):any {
 }
 
 /*@ bar :: ({number | true}) => number */
-function bar(x:number) : any{
+function bar(x:number) : any {
     var z = bob(x);
     return z;
 }
-   
- 

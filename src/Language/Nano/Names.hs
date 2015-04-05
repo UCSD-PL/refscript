@@ -41,6 +41,8 @@ module Language.Nano.Names (
   , offsetSym
   , ttagSym
   , hasPropertySym
+  , protoSym
+  , thisSym
   , thisId
   , undefinedId
 

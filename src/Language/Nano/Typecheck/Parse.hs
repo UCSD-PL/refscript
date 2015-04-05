@@ -693,6 +693,7 @@ mkCode ss = return   (mkCode' ss)
         >>= return . visitNano convertTvarVisitor []
         >>= return . expandAliases
         >>= return . replaceAbsolute
+        >>= return . replaceDotRef
         >>= return . scrapeQuals 
         >>=          scrapeModules
         >>= return . fixEnums

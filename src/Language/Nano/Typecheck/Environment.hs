@@ -13,9 +13,7 @@ import           Language.Nano.Env
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Program
-import           Language.Nano.Syntax
 import           Language.Nano.Syntax.PrettyPrint
-
 import qualified Language.Fixpoint.Types        as F
 import           Text.PrettyPrint.HughesPJ 
 
@@ -24,7 +22,7 @@ import           Text.PrettyPrint.HughesPJ
 -------------------------------------------------------------------------------
 
 data TCEnv r  = TCE {
-    tce_names       :: Env (RType r, Assignability, Initialization)
+    tce_names       :: Env (EnvEntry r)
   , tce_mod         :: QEnv (ModuleDef r)
   , tce_cha         :: ClassHierarchy r
   , tce_ctx         :: !IContext

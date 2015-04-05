@@ -460,8 +460,6 @@ efoldRType g f                 = go
     go γ z t@(TClass _)        = f γ t z
     go γ z t@(TModule _)       = f γ t z
     go γ z t@(TEnum _)         = f γ t z
-    go γ z t@(TSelf t')        = f γ t $ go γ z t'
-
     go _ _ t                   = error $ "Not supported in efoldRType: " ++ ppshow t
 
     gos γ z ts                 = L.foldl' (go γ) z ts
@@ -590,8 +588,8 @@ zipType γ x t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _)
     raExt t c  = F.RConc $ F.PBexp $ F.EApp (sym t) 
                $ [F.expr $ vv t, F.expr $ F.symbolText c]
     vv         = rTypeValueVar
-    sym t      | isClassType γ t = F.dummyLoc $ F.symbol "extends_class"
-               | otherwise       = F.dummyLoc $ F.symbol "extends_interface"
+    sym t      | isClassType γ t = extClassSym
+               | otherwise       = extInterfaceSym
 
 zipType _ _ t1@(TRef _ [] _) _ = error $ "zipType on " ++ ppshow t1  -- Invalid type
 zipType _ _ _ t2@(TRef _ [] _) = error $ "zipType on " ++ ppshow t2  -- Invalid type
@@ -736,14 +734,12 @@ unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
 -------------------------------------------------------------------------------
 unqualifyThis g t = F.subst $ F.mkSubst fieldSu
   where
-    fieldSu       | Just (TCons m fs _) <- expandType Coercive g t 
-                  = [ subPair f | ((f,im), FieldSig _ _ m _) <- M.toList fs
+    fieldSu       | Just (TCons _ fs _) <- expandType Coercive g t 
+                  = [ subPair f | ((f,InstanceMember), FieldSig _ _ m _) <- M.toList fs
                                 , isImmutable m ]
                   | otherwise                              
                   = []
-
     this          = F.symbol $ builtinOpId BIThis 
-    im            = InstanceMember
     qFld x f      = F.qualifySymbol (F.symbol x) f  
     subPair f     = (qFld this f, F.expr f)
  

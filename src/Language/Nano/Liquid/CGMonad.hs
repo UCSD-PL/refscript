@@ -763,12 +763,10 @@ subType :: AnnTypeR -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l err g t1 t2 =
   do  t1'    <- addInvariant g t1  -- enhance LHS with invariants
-      let xs  = [(symbolId l x, EE a i t) | (x, Just (EE a i t)) <- rNms t1' ++ rNms t2 ]
-      let ys  = [(symbolId l x, EE a i t) | (x,      (EE a i t)) <- E.envToList $ cgeAllNames g ]
-      ----  when (toType t1 /= toType t2) (errorstar (ppshow t1 ++ " VS " ++ ppshow t2))
-      -- g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++ ppshow "\nLHS: " ++ ppshow t1 ++ "\nRHS: " ++ ppshow t2) $ xs ++ ys) g
-      g'     <- envAdds "subtype" (xs ++ ys) g
-      modify  $ \st -> st { cs = Sub g' (ci err l) t1' t2 : cs st }
+      -- let xs  = [(symbolId l x, EE a i t) | (x, Just (EE a i t)) <- rNms t1' ++ rNms t2 ]
+      -- let ys  = [(symbolId l x, EE a i t) | (x,      (EE a i t)) <- E.envToList $ cgeAllNames g ]
+      -- g'     <- envAdds "subtype" (xs ++ ys) g
+      modify  $ \st -> st { cs = Sub g (ci err l) t1' t2 : cs st }
   where
     rNms t   = mapSnd (`envFindTyWithAsgn` g) . dup <$> names t
     dup a    = (a,a)
@@ -776,8 +774,8 @@ subType l err g t1 t2 =
     rr r xs  = F.syms r ++ xs
 
 
-cgeAllNames g@(CGE { cge_parent = Just g' }) = cgeAllNames g' `E.envUnion` cge_names g 
-cgeAllNames g@(CGE { cge_parent = Nothing }) = cge_names g
+-- cgeAllNames g@(CGE { cge_parent = Just g' }) = cgeAllNames g' `E.envUnion` cge_names g 
+-- cgeAllNames g@(CGE { cge_parent = Nothing }) = cge_names g
 
 
 -- BUGGY !! -- 

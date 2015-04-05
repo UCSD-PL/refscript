@@ -299,17 +299,15 @@ envAdds' doChecks doFields msg xts g
         when doChecks   $ zipWithM_ (checkSyms msg g xss) xs ts 
         -- 2. Add invariants
         es             <- L.zipWith3 EE as is <$> zipWithM inv is ts
-        -- ts'            <- zipWithM inv ts is
-        -- let xtas        = zip xs $ zip3 ts' as is
-        let ts''        = map replaceOffset $ zip xs es
-        let xtas'       = zip xs $ zip3 ts'' as is
+        let ts'        = map replaceOffset $ zip xs es
+        let es'         = L.zipWith3 EE as is ts'
         -- 3. Add fixpoint binds
         fpIds          <- catMaybes <$> zipWithM addFixpointBind xs es
         -- 4. Update environment @g@
-        let g'          = g { cge_names = E.envAdds (zip xs es)   $ cge_names g
+        let g'          = g { cge_names = E.envAdds (zip xs es')  $ cge_names g
                             , cge_fenv  = F.insertsIBindEnv fpIds $ cge_fenv  g }
         -- 5. Add object field binders 
-        foldM (addObjectFields msg doChecks doFields) g' $ zip3 xs as ts''
+        foldM (addObjectFields msg doChecks doFields) g' $ zip3 xs as ts'
   where
     (xs,as,is,ts)       = L.unzip4 [ (x, a, i, t) | (x, EE a i t) <- xts ]
     xss                 = map F.symbol xs

@@ -9,7 +9,6 @@ import           Control.Arrow                           ((***))
 import           Control.Applicative                     ((<$>), (<*>))
 import           Control.Monad
 import           Data.Default
-import           Data.Function                           (on)
 import           Data.Data
 import           Data.Maybe                              (catMaybes)
 import qualified Data.List                               as L
@@ -189,19 +188,11 @@ ssaStmt (IfStmt l e s1 s2)
                             return (False, stmt')
 
 -- 
--- | while c { b }
---
---   while (i <- f(i) ; cond(i)) {
---     BODY
---   }
+--   while (i <- f(i) ; cond(i)) { <BODY> }
 --   
 --   ===>
 --   
---   i = f(i);
---   while (cond(i)) {
---     BODY
---     i = f(i);
---   }
+--   i = f(i); while (cond(i)) { <BODY>; i = f(i); }
 -- 
 ssaStmt (WhileStmt l cnd body)
   = do  (xs, x0s)         <- unzip . map (\(x, (SI xo,_)) -> (x, xo)) <$> getLoopPhis body
@@ -292,9 +283,9 @@ ssaStmt (ForInStmt l (ForInVar v) e b) =
 
     initArr     = vStmt        $  VarDecl <$> fr 
                                           <*> keysArr 
-                                          <*> (Just <$> (CallExpr <$> fr 
-                                                                  <*> (VarRef <$> fr <*> biForInKeys)
-                                                                  <*> (return [e])))
+                                          <*> justM (CallExpr <$> fr 
+                                                              <*> (VarRef <$> fr <*> biForInKeys)
+                                                              <*> (return [e]))
     initIdx     = VarDecl     <$> fr 
                               <*> keysIdx 
                               <*> (Just      <$> (IntLit  <$> fr <*> return 0))
@@ -312,9 +303,9 @@ ssaStmt (ForInStmt l (ForInVar v) e b) =
                                                           <*> (unId <$> keysIdx)))
     accessKeys  = vStmt        $   VarDecl <$> fr 
                                            <*> return v 
-                                           <*> (Just <$> (BracketRef <$> fr 
-                                                                     <*> (VarRef <$> fr <*> keysArr) 
-                                                                     <*> (VarRef <$> fr <*> keysIdx)))
+                                           <*> justM (BracketRef <$> fr 
+                                                                 <*> (VarRef <$> fr <*> keysArr) 
+                                                                 <*> (VarRef <$> fr <*> keysIdx))
     forStmt     = ForStmt     <$> fr 
                               <*> (VarInit <$> single <$> initIdx) 
                               <*> condition 
@@ -394,7 +385,6 @@ ssaStmt (ModuleStmt l n body)
               setSsaEnv γ
               return      $ (True, ModuleStmt l n body')
   where
-    sp = ((srcPos <$>) <$>)
 
 ssaStmt (EnumStmt l n es) 
   = return (True, EnumStmt l n es) 
@@ -449,7 +439,7 @@ ctorVisitor ms            = defaultVisitor { endStmt = es } { endExpr = ee }
         superVS n = VarDeclStmt <$> fr <*> (single <$> superVD n) 
         superVD n = VarDecl  <$> fr 
                              <*> freshenIdSSA (builtinOpId BISuperVar)
-                             <*> (Just <$> (NewExpr <$> fr <*> n <*> return es))
+                             <*> justM (NewExpr <$> fr <*> n <*> return es)
         asgnS x = ExprStmt   <$> fr <*> asgnE x 
         asgnE x = AssignExpr <$> fr 
                              <*> return OpAssign
@@ -468,7 +458,7 @@ ctorVisitor ms            = defaultVisitor { endStmt = es } { endExpr = ee }
 ctorExit l ms 
   = do  m     <- VarRef <$> fr <*> freshenIdSSA (builtinOpId BICtorExit)
         es    <- mapM ((VarRef <$> fr <*>) . return . mkCtorId l) ms
-        ReturnStmt <$> fr <*> (Just <$> (CallExpr <$> fr <*> return m <*> return es))
+        ReturnStmt <$> fr <*> justM (CallExpr <$> fr <*> return m <*> return es)
   where
     fr = fr_ l
 
@@ -518,8 +508,6 @@ ssaClassElt (Constructor l xs bd)
                                        <*> getCurrentClass)
     bdM fs      = visitStmtsT (ctorVisitor fs) () bd
     exitM  fs   = single <$> ctorExit l fs
-    unshadow gs = L.deleteFirstsBy (on (==) unId) (sp gs) (sp xs)
-    sp              = ((srcPos <$>) <$>)
 
 -- | Initilization expression for instance variables is moved to the beginning 
 --   of the constructor.
@@ -600,8 +588,8 @@ ssaWith θ φ f x = do
   setSsaEnv θ
   setSsaEnvGlob φ
   (b, x') <- f x
-  (, x')  <$> (if b then Just <$> ((,) <$> getSsaEnv <*> getSsaEnvGlob) else return Nothing)
-
+  (, x')  <$> if b then justM ((,) <$> getSsaEnv <*> getSsaEnvGlob) 
+                   else return Nothing
 
 -------------------------------------------------------------------------------------
 ssaExpr ::  Data r => Expression (AnnSSA r) -> SSAM r ([Statement (AnnSSA r)], Expression (AnnSSA r))
@@ -804,9 +792,8 @@ ssaVarDecl v@(VarDecl l x Nothing)
   | not $ null [ () | (AmbVarDeclKind,_,_) <- scrapeVarDecl v ]
   = return ([], VarDecl l x Nothing)
   | otherwise
-  = do x' <- updSsaEnv l x
-       ([],) <$> (VarDecl l <$> updSsaEnv l x 
-                            <*> (Just <$> (VarRef <$> fr_ l <*> (Id <$> fr_ l <*> return "undefined"))))
+  = ([],) <$> (VarDecl l <$> updSsaEnv l x 
+                         <*> justM (VarRef <$> fr_ l <*> freshenIdSSA undefinedId))
 
 ------------------------------------------------------------------------------------------
 ssaVarRef ::  Data r => AnnSSA r -> Id (AnnSSA r) -> SSAM r (Expression (AnnSSA r))

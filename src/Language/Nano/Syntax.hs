@@ -30,9 +30,8 @@ module Language.Nano.Syntax (JavaScript(..)
                             ,SourcePos
                             ) where
 
-import Text.Parsec.Pos(initialPos,SourcePos) -- used by data JavaScript
+import Text.Parsec.Pos(SourcePos) -- used by data JavaScript
 import Data.Generics(Data,Typeable)
-import Data.Text
 import Data.Foldable (Foldable)
 import Data.Traversable (Traversable)
 import Data.Default

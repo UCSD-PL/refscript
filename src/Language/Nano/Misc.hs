@@ -1,8 +1,11 @@
-{-# LANGUAGE DeriveDataTypeable     #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE Rank2Types             #-} 
-{-# LANGUAGE Rank2Types             #-} 
-{-# LANGUAGE LambdaCase             #-}
+{-# LANGUAGE DeriveDataTypeable               #-}
+{-# LANGUAGE FlexibleInstances                #-}
+{-# LANGUAGE Rank2Types                       #-} 
+{-# LANGUAGE Rank2Types                       #-} 
+{-# LANGUAGE LambdaCase                       #-}
+{-# LANGUAGE NoMonomorphismRestriction        #-}
+{-# OPTIONS_GHC -fno-warn-incomplete-patterns #-}
+
 
 module Language.Nano.Misc (
   -- * Helper functions
@@ -43,13 +46,14 @@ module Language.Nano.Misc (
 
   , dup
 
-  , mappendM
+  , mappendM, justM
 
   , case1, case2, case3
+  , (<##>), (<###>)
 
 ) where
 
--- import           Control.Applicative                ((<$>))
+import           Control.Applicative                  ((<$>))
 import           Control.Monad                        (liftM2, foldM)
 import           Data.Data
 import           Data.Maybe                           (isJust)
@@ -238,4 +242,10 @@ mappendM = liftM2 mappend
 case1 g f e        = g (\case [e']            -> f e'         ) [e]
 case2 g f e1 e2    = g (\case [e1', e2']      -> f e1' e2'    ) [e1, e2]
 case3 g f e1 e2 e3 = g (\case [e1', e2', e3'] -> f e1' e2' e3') [e1, e2, e3]
+
+
+f <##>  x = ((f <$>) <$>) x
+f <###> x = ((f <$>) <$>) <$> x
+
+justM = (Just <$>)
 

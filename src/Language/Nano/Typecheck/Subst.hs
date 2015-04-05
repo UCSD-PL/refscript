@@ -31,6 +31,7 @@ import           Language.Nano.Syntax.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Annots
 import           Language.Nano.Env
+import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
@@ -105,10 +106,7 @@ instance Free (Cast r) where
   free (CDn t t')  = free [t,t']
 
 instance Free (Fact r) where
-  free (PhiVar _)           = S.empty
   free (PhiVarTy t)         = free (snd t)
-  free (PhiVarTC _)         = S.empty
-  free (PhiPost _ )         = S.empty
   free (TypInst _ _ ts)     = free ts
   free (Overload _ t)       = free t
   free (EltOverload _ t)    = free t
@@ -120,13 +118,9 @@ instance Free (Fact r) where
   free (StatAnn m)          = free m
   free (ConsAnn c)          = free c
   free (FuncAnn c)          = free c
-  free (ReadOnlyVar)        = S.empty
   free (ClassAnn (vs,e,i))  = foldr S.delete (free $ e ++ i) vs
   free (UserCast t)         = free t
-  free (IfaceAnn _)         = S.empty
-  free (ExportedElt)        = S.empty
-  free (ModuleAnn _)        = S.empty
-  free (EnumAnn _)          = S.empty
+  free _                    = S.empty
 
 instance Free (TypeMember r) where
   free (FieldSig _ o m t)   = free o `mappend` free m `mappend` free t
@@ -233,6 +227,9 @@ instance SubstitutableQ q r Initialization where
 
 instance (SubstitutableQ q r a, SubstitutableQ q r b, SubstitutableQ q r c) => SubstitutableQ q r (a,b,c) where
   apply θ (a,b,c)           = (apply θ a, apply θ b, apply θ c)
+
+instance SubstitutableQ q r (RType r) => SubstitutableQ q r (EnvEntry r) where
+  apply θ (EE a i t)        = EE a i $ apply θ t
 
  
 ---------------------------------------------------------------------------------

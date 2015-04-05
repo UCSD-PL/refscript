@@ -23,6 +23,10 @@ import           Language.Nano.Program
 import qualified Language.Fixpoint.Types as F
   
 -- import           Debug.Trace                        (trace)
+--
+--
+-- TODO: keep ID for each environment: the pair (env_id, symbol) should be
+--       unique ... 
 
 -------------------------------------------------------------------------------------
 -- | Constraint Generation Environment 
@@ -32,7 +36,7 @@ data CGEnvR r = CGE {
   -- 
   -- ^ bindings in scope 
   --
-    cge_names   :: !(Env (RType r, Assignability, Initialization))
+    cge_names   :: !(Env (EnvEntry r))
   -- 
   -- ^ fixpoint bindings
   --
@@ -69,7 +73,8 @@ data CGEnvR r = CGE {
   } deriving (Functor)
 
 type CGEnv = CGEnvR F.Reft
- 
+
+type CGEnvEntry = EnvEntry F.Reft
 
 instance EnvLike r CGEnvR where
   names     = cge_names

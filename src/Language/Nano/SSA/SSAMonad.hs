@@ -55,9 +55,6 @@ import           Control.Applicative                ((<$>),(<*>))
 import           Control.Monad.State                
 import           Control.Monad.Trans.Except
 
-import           Data.Generics                   
-import           Data.Either (partitionEithers)
-
 import           Data.Maybe                         (fromMaybe) 
 import qualified Data.HashSet                       as S
 import qualified Data.IntSet                        as I

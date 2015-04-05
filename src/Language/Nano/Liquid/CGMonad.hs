@@ -284,54 +284,30 @@ envAdds = envAdds' True True
 
 
 
-
 -- | No binders for WriteGlobal variables as they cannot appear in refinements.
 --
---   doFields : add bindings for fields (True/False)
+--   fld : add bindings for fields (True/False)
 --
 ---------------------------------------------------------------------------------------
 envAdds' :: EnvKey x => Bool -> Bool -> String -> [(x, CGEnvEntry)] -> CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAdds' _        _        _   []  g 
-  = return g 
-envAdds' doChecks doFields msg xts g
+envAdds' _   _   _   []  g = return g 
+envAdds' chk fld msg xts g
   = do  -- 1. Check for unbound symbols in refinement
-        when doChecks   $ zipWithM_ (checkSyms msg g xss) xs ts 
+        when chk   $ zipWithM_ (checkSyms msg g xs) xs ts
         -- 2. Add invariants
         es             <- L.zipWith3 EE as is <$> zipWithM inv is ts
-        let ts'        = map replaceOffset $ zip xs es
-        let es'         = L.zipWith3 EE as is ts'
         -- 3. Add fixpoint binds
         fpIds          <- catMaybes <$> zipWithM addFixpointBind xs es
         -- 4. Update environment @g@
-        let g'          = g { cge_names = E.envAdds (zip xs es')  $ cge_names g
+        let g'          = g { cge_names = E.envAdds (zip xs es)   $ cge_names g
                             , cge_fenv  = F.insertsIBindEnv fpIds $ cge_fenv  g }
         -- 5. Add object field binders 
-        foldM (addObjectFields msg doChecks doFields) g' $ zip3 xs as ts'
+        foldM (objFields msg chk fld) g' $ zip xs es
   where
     (xs,as,is,ts)       = L.unzip4 [ (x, a, i, t) | (x, EE a i t) <- xts ]
-    xss                 = map F.symbol xs
-
     inv Initialized     = addInvariant g
     inv _               = return
-
-
--- offset(v,"f") --> x.f
---
---  XXX: this introduces a lot of replication in refinements
---
-replaceOffset (x, EE a i t) = app (V.trans vis () ()) t
-  where
-    v                     = rTypeValueVar t
-    vis                   = V.defaultVisitor { V.txExpr = te }
-    te _ e@(F.EApp offset [F.EVar v',F.ESym (F.SL f)]) 
-                          | F.symbol "offset" == F.symbol offset
-                          , v == v'
-                          = F.eVar $ F.qualifySymbol (F.symbol x) (F.symbol f)
-    te _ e                = e
-    app f (TRef c xs r)   = TRef c xs (r `F.meet` f r)
-    app f (TCons m xs r)  = TCons m xs ( r `F.meet` f r)
-    app _ f               = t
 
 
 -- | Valid symbols:
@@ -344,6 +320,9 @@ replaceOffset (x, EE a i t) = app (V.trans vis () ()) t
 --   * Additional builtin symbols
 --   * ReadOnly ... binders in the environment
 --
+---------------------------------------------------------------------------------------
+checkSyms :: EnvKey a => String -> CGEnv -> [a] -> a -> RefType -> CGM ()
+---------------------------------------------------------------------------------------
 checkSyms m g ok x t = mapM_ cgError errs 
   where
     errs             = efoldRType h f F.emptySEnv [] t
@@ -357,7 +336,7 @@ checkSyms m g ok x t = mapM_ cgError errs
                      = Nothing
                      | s == rTypeValueVar t'              
                      = Nothing  
-                     | s `L.elem` ok                      
+                     | s `L.elem` ok_syms
                      = Nothing 
                      | s `F.memberSEnv` γ 
                      = Nothing
@@ -373,8 +352,9 @@ checkSyms m g ok x t = mapM_ cgError errs
 
     l                = srcPos x
     biReserved       = F.symbol <$> ["func", "obj"]
-    biExtra          = F.symbol <$> ["bvor", "bvand", "builtin_BINumArgs", "offset"]
+    biExtra          = F.symbol <$> ["bvor", "bvand", "builtin_BINumArgs", "offset", "this"]
     x_sym            = F.symbol x
+    ok_syms          = F.symbol <$> ok
     validAsgn        = [ReadOnly,ImportDecl,WriteLocal] 
 
 --     immFlds tt       | Just (TCons m ms _) <- expandType NonCoercive g tt 
@@ -385,42 +365,30 @@ checkSyms m g ok x t = mapM_ cgError errs
 --                      = []
 
 
--- | `addObjectFields g (x,t)`
---   
---   * Introduce bindings for all its IMMUTABLE fields. 
+-- | Introduce bindings for ALL IMMUTABLE fields
+--
 ---------------------------------------------------------------------------------------
-addObjectFields :: (IsLocated x, F.Symbolic x, PP x) 
-                => String 
-                -> Bool
-                -> Bool
-                -> CGEnv 
-                -> (x,Assignability,RefType) 
-                -> CGM CGEnv
+objFields :: EnvKey x => String -> Bool -> Bool -> CGEnv -> (x, CGEnvEntry) -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-addObjectFields msg chk False g _ 
-              = return g
+objFields _ _ False g _ = return g
 
-addObjectFields msg chk True  g (x,a,t) 
+objFields msg chk True g (x, EE a _ t) 
               | a `elem` [WriteGlobal,ReturnVar] 
               = return g
               | otherwise
-              = envAdds' chk False ("addObjectFields-" ++ msg) xts g
+              = envAdds' chk False ("objFields-" ++ msg) xts g
   where
-    xts       = [ (fd f, ty o tf) | FieldSig f o m tf <- ms
-                                  , isImmutable m 
-                                  , f /= F.symbol "__proto__" 
-                ]
+    xts       = [ (fd f, ee f o tf) | FieldSig f o m tf <- ms
+                                    , isImmutable m, f /= protoSym ]
 
     -- This should remain as is: x.f bindings are not going to change
     fd        = mkQualSym x 
 
-    --
-    -- FIXME : Is substThis necessary here ???
-    --
-    ty o tf   | optionalFieldType o 
-              = EE a Initialized $ orUndef $ substThis g (x,t) tf
-              | otherwise
-              = EE a Initialized $ substThis g (x,t) tf
+    ee f o tf | optionalFieldType o = EE a Initialized $ orUndef $ ty tf f
+              | otherwise           = EE a Initialized $           ty tf f
+
+    -- v = offset(x,"f")
+    ty t f    = substThis x t `eSingleton` F.EApp offsetLocSym [F.expr x, F.expr $ F.symbolText f]
 
     ms        | Just (TCons m ms _) <- expandType Coercive g t 
               = defMut m <$> M.elems ms
@@ -436,12 +404,7 @@ addObjectFields msg chk True  g (x,a,t)
     defMut _ f = f 
 
 
-envAdd x t g                 = envAdds "envAdd" [(x,t)] g
--- envAddNoChecksNoFields x t g = envAdds' False False "envAdd" [(x,t)] g
-
-
-instance PP F.IBindEnv where
-  pp e = F.toFix e 
+envAdd x t g  = envAdds "envAdd" [(x,t)] g
 
 
 ---------------------------------------------------------------------------------------
@@ -763,19 +726,18 @@ subType :: AnnTypeR -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l err g t1 t2 =
   do  t1'    <- addInvariant g t1  -- enhance LHS with invariants
-      -- let xs  = [(symbolId l x, EE a i t) | (x, Just (EE a i t)) <- rNms t1' ++ rNms t2 ]
-      -- let ys  = [(symbolId l x, EE a i t) | (x,      (EE a i t)) <- E.envToList $ cgeAllNames g ]
-      -- g'     <- envAdds "subtype" (xs ++ ys) g
-      modify  $ \st -> st { cs = Sub g (ci err l) t1' t2 : cs st }
+      let xs  = [(symbolId l x, EE a i t) | (x, Just (EE a i t)) <- rNms t1' ++ rNms t2 ]
+      let ys  = [(symbolId l x, EE a i t) | (x,      (EE a i t)) <- E.envToList $ cgeAllNames g ]
+      g'     <- envAdds "subtype" (xs ++ ys) g
+      modify  $ \st -> st { cs = Sub g' (ci err l) t1' t2 : cs st }
   where
     rNms t   = mapSnd (`envFindTyWithAsgn` g) . dup <$> names t
     dup a    = (a,a)
     names    = foldReft rr []
     rr r xs  = F.syms r ++ xs
 
-
--- cgeAllNames g@(CGE { cge_parent = Just g' }) = cgeAllNames g' `E.envUnion` cge_names g 
--- cgeAllNames g@(CGE { cge_parent = Nothing }) = cge_names g
+    cgeAllNames g@(CGE { cge_parent = Just g' }) = cgeAllNames g' `E.envUnion` cge_names g 
+    cgeAllNames g@(CGE { cge_parent = Nothing }) = cge_names g
 
 
 -- BUGGY !! -- 
@@ -1012,18 +974,19 @@ splitC (Sub g i t1 t2@(TRef _ _ _)) =
 
 -- | TCons
 --
-splitC (Sub g i t1@(TCons _ e1s r1) t2@(TCons _ e2s _))
+splitC (Sub g i@(Ci _ l) t1@(TCons _ e1s r1) t2@(TCons _ e2s _))
   | F.isFalse (F.simplify r1)
   = return []
   | otherwise
-  = do  cs    <- bsplitC g i t1 t2
-        cs'   <- splitEs g i e1s e2s
+  = do  cs     <- bsplitC g i t1 t2
+        (x,g') <- envAddFresh l (t1,ReadOnly,Initialized) g
+        cs'    <- splitEs g' (F.symbol x) i e1s e2s
         return $ cs ++ cs'
 
 splitC (Sub _ _ (TClass _) (TClass _)) = return []
 splitC (Sub _ _ (TModule _) (TModule _)) = return []
   
-splitC x@(Sub g i t1 t2)
+splitC (Sub g i t1 _)
   = splitIncompatC g i t1 
 
 splitOC g i (Just t) (Just t') = splitC (Sub g i t t') 
@@ -1049,17 +1012,22 @@ mkBot t = setRTypeR t (F.bot r) where r = rTypeR t
 --
 ---------------------------------------------------------------------------------------
 splitEs :: CGEnv 
+        -> F.Symbol
         -> Cinfo 
         -> TypeMembers F.Reft -> TypeMembers F.Reft 
         -> CGM [FixSubC]
 ---------------------------------------------------------------------------------------
-splitEs g i e1s e2s 
-  = do  g' <- envTyAdds "splitEs" i imms g
-        concatMapM (uncurry $ splitE g' i) es 
+splitEs g x i@(Ci _ l) e1s e2s 
+  = do  g' <- foldM step g imBs
+        concatMapM (uncurry $ splitE g' i) es
   where
-    es     = M.elems $ M.intersectionWith (,) e1s e2s
-    imms   = [ B (qlf f) t | (FieldSig f _ m t,_) <- es, isImmutable m ]
-    qlf    = F.qualifySymbol $ F.symbol $ builtinOpId BIThis
+    e1s'     = (substThis x <$>) <$> e1s
+    e2s'     = (substThis x <$>) <$> e2s
+    es       = M.elems $ M.intersectionWith (,) e1s' e2s'
+    step g p = snd <$> envAddFresh l (mkEntry p) g
+    imBs     = [ (f,t) | (FieldSig f _ m t, _) <- es
+                       , isImmutable m, f /= protoSym ]
+    mkEntry (f,t) = (t `eSingleton` mkOffset x f, ReadOnly, Initialized)
 
 
 splitE g i (CallSig t1) (CallSig t2) = splitC (Sub g i t1 t2)

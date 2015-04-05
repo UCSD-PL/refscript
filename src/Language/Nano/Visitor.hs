@@ -39,12 +39,12 @@ module Language.Nano.Visitor (
   , scrapeVarDecl
   , extractQualifiedNames
   , replaceAbsolute
+  , replaceDotRef
   , fixEnums
   , fixFunBinders
 
   , mkTypeMembers
   , mkVarEnv
-
 
   ) where
 
@@ -59,12 +59,13 @@ import qualified Data.Map.Strict                as M
 import           Data.Maybe                     (maybeToList, listToMaybe, fromMaybe)
 import qualified Data.IntMap                    as I
 import qualified Data.Traversable               as T
+import           Data.Text                      (pack, splitOn)
 import           Control.Applicative            ((<$>), (<*>))
 import           Control.Exception              (throw)
 import           Control.Monad.Trans.State      (modify, runState, StateT, runStateT)
 import           Control.Monad.Trans.Class      (lift)
 import           Control.Monad
-import           Language.Nano.Misc             (mapSndM)
+import           Language.Nano.Misc             (mapSndM, (<##>), (<###>))
 import           Language.Nano.Errors
 import           Language.Nano.Syntax
 import           Language.Nano.Syntax.Annotations
@@ -77,10 +78,14 @@ import           Language.Nano.Locations
 import           Language.Nano.Annots           hiding (err)
 import           Language.Nano.Program
 import           Language.Nano.Typecheck.Resolve
+import           Language.Nano.Liquid.Types     ()
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Names        (symSepName)
 import           Language.Fixpoint.Misc hiding ((<$$>))
 import qualified Language.Fixpoint.Types        as F
+import qualified Language.Fixpoint.Visitor      as V
+
+-- import           Debug.Trace                        (trace)
 
 import           Text.Printf 
 import           Text.PrettyPrint.HughesPJ 
@@ -147,6 +152,18 @@ defaultVisitor = Visitor {
   , mExpr   = return
   }           
 
+scopeVisitor = defaultVisitor { endExpr = ee, endStmt = es } 
+  where
+    es FunctionStmt{} = True 
+    es FuncAmbDecl {} = True
+    es FuncOverload{} = True
+    es ClassStmt   {} = True
+    es IfaceStmt   {} = True
+    es ModuleStmt  {} = True
+    es _              = False
+    ee _              = True
+
+
 --------------------------------------------------------------------------------
 -- | Visitor API 
 --------------------------------------------------------------------------------
@@ -200,9 +217,9 @@ visitStmtM v = vS
     vE      = visitExpr v   
     vEE     = visitEnumElt v
     vC      = visitCaseClause v   
-    vI      = visitId   v   
+    vI      = visitId v   
     vS c s  | endStmt v s 
-            = return s
+            = accum acc >> return s 
             | otherwise   
             = accum acc >> lift (mStmt v s') >>= step c' where c'   = ctxStmt v c s
                                                                s'   = txStmt  v c' s
@@ -240,7 +257,7 @@ visitExpr v = vE
      vI      = visitId         v   
      vL      = visitLValue     v   
      vE c e  | endExpr v e 
-             = return e
+             = accum acc >> return e
              | otherwise
              = accum acc >> lift (mExpr v s') >>= step c' where c'  = ctxExpr v c  e
                                                                 s'  = txExpr  v c' e
@@ -357,6 +374,9 @@ transIFD f as xs idf = idf { t_base = transIFDBase f as' xs  $  t_base idf
 transIFDBase f as xs (es,is) = (transClassAnn1 f as xs <$> es, transClassAnn1 f as xs <$> is)
 
 
+transFact :: F.Reftable r 
+          => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
+          -> [TVar] -> [BindQ q r] -> FactQ q r -> FactQ q r
 transFact f = go
   where
     go as xs (VarAnn (a,t))    = VarAnn        $ (a,trans f as xs <$> t)
@@ -547,27 +567,20 @@ type BindInfo r = (Id (AnnType r), AnnType r, SyntaxKind, Assignability, Initial
 -------------------------------------------------------------------------------
 hoistBindings :: Data r => [Statement (AnnType r)] -> [BindInfo r]
 -------------------------------------------------------------------------------
-hoistBindings = everythingBut (++) myQ
+hoistBindings = snd . visitStmts vs ()
   where
-    myQ a | Just s <- cast a :: (Data r => Maybe (Statement  (AnnType r))) = fSt s
-          | Just s <- cast a :: (Data r => Maybe (Expression (AnnType r))) = fExp s
-          | Just s <- cast a :: (Data r => Maybe (VarDecl    (AnnType r))) = fVd s
-          | otherwise                                                      = ([], False)
+    vs = scopeVisitor { accStmt = accStmt', accVDec = accVDec' }
 
-    fSt (FunctionStmt l n _ _)  = ([(n, l, fdk, ro, ii)], True)
-    fSt (FuncAmbDecl l n _)     = ([(n, l, fak, id, ii)], True)
-    fSt (FuncOverload l n _  )  = ([(n, l, fok, id, ii)], True)
-    fSt (ClassStmt l n _ _ _ )  = ([(n, l, cdk, ro, ii)], True)
-    fSt (ModuleStmt l n _)      = ([(n, l { ann_fact = modAnn  n l }, mdk, ro, ii)], True)
-    fSt (EnumStmt l n _)        = ([(n, l { ann_fact = enumAnn n l }, edk, ro, ii)], True)
-    fSt _                       = ([], False)
+    accStmt' _ (FunctionStmt l n _ _)  = [(n, l, fdk, ro, ii)]
+    accStmt' _ (FuncAmbDecl l n _)     = [(n, l, fak, id, ii)]
+    accStmt' _ (FuncOverload l n _  )  = [(n, l, fok, id, ii)]
+    accStmt' _ (ClassStmt l n _ _ _ )  = [(n, l, cdk, ro, ii)]
+    accStmt' _ (ModuleStmt l n _)      = [(n, l { ann_fact = modAnn  n l }, mdk, ro, ii)]
+    accStmt' _ (EnumStmt l n _)        = [(n, l { ann_fact = enumAnn n l }, edk, ro, ii)]
+    accStmt' _ _                       = []
 
-    fExp :: Expression (AnnType r) -> ([BindInfo r], Bool)
-    fExp _                      = ([], True)
-
-    fVd :: VarDecl (AnnType r) -> ([BindInfo r], Bool)
-    fVd (VarDecl l n init)      = ([(n, l, vdk, varAsgn l, fromInit init)] ++
-                                   [(n, l, vdk, wg, fromInit init) | AmbVarAnn _  <- ann_fact l], True)
+    accVDec' _ (VarDecl l n init)      = [(n, l, vdk, varAsgn l, fromInit init)] ++
+                                         [(n, l, vdk, wg, fromInit init) | AmbVarAnn _  <- ann_fact l]
 
     fromInit (Just _) = ii
     fromInit _        = ui
@@ -592,49 +605,22 @@ hoistBindings = everythingBut (++) myQ
 
 -- | Find classes / interfaces in scope
 -------------------------------------------------------------------------------
-hoistTypes :: Data a => [Statement a] -> [Statement a]
+hoistTypes :: IsLocated a => [Statement a] -> [Statement a]
 -------------------------------------------------------------------------------
-hoistTypes = everythingBut (++) myQ
+hoistTypes  = snd . visitStmts (scopeVisitor { accStmt = accStmt' }) ()
   where
-    myQ a | Just s <- cast a :: (Data a => Maybe (Statement a))  = fSt s
-          | Just s <- cast a :: (Data a => Maybe (Expression a)) = fExp s
-          | otherwise                                            = ([], False)
+    accStmt' _ s@(ClassStmt {}) = [s]
+    accStmt' _ s@(IfaceStmt {}) = [s]
+    accStmt' _ _                = [ ]
 
-    fSt FunctionStmt {}  = ([ ], True)
-    fSt FuncAmbDecl  {}  = ([ ], True)
-    fSt FuncOverload {}  = ([ ], True)
-    fSt s@(ClassStmt {}) = ([s], True)
-    fSt s@(IfaceStmt {}) = ([s], True)
-    fSt ModuleStmt   {}  = ([ ], True)
-    fSt _                = ([ ], False)
-
-    fExp :: Expression a -> ([Statement a], Bool)
-    fExp _               = ([ ], True)
 
 -------------------------------------------------------------------------------
 hoistGlobals :: Data r => [Statement (AnnType r)] -> [Id (AnnType r)]
 -------------------------------------------------------------------------------
-hoistGlobals = everythingBut (++) myQ
+hoistGlobals = snd . visitStmts (scopeVisitor { accVDec = accVDec' }) ()
   where
-    myQ a | Just s <- cast a :: (Data r => Maybe (Statement  (AnnType r))) = fSt s
-          | Just s <- cast a :: (Data r => Maybe (Expression (AnnType r))) = fExp s
-          | Just s <- cast a :: (Data r => Maybe (VarDecl    (AnnType r))) = fVd s
-          | otherwise                                                      = ([], False)
-
-    fSt                :: Statement (AnnType r) -> ([Id (AnnType r)], Bool)
-    fSt FunctionStmt{}  = ([ ], True)
-    fSt FuncAmbDecl {}  = ([ ], True)
-    fSt FuncOverload{}  = ([ ], True)
-    fSt ClassStmt   {}  = ([ ], True)
-    fSt ModuleStmt  {}  = ([ ], True)
-    fSt _               = ([ ], False)
-
-    fExp               :: Expression (AnnType r) -> ([Id (AnnType r)], Bool)
-    fExp _              = ([ ], True)
-
-    fVd                :: VarDecl (AnnType r) -> ([Id (AnnType r)], Bool)
-    fVd (VarDecl l x _) = ([ x | VarAnn (WriteGlobal,_) <- ann_fact l ] 
-                        ++ [ x | AmbVarAnn _            <- ann_fact l ], True)
+    accVDec' _ (VarDecl l x _) = [ x | VarAnn (WriteGlobal,_) <- ann_fact l ] 
+                              ++ [ x | AmbVarAnn _            <- ann_fact l ]
 
 -- | Summarise all nodes in top-down, left-to-right order, carrying some state
 --   down the tree during the computation, but not left-to-right to siblings,
@@ -668,10 +654,10 @@ collectModules ss = topLevel : rest ss
 ---------------------------------------------------------------------------------------
 visibleVars :: Data r => [Statement (AnnSSA r)] -> [(Id SrcSpan, VarInfo r)]
 ---------------------------------------------------------------------------------------
-visibleVars s = [ (ann <$> n,(k,v,a,t,i))   | (n,l,k,a,i) <- hoistBindings s
-                                            , f          <- ann_fact l
-                                            , t          <- annToType (ann l) n a f
-                                            , let v       = visibility l ]
+visibleVars s = [ (ann <$> n, (k,v,a,t,i))  | (n,l,k,a,i) <- hoistBindings s 
+                                            , f           <- ann_fact l
+                                            , t           <- annToType (ann l) n a f
+                                            , let v        = visibility l ]
   where
     annToType _ _ ReadOnly   (VarAnn (_,t)) = maybeToList t -- Hoist ReadOnly vars (i.e. function defs)
     annToType _ _ ImportDecl (VarAnn (_,t)) = maybeToList t -- Hoist ImportDecl (i.e. function decls)
@@ -723,6 +709,27 @@ replaceAbsolute pgm@(Nano { code      = Src ss
                     = QP AK_ l $ p ++ [F.symbol x] 
     cStmt q _       = q
     acc c s         = I.singleton (ann_id a) c where a = getAnnotation s
+
+
+-- | Replace `a.b.c...z` with `offset(offset(...(offset(a),"b"),"c"),...,"z")`
+---------------------------------------------------------------------------------------
+replaceDotRef :: NanoBareR F.Reft -> NanoBareR F.Reft
+---------------------------------------------------------------------------------------
+replaceDotRef p@(Nano{ code = Src fs, tAlias = ta, pAlias = pa, invts = is }) 
+    = p { code         = Src $      tf       <##>  fs
+        , tAlias       = transRType tt [] [] <###> ta 
+        , pAlias       =            tt [] [] <##>  pa
+        , invts        = transRType tt [] [] <##>  is
+        } 
+  where 
+    tf (Ann l a facts) = Ann l a $ transFact tt [] [] <$> facts
+    tt _ _             = fmap $ V.trans vs () ()
+    vs                 = V.defaultVisitor { V.txExpr = tx }
+    tx _ (F.EVar s)    | (x:y:zs) <- pack "." `splitOn` pack (F.symbolString s)
+                       = foldl offset (F.eVar x) (y:zs)
+    tx _ e             = e
+    offset k v         = F.EApp offsetLocSym [F.expr k, F.expr v]
+
 
 -- | Replace `TRef x _ _` where `x` is a name for an enumeration with `number`
 ---------------------------------------------------------------------------------------

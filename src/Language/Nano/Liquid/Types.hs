@@ -59,7 +59,7 @@ module Language.Nano.Liquid.Types (
 
   -- * 'this' related substitutions
   , substThis, unqualifyThis, mkQualSym, mkOffset
-
+  , substOffsetThis
 
   ) where
 
@@ -699,33 +699,38 @@ zipElts _ _ _                   _                      = Nothing
 
 appZ (f,r) = f r
 
-expandTypeWithSub g x t = substThis g (x,t) <$> expandType Coercive g t
+expandTypeWithSub g x t = substThis' g (x,t) <$> expandType Coercive g t
+
+substThis x t         = F.subst (F.mkSubst [(thisSym,F.expr x)]) t
+
+substOffsetThis = emapReft (\_ -> V.trans vs () ()) []
+  where 
+    vs     = V.defaultVisitor { V.txExpr = tx }
+    tx _ (F.EApp o [ F.EVar x, F.ESym (F.SL f) ])
+           | F.symbol o == offsetSym, F.symbol x == thisSym 
+           = F.eVar f 
+    tx _ e = e
 
 
 -- | Substitute occurences of 'this' in type @t'@, given that the receiver 
 --   object is bound to symbol @x@ and it has a type @t@ under @g@.
 -------------------------------------------------------------------------------
-substThis :: (IsLocated a, F.Symbolic a) 
-          => CGEnv -> (a, RefType) -> RefType -> RefType
+substThis' :: (IsLocated a, F.Symbolic a) 
+           => CGEnv -> (a, RefType) -> RefType -> RefType
 -------------------------------------------------------------------------------
-substThis g (x,t) = F.subst su
+substThis' g (x,t) = F.subst su
   where
     su            = F.mkSubst $ (this, F.expr $ F.symbol x) : fieldSu
     this          = F.symbol $ builtinOpId BIThis 
 
-    fieldSu       | Just (TCons m fs _) <- expandType Coercive g t 
-                  = [ subPair f | ((f,im), FieldSig _ _ m _) <- M.toList fs
+    fieldSu       | Just (TCons _ fs _) <- expandType Coercive g t 
+                  = [ subPair f | ((f,InstanceMember), FieldSig _ _ m _) <- M.toList fs
                                 , isImmutable m ]
                   | otherwise                              
                   = []
-
-    im            = InstanceMember
     qFld x f      = F.qualifySymbol (F.symbol x) f  
     subPair f     = (qFld this f, F.expr $ qFld x f)
 
-
-mkOffset :: F.Symbolic k => k -> String -> F.Expr
-mkOffset k v      = F.EApp (F.dummyLoc $ F.symbol "offset") [F.eVar k, F.expr $ Text.pack v]
 
  
 -- | Substitute occurences of 'this.f' in type @t'@, with 'f'
@@ -748,4 +753,9 @@ unqualifyThis g t = F.subst $ F.mkSubst fieldSu
 mkQualSym :: (F.Symbolic x, F.Symbolic f) => x -> f -> F.Symbol
 -------------------------------------------------------------------------------
 mkQualSym    x f = F.qualifySymbol (F.symbol x) (F.symbol f)
+
+-------------------------------------------------------------------------------
+mkOffset :: (F.Symbolic f, F.Expression x) => x -> f -> F.Expr
+-------------------------------------------------------------------------------
+mkOffset x f = F.EApp offsetLocSym [F.expr x, F.expr $ F.symbolText $ F.symbol f]
 

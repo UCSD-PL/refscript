@@ -494,14 +494,7 @@ consClassElt g d@(ID nm _ vs _ ms) (Constructor l xs body)
         ts       <- cgFunTys l ctor xs ctorTy
         forM_ ts  $ consFun1 l g1 ctor xs body
   where 
-    -- 
-    -- 'this' will not appear in the code but it might 
-    -- appear in refinements so add in scope 
-    --
     this_t        = TRef nm (tVar <$> vs) fTop
-    thisInfo      = [(this, (this_t, ReadOnly, Initialized))]
-
-    this          = Loc (srcPos l) $ builtinOpId BIThis
     ctor          = Loc (srcPos l) $ builtinOpId BICtor
     ctorExit      = Loc (srcPos l) $ builtinOpId BICtorExit
     super         = Loc (srcPos l) $ builtinOpId BISuper
@@ -510,23 +503,23 @@ consClassElt g d@(ID nm _ vs _ ms) (Constructor l xs body)
                   = [(super, EE ReadOnly Initialized t)]
                   | otherwise
                   = []
-    mkCtorExitTy  = mkFun (vs, Nothing, bs, 
-                           this_t `nubstrengthen` F.Reft (F.vv Nothing, fbind <$> out))
+
+    mkCtorExitTy  = substOffsetThis $ mkFun (vs, Nothing, bs, ret)
       where
+        ret       = this_t `strengthen` F.Reft (F.vv Nothing, fbind <$> out)
         bs        | Just (TCons _ ms _) <- expandType Coercive g this_t
-                  = sortBy c_sym [ B f t' | ((_,InstanceMember),(FieldSig f _ m t)) <- M.toList ms
-                                          , F.symbol f /= F.symbol "__proto__" 
+                  = sortBy c_sym [ B f t' | ((_,InstanceMember),(FieldSig f _ _ t)) <- M.toList ms
+                                          , F.symbol f /= protoSym 
                                           , let t' = unqualifyThis g this_t t ]
                   | otherwise
                   = []
         out       | Just (TCons _ ms _) <- expandType Coercive g this_t
                   = [ f | ((_,InstanceMember),(FieldSig f _ m _)) <- M.toList ms
-                        , isImmutable m, F.symbol f /= F.symbol "__proto__" ]
+                        , isImmutable m, F.symbol f /= protoSym ]
                   | otherwise
                   = []
 
     fbind f       = F.RConc $ F.PAtom F.Eq (mkOffset v_sym $ F.symbolString f) (F.eVar f)
-    -- fbind f       = F.RConc $ F.PAtom F.Eq (F.eVar $ F.symbol "this" `F.qualifySymbol` f) (F.eVar f)
 
     v_sym         = F.symbol $ F.vv Nothing
     c_sym         = on compare b_sym
@@ -547,7 +540,7 @@ consClassElt _ _ (MemberVarDecl l True x Nothing)
   = cgError $ unsupportedStaticNoInit (srcPos l) x
 
 -- | Instance variable (checked at ctor) 
-consClassElt g dfn (MemberVarDecl _ False _ Nothing)
+consClassElt _ _ (MemberVarDecl _ False _ Nothing)
   = return () 
 
 consClassElt _ _ (MemberVarDecl l False x _)
@@ -730,7 +723,7 @@ consExpr g c@(CallExpr l em@(DotRef _ e f) es) _
 
              -- Invoking a method
              | Just (_,ft,_) <- getProp g MethodAccess Nothing f t
-             = consCall g l c (argsThis (vr x) es) $ substThis g (x,t) ft
+             = consCall g l c (argsThis (vr x) es) ft
                                 
              | otherwise 
              = cgError $ errorCallNotFound (srcPos l) e f
@@ -769,14 +762,14 @@ consExpr g (DotRef l e f) to
         -- Do not nubstrengthen enumeration fields
         Just (TEnum _,t,_) -> Just <$> envAddFresh l (t,ReadOnly,Initialized) g'
 
-        Just (_,t,m)       -> Just <$> envAddFresh l (mkTy m x te t,WriteLocal,Initialized) g'
+        Just (_,t,m) -> Just <$> envAddFresh l (mkTy m x t, WriteLocal, Initialized) g'
 
         Nothing      -> cgError $  errorMissingFld (srcPos l) f te
   where
     vr         = VarRef $ getAnnotation e
 
-    mkTy m x te t | isImmutable m  = fmap F.top t `nubstrengthen` F.usymbolReft (mkQualSym x f)
-                  | otherwise      = substThis g (x,te) t
+    mkTy m x t | isImmutable m  = fmap F.top t `eSingleton` mkOffset x f
+               | otherwise      = substThis x t
 
 -- | e1[e2]
 consExpr g e@(BracketRef l e1 e2) _
@@ -815,7 +808,7 @@ consExpr g (NewExpr l e es) _
 
 -- | super
 consExpr g (SuperRef l) _
-  = case envFindTy (builtinOpId BIThis) g of 
+  = case envFindTy thisId g of 
       Just t   -> case extractParent g t of 
                     Just tp -> Just <$> envAddFresh l (tp, WriteGlobal, Initialized) g
                     Nothing -> cgError $ errorSuper (ann l)

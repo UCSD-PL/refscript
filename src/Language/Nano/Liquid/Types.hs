@@ -67,9 +67,6 @@ import           Data.Maybe              (fromMaybe, catMaybes, maybeToList)
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as HM
 import qualified Data.Map.Strict         as M
-import qualified Data.Text               as Text
-
--- import qualified Data.HashSet            as S
 import           Data.Monoid                        (mconcat)
 import qualified Data.Traversable        as T
 import           Text.PrettyPrint.HughesPJ

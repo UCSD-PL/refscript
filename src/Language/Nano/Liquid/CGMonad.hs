@@ -260,14 +260,15 @@ envGetContextTypArgs n g a αs
 
 ---------------------------------------------------------------------------------------
 envAddFresh :: IsLocated l 
-            => l 
+            => String
+            -> l 
             -> (RefType, Assignability, Initialization) 
             -> CGEnv 
             -> CGM (Id AnnTypeR, CGEnv) 
 ---------------------------------------------------------------------------------------
-envAddFresh l (t,a,i) g 
+envAddFresh msg l (t,a,i) g 
   = do x  <- freshId l
-       g' <- envAdds "envAddFresh" [(x, EE a i t)] g
+       g' <- envAdds ("envAddFresh: " ++ msg) [(x, EE a i t)] g
        addAnnot l x t
        return (x, g')
    
@@ -292,10 +293,10 @@ envAddGroup :: String -> [F.Symbol] -> CGEnv -> (F.Symbol,[(F.Symbol,CGEnvEntry)
 ---------------------------------------------------------------------------------------
 envAddGroup msg ks g (x,xts) = do
     zipWithM_ (checkSyms msg g ks) xs ts
-    es    <- L.zipWith3 EE as is <$> zipWithM inv is ts         -- INVARIANTS
-    ids   <- toIBindEnv . catMaybes <$> zipWithM addFixpointBind xs es       -- FP BINDS
+    es    <- L.zipWith3 EE as is <$> zipWithM inv is ts
+    ids   <- toIBindEnv . catMaybes <$> zipWithM addFixpointBind xs es
     return $ g { cge_names = E.envAdds (zip xs es) $ cge_names g
-               , cge_fenv  = F.insertSEnv x ids  $ cge_fenv  g }
+               , cge_fenv  = F.insertSEnv x ids    $ cge_fenv  g }
   where
     x_sym           = F.symbol x
     (xs,as,is,ts)   = L.unzip4 [(x,a,i,t) | (x, EE a i t) <- xts ]
@@ -844,7 +845,7 @@ splitC (Sub g i t1@(TApp TUn t1s r1) t2@(TApp TUn t2s _))
        s1s = L.sortBy (compare `on` toType) t1s
        s2s = L.sortBy (compare `on` toType) t2s
 
-splitC (Sub g i t1@(TApp TUn t1s r1) t2)
+splitC (Sub g i t1@(TApp TUn t1s _) t2)
   | [t1] <- L.filter (on (==) toType t2) t1s
   , t1s' <- L.filter (on (/=) toType t2) t1s
   = (++) <$> splitC (Sub g i t1 t2) <*> concatMapM (splitIncompatC g i) t1s'
@@ -916,7 +917,7 @@ splitC (Sub g i@(Ci _ l) t1@(TCons _ e1s r1) t2@(TCons _ e2s _))
   = return []
   | otherwise
   = do  cs     <- bsplitC g i t1 t2
-        (x,g') <- envAddFresh l (t1,ReadOnly,Initialized) g
+        (x,g') <- envAddFresh "" l (t1,ReadOnly,Initialized) g
         cs'    <- splitEs g' (F.symbol x) i e1s e2s
         return $ cs ++ cs'
 
@@ -961,7 +962,7 @@ splitEs g x i@(Ci _ l) e1s e2s
     e1s'     = (substThis x <$>) <$> e1s
     e2s'     = (substThis x <$>) <$> e2s
     es       = M.elems $ M.intersectionWith (,) e1s' e2s'
-    step g p = snd <$> envAddFresh l (mkEntry p) g
+    step g p = snd <$> envAddFresh "" l (mkEntry p) g
     imBs     = [ (f,t) | (FieldSig f _ m t, _) <- es
                        , isImmutable m, f /= protoSym ]
     mkEntry (f,t) = (t `eSingleton` mkOffset x f, ReadOnly, Initialized)

@@ -56,9 +56,9 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
--- import           Text.PrettyPrint.HughesPJ 
--- import qualified Data.Foldable                      as FO
+import           Debug.Trace                        (trace)
+import           Text.PrettyPrint.HughesPJ 
+import qualified Data.Foldable                      as FO
 
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
 
@@ -95,9 +95,9 @@ refTc cfg f p
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
   
--- ppCasts (Nano { code = Src fs }) = 
---   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
---                                 , TCast _ c <- ann_fact a ] 
+ppCasts (Nano { code = Src fs }) = 
+  fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+                                , TCast _ c <- ann_fact a ] 
          
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
@@ -216,8 +216,7 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     cst       = cge_consts g
     tyBinds   = [(Loc (srcPos l) α, EE ReadOnly Initialized $ tVar α) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) $ EE WriteLocal Initialized <$> ts
-    argBind   = (argSym, EE ReadOnly Initialized argTy)
-              : [(mkQualSym argSym f, EE ReadOnly Initialized t) | (f,t) <- immFields g argTy ]
+    argBind   = [(argSym, EE ReadOnly Initialized argTy)]
     argSym    = F.symbol $ argId l
     argTy     = mkArgTy l ts $ cge_names g
 
@@ -621,23 +620,23 @@ consExpr g ex@(Cast l e) _ =
     _   -> die $ bugNoCasts (srcPos l) ex
 
 consExpr g (IntLit l i) _
-  = Just <$> envAddFresh l (tInt `eSingleton` i, WriteLocal, Initialized) g
+  = Just <$> envAddFresh "8" l (tInt `eSingleton` i, WriteLocal, Initialized) g
 
 -- Assuming by default 32-bit BitVector
 consExpr g (HexLit l x) _
   | Just e <- bitVectorValue x
-  = Just <$> envAddFresh l (tBV32 `nubstrengthen` e, WriteLocal, Initialized) g
+  = Just <$> envAddFresh "9" l (tBV32 `nubstrengthen` e, WriteLocal, Initialized) g
   | otherwise
-  = Just <$> envAddFresh l (tBV32, WriteLocal, Initialized) g
+  = Just <$> envAddFresh "10" l (tBV32, WriteLocal, Initialized) g
 
 consExpr g (BoolLit l b) _
-  = Just <$> envAddFresh l (pSingleton tBool b, WriteLocal, Initialized) g 
+  = Just <$> envAddFresh "11" l (pSingleton tBool b, WriteLocal, Initialized) g 
 
 consExpr g (StringLit l s) _
-  = Just <$> envAddFresh l (tString `eSingleton` T.pack s, WriteLocal, Initialized) g
+  = Just <$> envAddFresh "12" l (tString `eSingleton` T.pack s, WriteLocal, Initialized) g
 
 consExpr g (NullLit l) _
-  = Just <$> envAddFresh l (tNull, WriteLocal, Initialized) g
+  = Just <$> envAddFresh "13" l (tNull, WriteLocal, Initialized) g
 
 consExpr g (ThisRef l) _
   = case envFindTyWithAsgn this g of
@@ -648,7 +647,7 @@ consExpr g (ThisRef l) _
 
 consExpr g (VarRef l x) _
   | Just (EE WriteGlobal i t) <- tInfo
-  = Just <$> envAddFresh l (t,WriteLocal,i) g
+  = Just <$> envAddFresh "0" l (t,WriteLocal,i) g
   | Just (EE _ _ t) <- tInfo
   = addAnnot (srcPos l) x t >> return (Just (x, g))
   | otherwise
@@ -679,7 +678,7 @@ consExpr g (InfixExpr l o e1 e2) _
 consExpr g (CondExpr l e e1 e2) to
   = do  opTy    <- mkTy to <$> safeEnvFindTy (builtinOpId BICondExpr) g
         tt'     <- freshTyFun g l (rType tt)
-        (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tt', WriteLocal, Initialized) g
+        (v,g')  <- mapFst (VarRef l) <$> envAddFresh "14" l (tt', WriteLocal, Initialized) g
         consCallCondExpr g' l BICondExpr 
           (FI Nothing $ [(e,Nothing),(v,Nothing),(e1,rType <$> to),(e2,rType <$> to)]) 
           opTy
@@ -758,9 +757,9 @@ consExpr g (DotRef l e f) to
               consExpr g' (CallExpr l (DotRef l (vr x) (Id l "_get_length_")) []) to
 
         -- Do not nubstrengthen enumeration fields
-        Just (TEnum _,t,_) -> Just <$> envAddFresh l (t,ReadOnly,Initialized) g'
+        Just (TEnum _,t,_) -> Just <$> envAddFresh "1" l (t,ReadOnly,Initialized) g'
 
-        Just (_,t,m) -> Just <$> envAddFresh l (mkTy m x t, WriteLocal, Initialized) g'
+        Just (_,t,m) -> Just <$> envAddFresh "2" l (mkTy m x t, WriteLocal, Initialized) g'
 
         Nothing      -> cgError $  errorMissingFld (srcPos l) f te
   where
@@ -808,7 +807,7 @@ consExpr g (NewExpr l e es) _
 consExpr g (SuperRef l) _
   = case envFindTy thisId g of 
       Just t   -> case extractParent g t of 
-                    Just tp -> Just <$> envAddFresh l (tp, WriteGlobal, Initialized) g
+                    Just tp -> Just <$> envAddFresh "15" l (tp, WriteGlobal, Initialized) g
                     Nothing -> cgError $ errorSuper (ann l)
       Nothing  -> cgError $ errorSuper (ann l)
 
@@ -823,7 +822,7 @@ consExpr g (FuncExpr l fo xs body) tCxtO
     consFuncExpr ft = do kft       <-  freshTyFun g l ft
                          fts       <-  cgFunTys l f xs kft
                          forM_ fts  $  consFun1 l g f xs body
-                         Just      <$> envAddFresh l (kft, WriteLocal, Initialized) g 
+                         Just      <$> envAddFresh "16" l (kft, WriteLocal, Initialized) g 
   
     anns            = [ t | FuncAnn t <- ann_fact l ]
     f               = maybe (F.symbol "<anonymous>") F.symbol fo
@@ -839,7 +838,7 @@ consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> RefType -> CGM (Maybe (I
 consCast g l e tc
   = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
         tc'     <- freshTyFun g l (rType tc)
-        (x,g')  <- envAddFresh l (tc', WriteLocal, Initialized) g
+        (x,g')  <- envAddFresh "3" l (tc', WriteLocal, Initialized) g
         consCall g' l "user-cast" (FI Nothing [(VarRef l x, Nothing),(e, Just tc')]) opTy 
                       
 -- | Dead code 
@@ -854,7 +853,7 @@ consDeadCode g l e t
 consUpCast g l x _ t2
   = do EE a i tx <- safeEnvFindTyWithAsgn x g
        ztx       <- zipTypeUpM g x tx t2
-       envAddFresh l (ztx,a,i) g
+       envAddFresh "4" l (ztx,a,i) g
 
 -- | DownCast(x, t1 => t2)
 consDownCast g l x _ t2
@@ -863,7 +862,7 @@ consDownCast g l x _ t2
        tx2       <- zipTypeUpM g x t2 tx
        ztx       <- zipTypeDownM g x tx t2
        subType l (errorDownCast (srcPos l) txx t2) g txx tx2
-       envAddFresh l (ztx,a,i) g
+       envAddFresh "5" l (ztx,a,i) g
 
 
 -- | `consCall g l fn ets ft0`:
@@ -927,7 +926,7 @@ consInstantiate l g fn ft ts xes
         let (ts2, its2)  = balance ts1 its1
         (ts3, ot')      <- subNoCapture l (toList its2) (toList xes) ot
         _               <- zipWithM_ (subType l err g) (toList ts2) ts3
-        Just           <$> envAddFresh l (ot', WriteLocal, Initialized) g
+        Just           <$> envAddFresh "5" l (ot', WriteLocal, Initialized) g
   where
     toList (FI x xs)     = maybeToList x ++ xs
     err                  = errorLiquid' l
@@ -1013,14 +1012,14 @@ consCondExprArgs l g (FI Nothing [(c,tc),(t,tt),(x,tx),(y,ty)])
                 Nothing -> 
                     do ttx       <- safeEnvFindTy x_ gx
                        let tty    = fromMaybe ttx ty    -- Dummy type if ty is Nothing
-                       (y_, gy') <- envAddFresh l (tty, WriteLocal, Initialized) gx
+                       (y_, gy') <- envAddFresh "6" l (tty, WriteLocal, Initialized) gx
                        return    $ Just (FI Nothing [c_,t_,x_,y_], gy')
           Nothing -> 
               withGuard gt c_ False y ty >>= \case
                 Just (y_, gy) -> 
                     do tty       <- safeEnvFindTy y_ gy
                        let ttx    = fromMaybe tty tx    -- Dummy type if tx is Nothing
-                       (x_, gx') <- envAddFresh l (ttx, WriteLocal, Initialized) gy
+                       (x_, gx') <- envAddFresh "7" l (ttx, WriteLocal, Initialized) gy
                        return     $ Just (FI Nothing [c_,t_,x_,y_], gx')
                 Nothing       -> return $ Nothing 
   where

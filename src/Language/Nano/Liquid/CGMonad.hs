@@ -38,7 +38,7 @@ module Language.Nano.Liquid.CGMonad (
   , Freshable (..)
 
   -- * Environment API
-  , envAddFresh, envAdds, envAdd
+  , envAddFresh, envAdds
   , envAddReturn, envAddGuard, envPopGuard
   , envFindTy, envFindTyWithAsgn
   , safeEnvFindTy, safeEnvFindTyWithAsgn, safeEnvFindTyNoSngl
@@ -279,36 +279,29 @@ freshenAnn l
        modify $ \st -> st {cg_ast_cnt = 1 + n}
        return $ Ann n (srcPos l) []
 
-
-envAdds = envAdds' True True
-
-
-
--- | No binders for WriteGlobal variables as they cannot appear in refinements.
---
---   fld : add bindings for fields (True/False)
---
 ---------------------------------------------------------------------------------------
-envAdds' :: EnvKey x => Bool -> Bool -> String -> [(x, CGEnvEntry)] -> CGEnv -> CGM CGEnv
+envAdds :: EnvKey x => String -> [(x, CGEnvEntry)] -> CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAdds' _   _   _   []  g = return g 
-envAdds' chk fld msg xts g
-  = do  -- 1. Check for unbound symbols in refinement
-        when chk   $ zipWithM_ (checkSyms msg g xs) xs ts
-        -- 2. Add invariants
-        es             <- L.zipWith3 EE as is <$> zipWithM inv is ts
-        -- 3. Add fixpoint binds
-        fpIds          <- catMaybes <$> zipWithM addFixpointBind xs es
-        -- 4. Update environment @g@
-        let g'          = g { cge_names = E.envAdds (zip xs es)   $ cge_names g
-                            , cge_fenv  = F.insertsIBindEnv fpIds $ cge_fenv  g }
-        -- 5. Add object field binders 
-        foldM (objFields msg chk fld) g' $ zip xs es
+envAdds msg xts g = foldM (envAddGroup msg ks) g es 
   where
-    (xs,as,is,ts)       = L.unzip4 [ (x, a, i, t) | (x, EE a i t) <- xts ]
-    inv Initialized     = addInvariant g
-    inv _               = return
+    es = objFields g <$> xts
+    ks = F.symbol . fst <$> xts
 
+---------------------------------------------------------------------------------------
+envAddGroup :: String -> [F.Symbol] -> CGEnv -> (F.Symbol,[(F.Symbol,CGEnvEntry)]) -> CGM CGEnv
+---------------------------------------------------------------------------------------
+envAddGroup msg ks g (x,xts) = do
+    zipWithM_ (checkSyms msg g ks) xs ts
+    es    <- L.zipWith3 EE as is <$> zipWithM inv is ts         -- INVARIANTS
+    ids   <- toIBindEnv . catMaybes <$> zipWithM addFixpointBind xs es       -- FP BINDS
+    return $ g { cge_names = E.envAdds (zip xs es) $ cge_names g
+               , cge_fenv  = F.insertSEnv x ids  $ cge_fenv  g }
+  where
+    x_sym           = F.symbol x
+    (xs,as,is,ts)   = L.unzip4 [(x,a,i,t) | (x, EE a i t) <- xts ]
+    inv Initialized = addInvariant g
+    inv _           = return
+    toIBindEnv      = (`F.insertsIBindEnv` F.emptyIBindEnv)
 
 -- | Valid symbols:
 --
@@ -352,60 +345,32 @@ checkSyms m g ok x t = mapM_ cgError errs
 
     l                = srcPos x
     biReserved       = F.symbol <$> ["func", "obj"]
+    -- FIXME: Check for this
     biExtra          = F.symbol <$> ["bvor", "bvand", "builtin_BINumArgs", "offset", "this"]
     x_sym            = F.symbol x
     ok_syms          = F.symbol <$> ok
     validAsgn        = [ReadOnly,ImportDecl,WriteLocal] 
 
---     immFlds tt       | Just (TCons m ms _) <- expandType NonCoercive g tt 
---                      = [ F.qualifySymbol (rTypeValueVar tt) f 
---                             | ((f,InstanceMember), FieldSig _ _ m _) <- M.toList ms
---                             , isImmutable m ]
---                      | otherwise 
---                      = []
-
-
--- | Introduce bindings for ALL IMMUTABLE fields
---
+-- | Bindings for IMMUTABLE fields
 ---------------------------------------------------------------------------------------
-objFields :: EnvKey x => String -> Bool -> Bool -> CGEnv -> (x, CGEnvEntry) -> CGM CGEnv
+objFields :: EnvKey x => CGEnv -> (x, CGEnvEntry) -> (F.Symbol, [(F.Symbol,CGEnvEntry)])
 ---------------------------------------------------------------------------------------
-objFields _ _ False g _ = return g
-
-objFields msg chk True g (x, EE a _ t) 
-              | a `elem` [WriteGlobal,ReturnVar] 
-              = return g
-              | otherwise
-              = envAdds' chk False ("objFields-" ++ msg) xts g
+objFields g (x, e@(EE a _ t)) 
+              | a `elem` [WriteGlobal,ReturnVar] = (x_sym, [(x_sym,e)])
+              | otherwise = (x_sym, (x_sym,e):xts)
   where
-    xts       = [ (fd f, ee f o tf) | FieldSig f o m tf <- ms
-                                    , isImmutable m, f /= protoSym ]
-
+    x_sym     = F.symbol x
+    xts       = [(mkQualSym x f, ee f o tf) | FieldSig f o m tf <- ms
+                                            , isImmutable m
+                                            , f /= protoSym ]
     -- This should remain as is: x.f bindings are not going to change
-    fd        = mkQualSym x 
-
     ee f o tf | optionalFieldType o = EE a Initialized $ orUndef $ ty tf f
               | otherwise           = EE a Initialized $           ty tf f
-
     -- v = offset(x,"f")
-    ty t f    = substThis x t `eSingleton` F.EApp offsetLocSym [F.expr x, F.expr $ F.symbolText f]
+    ty t f    = substThis x t `eSingleton` mkOffset x f
 
-    ms        | Just (TCons m ms _) <- expandType Coercive g t 
-              = defMut m <$> M.elems ms
-              | otherwise
-              = []
-
-    defMut m (FieldSig f o m0 t) 
-              | isInheritedMutability m0      -- FIXME: this shouldn't need to happen here  
-              = FieldSig f o m  t
-              | otherwise                
-              = FieldSig f o m0 t
-
-    defMut _ f = f 
-
-
-envAdd x t g  = envAdds "envAdd" [(x,t)] g
-
+    ms        | Just (TCons m ms _) <- expandType Coercive g t = M.elems ms
+              | otherwise = []
 
 ---------------------------------------------------------------------------------------
 addFixpointBind :: EnvKey x => x -> CGEnvEntry -> CGM (Maybe F.BindId)
@@ -728,8 +693,8 @@ subType l err g t1 t2 =
   do  t1'    <- addInvariant g t1  -- enhance LHS with invariants
       let xs  = [(symbolId l x, EE a i t) | (x, Just (EE a i t)) <- rNms t1' ++ rNms t2 ]
       let ys  = [(symbolId l x, EE a i t) | (x,      (EE a i t)) <- E.envToList $ cgeAllNames g ]
-      g'     <- envAdds "subtype" (xs ++ ys) g
-      modify  $ \st -> st { cs = Sub g' (ci err l) t1' t2 : cs st }
+      -- g'     <- envAdds "subtype" (xs ++ ys) g
+      modify  $ \st -> st { cs = Sub g (ci err l) t1' t2 : cs st }
   where
     rNms t   = mapSnd (`envFindTyWithAsgn` g) . dup <$> names t
     dup a    = (a,a)
@@ -738,34 +703,6 @@ subType l err g t1 t2 =
 
     cgeAllNames g@(CGE { cge_parent = Just g' }) = cgeAllNames g' `E.envUnion` cge_names g 
     cgeAllNames g@(CGE { cge_parent = Nothing }) = cge_names g
-
-
--- BUGGY !! -- 
--- BUGGY !! -- XXX: Removing addInvariant
--- BUGGY !! -- 
--- BUGGY !! ---------------------------------------------------------------------------------------
--- BUGGY !! subType :: AnnTypeR -> Error -> CGEnv -> RefType -> RefType -> CGM ()
--- BUGGY !! ---------------------------------------------------------------------------------------
--- BUGGY !! subType l err g t1 t2 =
--- BUGGY !!   do  -- t1'        <- addInvariant g t1  -- enhance LHS with invariants
--- BUGGY !!       t1'        <- return t1
--- BUGGY !!       g'         <- envAdds "subtype" (goT HM.empty [t1',t2] ++ 
--- BUGGY !!                                        goP HM.empty (cge_guards g)) g
--- BUGGY !!       modify      $ \st -> st { cs = Sub g' (ci err l) t1' t2 : cs st }
--- BUGGY !!   where
--- BUGGY !!     goP m         = goT m . catMaybes . map (`envFindTy` g) . concatMap F.syms
--- BUGGY !! 
--- BUGGY !!     goT m []      = [(symbolId l x,t) | (x,t) <- HM.toList m ]
--- BUGGY !!     goT m ts      = goT (m `HM.union` HM.fromList ps) ts'
--- BUGGY !!       where
--- BUGGY !!         (ps, ts') = unzip [ (p,t') | t              <- ts
--- BUGGY !!                                    , p@(x,(t',_,_)) <- foldT t 
--- BUGGY !!                                    , isNothing       $ HM.lookup x m ]
--- BUGGY !! 
--- BUGGY !!     foldT t       = [ (n,s) | n <- foldReft rr [] t
--- BUGGY !!                             , s <- maybeToList $ envFindTyWithAsgn n g ]
--- BUGGY !! 
--- BUGGY !!     rr r xs       = F.syms r ++ xs
 
 
 
@@ -1067,12 +1004,14 @@ bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant g t1 <*> return t2
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2
   -- = F.subC (cge_fenv g) F.PTrue (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
-  = F.subC (cge_fenv g) p (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
+  = F.subC bs p (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
   | F.isNonTrivialSortedReft r2
-  = F.subC (cge_fenv g) p r1 r2 Nothing [] ci
+  = F.subC bs p r1 r2 Nothing [] ci
   | otherwise
   = []
   where
+    bs             = foldl F.unionIBindEnv F.emptyIBindEnv 
+                   $ snd <$> F.toListSEnv (cge_fenv g)
     p              = F.pAnd $ cge_guards g
     (r1,r2)        = (rTypeSortedReft t1, rTypeSortedReft t2)
     typeofReft t   = F.Reft $ (vv t,) [F.RConc $ typeofExpr (F.symbol "function") t
@@ -1137,14 +1076,17 @@ splitW (W _ _ t) = error $ render $ text "Not supported in splitW: " <+> pp t
 
 bsplitW g t i 
   | F.isNonTrivialSortedReft r'
-  = [F.wfC (cge_fenv g) r' Nothing i] 
+  = [F.wfC bs r' Nothing i] 
   | otherwise
   = []
-  where r' = rTypeSortedReft t
+  where 
+    r' = rTypeSortedReft t
+    bs = foldl F.unionIBindEnv F.emptyIBindEnv 
+       $ snd <$> F.toListSEnv (cge_fenv g)
 
 
 envTyAdds msg l xts g
-  = envAdds' False True (msg ++ " - envTyAdds " ++ ppshow (srcPos l)) 
+  = envAdds (msg ++ " - envTyAdds " ++ ppshow (srcPos l)) 
       [(symbolId l x, EE WriteLocal Initialized t) | B x t <- xts] g
 
 

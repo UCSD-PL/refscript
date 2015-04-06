@@ -40,7 +40,7 @@ data CGEnvR r = CGE {
   -- 
   -- ^ fixpoint bindings
   --
-  , cge_fenv    :: F.IBindEnv
+  , cge_fenv    :: F.SEnv F.IBindEnv
   -- 
   -- ^ branch target conditions  
   --

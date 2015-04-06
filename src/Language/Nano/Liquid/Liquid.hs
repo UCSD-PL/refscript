@@ -28,7 +28,6 @@ import           Language.Nano.Syntax.PrettyPrint
 
 import qualified Language.Fixpoint.Config           as C
 import qualified Language.Fixpoint.Types            as F
-import qualified Language.Fixpoint.Names            as N
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Interface        (solve)
@@ -57,9 +56,9 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
-import           Text.PrettyPrint.HughesPJ 
-import qualified Data.Foldable                      as FO
+-- import           Debug.Trace                        (trace)
+-- import           Text.PrettyPrint.HughesPJ 
+-- import qualified Data.Foldable                      as FO
 
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
 
@@ -96,9 +95,9 @@ refTc cfg f p
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
   
-ppCasts (Nano { code = Src fs }) = 
-  fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
-                                , TCast _ c <- ann_fact a ] 
+-- ppCasts (Nano { code = Src fs }) = 
+--   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+--                                 , TCast _ c <- ann_fact a ] 
          
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
@@ -162,7 +161,7 @@ initGlobalEnv pgm@(Nano { code = Src s })
 
     extras     = [(undefinedId, undefInfo)]
     undefInfo  = EE ReadOnly Initialized $ TApp TUndef [] F.trueReft
-    bds        = F.emptyIBindEnv
+    bds        = F.emptySEnv
     cha        = pCHA pgm
     grd        = []
     mod        = pModules pgm
@@ -337,7 +336,7 @@ consStmt g (ReturnStmt l Nothing)
 -- return e 
 consStmt g (ReturnStmt l (Just e@(VarRef lv x)))
   | Just t <- envFindTy x g, needsCall t 
-  = do  g'    <- envAdd fn (EE ReadOnly Initialized $ finalizeTy t) g
+  = do  g'    <- envAdds "Return" [(fn, EE ReadOnly Initialized $ finalizeTy t)] g
         consStmt g' (ReturnStmt l (Just (CallExpr l (VarRef lv fn) [e]))) 
   | otherwise 
   = do  _ <- consCall g l "return" (FI Nothing [(e, Just retTy)]) $ returnTy retTy True
@@ -427,14 +426,14 @@ consVarDecl g v@(VarDecl l x (Just e))
           fta     <- freshenType WriteGlobal gy l t
           _       <- subType l (errorLiquid' l) gy ty  fta
           _       <- subType l (errorLiquid' l) gy fta t
-          Just   <$> envAdd x (EE WriteGlobal Initialized fta) gy
+          Just   <$> envAdds "consVarDecl" [(x, EE WriteGlobal Initialized fta)] gy
 
       [(_, WriteGlobal, Nothing)] -> 
         mseq (consExpr g e Nothing) $ \(y, gy) -> do
           ty      <- safeEnvFindTy y gy
           fta     <- refresh ty >>= wellFormed l g
           _       <- subType l (errorLiquid' l) gy ty fta
-          Just   <$> envAdd x (EE WriteGlobal Initialized fta) gy
+          Just   <$> envAdds "consVarDecl" [(x, EE WriteGlobal Initialized fta)] gy
 
       -- | ReadOnly
       [(_, ReadOnly, Just t)] -> 
@@ -489,7 +488,7 @@ consClassElts l g d@(ID nm _ vs _ es) cs
 consClassElt :: CGEnv -> IfaceDef F.Reft -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElt g d@(ID nm _ vs _ ms) (Constructor l xs body) 
-  = do  g0       <- envAdd ctorExit (EE ReadOnly Initialized mkCtorExitTy) g
+  = do  g0       <- envAdds "Constructor" [(ctorExit, eri mkCtorExitTy)] g
         g1       <- envAdds "classElt-ctor-1" superInfo g0
         ts       <- cgFunTys l ctor xs ctorTy
         forM_ ts  $ consFun1 l g1 ctor xs body
@@ -498,11 +497,10 @@ consClassElt g d@(ID nm _ vs _ ms) (Constructor l xs body)
     ctor          = Loc (srcPos l) $ builtinOpId BICtor
     ctorExit      = Loc (srcPos l) $ builtinOpId BICtorExit
     super         = Loc (srcPos l) $ builtinOpId BISuper
+    eri           = EE ReadOnly Initialized
 
-    superInfo     | Just t <- extractParent'' g d 
-                  = [(super, EE ReadOnly Initialized t)]
-                  | otherwise
-                  = []
+    superInfo     | Just t <- extractParent'' g d = [(super, eri t)]
+                  | otherwise                     = []
 
     mkCtorExitTy  = substOffsetThis $ mkFun (vs, Nothing, bs, ret)
       where

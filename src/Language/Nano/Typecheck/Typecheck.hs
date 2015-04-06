@@ -612,7 +612,7 @@ tcVarDecl γ v@(VarDecl l x (Just e))
       c -> tcError $ unimplemented l "tcVarDecl" ("case: " ++ ppshow c)
 
 -- XXX: Not using Initilation status for the moment
-tcVarDecl γ v@(VarDecl l x Nothing)
+tcVarDecl γ v@(VarDecl _ x Nothing)
   = case scrapeVarDecl v of
       -- special case ambient vars
       [(AmbVarDeclKind,_, Just t)] -> 

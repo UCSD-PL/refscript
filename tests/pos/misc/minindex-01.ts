@@ -15,9 +15,14 @@ function minIndex(a:number[]):number{
 
   /*@ readonly aa :: # */
   var aa = a; 
+
+  // XXX : MAKE SURE THE NESTED FUNCTIONS arguments BINDS, INDEED SHADOW THE
+  //       ENCLOSING FUNCTIONS ... 
 	
 	function step(i: number, min: number) {
-		if (aa[i] < aa[min]) { 
+  if ( aa[i]
+  < 
+  aa[min]) { 
 			return i;
 		} 
 		return min; 

@@ -898,10 +898,10 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 /*@ qualif CmpZ(v:int): v =  0 */
 /*@ qualif CmpZ(v:int): v != 0 */
 
-/*@ qualif Cmp(v:int, x:int): v <  x */
-/*@ qualif Cmp(v:int, x:int): v <= x */
-/*@ qualif Cmp(v:int, x:int): v >  x */
-/*@ qualif Cmp(v:int, x:int): v >= x */
+/*@ qualif Cmp(v:int,x:int): v <  x */
+/*@ qualif Cmp(v:int,x:int): v <= x */
+/*@ qualif Cmp(v:int,x:int): v >  x */
+/*@ qualif Cmp(v:int,x:int): v >= x */
 
 /*  qualif Cmp(v:a,x:a): v =  x */
 /*@ qualif Cmp(v:a,x:a): v ~~ x */
@@ -919,7 +919,7 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 /*  qualif Add(v:int,x:int,y:int): v = x + y */
 /*  qualif Sub(v:int,x:int,y:int): v = x - y */
 
-/*@  qualif Len(v:b, w:a)  : v < (len w) */
+/*@  qualif Len(v:b,w:a)  : v < (len w) */
 
 
 

@@ -18,7 +18,6 @@ import qualified Data.Traversable                   as T
 import qualified Data.HashMap.Strict                as HM
 import           Data.Function                      (on)
 import qualified Data.Map.Strict                    as M
-import qualified Data.HashSet                       as HS
 import           Data.Maybe                         (maybeToList, fromMaybe, catMaybes)
 import           Data.List                          (sortBy)
 
@@ -57,8 +56,8 @@ import qualified Data.Text                          as T
 import           System.Console.CmdArgs.Default
 
 import           Debug.Trace                        (trace)
-import           Text.PrettyPrint.HughesPJ 
-import qualified Data.Foldable                      as FO
+-- import           Text.PrettyPrint.HughesPJ 
+-- import qualified Data.Foldable                      as FO
 
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
 
@@ -95,9 +94,9 @@ refTc cfg f p
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
   
-ppCasts (Nano { code = Src fs }) = 
-  fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
-                                , TCast _ c <- ann_fact a ] 
+-- ppCasts (Nano { code = Src fs }) = 
+--   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+--                                 , TCast _ c <- ann_fact a ] 
          
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
@@ -147,17 +146,20 @@ consNano p@(Nano {code = Src fs})
 -------------------------------------------------------------------------------
 initGlobalEnv  :: NanoRefType -> CGM CGEnv
 -------------------------------------------------------------------------------
-initGlobalEnv pgm@(Nano { code = Src s }) 
-      = freshenCGEnvM (CGE nms bds grd ctx mod cha pth Nothing cst) 
-    >>= envAdds "initGlobalEnv" extras
+initGlobalEnv pgm@(Nano { code = Src s }) = do
+    g <- freshenCGEnvM (CGE nms bds grd ctx mod cha pth Nothing cst)
+    mapM_ (uncurry $ checkSyms "initFunc" g []) xts
+    envAdds "initGlobalEnv" extras g
   where
     reshuffle1 = \(_,_,c,d,e) -> EE c e d
     reshuffle2 = \(_,c,d,e)   -> EE c e d
     nms        = E.envUnion
                  (E.envAdds extras    $ E.envMap reshuffle1 
-                                      $ mkVarEnv $ visibleVars s) 
+                                      $ mkVarEnv vars) 
                  (E.envMap reshuffle2 $ E.envUnionList $ maybeToList 
                                       $ m_variables <$> E.qenvFindTy pth mod)
+    vars       = visibleVars s
+    xts        = [(x,t) | (x,(_,_,_,t,_))<- vars]
 
     extras     = [(undefinedId, undefInfo)]
     undefInfo  = EE ReadOnly Initialized $ TApp TUndef [] F.trueReft
@@ -172,14 +174,18 @@ initGlobalEnv pgm@(Nano { code = Src s })
 -------------------------------------------------------------------------------
 initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> CGM CGEnv
 -------------------------------------------------------------------------------
-initModuleEnv g n s 
-  = freshenCGEnvM $ CGE nms bds grd ctx mod cha pth (Just g) cst
+initModuleEnv g n s = do 
+    g' <- freshenCGEnvM $ CGE nms bds grd ctx mod cha pth (Just g) cst
+    mapM_ (uncurry $ checkSyms "initFunc" g' []) xts
+    return g'
   where
     reshuffle1 = \(_,_,c,d,e) -> EE c e d
     reshuffle2 = \(_,c,d,e)   -> EE c e d
-    nms        = (E.envMap reshuffle1 $ mkVarEnv $ visibleVars s) `E.envUnion`
+    nms        = (E.envMap reshuffle1 $ mkVarEnv vars) `E.envUnion`
                  (E.envMap reshuffle2 $ E.envUnionList $ maybeToList 
                                       $ m_variables <$> E.qenvFindTy pth mod)
+    vars       = visibleVars s
+    xts        = [(x,t) | (x,(_,_,_,t,_))<- vars]
     bds        = cge_fenv g
     grd        = []
     mod        = cge_mod g
@@ -196,16 +202,20 @@ initModuleEnv g n s
 --    * Adds binders for the arguments @ts@
 --    * Adds binder for the 'arguments' variable
 --
-initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
-        envAdds ("init-func-" ++ ppshow f ++ "-0") varBinds g'
-    >>= envAdds ("init-func-" ++ ppshow f ++ "-1") tyBinds 
-    >>= envAdds ("init-func-" ++ ppshow f ++ "-3") argBind
-    >>= envAdds ("init-func-" ++ ppshow f ++ "-4") thisBind       -- FIXME: this might be included in varBinds
-    >>= envAddReturn f t
-    >>= freshenCGEnvM
+initFuncEnv l f i xs (αs,thisTO,ts,t) g s = do
+    g1 <- envAdds ("init-func-" ++ ppshow f ++ "-0") varBinds g'
+    g2 <- envAdds ("init-func-" ++ ppshow f ++ "-1") tyBinds  g1
+    g3 <- envAdds ("init-func-" ++ ppshow f ++ "-3") argBind  g2
+    -- FIXME: this might be included in varBinds
+    g4 <- envAdds ("init-func-" ++ ppshow f ++ "-4") thisBind g3
+    g5 <- envAddReturn f t g4
+    _  <- mapM_ (uncurry $ checkSyms "init" g5 []) xts
+    freshenCGEnvM g5
   where
     g'        = CGE nms fenv grds ctx mod cha pth parent cst
-    nms       = E.envMap (\(_,_,c,d,e) -> EE c e d) $ mkVarEnv $ visibleVars s
+    nms       = E.envMap (\(_,_,c,d,e) -> EE c e d) $ mkVarEnv vars
+    vars      = visibleVars s
+    xts       = [(x,t) | (x,(_,_,_,t,_))<- vars]
     fenv      = cge_fenv g
     grds      = []
     mod       = cge_mod g
@@ -214,13 +224,13 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     pth       = cge_path g
     parent    = Just g
     cst       = cge_consts g
-    tyBinds   = [(Loc (srcPos l) α, EE ReadOnly Initialized $ tVar α) | α <- αs]
-    varBinds  = zip (fmap ann <$> xs) $ EE WriteLocal Initialized <$> ts
-    argBind   = [(argSym, EE ReadOnly Initialized argTy)]
-    argSym    = F.symbol $ argId l
+    varBinds  = zip (fmap ann <$> xs) $ ewi <$> ts
+    tyBinds   = [(Loc (srcPos l) α, eri $ tVar α) | α <- αs]
+    argBind   = [(argId l, eri argTy)]
     argTy     = mkArgTy l ts $ cge_names g
-
-    thisBind  = (thisId,) . EE ReadOnly Initialized <$> maybeToList thisTO
+    thisBind  | Just t <- thisTO = [(thisId, eri t)] | otherwise = []
+    eri       = EE ReadOnly Initialized
+    ewi       = EE WriteLocal Initialized
 
 
 -------------------------------------------------------------------------------
@@ -447,7 +457,7 @@ consVarDecl g v@(VarDecl l x (Just e))
          
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
  
-consVarDecl g v@(VarDecl l x Nothing)
+consVarDecl g v@(VarDecl _ x Nothing)
   = case scrapeVarDecl v of
       -- special case ambient vars
       [(AmbVarDeclKind, _, Just t)] -> 

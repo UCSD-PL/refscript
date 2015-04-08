@@ -1,5 +1,5 @@
 
-/*@ main :: (xx: number) => { v: number |v > x} */
+/*@ main :: (xx: number) => { v: number |v > xx} */
 function main(xx: number): number {
     
   /*@ readonly x :: # */

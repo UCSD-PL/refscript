@@ -258,9 +258,7 @@ deriving instance Foldable (TypeMemberQ q)
 type TypeMember = TypeMemberQ AK
 
 data Visibility 
-
   = Local 
-
   | Exported
   deriving (Show, Eq, Data, Typeable)
 

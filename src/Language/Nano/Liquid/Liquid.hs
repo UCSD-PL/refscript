@@ -18,7 +18,6 @@ import qualified Data.Traversable                   as T
 import qualified Data.HashMap.Strict                as HM
 import           Data.Function                      (on)
 import qualified Data.Map.Strict                    as M
-import qualified Data.HashSet                       as HS
 import           Data.Maybe                         (maybeToList, fromMaybe, catMaybes)
 import           Data.List                          (sortBy)
 
@@ -28,7 +27,6 @@ import           Language.Nano.Syntax.PrettyPrint
 
 import qualified Language.Fixpoint.Config           as C
 import qualified Language.Fixpoint.Types            as F
-import qualified Language.Fixpoint.Names            as N
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Interface        (solve)
@@ -38,6 +36,7 @@ import           Language.Nano.Annots
 import           Language.Nano.CmdLine              (Config)
 import           Language.Nano.Errors
 import qualified Language.Nano.Env                  as E
+import           Language.Nano.Environment
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Program
@@ -57,8 +56,8 @@ import qualified Data.Text                          as T
 import           System.Console.CmdArgs.Default
 
 import           Debug.Trace                        (trace)
-import           Text.PrettyPrint.HughesPJ 
-import qualified Data.Foldable                      as FO
+-- import           Text.PrettyPrint.HughesPJ 
+-- import qualified Data.Foldable                      as FO
 
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
 
@@ -95,9 +94,9 @@ refTc cfg f p
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
   
-ppCasts (Nano { code = Src fs }) = 
-  fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
-                                , TCast _ c <- ann_fact a ] 
+-- ppCasts (Nano { code = Src fs }) = 
+--   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+--                                 , TCast _ c <- ann_fact a ] 
          
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
@@ -147,21 +146,24 @@ consNano p@(Nano {code = Src fs})
 -------------------------------------------------------------------------------
 initGlobalEnv  :: NanoRefType -> CGM CGEnv
 -------------------------------------------------------------------------------
-initGlobalEnv pgm@(Nano { code = Src s }) 
-      = freshenCGEnvM (CGE nms bds grd ctx mod cha pth Nothing cst) 
-    >>= envAdds "initGlobalEnv" extras
+initGlobalEnv pgm@(Nano { code = Src s }) = do
+    g <- freshenCGEnvM (CGE nms bds grd ctx mod cha pth Nothing cst)
+    mapM_ (uncurry $ checkSyms "initFunc" g []) xts
+    envAdds "initGlobalEnv" extras g
   where
-    reshuffle1 = \(_,_,c,d,e) -> (d,c,e)
-    reshuffle2 = \(_,c,d,e)   -> (d,c,e)
+    reshuffle1 = \(_,_,c,d,e) -> EE c e d
+    reshuffle2 = \(_,c,d,e)   -> EE c e d
     nms        = E.envUnion
                  (E.envAdds extras    $ E.envMap reshuffle1 
-                                      $ mkVarEnv $ visibleVars s) 
+                                      $ mkVarEnv vars) 
                  (E.envMap reshuffle2 $ E.envUnionList $ maybeToList 
                                       $ m_variables <$> E.qenvFindTy pth mod)
+    vars       = visibleVars s
+    xts        = [(x,t) | (x,(_,_,_,t,_))<- vars]
 
-    extras     = [(Id (srcPos dummySpan) "undefined", undefInfo)]
-    undefInfo  = (TApp TUndef [] F.trueReft, ReadOnly, Initialized)
-    bds        = F.emptyIBindEnv
+    extras     = [(undefinedId, undefInfo)]
+    undefInfo  = EE ReadOnly Initialized $ TApp TUndef [] F.trueReft
+    bds        = F.emptySEnv
     cha        = pCHA pgm
     grd        = []
     mod        = pModules pgm
@@ -172,14 +174,18 @@ initGlobalEnv pgm@(Nano { code = Src s })
 -------------------------------------------------------------------------------
 initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> CGM CGEnv
 -------------------------------------------------------------------------------
-initModuleEnv g n s 
-  = freshenCGEnvM $ CGE nms bds grd ctx mod cha pth (Just g) cst
+initModuleEnv g n s = do 
+    g' <- freshenCGEnvM $ CGE nms bds grd ctx mod cha pth (Just g) cst
+    mapM_ (uncurry $ checkSyms "initFunc" g' []) xts
+    return g'
   where
-    reshuffle1 = \(_,_,c,d,e) -> (d,c,e)
-    reshuffle2 = \(_,c,d,e)   -> (d,c,e)
-    nms        = (E.envMap reshuffle1 $ mkVarEnv $ visibleVars s) `E.envUnion`
+    reshuffle1 = \(_,_,c,d,e) -> EE c e d
+    reshuffle2 = \(_,c,d,e)   -> EE c e d
+    nms        = (E.envMap reshuffle1 $ mkVarEnv vars) `E.envUnion`
                  (E.envMap reshuffle2 $ E.envUnionList $ maybeToList 
                                       $ m_variables <$> E.qenvFindTy pth mod)
+    vars       = visibleVars s
+    xts        = [(x,t) | (x,(_,_,_,t,_))<- vars]
     bds        = cge_fenv g
     grd        = []
     mod        = cge_mod g
@@ -196,16 +202,20 @@ initModuleEnv g n s
 --    * Adds binders for the arguments @ts@
 --    * Adds binder for the 'arguments' variable
 --
-initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
-        envAdds ("init-func-" ++ ppshow f ++ "-0") varBinds g'
-    >>= envAdds ("init-func-" ++ ppshow f ++ "-1") tyBinds 
-    >>= envAdds ("init-func-" ++ ppshow f ++ "-3") argBind
-    >>= envAdds ("init-func-" ++ ppshow f ++ "-4") thisBind       -- FIXME: this might be included in varBinds
-    >>= envAddReturn f t
-    >>= freshenCGEnvM
+initFuncEnv l f i xs (αs,thisTO,ts,t) g s = do
+    g1 <- envAdds ("init-func-" ++ ppshow f ++ "-0") varBinds g'
+    g2 <- envAdds ("init-func-" ++ ppshow f ++ "-1") tyBinds  g1
+    g3 <- envAdds ("init-func-" ++ ppshow f ++ "-3") argBind  g2
+    -- FIXME: this might be included in varBinds
+    g4 <- envAdds ("init-func-" ++ ppshow f ++ "-4") thisBind g3
+    g5 <- envAddReturn f t g4
+    _  <- mapM_ (uncurry $ checkSyms "init" g5 []) xts
+    freshenCGEnvM g5
   where
     g'        = CGE nms fenv grds ctx mod cha pth parent cst
-    nms       = E.envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv $ visibleVars s
+    nms       = E.envMap (\(_,_,c,d,e) -> EE c e d) $ mkVarEnv vars
+    vars      = visibleVars s
+    xts       = [(x,t) | (x,(_,_,_,t,_))<- vars]
     fenv      = cge_fenv g
     grds      = []
     mod       = cge_mod g
@@ -214,14 +224,13 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     pth       = cge_path g
     parent    = Just g
     cst       = cge_consts g
-    tyBinds   = [(Loc (srcPos l) α, (tVar α, ReadOnly, Initialized)) | α <- αs]
-    varBinds  = zip (fmap ann <$> xs) $ (,WriteLocal,Initialized) <$> ts
-    argBind   = ( argSym, (argTy, ReadOnly, Initialized))
-              : [ (mkQualSym argSym f, (t,ReadOnly, Initialized)) | (f,t) <- immFields g argTy ]
-    argSym    = F.symbol $ argId l
+    varBinds  = zip (fmap ann <$> xs) $ ewi <$> ts
+    tyBinds   = [(Loc (srcPos l) α, eri $ tVar α) | α <- αs]
+    argBind   = [(argId l, eri argTy)]
     argTy     = mkArgTy l ts $ cge_names g
-
-    thisBind  = (builtinOpId BIThis,) . (, ReadOnly, Initialized) <$> maybeToList thisTO
+    thisBind  | Just t <- thisTO = [(thisId, eri t)] | otherwise = []
+    eri       = EE ReadOnly Initialized
+    ewi       = EE WriteLocal Initialized
 
 
 -------------------------------------------------------------------------------
@@ -336,7 +345,7 @@ consStmt g (ReturnStmt l Nothing)
 -- return e 
 consStmt g (ReturnStmt l (Just e@(VarRef lv x)))
   | Just t <- envFindTy x g, needsCall t 
-  = do  g'    <- envAdd fn (finalizeTy t,ReadOnly,Initialized) g
+  = do  g'    <- envAdds "Return" [(fn, EE ReadOnly Initialized $ finalizeTy t)] g
         consStmt g' (ReturnStmt l (Just (CallExpr l (VarRef lv fn) [e]))) 
   | otherwise 
   = do  _ <- consCall g l "return" (FI Nothing [(e, Just retTy)]) $ returnTy retTy True
@@ -375,13 +384,12 @@ consStmt g s@(FunctionStmt _ _ _ _)
 --  * Compute type for "this" and add that to the env as well. 
 --
 consStmt g (ClassStmt l x _ _ ce) 
-  = do  dfn      <- consEnvFindTypeDefM l g rn
-        g'       <- envAdds "consStmt-class-0" 
-                      [(Loc (ann l) α, (tVar α, WriteGlobal,Initialized)) 
-                          | α <- t_args dfn] g
+  = do  dfn <- consEnvFindTypeDefM l g rn
+        g'  <- envAdds "class-0" [(Loc (ann l) α, ee $ tVar α) | α <- t_args dfn] g
         consClassElts l g' dfn ce
         return    $ Just g
   where
+    ee            = EE WriteGlobal Initialized
     rn            = QN AK_ (srcPos l) ss (F.symbol x)
     QP AK_ _ ss   = cge_path g
 
@@ -408,17 +416,17 @@ consVarDecl g v@(VarDecl l x (Just e))
       [ ] ->  
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           t       <- safeEnvFindTy y gy
-          Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal, Initialized))] gy
+          Just   <$> envAdds "consVarDecl" [(x, EE WriteLocal Initialized t)] gy
 
       [(_, WriteLocal, Just t)] -> 
         mseq (consCall g l "consVarDecl" (FI Nothing [(e, Nothing)]) $ localTy t) $ \(y,gy) -> do
           t       <- safeEnvFindTy y gy
-          Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal, Initialized))] gy
+          Just   <$> envAdds "consVarDecl" [(x, EE WriteLocal Initialized t)] gy
 
       [(_, WriteLocal, Nothing)] -> 
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           t       <- safeEnvFindTy y gy
-          Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal, Initialized))] gy
+          Just   <$> envAdds "consVarDecl" [(x, EE WriteLocal Initialized t)] gy
 
       -- | Global
       [(_, WriteGlobal, Just t)] -> 
@@ -427,33 +435,33 @@ consVarDecl g v@(VarDecl l x (Just e))
           fta     <- freshenType WriteGlobal gy l t
           _       <- subType l (errorLiquid' l) gy ty  fta
           _       <- subType l (errorLiquid' l) gy fta t
-          Just   <$> envAdd x (fta, WriteGlobal, Initialized) gy
+          Just   <$> envAdds "consVarDecl" [(x, EE WriteGlobal Initialized fta)] gy
 
       [(_, WriteGlobal, Nothing)] -> 
         mseq (consExpr g e Nothing) $ \(y, gy) -> do
           ty      <- safeEnvFindTy y gy
           fta     <- refresh ty >>= wellFormed l g
           _       <- subType l (errorLiquid' l) gy ty fta
-          Just   <$> envAdd x (fta, WriteGlobal, Initialized) gy
+          Just   <$> envAdds "consVarDecl" [(x, EE WriteGlobal Initialized fta)] gy
 
       -- | ReadOnly
       [(_, ReadOnly, Just t)] -> 
         mseq (consCall g l "consVarDecl" (FI Nothing [(e, Nothing)]) $ localTy t) $ \(y,gy) -> do
           t       <- safeEnvFindTy y gy
-          Just   <$> envAdds "consVarDecl" [(x, (t, ReadOnly, Initialized))] gy
+          Just   <$> envAdds "consVarDecl" [(x, EE ReadOnly Initialized t)] gy
  
       [(_, ReadOnly, Nothing)] -> 
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           t       <- safeEnvFindTy y gy
-          Just   <$> envAdds "consVarDecl" [(x, (t, ReadOnly ,Initialized))] gy
+          Just   <$> envAdds "consVarDecl" [(x, EE ReadOnly Initialized t)] gy
          
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
  
-consVarDecl g v@(VarDecl l x Nothing)
+consVarDecl g v@(VarDecl _ x Nothing)
   = case scrapeVarDecl v of
       -- special case ambient vars
       [(AmbVarDeclKind, _, Just t)] -> 
-        Just <$> envAdds "consVarDecl" [(x, (t, ReadOnly, Initialized))] g      
+        Just <$> envAdds "consVarDecl" [(x, EE ReadOnly Initialized t)] g      
       -- The rest should have fallen under the 'undefined' initialization case
       _ -> error "LQ: consVarDecl this shouldn't happen" 
 
@@ -473,69 +481,52 @@ consClassElts l g d@(ID nm _ vs _ es) cs
         g1   <- envAdds "consClassElts-1" fs g0  -- Add imm fields into scope beforehand
         mapM_ (consClassElt g1 d) cs
   where
-    fs = [ (ql f,(t,ro,ii)) | ((_,im), (FieldSig f _ m t)) <- M.toList es
-                            , isImmutable m ]
+    fs = [ (ql f, EE ro ii t) | ((_,InstanceMember), (FieldSig f _ m t)) <- M.toList es
+                              , isImmutable m ]
     -- TODO: Make location more precise
     --
     -- PV: qualified name here used as key -> ok 
-    ql        = mkQualSym $ F.symbol $ builtinOpId BIThis
-    im        = InstanceMember
+    ql        = mkQualSym $ F.symbol thisId
     ro        = ReadOnly
     ii        = Initialized
     this_t    = TRef nm (tVar <$> vs) fTop
-    thisInfo  = [(this,(this_t,ReadOnly,Initialized))]
-    this      = Loc (srcPos l) $ builtinOpId BIThis
+    thisInfo  = [(this, EE ReadOnly Initialized this_t)]
+    this      = Loc (srcPos l) thisId
 
 ------------------------------------------------------------------------------------
 consClassElt :: CGEnv -> IfaceDef F.Reft -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElt g d@(ID nm _ vs _ ms) (Constructor l xs body) 
-  = do  g0       <- envAdd ctorExit (mkCtorExitTy, ReadOnly, Initialized) g
+  = do  g0       <- envAdds "Constructor" [(ctorExit, eri mkCtorExitTy)] g
         g1       <- envAdds "classElt-ctor-1" superInfo g0
         ts       <- cgFunTys l ctor xs ctorTy
         forM_ ts  $ consFun1 l g1 ctor xs body
   where 
-    -- 
-    -- 'this' will not appear in the code but it might 
-    -- appear in refinements so add in scope 
-    --
     this_t        = TRef nm (tVar <$> vs) fTop
-    thisInfo      = [(this, (this_t, ReadOnly, Initialized))]
-
-    this          = Loc (srcPos l) $ builtinOpId BIThis
     ctor          = Loc (srcPos l) $ builtinOpId BICtor
     ctorExit      = Loc (srcPos l) $ builtinOpId BICtorExit
     super         = Loc (srcPos l) $ builtinOpId BISuper
+    eri           = EE ReadOnly Initialized
 
-    superInfo     | Just t <- extractParent'' g d 
-                  = [(super,(t,ReadOnly,Initialized))]
-                  | otherwise
-                  = []
-    --
-    -- * Keep the right order of fields
-    -- 
-    -- * Make the return object immutable to avoid contra-variance
-    --   checks at the return from the constructor.
-    -- 
-    -- * Exclude __proto__ field 
-    -- 
-    mkCtorExitTy  = mkFun (vs, Nothing, bs, 
-                           this_t `nubstrengthen` F.Reft (F.vv Nothing, fbind <$> out))
+    superInfo     | Just t <- extractParent'' g d = [(super, eri t)]
+                  | otherwise                     = []
+
+    mkCtorExitTy  = substOffsetThis $ mkFun (vs, Nothing, bs, ret)
       where
+        ret       = this_t `strengthen` F.Reft (F.vv Nothing, fbind <$> out)
         bs        | Just (TCons _ ms _) <- expandType Coercive g this_t
-                  = sortBy c_sym [ B f t' | ((_,InstanceMember),(FieldSig f _ m t)) <- M.toList ms
-                                          , F.symbol f /= F.symbol "__proto__" 
+                  = sortBy c_sym [ B f t' | ((_,InstanceMember),(FieldSig f _ _ t)) <- M.toList ms
+                                          , F.symbol f /= protoSym 
                                           , let t' = unqualifyThis g this_t t ]
                   | otherwise
                   = []
         out       | Just (TCons _ ms _) <- expandType Coercive g this_t
-                  = [ f | ((_,InstanceMember),(FieldSig f _ m t)) <- M.toList ms
-                        , isImmutable m, F.symbol f /= F.symbol "__proto__" ]
+                  = [ f | ((_,InstanceMember),(FieldSig f _ m _)) <- M.toList ms
+                        , isImmutable m, F.symbol f /= protoSym ]
                   | otherwise
                   = []
 
     fbind f       = F.RConc $ F.PAtom F.Eq (mkOffset v_sym $ F.symbolString f) (F.eVar f)
-    -- fbind f       = F.RConc $ F.PAtom F.Eq (F.eVar $ F.symbol "this" `F.qualifySymbol` f) (F.eVar f)
 
     v_sym         = F.symbol $ F.vv Nothing
     c_sym         = on compare b_sym
@@ -556,7 +547,7 @@ consClassElt _ _ (MemberVarDecl l True x Nothing)
   = cgError $ unsupportedStaticNoInit (srcPos l) x
 
 -- | Instance variable (checked at ctor) 
-consClassElt g dfn (MemberVarDecl _ False _ Nothing)
+consClassElt _ _ (MemberVarDecl _ False _ Nothing)
   = return () 
 
 consClassElt _ _ (MemberVarDecl l False x _)
@@ -601,22 +592,22 @@ consClassElt _ _  (MemberMethDecl _ _ _ _) = return ()
 consAsgn :: AnnTypeR -> CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
 consAsgn l g x e =
-  case envFindTyForAsgn x g of 
+  case envFindTyWithAsgn x g of 
     -- This is the first time we initialize this variable
-    Just (t, WriteGlobal, Uninitialized) ->
+    Just (EE WriteGlobal Uninitialized t) ->
       do  t' <- freshenType WriteGlobal g l t
           mseq (consExprT l g e $ Just t') $ \(_, g') -> do
-            g'' <- envAdds "consAsgn-0" [(x,(t', WriteGlobal, Initialized))] g'
+            g'' <- envAdds "consAsgn-0" [(x, EE WriteGlobal Initialized t')] g'
             return $ Just g''
 
-    Just (t,WriteGlobal,_) -> mseq (consExprT l g e $ Just t) $ \(_, g') -> 
-                                return    $ Just g'
-    Just (t,a,i)           -> mseq (consExprT l g e $ Just t) $ \(x', g') -> do
-                                t        <- safeEnvFindTy x' g'
-                                Just    <$> envAdds "consAsgn-1" [(x,(t,a,i))] g'
-    Nothing                -> mseq (consExprT l g e Nothing) $ \(x', g') -> do
-                                t        <- safeEnvFindTy x' g'
-                                Just    <$> envAdds "consAsgn-1" [(x,(t,WriteLocal, Initialized))] g'
+    Just (EE WriteGlobal _ t) -> mseq (consExprT l g e $ Just t) $ \(_, g') -> 
+                                   return $ Just g'
+    Just (EE a i t)           -> mseq (consExprT l g e $ Just t) $ \(x', g') -> do
+                                   t      <- safeEnvFindTy x' g'
+                                   Just  <$> envAdds "consAsgn-1" [(x, EE a i t)] g'
+    Nothing                   -> mseq (consExprT l g e Nothing) $ \(x', g') -> do
+                                   t      <- safeEnvFindTy x' g'
+                                   Just  <$> envAdds "consAsgn-1" [(x, EE WriteLocal Initialized t)] g'
 
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh, 
@@ -639,23 +630,23 @@ consExpr g ex@(Cast l e) _ =
     _   -> die $ bugNoCasts (srcPos l) ex
 
 consExpr g (IntLit l i) _
-  = Just <$> envAddFresh l (tInt `eSingleton` i, WriteLocal, Initialized) g
+  = Just <$> envAddFresh "8" l (tInt `eSingleton` i, WriteLocal, Initialized) g
 
 -- Assuming by default 32-bit BitVector
 consExpr g (HexLit l x) _
   | Just e <- bitVectorValue x
-  = Just <$> envAddFresh l (tBV32 `nubstrengthen` e, WriteLocal, Initialized) g
+  = Just <$> envAddFresh "9" l (tBV32 `nubstrengthen` e, WriteLocal, Initialized) g
   | otherwise
-  = Just <$> envAddFresh l (tBV32, WriteLocal, Initialized) g
+  = Just <$> envAddFresh "10" l (tBV32, WriteLocal, Initialized) g
 
 consExpr g (BoolLit l b) _
-  = Just <$> envAddFresh l (pSingleton tBool b, WriteLocal, Initialized) g 
+  = Just <$> envAddFresh "11" l (pSingleton tBool b, WriteLocal, Initialized) g 
 
 consExpr g (StringLit l s) _
-  = Just <$> envAddFresh l (tString `eSingleton` T.pack s, WriteLocal, Initialized) g
+  = Just <$> envAddFresh "12" l (tString `eSingleton` T.pack s, WriteLocal, Initialized) g
 
 consExpr g (NullLit l) _
-  = Just <$> envAddFresh l (tNull, WriteLocal, Initialized) g
+  = Just <$> envAddFresh "13" l (tNull, WriteLocal, Initialized) g
 
 consExpr g (ThisRef l) _
   = case envFindTyWithAsgn this g of
@@ -665,9 +656,9 @@ consExpr g (ThisRef l) _
     this = Id l "this" 
 
 consExpr g (VarRef l x) _
-  | Just (t,WriteGlobal,i) <- tInfo
-  = Just <$> envAddFresh l (t,WriteLocal,i) g
-  | Just (t,_,_) <- tInfo
+  | Just (EE WriteGlobal i t) <- tInfo
+  = Just <$> envAddFresh "0" l (t,WriteLocal,i) g
+  | Just (EE _ _ t) <- tInfo
   = addAnnot (srcPos l) x t >> return (Just (x, g))
   | otherwise
   = cgError $ errorUnboundId (ann l) x
@@ -697,7 +688,7 @@ consExpr g (InfixExpr l o e1 e2) _
 consExpr g (CondExpr l e e1 e2) to
   = do  opTy    <- mkTy to <$> safeEnvFindTy (builtinOpId BICondExpr) g
         tt'     <- freshTyFun g l (rType tt)
-        (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tt', WriteLocal, Initialized) g
+        (v,g')  <- mapFst (VarRef l) <$> envAddFresh "14" l (tt', WriteLocal, Initialized) g
         consCallCondExpr g' l BICondExpr 
           (FI Nothing $ [(e,Nothing),(v,Nothing),(e1,rType <$> to),(e2,rType <$> to)]) 
           opTy
@@ -739,7 +730,7 @@ consExpr g c@(CallExpr l em@(DotRef _ e f) es) _
 
              -- Invoking a method
              | Just (_,ft,_) <- getProp g MethodAccess Nothing f t
-             = consCall g l c (argsThis (vr x) es) $ substThis g (x,t) ft
+             = consCall g l c (argsThis (vr x) es) ft
                                 
              | otherwise 
              = cgError $ errorCallNotFound (srcPos l) e f
@@ -776,16 +767,16 @@ consExpr g (DotRef l e f) to
               consExpr g' (CallExpr l (DotRef l (vr x) (Id l "_get_length_")) []) to
 
         -- Do not nubstrengthen enumeration fields
-        Just (TEnum _,t,_) -> Just <$> envAddFresh l (t,ReadOnly,Initialized) g'
+        Just (TEnum _,t,_) -> Just <$> envAddFresh "1" l (t,ReadOnly,Initialized) g'
 
-        Just (_,t,m)       -> Just <$> envAddFresh l (mkTy m x te t,WriteLocal,Initialized) g'
+        Just (_,t,m) -> Just <$> envAddFresh "2" l (mkTy m x t, WriteLocal, Initialized) g'
 
         Nothing      -> cgError $  errorMissingFld (srcPos l) f te
   where
     vr         = VarRef $ getAnnotation e
 
-    mkTy m x te t | isImmutable m  = fmap F.top t `nubstrengthen` F.usymbolReft (mkQualSym x f)
-                  | otherwise      = substThis g (x,te) t
+    mkTy m x t | isImmutable m  = fmap F.top t `eSingleton` mkOffset x f
+               | otherwise      = substThis x t
 
 -- | e1[e2]
 consExpr g e@(BracketRef l e1 e2) _
@@ -824,9 +815,9 @@ consExpr g (NewExpr l e es) _
 
 -- | super
 consExpr g (SuperRef l) _
-  = case envFindTy (builtinOpId BIThis) g of 
+  = case envFindTy thisId g of 
       Just t   -> case extractParent g t of 
-                    Just tp -> Just <$> envAddFresh l (tp, WriteGlobal, Initialized) g
+                    Just tp -> Just <$> envAddFresh "15" l (tp, WriteGlobal, Initialized) g
                     Nothing -> cgError $ errorSuper (ann l)
       Nothing  -> cgError $ errorSuper (ann l)
 
@@ -841,7 +832,7 @@ consExpr g (FuncExpr l fo xs body) tCxtO
     consFuncExpr ft = do kft       <-  freshTyFun g l ft
                          fts       <-  cgFunTys l f xs kft
                          forM_ fts  $  consFun1 l g f xs body
-                         Just      <$> envAddFresh l (kft, WriteLocal, Initialized) g 
+                         Just      <$> envAddFresh "16" l (kft, WriteLocal, Initialized) g 
   
     anns            = [ t | FuncAnn t <- ann_fact l ]
     f               = maybe (F.symbol "<anonymous>") F.symbol fo
@@ -857,7 +848,7 @@ consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> RefType -> CGM (Maybe (I
 consCast g l e tc
   = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
         tc'     <- freshTyFun g l (rType tc)
-        (x,g')  <- envAddFresh l (tc', WriteLocal, Initialized) g
+        (x,g')  <- envAddFresh "3" l (tc', WriteLocal, Initialized) g
         consCall g' l "user-cast" (FI Nothing [(VarRef l x, Nothing),(e, Just tc')]) opTy 
                       
 -- | Dead code 
@@ -870,18 +861,18 @@ consDeadCode g l e t
 
 -- | UpCast(x, t1 => t2)
 consUpCast g l x _ t2
-  = do (tx,a,i)  <- safeEnvFindTyWithAsgn x g
+  = do EE a i tx <- safeEnvFindTyWithAsgn x g
        ztx       <- zipTypeUpM g x tx t2
-       envAddFresh l (ztx,a,i) g
+       envAddFresh "4" l (ztx,a,i) g
 
 -- | DownCast(x, t1 => t2)
 consDownCast g l x _ t2
-  = do (tx,a,i)  <- safeEnvFindTyWithAsgn x g
+  = do EE a i tx <- safeEnvFindTyWithAsgn x g
        txx       <- zipTypeUpM g x tx tx
        tx2       <- zipTypeUpM g x t2 tx
        ztx       <- zipTypeDownM g x tx t2
        subType l (errorDownCast (srcPos l) txx t2) g txx tx2
-       envAddFresh l (ztx,a,i) g
+       envAddFresh "5" l (ztx,a,i) g
 
 
 -- | `consCall g l fn ets ft0`:
@@ -945,9 +936,8 @@ consInstantiate l g fn ft ts xes
         let (ts2, its2)  = balance ts1 its1
         (ts3, ot')      <- subNoCapture l (toList its2) (toList xes) ot
         _               <- zipWithM_ (subType l err g) (toList ts2) ts3
-        Just           <$> envAddFresh l (ot', WriteLocal, Initialized) g
+        Just           <$> envAddFresh "5" l (ot', WriteLocal, Initialized) g
   where
-    bSyms bs             = b_sym <$> toList bs
     toList (FI x xs)     = maybeToList x ++ xs
     err                  = errorLiquid' l
     
@@ -1032,14 +1022,14 @@ consCondExprArgs l g (FI Nothing [(c,tc),(t,tt),(x,tx),(y,ty)])
                 Nothing -> 
                     do ttx       <- safeEnvFindTy x_ gx
                        let tty    = fromMaybe ttx ty    -- Dummy type if ty is Nothing
-                       (y_, gy') <- envAddFresh l (tty, WriteLocal, Initialized) gx
+                       (y_, gy') <- envAddFresh "6" l (tty, WriteLocal, Initialized) gx
                        return    $ Just (FI Nothing [c_,t_,x_,y_], gy')
           Nothing -> 
               withGuard gt c_ False y ty >>= \case
                 Just (y_, gy) -> 
                     do tty       <- safeEnvFindTy y_ gy
                        let ttx    = fromMaybe tty tx    -- Dummy type if tx is Nothing
-                       (x_, gx') <- envAddFresh l (ttx, WriteLocal, Initialized) gy
+                       (x_, gx') <- envAddFresh "7" l (ttx, WriteLocal, Initialized) gy
                        return     $ Just (FI Nothing [c_,t_,x_,y_], gx')
                 Nothing       -> return $ Nothing 
   where
@@ -1156,7 +1146,7 @@ envJoin' l g g1 g2
         -- up that one.
         -- FIXME: Add a raw type check on t1 and t2
         --
-        (g',ls)   <- freshTyPhis' l g xls $ mapFst3 toType <$> l1s
+        (g',ls)   <- freshTyPhis' l g xls $ (\(EE a i t) -> EE a i $ toType t) <$> l1s
         l1s'      <- mapM (`safeEnvFindTy` g1') xls
         l2s'      <- mapM (`safeEnvFindTy` g2') xls
         _         <- zipWithM_ (subType l err g1') l1s' ls 
@@ -1165,7 +1155,7 @@ envJoin' l g g1 g2
         -- GLOBALS: 
         --
         let (xgs, gl1s, _) = unzip3 $ globals (zip3 xs t1s t2s)
-        (g'',gls) <- freshTyPhis' l g' xgs $ mapFst3 toType <$> gl1s
+        (g'',gls) <- freshTyPhis' l g' xgs $ (\(EE a i t) -> EE a i $ toType t) <$> gl1s
         gl1s'     <- mapM (`safeEnvFindTy` g1') xgs
         gl2s'     <- mapM (`safeEnvFindTy` g2') xgs
         _         <- zipWithM_ (subType l err g1') gl1s' gls
@@ -1192,9 +1182,11 @@ getPhiTypes _ g1 g2 x =
     (_      , _      ) -> Nothing 
   
 
-locals  ts = [(x,s1,s2) | (x, s1@(_, WriteLocal, _), s2@(_, WriteLocal, _)) <- ts]
+locals  ts = [(x,s1,s2) | (x, s1@(EE WriteLocal _ _), 
+                              s2@(EE WriteLocal _ _)) <- ts ]
 
-globals ts = [(x,s1,s2) | (x, s1@(_, WriteGlobal, Initialized), s2@(_, WriteGlobal, Initialized)) <- ts]
+globals ts = [(x,s1,s2) | (x, s1@(EE WriteGlobal Initialized _), 
+                              s2@(EE WriteGlobal Initialized _)) <- ts ]
 
 -- partial ts = [(x,s2)    | (x, s2@(_, WriteGlobal, Uninitialized)) <- ts]
 --           ++ [(x,s1)    | (x, s1@(_, WriteGlobal, Uninitialized)) <- ts]
@@ -1202,12 +1194,15 @@ globals ts = [(x,s1,s2) | (x, s1@(_, WriteGlobal, Initialized), s2@(_, WriteGlob
 
 errorLiquid' = errorLiquid . srcPos
 
-traceTypePP l msg act 
-  = do  z <- act
-        case z of
-          Just (x,g) -> do  t <- safeEnvFindTy x g 
-                            return $ Just $ trace (ppshow (srcPos l) ++ " " ++ msg ++ " : " ++ ppshow t) (x,g)
-          Nothing    ->  return Nothing 
+-- traceTypePP l msg act 
+--   = act >>= \case
+--       Just (x,g) -> 
+--           do  t <- safeEnvFindTy x g 
+--               return $ Just $ trace (ppshow (srcPos l) ++ 
+--                                      " " ++ msg ++ 
+--                                      ": " ++ ppshow x ++ 
+--                                      " :: " ++ ppshow t) (x,g)
+--       Nothing ->  return Nothing 
     
 
 -- Local Variables:

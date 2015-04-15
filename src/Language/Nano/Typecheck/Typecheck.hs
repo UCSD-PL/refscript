@@ -28,6 +28,7 @@ import qualified Data.Traversable                   as T
 import           Language.Nano.Annots
 import           Language.Nano.CmdLine              (noFailCasts, Config)
 import           Language.Nano.Errors
+import           Language.Nano.Environment
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Program
@@ -43,7 +44,6 @@ import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Lookup
-import           Language.Nano.Liquid.Types
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Visitor
 
@@ -159,29 +159,31 @@ initGlobalEnv :: PPRSF r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
 initGlobalEnv pgm@(Nano { code = Src ss }) = TCE nms mod cha ctx pth Nothing
   where
-    reshuffle1 = \(_,_,c,d,e) -> (d,c,e)
-    reshuffle2 = \(_,c,d,e)   -> (d,c,e)
+    reshuffle1 = \(_,_,c,d,e) -> EE c e d
+    reshuffle2 = \(_,c,d,e)   -> EE c e d
     nms        = envUnion
                  (envAdds extras    $ envMap reshuffle1 $ mkVarEnv visibleNs)
                  (envMap reshuffle2 $ envUnionList $ maybeToList 
                                     $ m_variables <$> qenvFindTy pth mod)
     visibleNs  = visibleVars ss
     extras     = [(Id (srcPos dummySpan) "undefined", undefInfo)]
-    undefInfo  = (TApp TUndef [] fTop, ReadOnly, Initialized)
+    undefInfo  = EE ReadOnly Initialized $ TApp TUndef [] fTop
     cha        = pCHA pgm 
     mod        = pModules pgm 
     ctx        = emptyContext
     pth        = mkAbsPath []
 
 
-initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod cha ctx pth parent
+initFuncEnv γ f i αs thisTO xs ts t args s 
+              = TCE nms mod cha ctx pth parent
   where
-    tyBinds   = [(tVarId α, (tVar α, ReadOnly, Initialized)) | α <- αs]
-    varBinds  = zip (fmap ann <$> xs) $ (,WriteLocal, Initialized) <$> ts
-    nms       = envAddReturn f (t, ReadOnly, Initialized)
+    tyBinds   = [(tVarId α, EE ReadOnly Initialized $ tVar α) | α <- αs]
+    varBinds  = zip (fmap ann <$> xs) $ (EE WriteLocal Initialized) <$> ts
+    nms       = envAddReturn f (EE ReadOnly Initialized t)
               $ envAdds (thisBind ++ tyBinds ++ varBinds ++ args) 
-              $ envMap (\(_,_,c,d,e) -> (d,c,e)) 
-              $ mkVarEnv $ visibleVars s
+              $ envMap (\(_,_,c,d,e) -> EE c e d) 
+              $ mkVarEnv 
+              $ visibleVars s
     mod       = tce_mod γ
     cha       = tce_cha γ
     ctx       = pushContext i (tce_ctx γ) 
@@ -189,8 +191,7 @@ initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod cha ctx pth parent
     parent    = Just γ
     -- FIXME: this shouldn't be a special binding ... Include in xs
     thisBind  = (Id (srcPos dummySpan) "this",) . 
-                (, ReadOnly, Initialized)   <$> 
-                maybeToList thisTO
+                EE ReadOnly Initialized <$> maybeToList thisTO
 
 
 ---------------------------------------------------------------------------------------
@@ -198,11 +199,10 @@ initModuleEnv :: (PPRSF r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (An
 ---------------------------------------------------------------------------------------
 initModuleEnv γ n s = TCE nms mod cha ctx pth parent
   where
-    reshuffle1 = \(_,_,c,d,e) -> (d,c,e)
-    reshuffle2 = \(_,c,d,e)   -> (d,c,e)
-    nms        = (envMap reshuffle1 $ mkVarEnv $ visibleVars s) `envUnion`
-                 (envMap reshuffle2 $ envUnionList $ maybeToList 
-                                    $ m_variables <$> qenvFindTy pth mod)
+    reshuffle1 = \(_,_,c,d,e) -> EE c e d
+    reshuffle2 = \(_,c,d,e)   -> EE c e d
+    nms        = envMap reshuffle1 (mkVarEnv $ visibleVars s) `envUnion`
+                 envMap reshuffle2 (envUnionList $ maybeToList $ m_variables <$> qenvFindTy pth mod)
     mod        = tce_mod γ
     ctx        = emptyContext
     cha        = tce_cha γ
@@ -219,9 +219,9 @@ tcEnvAdds     xs γ      = γ { tce_names = envAdds xs $ tce_names γ }
 tcEnvAdd      x t γ     = γ { tce_names = envAdd x t $ tce_names γ }
 
 tcEnvFindTy            :: (PPRSF r, F.Symbolic x, IsLocated x) => x -> TCEnv r -> Maybe (RType r)
-tcEnvFindTy x γ         = fst3 <$> tcEnvFindTyWithAgsn x γ 
+tcEnvFindTy x γ         = ee_type <$> tcEnvFindTyWithAgsn x γ 
 
-tcEnvFindTyWithAgsn    :: (PPRSF r, F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability, Initialization)
+tcEnvFindTyWithAgsn    :: (PPRSF r, F.Symbolic x) => x -> TCEnv r -> Maybe (EnvEntry r)
 tcEnvFindTyWithAgsn x γ = case envFindTy x $ tce_names γ of 
                             Just t -> Just $ adjustInit t
                             Nothing     ->
@@ -229,8 +229,8 @@ tcEnvFindTyWithAgsn x γ = case envFindTy x $ tce_names γ of
                                 Just γ' -> tcEnvFindTyWithAgsn x γ'
                                 Nothing -> Nothing
   where
-    adjustInit s@(_, _, Initialized) = s
-    adjustInit (t, a, _ ) = (orUndef t, a, Uninitialized)
+    adjustInit s@(EE _ Initialized _) = s
+    adjustInit (EE a _ t) = EE a Uninitialized $ orUndef t
 
 
 
@@ -238,7 +238,7 @@ tcEnvFindTyWithAgsn x γ = case envFindTy x $ tce_names γ of
 -- This is a variant of the above that doesn't add the ' + undefined' for
 -- non-initialized variables.
 -- 
-tcEnvFindTyForAsgn    :: (PPRSF r, F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability, Initialization)
+tcEnvFindTyForAsgn    :: (PPRSF r, F.Symbolic x) => x -> TCEnv r -> Maybe (EnvEntry r)
 tcEnvFindTyForAsgn x γ = case envFindTy x $ tce_names γ of 
                            Just t -> Just $ t
                            Nothing     -> 
@@ -250,7 +250,7 @@ safeTcEnvFindTy l γ x   = case tcEnvFindTy x γ of
                             Just t  -> return t
                             Nothing -> die $ bugEnvFindTy (srcPos l) x 
 
-tcEnvFindReturn         = fst3 . envFindReturn . tce_names
+tcEnvFindReturn         = ee_type . envFindReturn . tce_names
 
 tcEnvFindTypeDefM l γ x 
   = case resolveTypeInEnv γ x of 
@@ -263,22 +263,21 @@ tcEnvFindTypeDefM l γ x
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-tcFun :: PPRSF r 
-      => TCEnv r 
-      -> Statement (AnnSSA r) 
-      -> TCM r (Statement (AnnSSA r), Maybe (TCEnv r))
+tcFun :: PPRSF r => TCEnv r -> Statement (AnnSSA r) 
+                 -> TCM r (Statement (AnnSSA r), Maybe (TCEnv r))
 -------------------------------------------------------------------------------
 tcFun γ (FunctionStmt l f xs body)
-  = case tcEnvFindTy f γ of
-      Just ft       -> do ts    <- tcFunTys l f xs ft
-                          body' <- foldM (tcFun1 γ l f xs) body ts
-                          return $ (FunctionStmt l f xs body', Just γ) 
-      Nothing       -> die $ errorMissingSpec (srcPos l) f
+  | Just ft   <- tcEnvFindTy f γ 
+  = do  ts    <- tcFunTys l f xs ft
+        body' <- foldM (tcFun1 γ l f xs) body ts
+        return $ (FunctionStmt l f xs body', Just γ) 
+  | otherwise
+  = die $ errorMissingSpec (srcPos l) f
 
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
 -------------------------------------------------------------------------------
-tcFun1 :: (PPRSF r, IsLocated l, CallSite t) 
+tcFun1 :: (PPRSF r, IsLocated l, PP l, CallSite t) 
        => TCEnv r 
        -> AnnSSA r 
        -> l 
@@ -293,7 +292,7 @@ tcFun1 g l f xs body fty
   where
     g1 					         = initFuncEnv g f i vs s xs ts t arg body
     (i, (vs,s,ts,t))     = fty
-    arg                  = [(argId $ srcPos l, (aTy, ReadOnly, Initialized))]
+    arg                  = [(argId $ srcPos l, EE ReadOnly Initialized aTy)]
     aTy                  = mkArgTy l ts $ tce_names g
 
 
@@ -333,11 +332,11 @@ tcClassElt γ d@(ID nm _ vs _ ms) (Constructor l xs body)
     this_t        = TRef nm (tVar <$> vs) fTop
 
     γ'            | Just t <- extractParent'' γ d 
-                  = tcEnvAdd super (t,ReadOnly,Initialized) γ
+                  = tcEnvAdd super (EE ReadOnly Initialized t) γ
                   | otherwise
                   = γ
 
-    γ''           = tcEnvAdd ctorExit (mkCtorExitTy,ReadOnly,Initialized) γ'
+    γ''           = tcEnvAdd ctorExit (EE ReadOnly Initialized mkCtorExitTy) γ'
 
     -- XXX        : * Keep the right order of fields
     --              * Make the return object immutable to avoid contra-variance
@@ -473,7 +472,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
        return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
 -- e1.f = e2
-tcStmt γ e@(ExprStmt l (AssignExpr l2 OpAssign r@(LDot l1 e1 f) e2))
+tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do  z               <- runFailM ( tcExpr γ e1l Nothing )
         case z of 
           Right (_,te1) -> tcSetProp $ fmap snd3 $ getProp γ FieldAccess Nothing f te1
@@ -504,32 +503,32 @@ tcStmt γ (IfStmt l e s1 s2)
   = do opTy         <- safeTcEnvFindTy l γ (builtinOpId BITruthy)
        ([e'], z)    <- tcNormalCallW γ l BITruthy [e] opTy
        case z of 
-         Just _  -> do  (s1', γ1) <- tcStmt γ s1
-                        (s2', γ2) <- tcStmt γ s2
-                        z         <- envJoin l γ γ1 γ2
-                        case z of 
-                          Just (γ3',s1s,s2s) -> 
-                            do  l1 <- freshenAnn l 
-                                l2 <- freshenAnn l 
-                                return $ (IfStmt l e' (postfixStmt l1 s1s s1') 
-                                                      (postfixStmt l2 s2s s2')
-                                         , Just γ3')
-                          Nothing -> 
-                            return (IfStmt l e' s1' s2', Nothing)
+         Just _  -> 
+            do  (s1', γ1) <- tcStmt γ s1
+                (s2', γ2) <- tcStmt γ s2
+                z         <- envJoin l γ γ1 γ2
+                case z of 
+                  Just (γ3',s1s,s2s) -> 
+                    do  l1 <- freshenAnn l 
+                        l2 <- freshenAnn l 
+                        return $ (IfStmt l e' (postfixStmt l1 s1s s1') 
+                                              (postfixStmt l2 s2s s2')
+                                 , Just γ3')
+                  Nothing -> 
+                    return (IfStmt l e' s1' s2', Nothing)
          _       -> return (IfStmt l e' s1 s2, Nothing)
 
 -- while c { b } 
 tcStmt γ (WhileStmt l c b) 
-  = do (c', to)  <- tcExprW γ c
-       case to of
-         Nothing -> return (WhileStmt l c' b, Nothing)
-         Just t  -> do unifyTypeM (srcPos l) γ t tBool
-                       phiTys       <- mapM (safeTcEnvFindTy l γ) phis
-                       (b', γl)     <- tcStmt (tcEnvAdds (zip xs ((,WriteLocal,Initialized) <$> phiTys)) γ) b
-                       z            <- tcWA γ dummyExpr (envLoopJoin l γ γl)
-                       case z of
-                         Left e     -> return $ (ExprStmt  l e    , γl)
-                         Right γout -> return $ (WhileStmt l c' b', γout)  
+  = tcExprW γ c >>= \case
+      (c', Nothing) -> return (WhileStmt l c' b, Nothing)
+      (c', Just t)  -> 
+        do unifyTypeM (srcPos l) γ t tBool
+           phiTys   <- mapM (safeTcEnvFindTy l γ) phis
+           (b', γl) <- tcStmt (tcEnvAdds (zip xs (EE WriteLocal Initialized <$> phiTys)) γ) b
+           tcWA γ dummyExpr (envLoopJoin l γ γl) >>= \case
+             Left e     -> return $ (ExprStmt  l e    , γl)
+             Right γout -> return $ (WhileStmt l c' b', γout)  
   where 
     dummyExpr     = StringLit l "DUMMY_LOOP_REPLACEMENT"
     xs            = [ mkNextId x | x <- phis ]
@@ -582,42 +581,42 @@ tcVarDecl γ v@(VarDecl l x (Just e))
       -- | Local 
       [ ] -> 
         do  (e', to) <- tcExprW γ e
-            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,WriteLocal,Initialized) <$> to)
+            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ EE WriteLocal Initialized <$> to)
 
       [(_, WriteLocal, Just t)] -> 
         do  ([e'], Just t') <- tcNormalCallW γ l "VarDecl-WL" [e] (localTy t)
-            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (t',WriteLocal,Initialized) γ)
+            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (EE WriteLocal Initialized t') γ)
 
       [(_, WriteLocal, Nothing)] -> 
         do  (e', to)   <- tcExprW γ e
-            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,WriteLocal,Initialized) <$> to)
+            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ EE WriteLocal Initialized <$> to)
 
       -- | Global 
       [(_, WriteGlobal, Just t)] -> 
         do  (e',t') <- tcCast γ l e t
-            return $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x,(t',WriteGlobal, Initialized))] γ)
+            return $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, EE WriteGlobal Initialized t')] γ)
 
       [(_, WriteGlobal, Nothing)] -> 
         do  (e',to) <- tcExprW γ e
-            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,WriteGlobal, Initialized) <$> to)
+            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ EE WriteGlobal Initialized <$> to)
 
       -- | ReadOnly
       [(_, ReadOnly, Just t)]   -> 
         do  ([e'], Just t') <- tcNormalCallW γ l "VarDecl-RO" [e] (localTy t)
-            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (t',ReadOnly,Initialized) γ)
+            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (EE ReadOnly Initialized t') γ)
 
       [(_, ReadOnly, Nothing)] -> 
         do  (e', to)   <- tcExprW γ e
-            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,ReadOnly,Initialized) <$> to)
+            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ EE ReadOnly Initialized <$> to)
 
-      -- TODO : more cases
+      c -> tcError $ unimplemented l "tcVarDecl" ("case: " ++ ppshow c)
 
 -- XXX: Not using Initilation status for the moment
-tcVarDecl γ v@(VarDecl l x Nothing)
+tcVarDecl γ v@(VarDecl _ x Nothing)
   = case scrapeVarDecl v of
       -- special case ambient vars
       [(AmbVarDeclKind,_, Just t)] -> 
-        return $ (v, Just $ tcEnvAdds [(x, (t, ReadOnly, Initialized))] γ)
+        return $ (v, Just $ tcEnvAdds [(x, EE ReadOnly Initialized t)] γ)
       -- The rest should have fallen under the 'undefined' initialization case
       _ -> error "TC-tcVarDecl: this shouldn't happen" 
 
@@ -628,11 +627,11 @@ tcAsgn :: PPRSF r
 -------------------------------------------------------------------------------
 tcAsgn l γ x e
   = do (e' , to)    <- tcExprTW l γ e rhsT
-       return       $ (e', tcEnvAddo γ x $ (,asgn,init) <$> to)
+       return       $ (e', tcEnvAddo γ x $ EE asgn init <$> to)
     where
        (rhsT, asgn, init) = case tcEnvFindTyForAsgn x γ of
-                              Just (t,a,_) -> (Just t, a, Initialized)
-                              Nothing      -> (Nothing, WriteLocal, Initialized)
+                              Just (EE a _ t) -> (Just t, a, Initialized)
+                              Nothing         -> (Nothing, WriteLocal, Initialized)
 
 tcEnvAddo _ _ Nothing  = Nothing
 tcEnvAddo γ x (Just t) = Just $ tcEnvAdds [(x, t)] γ 
@@ -670,7 +669,7 @@ tcNormalCallWCtx γ l o es t
       Right (FI _ es', t') -> return (es', Just t')
       Left err -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) err) (fst <$> es)
 
-tcRetW γ l (Just e@(VarRef lv x))
+tcRetW γ l (Just e@(VarRef _ x))
   | Just t <- tcEnvFindTy x γ, needsCall t 
   = tcRetW (newEnv t) l (Just (CallExpr l (VarRef l fn) [e'])) >>= \case 
       -- e' won't be cast
@@ -678,11 +677,11 @@ tcRetW γ l (Just e@(VarRef lv x))
       _ -> die $ errorUqMutSubtyping (srcPos l) e t retTy
   where 
     retTy    = tcEnvFindReturn γ 
-    newEnv t = tcEnvAdd fn (finalizeTy t,ReadOnly,Initialized) γ
+    newEnv t = tcEnvAdd fn (EE ReadOnly Initialized $ finalizeTy t) γ
     fn       = Id l "__finalize__"
     e'       = fmap (\a -> a { ann_fact = BypassUnique : ann_fact a }) e
-    needsCall (TRef x (m:ts) r) = isUniqueMutable m 
-    needsCall _                 = False
+    needsCall (TRef _ (m:_) _) = isUniqueMutable m 
+    needsCall _                = False
 
 tcRetW γ l eo = tcRetW' γ l eo
 
@@ -771,7 +770,7 @@ tcExpr γ e@(VarRef l x) _
 tcExpr γ (CondExpr l e e1 e2) to
   = do  opTy                      <- mkTy to <$> safeTcEnvFindTy l γ (builtinOpId BICondExpr)
         (sv,v)                    <- dup F.symbol (VarRef l) <$> freshCastId l
-        let γ'                     = tcEnvAdd sv (tt, WriteLocal, Initialized) γ
+        let γ'                     = tcEnvAdd sv (EE WriteLocal Initialized tt) γ
         (FI _ [e',_,e1',e2'], t') <- tcNormalCall γ' l BICondExpr (args v) opTy
         return                     $ (CondExpr l e' e1' e2', t')
   where
@@ -878,7 +877,7 @@ tcCast :: PPRSF r => TCEnv r -> AnnSSA r -> ExprSSAR r -> RType r -> TCM r (Expr
 tcCast γ l e tc 
   = do  opTy             <- safeTcEnvFindTy l γ (builtinOpId BICastExpr)
         cid              <- freshCastId l
-        let γ'            = tcEnvAdd (F.symbol cid) (tc, WriteLocal, Initialized) γ
+        let γ'            = tcEnvAdd (F.symbol cid) (EE WriteLocal Initialized tc) γ
         -- (FI _ [_,e'],t') <- tcNormalCall γ' l "user-cast" (FI Nothing [(VarRef l cid, Nothing),(e, Nothing)]) opTy
         (FI _ [_,e'],t') <- tcNormalCall γ' l "user-cast" (FI Nothing [(VarRef l cid, Nothing),(e, Just tc)]) opTy
         return            $ (e', t')
@@ -1008,46 +1007,36 @@ tcCall _ (CallExpr _ (SuperRef _)  _)
 tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
   = runFailM (tcExpr γ e Nothing) >>= go
   where
-         -- Variadic call error
-    go z 
---       | Right (_, t) <- z, isVariadicCall f, [] <- es
---       = tcError $ errorVariadicNoArgs (srcPos l) em
-
-      -- Variadic call
-      | Right (_, t) <- z, isVariadicCall f, v:vs <- es
+    -- Variadic call
+    go (Right (_, t)) 
+      | isVariadicCall f, v:vs <- es
       = do (e', _)                 <- tcExpr γ e Nothing
            (FI (Just v') vs', t')  <- tcNormalCall γ l em (argsThis v vs) t
            return                   $ (CallExpr l (DotRef l1 e' f) (v':vs'), t')
 
-      -- Accessing and calling a function field
-      | Right (_, t) <- z, Just (o,ft,_) <- getProp γ FieldAccess Nothing f t, isTFun ft
+    -- Accessing and calling a function field
+    go (Right (_, t))
+      | Just (o,ft,_) <- getProp γ FieldAccess Nothing f t, isTFun ft
       = do e'                      <- castM γ e t o
            (FI _ es',t')           <- tcNormalCall γ l ex (args es) ft
            return                   $ (CallExpr l (DotRef l1 e' f) es', t')
 
-      -- Invoking a method 
-      | Right (_, t) <- z, Just (o,ft,_) <- getProp γ MethodAccess Nothing f t, isTFun ft
+    -- Invoking a method 
+    go (Right (_, t))
+      | Just (o,ft,_) <- getProp γ MethodAccess Nothing f t, isTFun ft
       = do e'                      <- castM γ e t o
            (FI (Just e'') es', t') <- tcNormalCall γ l  ex (argsThis e' es) ft
            return                   $ (CallExpr l (DotRef l1 e'' f) es', t')
 
-      | Right (_,_) <- z
+    go (Right (_,_))
       = tcError $ errorCallNotFound (srcPos l) e f
 
-      | Left err <- z
+    go (Left err)
       = tcError err
 
     isVariadicCall f = F.symbol f == F.symbol "call"
     args vs          = FI Nothing            ((,Nothing) <$> vs)
     argsThis v vs    = FI (Just (v,Nothing)) ((,Nothing) <$> vs)
-
---     fixThis' thisT tFun 
---       | Just ts <- bkFuns tFun = mkAnd $ mkFun . fixThis thisT <$> ts
---       | otherwise              = tFun
--- 
---     fixThis thisT (vs,Nothing,ts,t) = (vs,Just thisT,ts,t)
---     fixThis _     t                 = t
-
 
 -- | `e(es)`
 tcCall γ (CallExpr l e es)
@@ -1234,7 +1223,7 @@ envJoin l γ (Just γ1) (Just γ2) =
 
 envJoinStep l γ1 γ2 next (γ, st01, st02) xt =
   case xt of
-    (v, ta@(t, WriteLocal, _)) -> 
+    (v, ta@(EE WriteLocal _ t)) -> 
       case find ((v ==) . snd3) next of
         Just (_,va, vb) -> do 
           st1     <- mkVdStmt l γ1 va vb t          -- FIRST BRANCH
@@ -1266,7 +1255,7 @@ envLoopJoin :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
 envLoopJoin _ γ Nothing   = return $ Just γ
 envLoopJoin l γ (Just γl) = 
   do  xts      <- toXts <$> mapM (getLoopNextPhiType l γ γl) xs
-      _        <- mapM_ mkPhiAnn $ mapSnd (toType . fst3) <$> xts
+      _        <- mapM_ mkPhiAnn $ (\(x, EE _ _ t) -> (x,toType t)) <$> xts
       Just . tcEnvAdds xts . (`substNames` γ) <$> getSubst
   where 
       xs             = phiVarsAnnot l 
@@ -1279,27 +1268,26 @@ envLoopJoin l γ (Just γl) =
 -- recorded in the initialization part of the output.
 --
 ----------------------------------------------------------------------------------
-getPhiType :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r 
-           -> TCM r (Maybe (RType r, Assignability, Initialization))
+getPhiType :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r -> TCM r (Maybe (EnvEntry r))
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (tcEnvFindTyForAsgn x γ1, tcEnvFindTyForAsgn x γ2) of
-    (Just (t1,a1,i1), Just (t2,_,i2)) -> do θ     <- getSubst 
-                                            t     <- unifyPhiTypes l γ1 x t1 t2 θ
-                                            return $ Just (t, a1, i1 `mappend` i2)
-    (_              , _             ) -> return Nothing 
+    (Just (EE a1 i1 t1), Just (EE _ i2 t2)) -> 
+        do  θ     <- getSubst 
+            t     <- unifyPhiTypes l γ1 x t1 t2 θ
+            return $ Just $ EE a1 (i1 `mappend` i2) t
+    (_, _) -> return Nothing 
     -- bindings that are not in both environments are discarded
 
 ----------------------------------------------------------------------------------
-getLoopNextPhiType :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r 
-                   -> TCM r (Maybe (RType r, Assignability, Initialization))
+getLoopNextPhiType :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r -> TCM r (Maybe (EnvEntry r))
 ----------------------------------------------------------------------------------
 getLoopNextPhiType l γ γl x =
   case (tcEnvFindTyForAsgn x γ, tcEnvFindTyForAsgn (mkNextId x) γl) of
-    (Just (t1,a1,i1), Just (t2,_,i2)) -> 
+    (Just (EE a1 i1 t1), Just (EE _ i2 t2)) -> 
         do  θ <- getSubst
             t <- unifyPhiTypes l γ x t1 t2 θ
-            return $ Just (t, a1, i1 `mappend` i2)
+            return $ Just $ EE a1 (i1 `mappend` i2) t
     _ -> return Nothing
     -- bindings that are not in both environments are discarded
 
@@ -1331,14 +1319,14 @@ unifyPhiTypes l γ x t1 t2 θ
     --          | otherwise   -> tcError $ errorEnvJoin (srcPos l) x (toType t1) (toType t2)
   where
     substE                  = unifys (srcPos l) γ θ [t1] [t2]
-    (t1', t2')              = mapPair (mkUnion . clear . bkUnion) (t1, t2)
-    fillNullOrUndef t1 t2 t | any isMaybeNull  [t1,t2] = fillUndef t1 t2 $ orNull t
-                            | otherwise                = t
-    fillUndef t1 t2 t       | any isMaybeUndef [t1,t2] = orUndef t
-                            | otherwise                = t
-    isMaybeUndef            = any isUndef . bkUnion
-    isMaybeNull             = any isNull  . bkUnion
-    clear ts                = [ t | t <- ts, not (isNull t) && not (isUndef t) ]
+    -- (t1', t2')              = mapPair (mkUnion . clear . bkUnion) (t1, t2)
+    -- fillNullOrUndef t1 t2 t | any isMaybeNull  [t1,t2] = fillUndef t1 t2 $ orNull t
+    --                         | otherwise                = t
+    -- fillUndef t1 t2 t       | any isMaybeUndef [t1,t2] = orUndef t
+    --                         | otherwise                = t
+    -- isMaybeUndef            = any isUndef . bkUnion
+    -- isMaybeNull             = any isNull  . bkUnion
+    -- clear ts                = [ t | t <- ts, not (isNull t) && not (isUndef t) ]
 
 
 -------------------------------------------------------------------------------------

@@ -91,7 +91,6 @@ import qualified Data.Map.Strict                as M
 import           Data.Typeable                  ()
 import           Language.Nano.Syntax 
 import           Language.Nano.Syntax.PrettyPrint
-import           Language.Nano.Syntax.Annotations
 import qualified Language.Nano.Env              as E
 import           Language.Nano.Misc
 import           Language.Nano.Types
@@ -861,8 +860,8 @@ instance F.Symbolic (Prop a) where
 -- | @argBind@ returns a dummy type binding `arguments :: T `
 --   where T is an object literal containing the non-undefined `ts`.
     
-mkArgTy l ts g   = -- tracePP ("mkArgTy: " ++ ppshow ts) $
-                 immObjectLitTy l g (pLen : ps') (tLen : ts')
+mkArgTy l ts g = immObjectLitTy l g [pLen] [tLen]
+                 -- immObjectLitTy l g (pLen : ps') (tLen : ts')
   where
     ts'        = take k ts
     ps'        = PropNum l . toInteger <$> [0 .. k-1]
@@ -912,14 +911,14 @@ returnTy _ False = mkFun ([], Nothing, [], tVoid)
 ---------------------------------------------------------------------------------
 finalizeTy :: (PP r, F.Reftable r, ExprReftable F.Symbol r) => RType r -> RType r
 ---------------------------------------------------------------------------------
-finalizeTy t@(TRef x (m:ts) r) 
+finalizeTy t@(TRef x (m:ts) _) 
   | isUniqueMutable m 
   = mkFun ([mOut], Nothing, [B sx t], TRef x (tOut:ts) (uexprReft sx))
   where 
     sx   = F.symbol "x_"
     tOut = tVar mOut
     mOut = TV (F.symbol "N") (srcPos dummySpan)
-finalizeTy t
+finalizeTy _
   = mkFun ([mV]  , Nothing, [B (F.symbol "x") tV], tV)
   where 
     tV   = tVar mV

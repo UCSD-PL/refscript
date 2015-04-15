@@ -258,9 +258,7 @@ deriving instance Foldable (TypeMemberQ q)
 type TypeMember = TypeMemberQ AK
 
 data Visibility 
-
   = Local 
-
   | Exported
   deriving (Show, Eq, Data, Typeable)
 
@@ -574,7 +572,7 @@ instance PP Initialization where
 -----------------------------------------------------------------------
 
 data Alias a s t = Alias {
-    al_name   :: Id SrcSpan  -- ^ alias name
+    al_name   :: Id SrcSpan     -- ^ alias name
   , al_tyvars :: ![a]           -- ^ type  parameters  
   , al_syvars :: ![s]           -- ^ value parameters 
   , al_body   :: !t             -- ^ alias body

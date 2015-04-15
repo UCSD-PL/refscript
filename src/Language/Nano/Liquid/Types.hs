@@ -59,7 +59,7 @@ module Language.Nano.Liquid.Types (
 
   -- * 'this' related substitutions
   , substThis, unqualifyThis, mkQualSym, mkOffset
-
+  , substOffsetThis
 
   ) where
 
@@ -67,9 +67,6 @@ import           Data.Maybe              (fromMaybe, catMaybes, maybeToList)
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as HM
 import qualified Data.Map.Strict         as M
-import qualified Data.Text               as Text
-
--- import qualified Data.HashSet            as S
 import           Data.Monoid                        (mconcat)
 import qualified Data.Traversable        as T
 import           Text.PrettyPrint.HughesPJ
@@ -460,8 +457,6 @@ efoldRType g f                 = go
     go γ z t@(TClass _)        = f γ t z
     go γ z t@(TModule _)       = f γ t z
     go γ z t@(TEnum _)         = f γ t z
-    go γ z t@(TSelf t')        = f γ t $ go γ z t'
-
     go _ _ t                   = error $ "Not supported in efoldRType: " ++ ppshow t
 
     gos γ z ts                 = L.foldl' (go γ) z ts
@@ -590,8 +585,8 @@ zipType γ x t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _)
     raExt t c  = F.RConc $ F.PBexp $ F.EApp (sym t) 
                $ [F.expr $ vv t, F.expr $ F.symbolText c]
     vv         = rTypeValueVar
-    sym t      | isClassType γ t = F.dummyLoc $ F.symbol "extends_class"
-               | otherwise       = F.dummyLoc $ F.symbol "extends_interface"
+    sym t      | isClassType γ t = extClassSym
+               | otherwise       = extInterfaceSym
 
 zipType _ _ t1@(TRef _ [] _) _ = error $ "zipType on " ++ ppshow t1  -- Invalid type
 zipType _ _ _ t2@(TRef _ [] _) = error $ "zipType on " ++ ppshow t2  -- Invalid type
@@ -701,33 +696,38 @@ zipElts _ _ _                   _                      = Nothing
 
 appZ (f,r) = f r
 
-expandTypeWithSub g x t = substThis g (x,t) <$> expandType Coercive g t
+expandTypeWithSub g x t = substThis' g (x,t) <$> expandType Coercive g t
+
+substThis x t         = F.subst (F.mkSubst [(thisSym,F.expr x)]) t
+
+substOffsetThis = emapReft (\_ -> V.trans vs () ()) []
+  where 
+    vs     = V.defaultVisitor { V.txExpr = tx }
+    tx _ (F.EApp o [ F.EVar x, F.ESym (F.SL f) ])
+           | F.symbol o == offsetSym, F.symbol x == thisSym 
+           = F.eVar f 
+    tx _ e = e
 
 
 -- | Substitute occurences of 'this' in type @t'@, given that the receiver 
 --   object is bound to symbol @x@ and it has a type @t@ under @g@.
 -------------------------------------------------------------------------------
-substThis :: (IsLocated a, F.Symbolic a) 
-          => CGEnv -> (a, RefType) -> RefType -> RefType
+substThis' :: (IsLocated a, F.Symbolic a) 
+           => CGEnv -> (a, RefType) -> RefType -> RefType
 -------------------------------------------------------------------------------
-substThis g (x,t) = F.subst su
+substThis' g (x,t) = F.subst su
   where
     su            = F.mkSubst $ (this, F.expr $ F.symbol x) : fieldSu
     this          = F.symbol $ builtinOpId BIThis 
 
-    fieldSu       | Just (TCons m fs _) <- expandType Coercive g t 
-                  = [ subPair f | ((f,im), FieldSig _ _ m _) <- M.toList fs
+    fieldSu       | Just (TCons _ fs _) <- expandType Coercive g t 
+                  = [ subPair f | ((f,InstanceMember), FieldSig _ _ m _) <- M.toList fs
                                 , isImmutable m ]
                   | otherwise                              
                   = []
-
-    im            = InstanceMember
     qFld x f      = F.qualifySymbol (F.symbol x) f  
     subPair f     = (qFld this f, F.expr $ qFld x f)
 
-
-mkOffset :: F.Symbolic k => k -> String -> F.Expr
-mkOffset k v      = F.EApp (F.dummyLoc $ F.symbol "offset") [F.eVar k, F.expr $ Text.pack v]
 
  
 -- | Substitute occurences of 'this.f' in type @t'@, with 'f'
@@ -736,14 +736,12 @@ unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
 -------------------------------------------------------------------------------
 unqualifyThis g t = F.subst $ F.mkSubst fieldSu
   where
-    fieldSu       | Just (TCons m fs _) <- expandType Coercive g t 
-                  = [ subPair f | ((f,im), FieldSig _ _ m _) <- M.toList fs
+    fieldSu       | Just (TCons _ fs _) <- expandType Coercive g t 
+                  = [ subPair f | ((f,InstanceMember), FieldSig _ _ m _) <- M.toList fs
                                 , isImmutable m ]
                   | otherwise                              
                   = []
-
     this          = F.symbol $ builtinOpId BIThis 
-    im            = InstanceMember
     qFld x f      = F.qualifySymbol (F.symbol x) f  
     subPair f     = (qFld this f, F.expr f)
  
@@ -752,4 +750,9 @@ unqualifyThis g t = F.subst $ F.mkSubst fieldSu
 mkQualSym :: (F.Symbolic x, F.Symbolic f) => x -> f -> F.Symbol
 -------------------------------------------------------------------------------
 mkQualSym    x f = F.qualifySymbol (F.symbol x) (F.symbol f)
+
+-------------------------------------------------------------------------------
+mkOffset :: (F.Symbolic f, F.Expression x) => x -> f -> F.Expr
+-------------------------------------------------------------------------------
+mkOffset x f = F.EApp offsetLocSym [F.expr x, F.expr $ F.symbolText $ F.symbol f]
 

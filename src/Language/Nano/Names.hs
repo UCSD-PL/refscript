@@ -34,6 +34,17 @@ module Language.Nano.Names (
   , absolutePath
 
   , toAbsoluteName
+  , toLocSym 
+  , extClassSym
+  , extInterfaceSym
+  , offsetLocSym 
+  , offsetSym
+  , ttagSym
+  , hasPropertySym
+  , protoSym
+  , thisSym
+  , thisId
+  , undefinedId
 
   ) where 
 
@@ -210,4 +221,17 @@ absolutePath ps (QP AK_ _ p) (QP RK_ _ ss) =
     suffixes (x:xs) = (x:xs) : suffixes xs
 
 toAbsoluteName (QN RK_ l ss s) = QN AK_ l ss s
+
+toLocSym        = F.dummyLoc . F.symbol 
+extClassSym     = toLocSym "extends_class"
+extInterfaceSym = toLocSym "extends_interface"
+offsetLocSym    = toLocSym "offset"
+offsetSym       = F.symbol "offset"
+ttagSym         = toLocSym "ttag" 
+hasPropertySym  = toLocSym "hasProperty"
+
+undefinedId     = Id (srcPos dummySpan) "undefined"
+thisId          = Id (srcPos dummySpan) "this"
+thisSym         = F.symbol "this"
+protoSym        = F.symbol "__proto__"
 

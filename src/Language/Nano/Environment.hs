@@ -13,8 +13,8 @@ import           Language.Nano.Env
 import           Language.Nano.Names
 import           Language.Nano.Program
 import           Language.Fixpoint.Names
-import           Language.Fixpoint.Misc
-import           Language.Nano.Syntax.PrettyPrint ()
+import           Language.Nano.Syntax.PrettyPrint
+import qualified Language.Fixpoint.Types            as F
 
 -------------------------------------------------------------------------------
 -- | Typecheck Environment
@@ -25,7 +25,7 @@ class EnvLike r t where
   -- ^ Bindings in scope
   --   Includes : variables, functions, classes, interfaces
   --
-  names           :: t r -> Env (RType r, Assignability, Initialization)
+  names           :: t r -> Env (EnvEntry r)
   -- 
   -- ^ Modules in scope (exported API)
   --
@@ -47,9 +47,19 @@ class EnvLike r t where
   --
   parent          :: t r -> Maybe (t r)
 
+
+data EnvEntry r = EE { 
+    ee_asgn :: Assignability 
+  , ee_init :: Initialization
+  , ee_type :: RType r
+  } deriving (Functor)
+
+
+instance (F.Reftable r, PP r) => PP (EnvEntry r) where  
+  pp (EE _ _ t) = pp t
+
 -------------------------------------------------------------------------------
-envLikeFindTy' :: (EnvLike r t, Symbolic a) 
-               => a -> t r -> Maybe (RType r, Assignability, Initialization)
+envLikeFindTy' :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (EnvEntry r)
 -------------------------------------------------------------------------------
 envLikeFindTy' x γ | Just t  <- envFindTy x $ names γ = Just t
                    | Just γ' <- parent γ              = envLikeFindTy' x γ'
@@ -58,7 +68,7 @@ envLikeFindTy' x γ | Just t  <- envFindTy x $ names γ = Just t
 -------------------------------------------------------------------------------
 envLikeFindTy :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-envLikeFindTy x = fmap fst3 . envLikeFindTy' x
+envLikeFindTy x = fmap ee_type . envLikeFindTy' x
 
 envLikeMember x = isJust . envLikeFindTy x
 

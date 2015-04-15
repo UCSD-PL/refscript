@@ -71,7 +71,7 @@ import           Text.Parsec.Error                       (errorMessages, showErr
 import qualified Text.Parsec.Token                as     T
 import qualified Data.Text                        as     DT
 import           Text.Parsec.Token                       (identStart, identLetter)
-import           Text.Parsec.Prim                        (stateUser)
+-- import           Text.Parsec.Prim                        (stateUser)
 import           Text.Parsec.Language                    (emptyDef)
 
 import           GHC.Generics
@@ -693,6 +693,7 @@ mkCode ss = return   (mkCode' ss)
         >>= return . visitNano convertTvarVisitor []
         >>= return . expandAliases
         >>= return . replaceAbsolute
+        >>= return . replaceDotRef
         >>= return . scrapeQuals 
         >>=          scrapeModules
         >>= return . fixEnums

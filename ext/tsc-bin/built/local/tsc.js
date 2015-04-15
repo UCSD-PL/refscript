@@ -31773,7 +31773,6 @@ var TypeScript;
             for (var i = 0; i < n; i++) {
                 var arg = parameters.astAt(i);
                 var id = parameters.identifierAt(i);
-                console.log("EMIT DEF VALUE: " + id.text());
                 var equalsValueClause = parameters.initializerAt(i);
                 if (equalsValueClause) {
                     this.emitIndent();

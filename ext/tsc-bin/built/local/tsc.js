@@ -5959,25 +5959,25 @@ var TypeScript;
 (function (TypeScript) {
     (function (Syntax) {
         function toRsAST(list, helper) {
-            return new TypeScript.RsASTList(list.toNonSeparatorArray().map(function (m) {
+            return new TypeScript.RsList(list.toNonSeparatorArray().map(function (m) {
                 return m.toRsAST(helper);
             }));
         }
 
         function toRsExp(list, helper) {
-            return new TypeScript.RsASTList(list.toNonSeparatorArray().map(function (m) {
+            return new TypeScript.RsList(list.toNonSeparatorArray().map(function (m) {
                 return m.toRsExp(helper);
             }));
         }
 
         function toRsStmt(list, helper) {
-            return new TypeScript.RsASTList(list.toNonSeparatorArray().map(function (m) {
+            return new TypeScript.RsList(list.toNonSeparatorArray().map(function (m) {
                 return m.toRsStmt(helper);
             }));
         }
 
         function toRsMemList(list, helper) {
-            return new TypeScript.RsASTList(list.toNonSeparatorArray().map(function (m) {
+            return new TypeScript.RsList(list.toNonSeparatorArray().map(function (m) {
                 return m.toRsMemList(helper);
             }));
         }
@@ -5995,7 +5995,7 @@ var TypeScript;
         }
 
         function toRsVarDecl(list, helper, anns) {
-            return new TypeScript.RsASTList(list.toNonSeparatorArray().map(function (m) {
+            return new TypeScript.RsList(list.toNonSeparatorArray().map(function (m) {
                 return m.toRsVarDecl(helper, anns);
             }));
         }
@@ -8022,7 +8022,7 @@ var TypeScript;
 (function (TypeScript) {
     (function (Syntax) {
         function toRsAST(list, helper, anns) {
-            return new TypeScript.RsASTList(list.toArray().map(function (m) {
+            return new TypeScript.RsList(list.toArray().map(function (m) {
                 return m.toRsAST(helper);
             }));
         }
@@ -8032,7 +8032,7 @@ var TypeScript;
         }
 
         function toRsStmt(list, helper, anns) {
-            return new TypeScript.RsASTList(list.toArray().map(function (m) {
+            return new TypeScript.RsList(list.toArray().map(function (m) {
                 return m.toRsStmt(helper);
             }).filter(function (e) {
                 return e !== null;
@@ -8048,7 +8048,7 @@ var TypeScript;
         }
 
         function toRsClassElt(list, helper, mut) {
-            return new TypeScript.RsASTList(list.toArray().map(function (m) {
+            return new TypeScript.RsList(list.toArray().map(function (m) {
                 return m.toRsClassElt(helper, mut);
             }));
         }
@@ -9163,7 +9163,7 @@ var TypeScript;
                 var cstring = fullStr.substring(3, fullStr.length - 2);
                 var startLineAndChar = ct.syntaxTree().lineMap().getLineAndCharacterFromPosition(cstart);
                 var endLineAndChar = ct.syntaxTree().lineMap().getLineAndCharacterFromPosition(cstart + cstring.length);
-                var ss = new TypeScript.RsSourceSpan(ct.syntaxTree().sourceUnit().fileName(), startLineAndChar, endLineAndChar);
+                var ss = new TypeScript.RsSrcSpan(ct.syntaxTree().sourceUnit().fileName(), startLineAndChar, endLineAndChar);
                 return new TypeScript.Pair(ss, cstring);
             }
             return null;
@@ -9807,7 +9807,7 @@ var TypeScript;
             var ext = TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
                 return t.toRsHeritageIds(helper, 48 /* ExtendsKeyword */);
             }));
-            var imp = new TypeScript.RsASTList(TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
+            var imp = new TypeScript.RsList(TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
                 return t.toRsHeritageIds(helper, 51 /* ImplementsKeyword */);
             })));
 
@@ -9827,7 +9827,7 @@ var TypeScript;
 
             helper.popParentNode();
 
-            return new TypeScript.RsClassStmt(helper.getSourceSpan(this), restAnnots, this.identifier.toRsId(helper), (ext && ext.length > 0) ? ext[0] : null, imp, classElts);
+            return new TypeScript.RsClassStmt(helper.getSourceSpan(this), restAnnots, this.identifier.toRsId(helper), (ext && ext.length > 0) ? new TypeScript.RsJust(ext[0]) : new TypeScript.RsNothing(), imp, classElts);
         };
         return ClassDeclarationSyntax;
     })(TypeScript.SyntaxNode);
@@ -10491,7 +10491,7 @@ var TypeScript;
                     return new TypeScript.RsFunctionOverload(helper.getSourceSpan(this), anns, this.identifier.toRsId(helper), this.callSignature.parameterList.parameters.toRsAST(helper));
                 }
             } else {
-                return new TypeScript.RsFunctionStmt(helper.getSourceSpan(this), anns, this.identifier.toRsId(helper), this.callSignature.parameterList.parameters.toRsAST(helper), new TypeScript.RsASTList([this.block.toRsStmt(helper)]));
+                return new TypeScript.RsFunctionStmt(helper.getSourceSpan(this), anns, this.identifier.toRsId(helper), this.callSignature.parameterList.parameters.toRsAST(helper), new TypeScript.RsList([this.block.toRsStmt(helper)]));
             }
         };
         return FunctionDeclarationSyntax;
@@ -10830,16 +10830,16 @@ var TypeScript;
                         }
                         var typeStr = type.toString();
                         anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 2 /* RawAmbBind */, 3 /* AErrorAssignability */, this.propertyName.text() + " :: " + typeStr));
-                        return new TypeScript.RsVarDecl(helper.getSourceSpan(this), anns, this.propertyName.toRsId(helper), null);
+                        return new TypeScript.RsVarDecl(helper.getSourceSpan(this), anns, this.propertyName.toRsId(helper), new TypeScript.RsNothing());
                     } else if (binderAnns.length === 1) {
                         binderAnns[0]["_kind"] = 2 /* RawAmbBind */;
-                        return new TypeScript.RsVarDecl(helper.getSourceSpan(this), binderAnns, this.propertyName.toRsId(helper), null);
+                        return new TypeScript.RsVarDecl(helper.getSourceSpan(this), binderAnns, this.propertyName.toRsId(helper), new TypeScript.RsNothing());
                     }
                     helper.postDiagnostic(this, TypeScript.DiagnosticCode.Ambient_variable_declarator_for_0_needs_to_have_at_least_one_type_annotation, [this.propertyName.text()]);
                 }
 
                 if (binderAnns.length < 2) {
-                    return new TypeScript.RsVarDecl(helper.getSourceSpan(this), TypeScript.ArrayUtilities.concat([binderAnns]), this.propertyName.toRsId(helper), (this.equalsValueClause) ? this.equalsValueClause.toRsExp(helper) : null);
+                    return new TypeScript.RsVarDecl(helper.getSourceSpan(this), TypeScript.ArrayUtilities.concat([binderAnns]), this.propertyName.toRsId(helper), (this.equalsValueClause) ? new TypeScript.RsJust(this.equalsValueClause.toRsExp(helper)) : new TypeScript.RsNothing());
                 }
 
                 helper.postDiagnostic(this, TypeScript.DiagnosticCode.Variable_declarator_for_0_needs_to_have_at_most_one_type_annotation, [this.propertyName.text()]);
@@ -14404,9 +14404,9 @@ var TypeScript;
                 helper.postDiagnostic(this, TypeScript.DiagnosticCode.Constructor_parent_has_not_been_set);
             }
 
-            return new TypeScript.RsConstructor(helper.getSourceSpan(this), anns, new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (t) {
+            return new TypeScript.RsConstructor(helper.getSourceSpan(this), anns, new TypeScript.RsList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (t) {
                 return t.toRsId(helper);
-            })), new TypeScript.RsASTList(rsBlock));
+            })), new TypeScript.RsList(rsBlock));
         };
         return ConstructorDeclarationSyntax;
     })(TypeScript.SyntaxNode);
@@ -14542,11 +14542,11 @@ var TypeScript;
             }
 
             if (this.block) {
-                return new TypeScript.RsMemberMethDef(helper.getSourceSpan(this), anns, isStatic, this.propertyName.toRsId(helper), new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (t) {
+                return new TypeScript.RsMemberMethDef(helper.getSourceSpan(this), anns, isStatic, this.propertyName.toRsId(helper), new TypeScript.RsList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (t) {
                     return t.toRsId(helper);
-                })), new TypeScript.RsASTList([this.block.toRsStmt(helper)]));
+                })), new TypeScript.RsList([this.block.toRsStmt(helper)]));
             } else {
-                return new TypeScript.RsMemberMethDecl(helper.getSourceSpan(this), anns, isStatic, this.propertyName.toRsId(helper), new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (t) {
+                return new TypeScript.RsMemberMethDecl(helper.getSourceSpan(this), anns, isStatic, this.propertyName.toRsId(helper), new TypeScript.RsList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (t) {
                     return t.toRsId(helper);
                 })));
             }
@@ -14906,9 +14906,9 @@ var TypeScript;
             }
 
             if (this.variableDeclarator.equalsValueClause) {
-                return new TypeScript.RsMemberVarDecl(helper.getSourceSpan(this), anns, isStatic, this.variableDeclarator.propertyName.toRsId(helper), this.variableDeclarator.equalsValueClause.toRsExp(helper));
+                return new TypeScript.RsMemberVarDecl(helper.getSourceSpan(this), anns, isStatic, this.variableDeclarator.propertyName.toRsId(helper), new TypeScript.RsJust(this.variableDeclarator.equalsValueClause.toRsExp(helper)));
             } else {
-                return new TypeScript.RsMemberVarDecl(helper.getSourceSpan(this), anns, isStatic, this.variableDeclarator.propertyName.toRsId(helper), null);
+                return new TypeScript.RsMemberVarDecl(helper.getSourceSpan(this), anns, isStatic, this.variableDeclarator.propertyName.toRsId(helper), new TypeScript.RsNothing());
             }
         };
         return MemberVariableDeclarationSyntax;
@@ -15178,8 +15178,7 @@ var TypeScript;
         };
 
         ReturnStatementSyntax.prototype.toRsStmt = function (helper) {
-            var ret = this.expression ? this.expression.toRsExp(helper) : null;
-            return new TypeScript.RsReturnStmt(helper.getSourceSpan(this), leadingTokenAnnots(this), ret);
+            return new TypeScript.RsReturnStmt(helper.getSourceSpan(this), leadingTokenAnnots(this), (this.expression) ? new TypeScript.RsJust(this.expression.toRsExp(helper)) : new TypeScript.RsNothing());
         };
         return ReturnStatementSyntax;
     })(TypeScript.SyntaxNode);
@@ -15935,9 +15934,9 @@ var TypeScript;
         ForStatementSyntax.prototype.toRsStmt = function (helper) {
             var anns = leadingTokenAnnots(this.forKeyword);
             if (this.variableDeclaration && !this.initializer) {
-                return new TypeScript.RsForStmt(helper.getSourceSpan(this), leadingTokenAnnots(this), this.variableDeclaration.toRsForInit(helper, anns), this.condition ? this.condition.toRsExp(helper) : null, this.incrementor ? this.incrementor.toRsExp(helper) : null, this.statement.toRsStmt(helper));
+                return new TypeScript.RsForStmt(helper.getSourceSpan(this), leadingTokenAnnots(this), this.variableDeclaration.toRsForInit(helper, anns), (this.condition) ? new TypeScript.RsJust(this.condition.toRsExp(helper)) : new TypeScript.RsNothing(), (this.incrementor) ? new TypeScript.RsJust(this.incrementor.toRsExp(helper)) : new TypeScript.RsNothing(), this.statement.toRsStmt(helper));
             } else if (this.initializer && !this.variableDeclaration) {
-                return new TypeScript.RsForStmt(helper.getSourceSpan(this), leadingTokenAnnots(this), new TypeScript.RsExprInit(this.initializer.toRsExp(helper)), this.condition ? this.condition.toRsExp(helper) : null, this.incrementor ? this.incrementor.toRsExp(helper) : null, this.statement.toRsStmt(helper));
+                return new TypeScript.RsForStmt(helper.getSourceSpan(this), leadingTokenAnnots(this), new TypeScript.RsExprInit(this.initializer.toRsExp(helper)), (this.condition) ? new TypeScript.RsJust(this.condition.toRsExp(helper)) : new TypeScript.RsNothing(), (this.incrementor) ? new TypeScript.RsJust(this.incrementor.toRsExp(helper)) : new TypeScript.RsNothing(), this.statement.toRsStmt(helper));
             }
             helper.postDiagnostic(this, TypeScript.DiagnosticCode.Variable_declarations_are_only_supported_in_the_first_part_of_the_loop_in_0, [this.initializer.fullText()]);
         };
@@ -16422,7 +16421,7 @@ var TypeScript;
         EnumDeclarationSyntax.prototype.toRsStmt = function (helper) {
             var originalAnnots = leadingTokenAnnots(this.firstToken());
             var sourceSpan = helper.getSourceSpan(this);
-            return new TypeScript.RsEnumStmt(sourceSpan, originalAnnots, this.identifier.toRsId(helper), new TypeScript.RsASTList(this.enumElements.toNonSeparatorArray().map(function (e) {
+            return new TypeScript.RsEnumStmt(sourceSpan, originalAnnots, this.identifier.toRsId(helper), new TypeScript.RsList(this.enumElements.toNonSeparatorArray().map(function (e) {
                 return e.toRsEnumElt(helper);
             })));
         };
@@ -16837,7 +16836,7 @@ var TypeScript;
 
         SimplePropertyAssignmentSyntax.prototype.toRsMemList = function (helper) {
             var pName = this.propertyName;
-            return new TypeScript.RsASTList([
+            return new TypeScript.RsList([
                 new TypeScript.RsPropId(helper.getSourceSpan(pName), [], this.propertyName.toRsId(helper)),
                 this.expression.toRsExp(helper)]);
         };
@@ -17058,9 +17057,9 @@ var TypeScript;
                 helper.postDiagnostic(this, TypeScript.DiagnosticCode.Anonymous_function_should_have_exactly_one_type_annotation);
             }
 
-            return new TypeScript.RsFuncExpr(helper.getSourceSpan(this), anns, this.identifier ? this.identifier.toRsId(helper) : null, new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (p) {
+            return new TypeScript.RsFuncExpr(helper.getSourceSpan(this), anns, (this.identifier) ? new TypeScript.RsJust(this.identifier.toRsId(helper)) : new TypeScript.RsNothing(), new TypeScript.RsList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (p) {
                 return p.toRsId(helper);
-            })), new TypeScript.RsASTList(this.block.statements.toArray().map(function (s) {
+            })), new TypeScript.RsList(this.block.statements.toArray().map(function (s) {
                 return s.toRsStmt(helper);
             })));
         };
@@ -33208,7 +33207,7 @@ var TypeScript;
             if (ast === null) {
                 return;
             }
-            this.writeToOutput(JSON.stringify(ast.toObject(), undefined, 2));
+            this.writeToOutput(JSON.stringify(ast.serialize(), undefined, 2));
         };
 
         Emitter.prototype.emitAccessorMemberDeclaration = function (funcDecl, name, className, isProto) {
@@ -59165,7 +59164,6 @@ var TypeScript;
         Assignability[Assignability["AWriteLocal"] = 0] = "AWriteLocal";
         Assignability[Assignability["AWriteGlobal"] = 1] = "AWriteGlobal";
         Assignability[Assignability["AReadOnly"] = 2] = "AReadOnly";
-
         Assignability[Assignability["AErrorAssignability"] = 3] = "AErrorAssignability";
     })(TypeScript.Assignability || (TypeScript.Assignability = {}));
     var Assignability = TypeScript.Assignability;
@@ -59250,10 +59248,8 @@ var TypeScript;
             return this._kind;
         };
 
-        RsAnnotation.prototype.toObject = function () {
-            var obj = {};
-            obj[AnnotKind[this.kind()]] = [this.sourceSpan().toObject(), this.content()];
-            return obj;
+        RsAnnotation.prototype.serialize = function () {
+            return TypeScript.aesonEncode(AnnotKind[this.kind()], [this.sourceSpan().serialize(), this.content()]);
         };
 
         RsAnnotation.stringTag = function (s) {
@@ -59510,20 +59506,114 @@ var TypeScript;
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
 (function (TypeScript) {
+    function aesonEncode(tag, content) {
+        return { "tag": tag, "contents": content };
+    }
+    TypeScript.aesonEncode = aesonEncode;
+
+    (function (AesonCtor) {
+        AesonCtor[AesonCtor["WITH_CTOR"] = 0] = "WITH_CTOR";
+        AesonCtor[AesonCtor["NO_CTOR"] = 1] = "NO_CTOR";
+    })(TypeScript.AesonCtor || (TypeScript.AesonCtor = {}));
+    var AesonCtor = TypeScript.AesonCtor;
+
     var RsAST = (function () {
         function RsAST() {
         }
-        RsAST.prototype.toObject = function () {
-            throw new Error("RsAST: child class should implement toObject");
+        RsAST.prototype.serialize = function () {
+            throw new Error("RsAST: child class should implement serialize");
+        };
+
+        RsAST.prototype._toAeson = function (tag, content, ctor) {
+            if (ctor === 1 /* NO_CTOR */) {
+                return content;
+            } else {
+                return aesonEncode(tag, content);
+            }
         };
         return RsAST;
     })();
     TypeScript.RsAST = RsAST;
 
+    var RsSrcSpan = (function () {
+        function RsSrcSpan(file, start, stop) {
+            this.file = file;
+            this.start = start;
+            this.stop = stop;
+        }
+        RsSrcSpan.prototype.serialize = function () {
+            return {
+                "sp_start": [this.file, this.start.line() + 1, this.start.character() + 1],
+                "sp_stop": [this.file, this.stop.line() + 1, this.stop.character() + 1]
+            };
+        };
+
+        RsSrcSpan.prototype.toString = function () {
+            return this.file + ": (" + (this.start.line() + 1) + ", " + (this.start.character() + 1) + ") - (" + (this.stop.line() + 1) + ", " + (this.stop.character() + 1) + ")";
+        };
+        return RsSrcSpan;
+    })();
+    TypeScript.RsSrcSpan = RsSrcSpan;
+
+    var RsList = (function (_super) {
+        __extends(RsList, _super);
+        function RsList(members) {
+            _super.call(this);
+            this.members = members;
+        }
+        RsList.prototype.serialize = function () {
+            return this.members.map(function (m) {
+                return m.serialize();
+            });
+        };
+        return RsList;
+    })(RsAST);
+    TypeScript.RsList = RsList;
+
+    var RsPair = (function (_super) {
+        __extends(RsPair, _super);
+        function RsPair(fst, snd) {
+            _super.call(this);
+            this.fst = fst;
+            this.snd = snd;
+        }
+        RsPair.prototype.serialize = function () {
+            return [this.fst.serialize(), this.snd.serialize()];
+        };
+        return RsPair;
+    })(RsAST);
+    TypeScript.RsPair = RsPair;
+
+    var RsJust = (function (_super) {
+        __extends(RsJust, _super);
+        function RsJust(content) {
+            _super.call(this);
+            this.content = content;
+        }
+        RsJust.prototype.serialize = function () {
+            return this.content.serialize();
+        };
+        return RsJust;
+    })(RsAST);
+    TypeScript.RsJust = RsJust;
+
+    var RsNothing = (function (_super) {
+        __extends(RsNothing, _super);
+        function RsNothing() {
+            _super.apply(this, arguments);
+        }
+        RsNothing.prototype.serialize = function () {
+            return null;
+        };
+        return RsNothing;
+    })(RsAST);
+    TypeScript.RsNothing = RsNothing;
+
     var RsAnnotatedAST = (function (_super) {
         __extends(RsAnnotatedAST, _super);
-        function RsAnnotatedAST(ann) {
+        function RsAnnotatedAST(span, ann) {
             _super.call(this);
+            this.span = span;
             this.ann = ann;
         }
         RsAnnotatedAST.prototype.mapAnn = function (f) {
@@ -59531,73 +59621,38 @@ var TypeScript;
                 return a !== null;
             }).map(f);
         };
+
+        RsAnnotatedAST.prototype._toAeson = function (tag, content, ctor) {
+            if (ctor === 0 /* WITH_CTOR */) {
+                if (content instanceof Array && content.length === 0) {
+                    return aesonEncode(tag, [this.span.serialize(), this.ann.map(function (a) {
+                            return a.serialize();
+                        })]);
+                } else {
+                    return aesonEncode(tag, [[this.span.serialize(), this.ann.map(function (a) {
+                                return a.serialize();
+                            })]].concat(content));
+                }
+            } else {
+                return [[this.span.serialize(), this.ann.map(function (a) {
+                            return a.serialize();
+                        })]].concat(content);
+            }
+        };
         return RsAnnotatedAST;
     })(RsAST);
     TypeScript.RsAnnotatedAST = RsAnnotatedAST;
 
-    var RsSourceSpan = (function () {
-        function RsSourceSpan(file, start, stop) {
-            this.file = file;
-            this.start = start;
-            this.stop = stop;
-        }
-        RsSourceSpan.prototype.toObject = function () {
-            return {
-                "sp_start": [this.file, this.start.line() + 1, this.start.character() + 1],
-                "sp_stop": [this.file, this.stop.line() + 1, this.stop.character() + 1]
-            };
-        };
-
-        RsSourceSpan.prototype.toString = function () {
-            return this.file + ": (" + (this.start.line() + 1) + ", " + (this.start.character() + 1) + ") - (" + (this.stop.line() + 1) + ", " + (this.stop.character() + 1) + ")";
-        };
-        return RsSourceSpan;
-    })();
-    TypeScript.RsSourceSpan = RsSourceSpan;
-
-    var RsASTList = (function (_super) {
-        __extends(RsASTList, _super);
-        function RsASTList(members) {
-            _super.call(this);
-            this.members = members;
-        }
-        RsASTList.prototype.toObject = function () {
-            return this.members.map(function (m) {
-                return m.toObject();
-            });
-        };
-        return RsASTList;
-    })(RsAST);
-    TypeScript.RsASTList = RsASTList;
-
-    var RsASTPair = (function (_super) {
-        __extends(RsASTPair, _super);
-        function RsASTPair(fst, snd) {
-            _super.call(this);
-            this.fst = fst;
-            this.snd = snd;
-        }
-        RsASTPair.prototype.toObject = function () {
-            return [this.fst.toObject(), this.snd.toObject()];
-        };
-        return RsASTPair;
-    })(RsAST);
-    TypeScript.RsASTPair = RsASTPair;
-
     var RsId = (function (_super) {
         __extends(RsId, _super);
         function RsId(span, ann, id) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.id = id;
         }
-        RsId.prototype.toObject = function () {
-            return [
-                [this.span.toObject(), this.mapAnn(function (a) {
-                        return a.toObject();
-                    })],
-                this.id];
+        RsId.prototype.serialize = function () {
+            return this._toAeson("Id", [this.id], 1 /* NO_CTOR */);
         };
         return RsId;
     })(RsAnnotatedAST);
@@ -59608,20 +59663,14 @@ var TypeScript;
     var RsVarDecl = (function (_super) {
         __extends(RsVarDecl, _super);
         function RsVarDecl(span, ann, name, exp) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.name = name;
             this.exp = exp;
         }
-        RsVarDecl.prototype.toObject = function () {
-            return [
-                [this.span.toObject(), this.mapAnn(function (a) {
-                        return a.toObject();
-                    })],
-                this.name.toObject(),
-                (this.exp) ? this.exp.toObject() : null
-            ];
+        RsVarDecl.prototype.serialize = function () {
+            return this._toAeson("VarDecl", [this.name.serialize(), this.exp.serialize()], 1 /* NO_CTOR */);
         };
         return RsVarDecl;
     })(RsAnnotatedAST);
@@ -59630,19 +59679,13 @@ var TypeScript;
     var RsPropId = (function (_super) {
         __extends(RsPropId, _super);
         function RsPropId(span, ann, f) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.f = f;
         }
-        RsPropId.prototype.toObject = function () {
-            return {
-                PropId: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.f.toObject()]
-            };
+        RsPropId.prototype.serialize = function () {
+            return this._toAeson("PropId", [this.f.serialize()], 0 /* WITH_CTOR */);
         };
         return RsPropId;
     })(RsAnnotatedAST);
@@ -59651,19 +59694,13 @@ var TypeScript;
     var RsPropString = (function (_super) {
         __extends(RsPropString, _super);
         function RsPropString(span, ann, s) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.s = s;
         }
-        RsPropString.prototype.toObject = function () {
-            return {
-                PropString: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.s]
-            };
+        RsPropString.prototype.serialize = function () {
+            return this._toAeson("PropString", [this.s], 0 /* WITH_CTOR */);
         };
         return RsPropString;
     })(RsAnnotatedAST);
@@ -59672,19 +59709,13 @@ var TypeScript;
     var RsPropNum = (function (_super) {
         __extends(RsPropNum, _super);
         function RsPropNum(span, ann, n) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.n = n;
         }
-        RsPropNum.prototype.toObject = function () {
-            return {
-                PropNum: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.n]
-            };
+        RsPropNum.prototype.serialize = function () {
+            return this._toAeson("PropNum", [this.n], 0 /* WITH_CTOR */);
         };
         return RsPropNum;
     })(RsAnnotatedAST);
@@ -59696,20 +59727,18 @@ var TypeScript;
             _super.apply(this, arguments);
         }
         return RsForInit;
-    })(RsAnnotatedAST);
+    })(RsAST);
     TypeScript.RsForInit = RsForInit;
 
     var RsNoInit = (function (_super) {
         __extends(RsNoInit, _super);
         function RsNoInit(span, ann) {
-            _super.call(this, ann);
+            _super.call(this);
             this.span = span;
             this.ann = ann;
         }
-        RsNoInit.prototype.toObject = function () {
-            return { NoInit: [this.span.toObject(), this.mapAnn(function (a) {
-                        return a.toObject();
-                    })] };
+        RsNoInit.prototype.serialize = function () {
+            return this._toAeson("NoInit", [], 0 /* WITH_CTOR */);
         };
         return RsNoInit;
     })(RsForInit);
@@ -59718,13 +59747,13 @@ var TypeScript;
     var RsVarInit = (function (_super) {
         __extends(RsVarInit, _super);
         function RsVarInit(span, ann, vds) {
-            _super.call(this, ann);
+            _super.call(this);
             this.span = span;
             this.ann = ann;
             this.vds = vds;
         }
-        RsVarInit.prototype.toObject = function () {
-            return { VarInit: this.vds.toObject() };
+        RsVarInit.prototype.serialize = function () {
+            return this._toAeson("VarInit", this.vds.serialize(), 0 /* WITH_CTOR */);
         };
         return RsVarInit;
     })(RsForInit);
@@ -59733,11 +59762,11 @@ var TypeScript;
     var RsExprInit = (function (_super) {
         __extends(RsExprInit, _super);
         function RsExprInit(exp) {
-            _super.call(this, null);
+            _super.call(this);
             this.exp = exp;
         }
-        RsExprInit.prototype.toObject = function () {
-            return { ExprInit: this.exp.toObject() };
+        RsExprInit.prototype.serialize = function () {
+            return this._toAeson("ExprInit", this.exp.serialize(), 0 /* WITH_CTOR */);
         };
         return RsExprInit;
     })(RsForInit);
@@ -59758,8 +59787,8 @@ var TypeScript;
             _super.call(this);
             this.id = id;
         }
-        RsForInVar.prototype.toObject = function () {
-            return { ForInVar: this.id.toObject() };
+        RsForInVar.prototype.serialize = function () {
+            return this._toAeson("ForInVar", this.id.serialize(), 0 /* WITH_CTOR */);
         };
         return RsForInVar;
     })(RsForInInit);
@@ -59771,8 +59800,8 @@ var TypeScript;
             _super.call(this);
             this.lval = lval;
         }
-        RsForInLVal.prototype.toObject = function () {
-            return { ForInLVal: this.lval.toObject() };
+        RsForInLVal.prototype.serialize = function () {
+            return this._toAeson("ForInLVal", this.lval.serialize(), 0 /* WITH_CTOR */);
         };
         return RsForInLVal;
     })(RsForInInit);
@@ -59861,13 +59890,12 @@ var TypeScript;
                 case "+":
                     return 22 /* OpAdd */;
             }
+            ;
             throw new Error("Case: " + this.sign + " not handled in RsInfixOp.signToOpKind");
         };
 
-        RsInfixOp.prototype.toObject = function () {
-            var obj = {};
-            obj[RsInfixOpKind[this.signToOpKind()]] = [];
-            return obj;
+        RsInfixOp.prototype.serialize = function () {
+            return RsInfixOpKind[this.signToOpKind()];
         };
         return RsInfixOp;
     })(RsAST);
@@ -59920,13 +59948,12 @@ var TypeScript;
                 case "|=":
                     return 10 /* OpAssignBOr */;
             }
+            ;
             throw new Error("Case: " + this.sign + " not handled in RsAssignOp.signToOpKind");
         };
 
-        RsAssignOp.prototype.toObject = function () {
-            var obj = {};
-            obj[RsAssignOpKind[this.signToOpKind()]] = [];
-            return obj;
+        RsAssignOp.prototype.serialize = function () {
+            return RsAssignOpKind[this.signToOpKind()];
         };
         return RsAssignOp;
     })(RsAST);
@@ -59946,10 +59973,8 @@ var TypeScript;
             _super.call(this);
             this.opKind = opKind;
         }
-        RsUnaryAssignOp.prototype.toObject = function () {
-            var op = {};
-            op[RsUnaryAssignOpKind[this.opKind]] = [];
-            return op;
+        RsUnaryAssignOp.prototype.serialize = function () {
+            return RsUnaryAssignOpKind[this.opKind];
         };
         return RsUnaryAssignOp;
     })(RsAST);
@@ -59972,10 +59997,8 @@ var TypeScript;
             _super.call(this);
             this.opKind = opKind;
         }
-        RsPrefixOp.prototype.toObject = function () {
-            var op = {};
-            op[RsPrefixOpKind[this.opKind]] = [];
-            return op;
+        RsPrefixOp.prototype.serialize = function () {
+            return RsPrefixOpKind[this.opKind];
         };
         return RsPrefixOp;
     })(RsAST);
@@ -59993,19 +60016,13 @@ var TypeScript;
     var RsLVar = (function (_super) {
         __extends(RsLVar, _super);
         function RsLVar(span, ann, s) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.s = s;
         }
-        RsLVar.prototype.toObject = function () {
-            return {
-                LVar: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.s]
-            };
+        RsLVar.prototype.serialize = function () {
+            return this._toAeson("LVar", [this.s], 0 /* WITH_CTOR */);
         };
         return RsLVar;
     })(RsLValue);
@@ -60014,21 +60031,14 @@ var TypeScript;
     var RsLDot = (function (_super) {
         __extends(RsLDot, _super);
         function RsLDot(span, ann, exp, str) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.exp = exp;
             this.str = str;
         }
-        RsLDot.prototype.toObject = function () {
-            return {
-                LDot: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.exp.toObject(),
-                    this.str]
-            };
+        RsLDot.prototype.serialize = function () {
+            return this._toAeson("LDot", [this.exp.serialize(), this.str], 0 /* WITH_CTOR */);
         };
         return RsLDot;
     })(RsLValue);
@@ -60037,21 +60047,14 @@ var TypeScript;
     var RsLBracket = (function (_super) {
         __extends(RsLBracket, _super);
         function RsLBracket(span, ann, e1, e2) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.e1 = e1;
             this.e2 = e2;
         }
-        RsLBracket.prototype.toObject = function () {
-            return {
-                LBracket: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.e1.toObject(),
-                    this.e2.toObject()]
-            };
+        RsLBracket.prototype.serialize = function () {
+            return this._toAeson("LBracket", [this.e1.serialize(), this.e2.serialize()], 0 /* WITH_CTOR */);
         };
         return RsLBracket;
     })(RsLValue);
@@ -60069,23 +60072,15 @@ var TypeScript;
     var RsInfixExpr = (function (_super) {
         __extends(RsInfixExpr, _super);
         function RsInfixExpr(span, ann, op, operand1, operand2) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.op = op;
             this.operand1 = operand1;
             this.operand2 = operand2;
         }
-        RsInfixExpr.prototype.toObject = function () {
-            return {
-                InfixExpr: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.op.toObject(),
-                    this.operand1.toObject(),
-                    this.operand2.toObject()]
-            };
+        RsInfixExpr.prototype.serialize = function () {
+            return this._toAeson("InfixExpr", [this.op.serialize(), this.operand1.serialize(), this.operand2.serialize()], 0 /* WITH_CTOR */);
         };
         return RsInfixExpr;
     })(RsExpression);
@@ -60094,23 +60089,15 @@ var TypeScript;
     var RsCondExpr = (function (_super) {
         __extends(RsCondExpr, _super);
         function RsCondExpr(span, ann, cond, exp1, exp2) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.cond = cond;
             this.exp1 = exp1;
             this.exp2 = exp2;
         }
-        RsCondExpr.prototype.toObject = function () {
-            return {
-                CondExpr: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.cond.toObject(),
-                    this.exp1.toObject(),
-                    this.exp2.toObject()]
-            };
+        RsCondExpr.prototype.serialize = function () {
+            return this._toAeson("CondExpr", [this.cond.serialize(), this.exp1.serialize(), this.exp2.serialize()], 0 /* WITH_CTOR */);
         };
         return RsCondExpr;
     })(RsExpression);
@@ -60119,19 +60106,13 @@ var TypeScript;
     var RsNumLit = (function (_super) {
         __extends(RsNumLit, _super);
         function RsNumLit(span, ann, num) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.num = num;
         }
-        RsNumLit.prototype.toObject = function () {
-            return {
-                NumLit: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.num]
-            };
+        RsNumLit.prototype.serialize = function () {
+            return this._toAeson("NumLit", [this.num], 0 /* WITH_CTOR */);
         };
         return RsNumLit;
     })(RsExpression);
@@ -60140,19 +60121,13 @@ var TypeScript;
     var RsIntLit = (function (_super) {
         __extends(RsIntLit, _super);
         function RsIntLit(span, ann, num) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.num = num;
         }
-        RsIntLit.prototype.toObject = function () {
-            return {
-                IntLit: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.num]
-            };
+        RsIntLit.prototype.serialize = function () {
+            return this._toAeson("IntLit", [this.num], 0 /* WITH_CTOR */);
         };
         return RsIntLit;
     })(RsExpression);
@@ -60161,19 +60136,13 @@ var TypeScript;
     var RsHexLit = (function (_super) {
         __extends(RsHexLit, _super);
         function RsHexLit(span, ann, num) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.num = num;
         }
-        RsHexLit.prototype.toObject = function () {
-            return {
-                HexLit: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.num]
-            };
+        RsHexLit.prototype.serialize = function () {
+            return this._toAeson("HexLit", [this.num], 0 /* WITH_CTOR */);
         };
         return RsHexLit;
     })(RsExpression);
@@ -60182,20 +60151,18 @@ var TypeScript;
     var RsStringLit = (function (_super) {
         __extends(RsStringLit, _super);
         function RsStringLit(span, ann, str) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.str = str;
         }
-        RsStringLit.prototype.toObject = function () {
+        RsStringLit.prototype.serialize = function () {
             var l = this.str.length;
             var newStr = this.str;
             if (l > 1 && (newStr[0] === '\"' && newStr[l - 1] === '\"' || newStr[0] === '\'' && newStr[l - 1] === '\'')) {
                 newStr = newStr.substring(1, l - 1);
             }
-            return { StringLit: [[this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })], newStr] };
+            return this._toAeson("StringLit", [newStr], 0 /* WITH_CTOR */);
         };
         return RsStringLit;
     })(RsExpression);
@@ -60204,23 +60171,15 @@ var TypeScript;
     var RsFuncExpr = (function (_super) {
         __extends(RsFuncExpr, _super);
         function RsFuncExpr(span, ann, id, args, body) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.id = id;
             this.args = args;
             this.body = body;
         }
-        RsFuncExpr.prototype.toObject = function () {
-            return {
-                FuncExpr: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    (this.id) ? this.id.toObject() : null,
-                    this.args.toObject(),
-                    this.body.toObject()]
-            };
+        RsFuncExpr.prototype.serialize = function () {
+            return this._toAeson("FuncExpr", [this.id.serialize(), this.args.serialize(), this.body.serialize()], 0 /* WITH_CTOR */);
         };
         return RsFuncExpr;
     })(RsExpression);
@@ -60229,19 +60188,13 @@ var TypeScript;
     var RsVarRef = (function (_super) {
         __extends(RsVarRef, _super);
         function RsVarRef(span, ann, id) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.id = id;
         }
-        RsVarRef.prototype.toObject = function () {
-            return {
-                VarRef: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.id.toObject()]
-            };
+        RsVarRef.prototype.serialize = function () {
+            return this._toAeson("VarRef", [this.id.serialize()], 0 /* WITH_CTOR */);
         };
         return RsVarRef;
     })(RsExpression);
@@ -60250,20 +60203,14 @@ var TypeScript;
     var RsDotRef = (function (_super) {
         __extends(RsDotRef, _super);
         function RsDotRef(span, ann, expression, id) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.expression = expression;
             this.id = id;
         }
-        RsDotRef.prototype.toObject = function () {
-            return {
-                DotRef: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.expression.toObject(), this.id.toObject()]
-            };
+        RsDotRef.prototype.serialize = function () {
+            return this._toAeson("DotRef", [this.expression.serialize(), this.id.serialize()], 0 /* WITH_CTOR */);
         };
         return RsDotRef;
     })(RsExpression);
@@ -60272,20 +60219,14 @@ var TypeScript;
     var RsBracketRef = (function (_super) {
         __extends(RsBracketRef, _super);
         function RsBracketRef(span, ann, e1, e2) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.e1 = e1;
             this.e2 = e2;
         }
-        RsBracketRef.prototype.toObject = function () {
-            return {
-                BracketRef: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.e1.toObject(), this.e2.toObject()]
-            };
+        RsBracketRef.prototype.serialize = function () {
+            return this._toAeson("BracketRef", [this.e1.serialize(), this.e2.serialize()], 0 /* WITH_CTOR */);
         };
         return RsBracketRef;
     })(RsExpression);
@@ -60294,20 +60235,14 @@ var TypeScript;
     var RsCallExpr = (function (_super) {
         __extends(RsCallExpr, _super);
         function RsCallExpr(span, ann, target, args) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.target = target;
             this.args = args;
         }
-        RsCallExpr.prototype.toObject = function () {
-            return {
-                CallExpr: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.target.toObject(), this.args.toObject()]
-            };
+        RsCallExpr.prototype.serialize = function () {
+            return this._toAeson("CallExpr", [this.target.serialize(), this.args.serialize()], 0 /* WITH_CTOR */);
         };
         return RsCallExpr;
     })(RsExpression);
@@ -60316,19 +60251,13 @@ var TypeScript;
     var RsObjectLit = (function (_super) {
         __extends(RsObjectLit, _super);
         function RsObjectLit(span, ann, bindings) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.bindings = bindings;
         }
-        RsObjectLit.prototype.toObject = function () {
-            return {
-                ObjectLit: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.bindings.toObject()]
-            };
+        RsObjectLit.prototype.serialize = function () {
+            return this._toAeson("ObjectLit", [this.bindings.serialize()], 0 /* WITH_CTOR */);
         };
         return RsObjectLit;
     })(RsExpression);
@@ -60337,24 +60266,15 @@ var TypeScript;
     var RsAssignExpr = (function (_super) {
         __extends(RsAssignExpr, _super);
         function RsAssignExpr(span, ann, assignOp, lval, expression) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.assignOp = assignOp;
             this.lval = lval;
             this.expression = expression;
         }
-        RsAssignExpr.prototype.toObject = function () {
-            return {
-                AssignExpr: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.assignOp.toObject(),
-                    this.lval.toObject(),
-                    this.expression.toObject()
-                ]
-            };
+        RsAssignExpr.prototype.serialize = function () {
+            return this._toAeson("AssignExpr", [this.assignOp.serialize(), this.lval.serialize(), this.expression.serialize()], 0 /* WITH_CTOR */);
         };
         return RsAssignExpr;
     })(RsExpression);
@@ -60363,16 +60283,12 @@ var TypeScript;
     var RsThisRef = (function (_super) {
         __extends(RsThisRef, _super);
         function RsThisRef(span, ann) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
         }
-        RsThisRef.prototype.toObject = function () {
-            return {
-                ThisRef: [this.span.toObject(), this.mapAnn(function (a) {
-                        return a.toObject();
-                    })]
-            };
+        RsThisRef.prototype.serialize = function () {
+            return this._toAeson("ThisRef", [], 0 /* WITH_CTOR */);
         };
         return RsThisRef;
     })(RsExpression);
@@ -60381,16 +60297,12 @@ var TypeScript;
     var RsSuperRef = (function (_super) {
         __extends(RsSuperRef, _super);
         function RsSuperRef(span, ann) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
         }
-        RsSuperRef.prototype.toObject = function () {
-            return {
-                SuperRef: [this.span.toObject(), this.mapAnn(function (a) {
-                        return a.toObject();
-                    })]
-            };
+        RsSuperRef.prototype.serialize = function () {
+            return this._toAeson("SuperRef", [], 0 /* WITH_CTOR */);
         };
         return RsSuperRef;
     })(RsExpression);
@@ -60399,16 +60311,12 @@ var TypeScript;
     var RsNullLit = (function (_super) {
         __extends(RsNullLit, _super);
         function RsNullLit(span, ann) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
         }
-        RsNullLit.prototype.toObject = function () {
-            return {
-                NullLit: [this.span.toObject(), this.mapAnn(function (a) {
-                        return a.toObject();
-                    })]
-            };
+        RsNullLit.prototype.serialize = function () {
+            return this._toAeson("NullLit", [], 0 /* WITH_CTOR */);
         };
         return RsNullLit;
     })(RsExpression);
@@ -60417,20 +60325,13 @@ var TypeScript;
     var RsBoolLit = (function (_super) {
         __extends(RsBoolLit, _super);
         function RsBoolLit(span, ann, b) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.b = b;
         }
-        RsBoolLit.prototype.toObject = function () {
-            return {
-                BoolLit: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.b
-                ]
-            };
+        RsBoolLit.prototype.serialize = function () {
+            return this._toAeson("BoolLit", [this.b], 0 /* WITH_CTOR */);
         };
         return RsBoolLit;
     })(RsExpression);
@@ -60439,20 +60340,14 @@ var TypeScript;
     var RsNewExpr = (function (_super) {
         __extends(RsNewExpr, _super);
         function RsNewExpr(span, ann, e, es) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.e = e;
             this.es = es;
         }
-        RsNewExpr.prototype.toObject = function () {
-            return {
-                NewExpr: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.e.toObject(), this.es.toObject()]
-            };
+        RsNewExpr.prototype.serialize = function () {
+            return this._toAeson("NewExpr", [this.e.serialize(), this.es.serialize()], 0 /* WITH_CTOR */);
         };
         return RsNewExpr;
     })(RsExpression);
@@ -60461,20 +60356,14 @@ var TypeScript;
     var RsUnaryAssignExpr = (function (_super) {
         __extends(RsUnaryAssignExpr, _super);
         function RsUnaryAssignExpr(span, ann, op, lval) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.op = op;
             this.lval = lval;
         }
-        RsUnaryAssignExpr.prototype.toObject = function () {
-            return {
-                UnaryAssignExpr: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.op.toObject(), this.lval.toObject()]
-            };
+        RsUnaryAssignExpr.prototype.serialize = function () {
+            return this._toAeson("UnaryAssignExpr", [this.op.serialize(), this.lval.serialize()], 0 /* WITH_CTOR */);
         };
         return RsUnaryAssignExpr;
     })(RsExpression);
@@ -60483,20 +60372,14 @@ var TypeScript;
     var RsPrefixExpr = (function (_super) {
         __extends(RsPrefixExpr, _super);
         function RsPrefixExpr(span, ann, op, exp) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.op = op;
             this.exp = exp;
         }
-        RsPrefixExpr.prototype.toObject = function () {
-            return {
-                PrefixExpr: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.op.toObject(), this.exp.toObject()]
-            };
+        RsPrefixExpr.prototype.serialize = function () {
+            return this._toAeson("PrefixExpr", [this.op.serialize(), this.exp.serialize()], 0 /* WITH_CTOR */);
         };
         return RsPrefixExpr;
     })(RsExpression);
@@ -60505,19 +60388,13 @@ var TypeScript;
     var RsArrayLit = (function (_super) {
         __extends(RsArrayLit, _super);
         function RsArrayLit(span, ann, members) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.members = members;
         }
-        RsArrayLit.prototype.toObject = function () {
-            return {
-                ArrayLit: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.members.toObject()]
-            };
+        RsArrayLit.prototype.serialize = function () {
+            return this._toAeson("ArrayLit", [this.members.serialize()], 0 /* WITH_CTOR */);
         };
         return RsArrayLit;
     })(RsExpression);
@@ -60526,19 +60403,13 @@ var TypeScript;
     var RsCast = (function (_super) {
         __extends(RsCast, _super);
         function RsCast(span, ann, expression) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.expression = expression;
         }
-        RsCast.prototype.toObject = function () {
-            return {
-                Cast: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.expression.toObject()]
-            };
+        RsCast.prototype.serialize = function () {
+            return this._toAeson("Cast", [this.expression.serialize()], 0 /* WITH_CTOR */);
         };
         return RsCast;
     })(RsExpression);
@@ -60549,7 +60420,7 @@ var TypeScript;
         function RsClassElt() {
             _super.apply(this, arguments);
         }
-        RsClassElt.prototype.toObject = function () {
+        RsClassElt.prototype.serialize = function () {
             throw new Error("RsClassElt: child class should implement toJSON");
         };
         return RsClassElt;
@@ -60559,20 +60430,14 @@ var TypeScript;
     var RsConstructor = (function (_super) {
         __extends(RsConstructor, _super);
         function RsConstructor(span, ann, args, body) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.args = args;
             this.body = body;
         }
-        RsConstructor.prototype.toObject = function () {
-            return {
-                Constructor: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    (this.args) ? this.args.toObject() : null, this.body.toObject()]
-            };
+        RsConstructor.prototype.serialize = function () {
+            return this._toAeson("Constructor", [this.args.serialize(), this.body.serialize()], 0 /* WITH_CTOR */);
         };
         return RsConstructor;
     })(RsClassElt);
@@ -60581,24 +60446,15 @@ var TypeScript;
     var RsMemberVarDecl = (function (_super) {
         __extends(RsMemberVarDecl, _super);
         function RsMemberVarDecl(span, ann, sta, name, exp) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.sta = sta;
             this.name = name;
             this.exp = exp;
         }
-        RsMemberVarDecl.prototype.toObject = function () {
-            return {
-                MemberVarDecl: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.sta,
-                    this.name.toObject(),
-                    (this.exp) ? this.exp.toObject() : null
-                ]
-            };
+        RsMemberVarDecl.prototype.serialize = function () {
+            return this._toAeson("MemberVarDecl", [this.sta, this.name.serialize(), this.exp.serialize()], 0 /* WITH_CTOR */);
         };
         return RsMemberVarDecl;
     })(RsClassElt);
@@ -60607,7 +60463,7 @@ var TypeScript;
     var RsMemberMethDef = (function (_super) {
         __extends(RsMemberMethDef, _super);
         function RsMemberMethDef(span, ann, sta, name, args, body) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.sta = sta;
@@ -60615,14 +60471,8 @@ var TypeScript;
             this.args = args;
             this.body = body;
         }
-        RsMemberMethDef.prototype.toObject = function () {
-            return {
-                MemberMethDef: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.sta, this.name.toObject(), this.args.toObject(), this.body.toObject()]
-            };
+        RsMemberMethDef.prototype.serialize = function () {
+            return this._toAeson("MemberMethDef", [this.sta, this.name.serialize(), this.args.serialize(), this.body.serialize()], 0 /* WITH_CTOR */);
         };
         return RsMemberMethDef;
     })(RsClassElt);
@@ -60631,21 +60481,15 @@ var TypeScript;
     var RsMemberMethDecl = (function (_super) {
         __extends(RsMemberMethDecl, _super);
         function RsMemberMethDecl(span, ann, sta, name, args) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.sta = sta;
             this.name = name;
             this.args = args;
         }
-        RsMemberMethDecl.prototype.toObject = function () {
-            return {
-                MemberMethDecl: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.sta, this.name.toObject(), this.args.toObject()]
-            };
+        RsMemberMethDecl.prototype.serialize = function () {
+            return this._toAeson("MemberMethDecl", [this.sta, this.name.serialize(), this.args.serialize()], 0 /* WITH_CTOR */);
         };
         return RsMemberMethDecl;
     })(RsClassElt);
@@ -60656,7 +60500,7 @@ var TypeScript;
         function RsStatement() {
             _super.apply(this, arguments);
         }
-        RsStatement.prototype.toObject = function () {
+        RsStatement.prototype.serialize = function () {
             throw new Error("RsStatement: child class should implement toJSON");
         };
         return RsStatement;
@@ -60666,14 +60510,12 @@ var TypeScript;
     var RsEmptyStmt = (function (_super) {
         __extends(RsEmptyStmt, _super);
         function RsEmptyStmt(span, ann) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
         }
-        RsEmptyStmt.prototype.toObject = function () {
-            return { EmptyStmt: [this.span.toObject(), this.mapAnn(function (a) {
-                        return a.toObject();
-                    })] };
+        RsEmptyStmt.prototype.serialize = function () {
+            return this._toAeson("EmptyStmt", [], 0 /* WITH_CTOR */);
         };
         return RsEmptyStmt;
     })(RsStatement);
@@ -60682,19 +60524,13 @@ var TypeScript;
     var RsExprStmt = (function (_super) {
         __extends(RsExprStmt, _super);
         function RsExprStmt(span, ann, exp) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.exp = exp;
         }
-        RsExprStmt.prototype.toObject = function () {
-            return {
-                ExprStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.exp.toObject()]
-            };
+        RsExprStmt.prototype.serialize = function () {
+            return this._toAeson("ExprStmt", [this.exp.serialize()], 0 /* WITH_CTOR */);
         };
         return RsExprStmt;
     })(RsStatement);
@@ -60703,19 +60539,13 @@ var TypeScript;
     var RsVarDeclStmt = (function (_super) {
         __extends(RsVarDeclStmt, _super);
         function RsVarDeclStmt(span, ann, varDecls) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.varDecls = varDecls;
         }
-        RsVarDeclStmt.prototype.toObject = function () {
-            return {
-                VarDeclStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.varDecls.toObject()]
-            };
+        RsVarDeclStmt.prototype.serialize = function () {
+            return this._toAeson("VarDeclStmt", [this.varDecls.serialize()], 0 /* WITH_CTOR */);
         };
         return RsVarDeclStmt;
     })(RsStatement);
@@ -60724,21 +60554,15 @@ var TypeScript;
     var RsFunctionStmt = (function (_super) {
         __extends(RsFunctionStmt, _super);
         function RsFunctionStmt(span, ann, id, args, body) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.id = id;
             this.args = args;
             this.body = body;
         }
-        RsFunctionStmt.prototype.toObject = function () {
-            return {
-                FunctionStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.id.toObject(), this.args.toObject(), this.body.toObject()]
-            };
+        RsFunctionStmt.prototype.serialize = function () {
+            return this._toAeson("FunctionStmt", [this.id.serialize(), this.args.serialize(), this.body.serialize()], 0 /* WITH_CTOR */);
         };
         return RsFunctionStmt;
     })(RsStatement);
@@ -60747,21 +60571,15 @@ var TypeScript;
     var RsFuncCtorStmt = (function (_super) {
         __extends(RsFuncCtorStmt, _super);
         function RsFuncCtorStmt(span, ann, id, args, body) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.id = id;
             this.args = args;
             this.body = body;
         }
-        RsFuncCtorStmt.prototype.toObject = function () {
-            return {
-                FuncCtorStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.id.toObject(), this.args.toObject(), this.body.toObject()]
-            };
+        RsFuncCtorStmt.prototype.serialize = function () {
+            return this._toAeson("FuncCtorStmt", [this.id.serialize(), this.args.serialize(), this.body.serialize()], 0 /* WITH_CTOR */);
         };
         return RsFuncCtorStmt;
     })(RsStatement);
@@ -60770,20 +60588,14 @@ var TypeScript;
     var RsFunctionAmbientDecl = (function (_super) {
         __extends(RsFunctionAmbientDecl, _super);
         function RsFunctionAmbientDecl(span, ann, id, args) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.id = id;
             this.args = args;
         }
-        RsFunctionAmbientDecl.prototype.toObject = function () {
-            return {
-                FuncAmbDecl: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.id.toObject(), this.args.toObject()]
-            };
+        RsFunctionAmbientDecl.prototype.serialize = function () {
+            return this._toAeson("FuncAmbDecl", [this.id.serialize(), this.args.serialize()], 0 /* WITH_CTOR */);
         };
         return RsFunctionAmbientDecl;
     })(RsStatement);
@@ -60792,20 +60604,14 @@ var TypeScript;
     var RsFunctionOverload = (function (_super) {
         __extends(RsFunctionOverload, _super);
         function RsFunctionOverload(span, ann, id, args) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.id = id;
             this.args = args;
         }
-        RsFunctionOverload.prototype.toObject = function () {
-            return {
-                FuncOverload: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.id.toObject(), this.args.toObject()]
-            };
+        RsFunctionOverload.prototype.serialize = function () {
+            return this._toAeson("FuncOverload", [this.id.serialize(), this.args.serialize()], 0 /* WITH_CTOR */);
         };
         return RsFunctionOverload;
     })(RsStatement);
@@ -60814,19 +60620,13 @@ var TypeScript;
     var RsReturnStmt = (function (_super) {
         __extends(RsReturnStmt, _super);
         function RsReturnStmt(span, ann, expression) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.expression = expression;
         }
-        RsReturnStmt.prototype.toObject = function () {
-            return {
-                ReturnStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    (this.expression) ? this.expression.toObject() : null]
-            };
+        RsReturnStmt.prototype.serialize = function () {
+            return this._toAeson("ReturnStmt", [this.expression.serialize()], 0 /* WITH_CTOR */);
         };
         return RsReturnStmt;
     })(RsStatement);
@@ -60835,19 +60635,13 @@ var TypeScript;
     var RsBlockStmt = (function (_super) {
         __extends(RsBlockStmt, _super);
         function RsBlockStmt(span, ann, body) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.body = body;
         }
-        RsBlockStmt.prototype.toObject = function () {
-            return {
-                BlockStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.body.toObject()]
-            };
+        RsBlockStmt.prototype.serialize = function () {
+            return this._toAeson("BlockStmt", [this.body.serialize()], 0 /* WITH_CTOR */);
         };
         return RsBlockStmt;
     })(RsStatement);
@@ -60856,7 +60650,7 @@ var TypeScript;
     var RsClassStmt = (function (_super) {
         __extends(RsClassStmt, _super);
         function RsClassStmt(span, ann, id, extendsClass, implementsInterfaces, body) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.id = id;
@@ -60864,17 +60658,8 @@ var TypeScript;
             this.implementsInterfaces = implementsInterfaces;
             this.body = body;
         }
-        RsClassStmt.prototype.toObject = function () {
-            return {
-                ClassStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.id.toObject(),
-                    (this.extendsClass) ? this.extendsClass.toObject() : null,
-                    this.implementsInterfaces.toObject(),
-                    this.body.toObject()]
-            };
+        RsClassStmt.prototype.serialize = function () {
+            return this._toAeson("ClassStmt", [this.id.serialize(), this.extendsClass.serialize(), this.implementsInterfaces.serialize(), this.body.serialize()], 0 /* WITH_CTOR */);
         };
         return RsClassStmt;
     })(RsStatement);
@@ -60883,21 +60668,14 @@ var TypeScript;
     var RsEnumStmt = (function (_super) {
         __extends(RsEnumStmt, _super);
         function RsEnumStmt(span, ann, id, body) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.id = id;
             this.body = body;
         }
-        RsEnumStmt.prototype.toObject = function () {
-            return {
-                EnumStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.id.toObject(),
-                    this.body.toObject()]
-            };
+        RsEnumStmt.prototype.serialize = function () {
+            return this._toAeson("EnumStmt", [this.id.serialize(), this.body.serialize()], 0 /* WITH_CTOR */);
         };
         return RsEnumStmt;
     })(RsStatement);
@@ -60906,20 +60684,14 @@ var TypeScript;
     var RsWhileStmt = (function (_super) {
         __extends(RsWhileStmt, _super);
         function RsWhileStmt(span, ann, exp, body) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.exp = exp;
             this.body = body;
         }
-        RsWhileStmt.prototype.toObject = function () {
-            return {
-                WhileStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.exp.toObject(), this.body.toObject()]
-            };
+        RsWhileStmt.prototype.serialize = function () {
+            return this._toAeson("WhileStmt", [this.exp.serialize(), this.body.serialize()], 0 /* WITH_CTOR */);
         };
         return RsWhileStmt;
     })(RsStatement);
@@ -60928,23 +60700,15 @@ var TypeScript;
     var RsForInStmt = (function (_super) {
         __extends(RsForInStmt, _super);
         function RsForInStmt(span, ann, init, exp, body) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.init = init;
             this.exp = exp;
             this.body = body;
         }
-        RsForInStmt.prototype.toObject = function () {
-            return {
-                ForInStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.init.toObject(),
-                    this.exp.toObject(),
-                    this.body.toObject()]
-            };
+        RsForInStmt.prototype.serialize = function () {
+            return this._toAeson("ForInStmt", [this.init.serialize(), this.exp.serialize(), this.body.serialize()], 0 /* WITH_CTOR */);
         };
         return RsForInStmt;
     })(RsStatement);
@@ -60953,7 +60717,7 @@ var TypeScript;
     var RsForStmt = (function (_super) {
         __extends(RsForStmt, _super);
         function RsForStmt(span, ann, init, test, inc, body) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.init = init;
@@ -60961,17 +60725,8 @@ var TypeScript;
             this.inc = inc;
             this.body = body;
         }
-        RsForStmt.prototype.toObject = function () {
-            return {
-                ForStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.init.toObject(),
-                    (this.test) ? this.test.toObject() : null,
-                    (this.inc) ? this.inc.toObject() : null,
-                    this.body.toObject()]
-            };
+        RsForStmt.prototype.serialize = function () {
+            return this._toAeson("ForStmt", [this.init.serialize(), this.test.serialize(), this.inc.serialize(), this.body.serialize()], 0 /* WITH_CTOR */);
         };
         return RsForStmt;
     })(RsStatement);
@@ -60980,21 +60735,15 @@ var TypeScript;
     var RsIfStmt = (function (_super) {
         __extends(RsIfStmt, _super);
         function RsIfStmt(span, ann, cond, s1, s2) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.cond = cond;
             this.s1 = s1;
             this.s2 = s2;
         }
-        RsIfStmt.prototype.toObject = function () {
-            return {
-                IfStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.cond.toObject(), this.s1.toObject(), this.s2.toObject()]
-            };
+        RsIfStmt.prototype.serialize = function () {
+            return this._toAeson("IfStmt", [this.cond.serialize(), this.s1.serialize(), this.s2.serialize()], 0 /* WITH_CTOR */);
         };
         return RsIfStmt;
     })(RsStatement);
@@ -61003,20 +60752,14 @@ var TypeScript;
     var RsIfSingleStmt = (function (_super) {
         __extends(RsIfSingleStmt, _super);
         function RsIfSingleStmt(span, ann, cond, s) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.cond = cond;
             this.s = s;
         }
-        RsIfSingleStmt.prototype.toObject = function () {
-            return {
-                IfSingleStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.cond.toObject(), this.s.toObject()]
-            };
+        RsIfSingleStmt.prototype.serialize = function () {
+            return this._toAeson("IfSingleStmt", [this.cond.serialize(), this.s.serialize()], 0 /* WITH_CTOR */);
         };
         return RsIfSingleStmt;
     })(RsStatement);
@@ -61025,19 +60768,13 @@ var TypeScript;
     var RsThrowStatement = (function (_super) {
         __extends(RsThrowStatement, _super);
         function RsThrowStatement(span, ann, expression) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.expression = expression;
         }
-        RsThrowStatement.prototype.toObject = function () {
-            return {
-                ThrowStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.expression.toObject()]
-            };
+        RsThrowStatement.prototype.serialize = function () {
+            return this._toAeson("ThrowStmt", [this.expression.serialize()], 0 /* WITH_CTOR */);
         };
         return RsThrowStatement;
     })(RsStatement);
@@ -61046,21 +60783,14 @@ var TypeScript;
     var RsModuleStmt = (function (_super) {
         __extends(RsModuleStmt, _super);
         function RsModuleStmt(span, ann, name, body) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.name = name;
             this.body = body;
         }
-        RsModuleStmt.prototype.toObject = function () {
-            return {
-                ModuleStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.name.toObject(),
-                    this.body.toObject()]
-            };
+        RsModuleStmt.prototype.serialize = function () {
+            return this._toAeson("ModuleStmt", [this.name.serialize(), this.body.serialize()], 0 /* WITH_CTOR */);
         };
         return RsModuleStmt;
     })(RsStatement);
@@ -61069,16 +60799,13 @@ var TypeScript;
     var RsIfaceStmt = (function (_super) {
         __extends(RsIfaceStmt, _super);
         function RsIfaceStmt(span, ann, name) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.name = name;
         }
-        RsIfaceStmt.prototype.toObject = function () {
-            return { IfaceStmt: [[
-                        this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })], this.name.toObject()] };
+        RsIfaceStmt.prototype.serialize = function () {
+            return this._toAeson("IfaceStmt", [this.name.serialize()], 0 /* WITH_CTOR */);
         };
         return RsIfaceStmt;
     })(RsStatement);
@@ -61087,20 +60814,14 @@ var TypeScript;
     var RsEnumElt = (function (_super) {
         __extends(RsEnumElt, _super);
         function RsEnumElt(span, ann, name, exp) {
-            _super.call(this, ann);
+            _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.name = name;
             this.exp = exp;
         }
-        RsEnumElt.prototype.toObject = function () {
-            return [
-                [this.span.toObject(), this.mapAnn(function (a) {
-                        return a.toObject();
-                    })],
-                this.name.toObject(),
-                this.exp.toObject()
-            ];
+        RsEnumElt.prototype.serialize = function () {
+            return this._toAeson("EnumElt", [this.name.serialize(), this.exp.serialize()], 1 /* NO_CTOR */);
         };
         return RsEnumElt;
     })(RsAnnotatedAST);
@@ -61143,7 +60864,7 @@ var TypeScript;
             var lineMap = this._document.lineMap();
             var startLineAndChar = lineMap.getLineAndCharacterFromPosition(ast.start());
             var stopLineAndChar = lineMap.getLineAndCharacterFromPosition(ast.end());
-            return new TypeScript.RsSourceSpan(ast.fileName(), startLineAndChar, stopLineAndChar);
+            return new TypeScript.RsSrcSpan(ast.fileName(), startLineAndChar, stopLineAndChar);
         };
 
         RsHelper.prototype.isLibrary = function (ast) {
@@ -61188,8 +60909,8 @@ var TypeScript;
     var FixResult = (function () {
         function FixResult() {
         }
-        FixResult.prototype.toObject = function () {
-            throw new Error("FixResult.toObject - abstract");
+        FixResult.prototype.serialize = function () {
+            throw new Error("FixResult.serialize - abstract");
         };
         return FixResult;
     })();
@@ -61201,7 +60922,7 @@ var TypeScript;
             this.line = line;
             this.column = column;
         }
-        FPSrcPos.prototype.toObject = function () {
+        FPSrcPos.prototype.serialize = function () {
             return [this.name, this.line + 1, this.column + 1];
         };
         return FPSrcPos;
@@ -61213,10 +60934,10 @@ var TypeScript;
             this.sp_start = sp_start;
             this.sp_stop = sp_stop;
         }
-        FPSrcSpan.prototype.toObject = function () {
+        FPSrcSpan.prototype.serialize = function () {
             return {
-                "sp_start": this.sp_start.toObject(),
-                "sp_stop": this.sp_stop.toObject()
+                "sp_start": this.sp_start.serialize(),
+                "sp_stop": this.sp_stop.serialize()
             };
         };
         return FPSrcSpan;
@@ -61235,10 +60956,10 @@ var TypeScript;
             return new FPError(diagnostic.text(), new FPSrcSpan(new FPSrcPos(diagnostic.fileName(), startLineAndCharacter.line(), startLineAndCharacter.character()), new FPSrcPos(diagnostic.fileName(), stopLineAndCharacter.line(), stopLineAndCharacter.character())));
         };
 
-        FPError.prototype.toObject = function () {
+        FPError.prototype.serialize = function () {
             return {
                 "errMsg": this.errMsg,
-                "errLoc": this.errLoc.toObject()
+                "errLoc": this.errLoc.serialize()
             };
         };
         return FPError;
@@ -61252,10 +60973,10 @@ var TypeScript;
             this.errs = errs;
             this.msg = msg;
         }
-        FRCrash.prototype.toObject = function () {
-            return { "Crash": [this.errs.map(function (err) {
-                        return err.toObject();
-                    }), this.msg] };
+        FRCrash.prototype.serialize = function () {
+            return TypeScript.aesonEncode("Crash", [this.errs.map(function (err) {
+                    return err.serialize();
+                }), this.msg]);
         };
         return FRCrash;
     })(FixResult);
@@ -61266,8 +60987,8 @@ var TypeScript;
         function FRSafe() {
             _super.apply(this, arguments);
         }
-        FRSafe.prototype.toObject = function () {
-            return { "Safe": [] };
+        FRSafe.prototype.serialize = function () {
+            return TypeScript.aesonEncode("Safe", []);
         };
         return FRSafe;
     })(FixResult);
@@ -61279,10 +61000,10 @@ var TypeScript;
             _super.call(this);
             this.errs = errs;
         }
-        FRUnsafe.prototype.toObject = function () {
-            return { "Unsafe": this.errs.map(function (err) {
-                    return err.toObject();
-                }) };
+        FRUnsafe.prototype.serialize = function () {
+            return TypeScript.aesonEncode("Unsafe", this.errs.map(function (err) {
+                return err.serialize();
+            }));
         };
         return FRUnsafe;
     })(FixResult);
@@ -61294,7 +61015,7 @@ var TypeScript;
             _super.call(this);
             this.msg = msg;
         }
-        FRUnknownError.prototype.toObject = function () {
+        FRUnknownError.prototype.serialize = function () {
             return { "UnknownError": this.msg };
         };
         return FRUnknownError;
@@ -61346,7 +61067,7 @@ var TypeScript;
             var cstop = ast.fullEnd();
             var startLineAndChar = ast.syntaxTree().lineMap().getLineAndCharacterFromPosition(cstart);
             var endLineAndChar = ast.syntaxTree().lineMap().getLineAndCharacterFromPosition(cstop);
-            return new TypeScript.RsSourceSpan(ast.syntaxTree().sourceUnit().fileName(), startLineAndChar, endLineAndChar);
+            return new TypeScript.RsSrcSpan(ast.syntaxTree().sourceUnit().fileName(), startLineAndChar, endLineAndChar);
         };
 
         InitializationValidator.pre = function (ast, context) {
@@ -63374,7 +63095,7 @@ var TypeScript;
                 } else {
                     fixResult = new TypeScript.FRUnsafe(errors);
                 }
-                this.ioHost.stdout.Write(JSON.stringify(fixResult.toObject(), undefined, 2));
+                this.ioHost.stdout.Write(JSON.stringify(fixResult.serialize(), undefined, 2));
                 this.ioHost.quit(1);
             } else {
                 this.ioHost.stdout.Write(JSON.stringify(this._refScriptOutputFiles.map(function (f) {
@@ -63385,7 +63106,7 @@ var TypeScript;
 
         BatchCompiler.prototype.dumpRefScriptUnknownError = function (msg) {
             var unknownError = new TypeScript.FRUnknownError(msg);
-            this.ioHost.stdout.Write(JSON.stringify(unknownError.toObject(), undefined, 2));
+            this.ioHost.stdout.Write(JSON.stringify(unknownError.serialize(), undefined, 2));
         };
 
         BatchCompiler.prototype.addDiagnostic = function (diagnostic) {

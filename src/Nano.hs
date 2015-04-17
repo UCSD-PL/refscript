@@ -63,10 +63,10 @@ withExistingFile f
         (code, stdOut, _) <- readProcessWithExitCode tsCmd (mkArgs [preludeTSPath, domTSPath]) ""
         case code of 
           ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
-                                Left  s  -> return $ Left  $ F.UnknownError ("withExistingFile1: " ++ s)
+                                Left  s  -> return $ Left  $ F.UnknownError $ "withExistingFile1: " ++ s
                                 Right fs -> return $ Right $ fs
-          ExitFailure _   -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
-                                Left  s  -> return $ Left $ F.UnknownError ("withExistingFile2: " ++ s)
+          ExitFailure _   -> case eitherDecode (B.pack $ stdOut) :: Either String (F.FixResult Error) of
+                                Left  s  -> return $ Left $ F.UnknownError $ "withExistingFile2: " ++ s
                                 Right e  -> return $ Left $ e
   | otherwise
   = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext

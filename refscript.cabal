@@ -36,7 +36,7 @@ Executable rsc
                   , vector
                   , bytestring
                   , text
-                  , aeson <= 0.6.1.0
+                  , aeson
                   , hashable
                   , data-default
                   , directory

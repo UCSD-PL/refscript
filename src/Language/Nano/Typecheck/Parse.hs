@@ -11,7 +11,7 @@
 {-# LANGUAGE DeriveGeneric             #-}
 
 
-module Language.Nano.Typecheck.Parse (parseNanoFromFiles) where
+module Language.Nano.Typecheck.Parse (parseNanoFromFiles, parseScriptFromJSON, parseIdFromJSON, RawSpec(..)) where
 
 import           Prelude                          hiding ( mapM)
 
@@ -66,7 +66,7 @@ import           Language.Nano.Syntax.PrettyPrint
 import           Language.Nano.Syntax.Annotations
 
 import           Text.Parsec                      hiding (parse, State)
-import           Text.Parsec.Pos                         (newPos)
+import           Text.Parsec.Pos                         (newPos, SourcePos)
 import           Text.Parsec.Error                       (errorMessages, showErrorMessages)
 import qualified Text.Parsec.Token                as     T
 import qualified Data.Text                        as     DT
@@ -655,6 +655,31 @@ instance FromJSON UnaryAssignOp
 instance FromJSON SrcSpan
 instance FromJSON RawSpec
 
+instance ToJSON (Expression (SrcSpan, [RawSpec]))
+instance ToJSON (Statement (SrcSpan, [RawSpec]))
+instance ToJSON (EnumElt (SrcSpan, [RawSpec]))
+instance ToJSON (LValue (SrcSpan, [RawSpec]))
+instance ToJSON (JavaScript (SrcSpan, [RawSpec]))
+instance ToJSON (ClassElt (SrcSpan, [RawSpec]))
+instance ToJSON (CaseClause (SrcSpan, [RawSpec]))
+instance ToJSON (CatchClause (SrcSpan, [RawSpec]))
+instance ToJSON (ForInit (SrcSpan, [RawSpec]))
+instance ToJSON (ForInInit (SrcSpan, [RawSpec]))
+instance ToJSON (VarDecl (SrcSpan, [RawSpec]))
+instance ToJSON (Id (SrcSpan, [RawSpec]))
+instance ToJSON (Prop (SrcSpan, [RawSpec]))
+instance ToJSON (SrcSpan, [RawSpec])
+instance ToJSON InfixOp
+instance ToJSON AssignOp
+instance ToJSON PrefixOp
+instance ToJSON UnaryAssignOp
+instance ToJSON SrcSpan
+instance ToJSON RawSpec
+
+instance ToJSON SourcePos where
+  toJSON sp = toJSON (sourceName sp, sourceLine sp, sourceColumn sp)
+
+
 
 --------------------------------------------------------------------------------------
 -- | Parse File and Type Signatures 
@@ -682,6 +707,17 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
   where 
     decodeOrDie s =
       case eitherDecode s :: Either String [Statement (SrcSpan, [RawSpec])] of
+        Left msg -> Left  $ Crash [] $ "JSON decode error:\n" ++ msg
+        Right p  -> Right $ p
+
+
+--------------------------------------------------------------------------------------
+parseIdFromJSON :: FilePath -> IO (Either (FixResult a) [Id (SrcSpan, [RawSpec])])
+--------------------------------------------------------------------------------------
+parseIdFromJSON filename = decodeOrDie <$> getJSON filename
+  where 
+    decodeOrDie s =
+      case eitherDecode s :: Either String [Id (SrcSpan, [RawSpec])] of
         Left msg -> Left  $ Crash [] $ "JSON decode error:\n" ++ msg
         Right p  -> Right $ p
 

@@ -1,10 +1,4 @@
 
-
-interface Pair<A,B> {
-  x: A;
-  y: B;
-}
-
 /*@ fst :: forall A B . (x: #Pair[A,B]) => A */
 function fst<A,B>(p: Pair<A,B>): A {
   return p.x;

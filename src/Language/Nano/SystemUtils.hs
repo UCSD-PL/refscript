@@ -33,6 +33,7 @@ import           Language.Fixpoint.Files()
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc             (inserts)
 import qualified Language.Fixpoint.Types    as F
+import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Syntax.PrettyPrint   
 import           Text.Parsec.Pos                   
 import           Language.Nano.Types()
@@ -161,14 +162,16 @@ instance ToJSON Annot1 where
                                , "col"   .= c
                                ]
 
-instance ToJSON SourcePos where
-  toJSON z           = object [("line" .= toJSON l), ("column" .= toJSON c)]
-    where 
-      l              = sourceLine   z
-      c              = sourceColumn z 
- 
-instance ToJSON SrcSpan where
-  toJSON = object . sourceSpanBinds  
+-- TEMPORARILY
+
+-- instance ToJSON SourcePos where
+--   toJSON z           = object [("line" .= toJSON l), ("column" .= toJSON c)]
+--     where 
+--       l              = sourceLine   z
+--       c              = sourceColumn z 
+--  
+-- instance ToJSON SrcSpan where
+--   toJSON = object . sourceSpanBinds  
 
 instance ToJSON AnnErrors where 
   toJSON = Array . V.fromList . fmap (\(sp, str) -> object $ ("message" .= str) : sourceSpanBinds sp)

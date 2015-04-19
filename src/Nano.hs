@@ -10,8 +10,9 @@ import qualified Language.Nano.Liquid.Types         as L
 
 import           System.Console.CmdArgs     hiding  (Loud)
 
-import           Data.Aeson                         (eitherDecode)
+import           Data.Aeson                         (eitherDecode, encode)
 import           Data.Aeson.Types            hiding (Parser, Error, parse)
+import           Data.ByteString.Lazy.Char8         (unpack)
 import           Language.Nano.CmdLine
 import           Language.Nano.Errors
 import           Language.Nano.Files
@@ -25,6 +26,7 @@ import           System.Exit
 import           System.Directory                   (createDirectoryIfMissing, doesFileExist)
 import           System.Process
 import           System.FilePath.Posix
+import           System.IO                          (hPutStrLn, stderr)
 import           Language.Fixpoint.Interface        (resultExit)
 import qualified Language.Fixpoint.Types      as    F
 import           Language.Fixpoint.Misc
@@ -43,16 +45,13 @@ main = do cfg  <- cmdArgs config
 verifier           :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult Error)
 -------------------------------------------------------------------------------
 verifier cfg f 
-  = json f >>= \case 
+  = json >>= \case 
       Left  e     -> return (NoAnn, e)
       Right jsons -> case cfg of
                        TC     {} -> TC.verifyFile cfg   jsons
                        Liquid {} -> LQ.verifyFile cfg f jsons
-
--------------------------------------------------------------------------------
-json :: FilePath -> IO (Either (F.FixResult Error) [FilePath])
--------------------------------------------------------------------------------
-json f = do fileExists <- doesFileExist f
+  where
+  json = do fileExists <- doesFileExist f
             if fileExists then withExistingFile f
                           else return $ Left $ F.Crash [] $ "File does not exist: " ++ f
 
@@ -81,7 +80,7 @@ withExistingFile f
 
 
 instance FromJSON (F.FixResult Error)
-instance ToJSON (F.FixResult Error)
+instance ToJSON a => ToJSON (F.FixResult a)
 
 instance FromJSON Error
 instance ToJSON Error 
@@ -91,7 +90,8 @@ run verifyFile cfg
   = do mapM_ (createDirectoryIfMissing False. tmpDir) (files cfg)
        rs   <- mapM (runOne cfg verifyFile) $ files cfg
        let r = mconcat rs
-       writeResult r
+       -- writeResult r
+       writeJSONResult r
        exitWith (resultExit r)
     where
        tmpDir    = tempDirectory
@@ -109,13 +109,17 @@ runOne cfg verifyFile f
 
 
 -------------------------------------------------------------------------------
-writeResult :: (Ord a, PP a) => F.FixResult a -> IO ()
+writeResult :: (Ord a, PP a, ToJSON a) => F.FixResult a -> IO ()
 -------------------------------------------------------------------------------
-writeResult r            = mapM_ (writeDoc c) $ zip [0..] $ resDocs r
+writeResult r        = mapM_ (writeDoc c) $ zip [0..] $ resDocs r
   where 
-    c                    = F.colorResult r
+    c                = F.colorResult r
+
+-- Write the JSON in the error stream
+writeJSONResult      = hPutStrLn stderr . unpack . encode
 
 writeDoc c (i, d)    = writeBlock c i $ procDoc d
+
 writeBlock _ _ []    = return ()
 writeBlock c 0 ss    = forM_ ss (colorPhaseLn c "")
 writeBlock _ _ ss    = forM_ ("\n" : ss) putStrLn

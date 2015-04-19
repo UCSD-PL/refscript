@@ -71,21 +71,22 @@ verifyFile cfg f fs = parse     fs
 
 parse fs next 
   = do  r <- parseNanoFromFiles fs
-        donePhase Loud "Parse Files"
+        {-donePhase Loud "Parse Files"-}
         nextPhase r next
 
 ssa next p
   = do  r <- ssaTransform p
-        donePhase Loud "SSA Transform"
+        {-donePhase Loud "SSA Transform"-}
         nextPhase r next
 
 tc cfg next p    
   = do  r <- typeCheck cfg p 
-        donePhase Loud "Typecheck"
+        {-donePhase Loud "Typecheck"-}
         nextPhase r next
 
 refTc cfg f p
-  = do donePhase Loud "Generate Constraints"
+  = do 
+       {-donePhase Loud "Generate Constraints"-}
        solveConstraints p f cgi
   where
     -- cgi = generateConstraints cfg $ trace (show (ppCasts p)) p

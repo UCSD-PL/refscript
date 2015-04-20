@@ -34,7 +34,7 @@ Suppose you want to work in a directory `$ROOT`. First `cd $ROOT`, and then:
     cd RefScript
     cabal sandbox init
     cabal sandbox add-source ../liquid-fixpoint
-    cabal installl
+    cabal install
 	
 
 ### Building typescript (optional) 

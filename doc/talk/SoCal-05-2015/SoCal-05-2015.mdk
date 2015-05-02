@@ -14,8 +14,7 @@ Reveal Theme  : solarized
 Common task:
 { .mylist text-align=left }
 
-Find the index of the smallest element in an array
-{ .mylist font-style="italic" }
+>Find the index of the smallest array element
 
 
 ## First-order
@@ -36,17 +35,18 @@ function minIndexFO (a) {
 Directly manipulating array indices is error prone
 </div>
 \
-<div class="fragment" align="left">
-Fewer opportunities for abstraction
-</div>
+<div class="fragment">
+Too verbose -- Fewer opportunities for abstraction
+{ .mylist text-align=left }
+
 
 
 ## Higher-order
 
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
 function $reduce(a, f, x) {
-	var res = x, i;
-	for (i = 0; i < a.length; i++)
+	var res = x;
+	for (var i = 0; i < a.length; i++)
       res = f(res, a[i], i);
 	return res;
 }
@@ -75,17 +75,17 @@ Challenge for dataflow analyses:
 { .mylist text-align=left }
 
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
-//@ type idx<x> = { v: number | 0 ≤ v && v < len (x) }
+/*@ type idx<x> = { v: number | 0 ≤ v && v < len(x) } */
 ```
 
 <div class="fragment"/>
 
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
-//@ $reduce :: <A,B>(a: A[], f: (B, A, idx<a>) => B, x: B) => B
+/*@ $reduce :: <A,B>(a: A[], f: (B, A, idx<a>) => B, x: B) => B */
 function $reduce(a, f, x) {
   var res = x, i = 0;
   for (i = 0; i < a.length; i++) {
-    res = f(res, a[i], i++);
+    res = f(res, a[i], i);
   }
   return res;
 }
@@ -106,52 +106,50 @@ function $reduce(a, f, x) {
 
 
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
+/*@ $reduce :: <A,B>(a: A[], f: (B, A, idx<a>) => B, x: B) => B */
+function $reduce(a, f, x) { ... }
+
 function reduce(a, f, x) {
-  return (arguments.length === 3) ?
-    $reduce(a, f, x) :
-    $reduce(a, f, a[0]);
+  if (arguments.length === 3) return $reduce(a, f, x);
+  else return $reduce(a, f, a[0]);
 }
 ```
 <div class="fragment"/>
 
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
-//@ reduce#1 :: <A,B>(a: A[], f: (B, A, idx<a>) => B, x: B) => B
+/*@ reduce#1 :: <A,B>(a: A[], f: (B, A, idx<a>) => B, x: B) => B */
 
-//@ reduce#2 :: <A>(a: A[]+, f: (A, A, idx<a>) => A) => A
+/*@ reduce#2 :: <A>(a: A[]+, f: (A, A, idx<a>) => A) => A */
 ```
+<div class="fragment"/>
 
-Behavior depends on **reflection** on variables (e.g. `arguments`)
+Behavior depends on **reflection** on variables (e.g. `arguments`)  
+
+Dependency: Basic Typing ⟷ Value Reasoning
 
 
 ## Solution: Two-phased Typing
 
-* Split *basic types* and *refinement* reasoning into **two** phases 
-that operate on distinct languages:
+**Source Language** 
+{ .mylist text-align=left }
 
-* **Source Language** (value-based overloading)
-  - *Intersections*
-  - *Untagged Unions*: different possible (run-time) types
+  - Basic Type-checking
+  
+  - Value-based overloading: *Intersections*, *Untagged Unions*
 
-* **Target language** (conventional ML-like language)
-  - *Products*
-  - *Tagged Unions*
+\
 
+*elaborate to*
 
-## Example
+\
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
-/*@ negate :: (number, number ) => number
-            Λ (number, boolean) => boolean
- */
-function negate(flag, x) {
-  if (flag) 
-    return 0 - x;
-  else
-    return !x;
-}
-```
+**Target language** 
+{ .mylist text-align=left }
 
-`negate`'s behavior depends on value of `flag`
+  - Refinement Type-checking 
+  
+  - Conventional ML-like language: *Products*, *Tagged Unions*
+
 
 
 
@@ -162,15 +160,17 @@ function negate(flag, x) {
             Λ (number, boolean) => boolean
  */
 function negate(flag, x) {
-  if (flag) 
-    return 0 - x;
-  else
-    return !x;
+  if (flag) return 0 - x;
+  else return !x;
 }
 ```
 
+`negate`'s behavior **depends on value** of `flag`
+{ .mylist text-align=left }
 
-`negate`'s specification is problematic
+<div class="fragment"/>
+
+`negate`'s specification is *problematic*
 { .mylist text-align=left }
 
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
@@ -189,17 +189,15 @@ type ff = { v: number | v  = 0}   // "falsy" numbers
 ```
 
 
-## Example
+## Example -- Specification
 
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
 /*@ negate :: (tt, number ) => number
            /\ (ff, boolean) => boolean
  */
 function negate(flag, x) {
-  if (flag) 
-    return 0 - x;
-  else
-    return !x;
+  if (flag) return 0 - x;
+  else return !x;
 }
 ```
 
@@ -229,19 +227,15 @@ var d = negate(1, true );   // ERROR
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
 /*@ negate#1 :: (tt, number) => number */
 function negate#2(flag, x) {
-  if (flag) 
-    return 0 - x;
-  else
-    return !x;
+  if (flag) return 0 - x;
+  else return !x;
 }
 ```
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
 /*@ negate#2 :: (ff, boolean) => boolean */
 function negate#2(flag, x) {
-  if (flag) 
-    return 0 - x;
-  else
-    return !x;
+  if (flag) return 0 - x;
+  else return !x;
 }
 ```
 
@@ -265,7 +259,7 @@ var b = negate#2(0, true);
 var c = negate#1(0, 1);
 var d = negate#2(1, true);
 ```
-
+<!--
 ## 1st Phase (Trust) -- Clone
 
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
@@ -290,7 +284,7 @@ var b = snd(negate)(0, true);
 var c = fst(negate)(0, 1);
 var d = snd(negate)(1, true);
 ```
-
+-->
 
 
 ## 1st Phase (Trust) -- Cast  { data-transition=fade }
@@ -301,10 +295,8 @@ Check each conjunct independently
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
 /*@ negate#1 :: (tt, number) => number */
 function negate#1(flag, x) {
-  if (flag) 
-    return 0 - x;
-  else
-    return !x;        // TYPE ERROR
+  if (flag) return 0 - x;
+  else return !x;        // TYPE ERROR
 }
 ```
 
@@ -318,10 +310,8 @@ Add DEAD-cast for code that **should** be unreachable
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
 /*@ negate#1 :: (tt, number) => number */
 function negate#1(flag, x) {
-  if (flag) 
-    return 0 - x;
-  else
-    return !DEAD(x);  // ADD CAST
+  if (flag) return 0 - x;
+  else return !DEAD(x);  // ADD CAST
 }
 ```
 
@@ -329,24 +319,23 @@ function negate#1(flag, x) {
 
 ## 2nd Phase (verify)
 
+Performs standard refinement type-checking
+{ .mylist text-align=left }
+
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
 /*@ negate#1 :: (tt, number) => number */
 function negate#1(flag, x) {
-  if (flag) 
-    return 0 - x;
-  else
-    return !DEAD(x);
+  if (flag) return 0 - x;
+  else return !DEAD(x);
 }
 ```
 
--- Performs standard refinement type-checking
+<div class="fragment"/>
+\
+Flow- and Path-sensitive 
 { .mylist text-align=left }
-
-
--- Flow and Path sensitive 
-{ .mylist text-align=left }
-
--- DEAD-casts are regular calls
+\
+DEAD-casts are regular calls
 { .mylist text-align=left }
 
 
@@ -360,28 +349,26 @@ DEAD :: ∀ A, B . ({v: A | false}) => B
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
 /*@ negate#1 :: (tt, number) => number */
 function negate#1(flag, x) {
-  if (flag) {
-    return 0 - x;
-  }
-  else {
-    return !DEAD(x);          // A
-  }
+  if (flag) return 0 - x;
+  else return !DEAD(x);     // A
 }
 ```
 \
 Subtyping obligation at point A:
-$$
-\Gamma_A \vdash \{ v: \texttt{number}\ |\ v = x \} 
-\sqsubseteq \{ v: \texttt{number}\ |\ false \}
-$$
+
+$\Gamma_A \vdash \{ v: \texttt{number}\ |\ v = x \} 
+\sqsubseteq \{ v: \texttt{number}\ |\ false \}$
+
+$\Gamma_A \equiv \{ \texttt{flag}: \texttt{tt}, !\texttt{flag}, \dots \}$
+
+\
+
+<div class="fragment"/>
+
 Embed into logic:
-$$
-(\texttt{flag}!= 0 \wedge \texttt{flag} = 0) 
-\Rightarrow
-v = x
-\Rightarrow
-false   
-$$
+
+$(\texttt{flag}!= 0 \wedge \texttt{flag} = 0) 
+\Rightarrow v = x \Rightarrow false$
 
 
 ## Two-Phase Inference
@@ -391,10 +378,8 @@ $$
            /\ (number, boolean) => boolean
  */
 function negate(flag, x) {
-  if (flag) 
-    return 0 - x;
-  else
-    return !x;
+  if (flag) return 0 - x;
+  else return !x;
 }
 ```
 
@@ -404,7 +389,8 @@ Can we infer the refinements for `negate`?
 
 ## Two-Phase Inference
 
-0. Create a template and refine with a predicate variable:
+0 -- Create a template and refine with a predicate variable
+{ .mylist text-align=left }
 
 \[
 \begin{array}{ccl}
@@ -415,14 +401,15 @@ Can we infer the refinements for `negate`?
 \end{array}
 \]
 
-1. Trust Phase: like before
+<div class="fragment"/>
 
+1 -- Trust Phase
+{ .mylist text-align=left }
 
 \[
 \begin{array}{ccl}
 \texttt{negate\#1} & :: & 
   (\{ v: \texttt{num}\ |\ k_1 \}, \{ v: \texttt{num}\ |\ k_2 \}) \Rightarrow \{ v: \texttt{num}\ |\ k_3 \} \\
-  \vspace{2em}
 \texttt{negate\#2} & :: & 
   (\{ v: \texttt{num}\ |\ k_4 \}, \{ v: \texttt{bool}\ |\ k_5 \}) \Rightarrow \{ v: \texttt{bool}\ |\ k_6 \}         
 \end{array}
@@ -431,13 +418,25 @@ Can we infer the refinements for `negate`?
 
 ## Two-Phase Inference
 
-2. Verify
-$$
+2 -- Verify
+{ .mylist text-align=left }
+
+```javascript { border-width=0px font-family="Droid Sans Mono" }
+/*@ negate#1 :: ({v: number | k1}, {v: number | k2}) => {v: number | k3} */
+function negate#1(flag, x) {
+  if (flag) return 0 - x;
+  else return !DEAD(x);     // A
+}
+```
+
+\[
+\begin{array}{c}
 \Gamma_A \vdash \{ v: \texttt{number}\ |\ v = x \}
 \sqsubseteq 
 \{ v: \texttt{number}\ |\ false \} 
-$$
-$$
+\\
+\Downarrow
+\\
 (k_1\left[\texttt{flag}/v\right] 
 \wedge 
 \texttt{flag} = 0
@@ -446,22 +445,46 @@ $$
 v = x
 \Rightarrow
 false
+\end{array}
+\]
+
+
+
+## Two-Phase Inference
+
+
+3 -- Solve via Liquid Types:
+{ .mylist text-align=left }
+
+$$
+k_1 \equiv (v != 0), k_3 \equiv (v = 0), k_2, k_4, k_5, k_6 \equiv true
 $$
 
-3. Solve via Liquid Types:
+Replace templates
+{ .mylist text-align=left }
 
-$$
-k_1 \equiv (v = 0)
-$$
+\[
+\begin{array}{ccl}
+\texttt{negate} & :: & 
+  (\{ v: \texttt{num}\ |\ v != 0 \}, \texttt{num}) \Rightarrow \texttt{num} \\
+       & \wedge &
+  (\{ v: \texttt{num}\ |\ v = 0 \}, \texttt{bool}) \Rightarrow \texttt{bool}         
+\end{array}
+\]
 
-## Extra material
 
-To appear in ECOOP'15
 
-![Screenshot from 2015-05-01 16:19:23]
 
-[Screenshot from 2015-05-01 16:19:23]: images/Screenshot-from-2015-05-01-16-19-23.png "Screenshot from 2015-05-01 16:19:23" { width=auto max-width=90% }
+## 
 
+![ecoop15]
+
+[ecoop15]: images/ecoop15.png "ecoop15" { width=auto max-width=90% }
+
+\
+Extension to TypeScript (under submission)
+
+\
 Demo Available
 
 

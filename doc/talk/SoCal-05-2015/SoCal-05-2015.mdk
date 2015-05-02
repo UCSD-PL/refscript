@@ -125,7 +125,7 @@ function reduce(a, f, x) {
 
 Behavior depends on **reflection** on variables (e.g. `arguments`)  
 
-Dependency: Basic Typing ⟷ Value Reasoning
+Circular Dependency: Basic Typing ⟷ Value Reasoning
 
 
 ## Solution: Two-phased Typing
@@ -148,7 +148,7 @@ Dependency: Basic Typing ⟷ Value Reasoning
 
   - Refinement Type-checking 
   
-  - Conventional ML-like language: *Products*, *Tagged Unions*
+  - Conventional ML-like language: *Products*, *Sums*, *Casts*
 
 
 
@@ -181,11 +181,11 @@ var d = negate(1, true );
 ## Truthy / Falsy Values
 
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
-type tt = { v: number | v != 0}   // "truthy" numbers
+type tt = {v: number | v != 0}   // "truthy" numbers
 ```
 
 ```javascript { border-width=0px font-family="Droid Sans Mono" }
-type ff = { v: number | v  = 0}   // "falsy" numbers
+type ff = {v: number | v  = 0}   // "falsy" numbers
 ```
 
 

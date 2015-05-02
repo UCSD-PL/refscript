@@ -19,7 +19,7 @@ Common task:
 
 ## First-order
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 function minIndexFO (a) {
   if (a.length <= 0) return -1;
   var min = 0;
@@ -43,7 +43,7 @@ Too verbose -- Fewer opportunities for abstraction
 
 ## Higher-order
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 function $reduce(a, f, x) {
 	var res = x;
 	for (var i = 0; i < a.length; i++)
@@ -52,7 +52,7 @@ function $reduce(a, f, x) {
 }
 ```
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 function minIndexHO(a) {
 	if (a.length <= 0) return -1;
 	var step = (min, cur, i) => cur < a[min] ? i : min;
@@ -74,13 +74,13 @@ Challenge for dataflow analyses:
 \+ Provide **precise specifications**
 { .mylist text-align=left }
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ type idx<x> = { v: number | 0 ≤ v && v < len(x) } */
 ```
 
 <div class="fragment"/>
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ $reduce :: <A,B>(a: A[], f: (B, A, idx<a>) => B, x: B) => B */
 function $reduce(a, f, x) {
   var res = x, i = 0;
@@ -105,7 +105,7 @@ function $reduce(a, f, x) {
 <div class="fragment"/>
 
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ $reduce :: <A,B>(a: A[], f: (B, A, idx<a>) => B, x: B) => B */
 function $reduce(a, f, x) { ... }
 
@@ -116,7 +116,7 @@ function reduce(a, f, x) {
 ```
 <div class="fragment"/>
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ reduce#1 :: <A,B>(a: A[], f: (B, A, idx<a>) => B, x: B) => B */
 
 /*@ reduce#2 :: <A>(a: A[]+, f: (A, A, idx<a>) => A) => A */
@@ -143,7 +143,7 @@ Circular Dependency: Basic Typing ⟷ Value Reasoning
 
 \
 
-**Target language** 
+**Target Language** 
 { .mylist text-align=left }
 
   - Refinement Type-checking 
@@ -155,7 +155,7 @@ Circular Dependency: Basic Typing ⟷ Value Reasoning
 
 ## Example
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ negate :: (number, number ) => number
             Λ (number, boolean) => boolean
  */
@@ -173,25 +173,25 @@ function negate(flag, x) {
 `negate`'s specification is *problematic*
 { .mylist text-align=left }
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 var c = negate(0, 1);
 var d = negate(1, true );
 ```
 
 ## Truthy / Falsy Values
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 type tt = {v: number | v != 0}   // "truthy" numbers
 ```
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 type ff = {v: number | v  = 0}   // "falsy" numbers
 ```
 
 
 ## Example -- Specification
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ negate :: (tt, number ) => number
            /\ (ff, boolean) => boolean
  */
@@ -205,7 +205,7 @@ Statically check the calls:
 { .mylist text-align=left }
 
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 var a = negate(1, 1);       // OK
 var b = negate(0, true );   // OK
 var c = negate(0, 1);       // ERROR
@@ -224,14 +224,14 @@ var d = negate(1, true );   // ERROR
 
 ## 1st Phase (Trust) -- Clone
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ negate#1 :: (tt, number) => number */
 function negate#2(flag, x) {
   if (flag) return 0 - x;
   else return !x;
 }
 ```
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ negate#2 :: (ff, boolean) => boolean */
 function negate#2(flag, x) {
   if (flag) return 0 - x;
@@ -241,11 +241,11 @@ function negate#2(flag, x) {
 
 ## 1st Phase (Trust) -- Clone
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ negate#1 :: (tt, number) => number */
 function negate#2(flag, x) { ... }
 ```
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ negate#2 :: (ff, boolean) => boolean */
 function negate#2(flag, x) { ... }
 ```
@@ -253,7 +253,7 @@ function negate#2(flag, x) { ... }
 Overload resolution is based entirely on the *basic* type:
 { .mylist text-align=left }
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 var a = negate#1(1, 1);
 var b = negate#2(0, true);
 var c = negate#1(0, 1);
@@ -262,11 +262,11 @@ var d = negate#2(1, true);
 <!--
 ## 1st Phase (Trust) -- Clone
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ negate#1 :: (tt, number) => number */
 function negate#2(flag, x) { ... }
 ```
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ negate#2 :: (ff, boolean) => boolean */
 function negate#2(flag, x) { ... }
 ```
@@ -274,11 +274,11 @@ function negate#2(flag, x) { ... }
 Replace with conventional products and projections:
 { .mylist text-align=left }
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 var negate = (negate#1, negate#2); 
 ```
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 var a = fst(negate)(1, 1);
 var b = snd(negate)(0, true);
 var c = fst(negate)(0, 1);
@@ -292,7 +292,7 @@ var d = snd(negate)(1, true);
 Check each conjunct independently
 { .mylist text-align=left }
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ negate#1 :: (tt, number) => number */
 function negate#1(flag, x) {
   if (flag) return 0 - x;
@@ -307,7 +307,7 @@ Add DEAD-cast for code that **should** be unreachable
 { .mylist text-align=left }
 
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ negate#1 :: (tt, number) => number */
 function negate#1(flag, x) {
   if (flag) return 0 - x;
@@ -322,7 +322,7 @@ function negate#1(flag, x) {
 Performs standard refinement type-checking
 { .mylist text-align=left }
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ negate#1 :: (tt, number) => number */
 function negate#1(flag, x) {
   if (flag) return 0 - x;
@@ -339,14 +339,14 @@ DEAD-casts are regular calls
 { .mylist text-align=left }
 
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 DEAD :: ∀ A, B . ({v: A | false}) => B
 ```
 
 
 ## 2nd Phase (Verify)
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ negate#1 :: (tt, number) => number */
 function negate#1(flag, x) {
   if (flag) return 0 - x;
@@ -373,7 +373,7 @@ $(\texttt{flag}!= 0 \wedge \texttt{flag} = 0)
 
 ## Two-Phase Inference
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ negate :: (number, number ) => number
            /\ (number, boolean) => boolean
  */
@@ -421,7 +421,7 @@ Can we infer the refinements for `negate`?
 2 -- Verify
 { .mylist text-align=left }
 
-```javascript { border-width=0px font-family="Droid Sans Mono" }
+```javascript { border-width=0px  }
 /*@ negate#1 :: ({v: number | k1}, {v: number | k2}) => {v: number | k3} */
 function negate#1(flag, x) {
   if (flag) return 0 - x;
@@ -498,7 +498,7 @@ Demo Available
 
 * Compile unrestricted intersections and unions
 
-```{ border-width=0px font-family="Droid Sans Mono" }
+```{ border-width=0px  }
 % Int.+ ,, Real.+
 
 val it : (int * int -> int) Λ (real * real -> real)

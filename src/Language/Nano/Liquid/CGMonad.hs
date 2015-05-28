@@ -65,7 +65,7 @@ import           Control.Monad.State
 import           Control.Monad.Trans.Except
 
 import           Data.Maybe                     (catMaybes, maybeToList)
-import           Data.Monoid                    (mempty)
+import           Data.Monoid                    (mappend, mempty)
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map.Strict                as M
 import qualified Data.List                      as L
@@ -125,16 +125,16 @@ getCGInfo cfg pgm = cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
 execute :: Config -> NanoRefType -> CGM a -> (a, CGState)
 execute cfg pgm act
   = case runState (runExceptT act) $ initState cfg pgm of
-      (Left err, _) -> throw err
+      (Left e, _)   -> throw e
       (Right x, st) -> (x, st)
 
 
 -------------------------------------------------------------------------------
 initState       :: Config -> Nano AnnTypeR F.Reft -> CGState
 -------------------------------------------------------------------------------
-initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invs c (max_id p)
+initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invars c (max_id p)
   where
-    invs        = HM.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
+    invars        = HM.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
 
 
 -------------------------------------------------------------------------------
@@ -409,11 +409,11 @@ addInvariant g t
     typeofExpr s              = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
                                              (F.expr $ F.symbolText s)
 
-    ofRef (F.Reft (s, as))    = (F.Reft . (s,) . single) <$> as
+    ofRef (F.Reft (s, ra))    = F.reft s <$> F.raConjuncts ra
 
     -- | { f: T } --> hasProperty("f", v)
-    hasProp t                   = t `nubstrengthen` keyReft (boundKeys g t)
-    keyReft                   = F.reft (vv t) . (F.PBexp . hasPropExpr <$>)
+    hasProp ty                = t `nubstrengthen` keyReft (boundKeys g ty)
+    keyReft ks                = F.reft (vv t) $ F.pAnd (F.PBexp . hasPropExpr <$> ks)
     hasPropExpr s             = F.EApp (F.dummyLoc (F.symbol "hasProperty"))
                                 [F.expr (F.symbolText s), F.eVar $ vv t]
 
@@ -437,19 +437,22 @@ addInvariant g t
 ----------------------------------------------------------------------------------------
 nubstrengthen                   :: RefType -> F.Reft -> RefType
 ----------------------------------------------------------------------------------------
-nubstrengthen (TApp c ts r) r'  = TApp c ts  $ r' `meetReft` r
-nubstrengthen (TRef c ts r) r'  = TRef c ts  $ r' `meetReft` r
-nubstrengthen (TCons ts m r) r' = TCons ts m $ r' `meetReft` r
-nubstrengthen (TVar α r)    r'  = TVar α     $ r' `meetReft` r
-nubstrengthen (TFun a b c r) r' = TFun a b c $ r' `meetReft` r
+nubstrengthen (TApp c ts r) r'  = TApp c ts  $ r' `mappend` r
+nubstrengthen (TRef c ts r) r'  = TRef c ts  $ r' `mappend` r
+nubstrengthen (TCons ts m r) r' = TCons ts m $ r' `mappend` r
+nubstrengthen (TVar α r)    r'  = TVar α     $ r' `mappend` r
+nubstrengthen (TFun a b c r) r' = TFun a b c $ r' `mappend` r
 nubstrengthen t _               = t
 
-meetReft (F.Reft (v, ras)) (F.Reft (v', ras'))
-  | v == v'            = F.Reft (v , L.nubBy cmp $ ras  ++ ras')
-  | v == F.dummySymbol = F.Reft (v', L.nubBy cmp $ ras' ++ (ras `F.subst1`  (v , F.EVar v')))
-  | otherwise          = F.Reft (v , L.nubBy cmp $ ras  ++ (ras' `F.subst1` (v', F.EVar v )))
-  where
-    cmp = (==) `on` (show . F.toFix)
+
+
+
+-- IN FIXPOINT meetReft (F.Reft (v, ras)) (F.Reft (v', ras'))
+-- IN FIXPOINT   | v == v'            = F.Reft (v , L.nubBy cmp $ ras  ++ ras')
+-- IN FIXPOINT   | v == F.dummySymbol = F.Reft (v', L.nubBy cmp $ ras' ++ (ras `F.subst1`  (v , F.EVar v')))
+-- IN FIXPOINT   | otherwise          = F.Reft (v , L.nubBy cmp $ ras  ++ (ras' `F.subst1` (v', F.EVar v )))
+-- IN FIXPOINT   where
+-- IN FIXPOINT     cmp = (==) `on` (show . F.toFix)
 
 
 
@@ -712,14 +715,14 @@ freshTy :: RefTypable a => s -> a -> CGM RefType
 freshTy _ τ = refresh $ rType τ
 
 instance Freshable F.Refa where
-  fresh = (`F.RKvar` mempty) <$> (F.intKvar <$> fresh)
+  fresh = F.Refa . (`F.PKVar` mempty) . F.intKvar <$> fresh
 
 instance Freshable [F.Refa] where
   fresh = single <$> fresh
 
 instance Freshable F.Reft where
   fresh                  = errorstar "fresh F.Reft"
-  true    (F.Reft (v,_)) = return $ F.Reft (v, [])
+  true    (F.Reft (v,_)) = return $ F.Reft (v, mempty)
   refresh (F.Reft (_,_)) = curry F.Reft <$> freshVV <*> fresh
     where freshVV        = F.vv . Just  <$> fresh
 

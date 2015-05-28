@@ -24,8 +24,6 @@ qualifiers xts = concatMap (refTypeQualifiers γ0) xts
   where
      γ0        = envSEnv $ envMap rTypeSort $ envFromList xts
 
-
-
 refTypeQualifiers γ0 (l, t) = efoldRType rTypeSort addQs γ0 [] t
   where
     addQs γ t qs  = mkQuals l γ t ++ qs
@@ -48,5 +46,3 @@ lookupSort l  x γ = fromMaybe err $ lookupSEnv x γ
 
 orderedFreeVars γ = nub . filter (`memberSEnv` γ) . syms
 
-atoms (PAnd ps)   = concatMap atoms ps
-atoms p           = [p]

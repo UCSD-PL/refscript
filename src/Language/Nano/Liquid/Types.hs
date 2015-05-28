@@ -290,14 +290,14 @@ rTypeSortApp TFPBool _             = F.boolSort
 rTypeSortApp TString _             = F.strSort
 rTypeSortApp c ts                  = F.FApp (tconFTycon c) (rTypeSort <$> ts)
 
-
+-- RJ: why are these suddenly uppercase?
 tconFTycon :: TCon -> F.FTycon
-tconFTycon TBool                   = rawStringFTycon "Boolean"
-tconFTycon TVoid                   = rawStringFTycon "Void"
-tconFTycon TUn                     = rawStringFTycon "Union"
-tconFTycon TTop                    = rawStringFTycon "Top"
-tconFTycon TNull                   = rawStringFTycon "Null"
-tconFTycon TUndef                  = rawStringFTycon "Undefined"
+tconFTycon TBool                   = rawStringFTycon "boolean"
+tconFTycon TVoid                   = rawStringFTycon "void"
+tconFTycon TUn                     = rawStringFTycon "union"
+tconFTycon TTop                    = rawStringFTycon "top"
+tconFTycon TNull                   = rawStringFTycon "null"
+tconFTycon TUndef                  = rawStringFTycon "undefined"
 tconFTycon c                       = error $ "impossible: tconFTycon " ++ show c
 
 rTypeSortForAll t                  = genSort n θ $ rTypeSort tbody

@@ -322,9 +322,7 @@ stripRTypeBase _              = Nothing
 ------------------------------------------------------------------------------------------
 noKVars :: F.Reft -> F.Reft
 ------------------------------------------------------------------------------------------
-noKVars r = F.traceFix ("noKVars r = " ++ F.showFix r) $ noKVars' r
-
-noKVars' (F.Reft (x, F.Refa p)) = F.Reft (x, F.Refa $ dropKs p)
+noKVars (F.Reft (x, F.Refa p)) = F.Reft (x, F.Refa $ dropKs p)
   where
     dropKs                     = F.pAnd . filter (not . isK) . F.conjuncts
     isK (F.PKVar {})           = True

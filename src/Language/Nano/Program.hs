@@ -1,5 +1,4 @@
 
-{-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE DeriveDataTypeable     #-}
 {-# LANGUAGE DeriveFunctor          #-}
 {-# LANGUAGE TypeSynonymInstances   #-}
@@ -20,14 +19,14 @@ module Language.Nano.Program (
   -- * Nano Transformations
   , flattenStmt
 
-  -- * SSA Ids 
+  -- * SSA Ids
   , mkNextId, isNextId, mkSSAId , mkKeysId, mkKeysIdxId, mkCtorStr, mkCtorId
 
 
   -- * Types
   , SyntaxKind(..)
   , MemberKind(..)
-  , VarInfo 
+  , VarInfo
 
   -- * CHA
   , ClassHierarchy (..)
@@ -36,16 +35,16 @@ module Language.Nano.Program (
 
 import           Control.Applicative     hiding (empty)
 import           Control.Exception              (throw)
-import           Data.Monoid             hiding ((<>))            
+import           Data.Monoid             hiding ((<>))
 import           Data.Default
 import           Data.List                      (stripPrefix)
 import qualified Data.HashMap.Strict              as HM
 import           Data.Graph.Inductive.Graph
 import           Data.Graph.Inductive.PatriciaTree
 import qualified Data.HashSet                   as H
-import           Data.Generics                   
+import           Data.Generics
 import qualified Data.IntMap                    as I
-import           Text.PrettyPrint.HughesPJ 
+import           Text.PrettyPrint.HughesPJ
 
 import           Language.Nano.Annots
 import           Language.Nano.Env
@@ -54,52 +53,52 @@ import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Types
 
-import           Language.Nano.Syntax 
+import           Language.Nano.Syntax
 import           Language.Nano.Syntax.PrettyPrint
 
-import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Misc hiding (mkGraph)
 import qualified Language.Fixpoint.Types        as F
 
 -- import           Debug.Trace                        hiding (traceShow)
 
 
 ---------------------------------------------------------------------------------
--- | Nano Program 
+-- | Nano Program
 ---------------------------------------------------------------------------------
 --
--- consts, aliases, invariants refer to absolute names 
+-- consts, aliases, invariants refer to absolute names
 -- (hence the use of RType r)
 
-data Nano a r = Nano { 
-  -- 
+data Nano a r = Nano {
+  --
   -- ^ Code to check
   --
     code      :: !(Source a)
-  -- 
+  --
   -- ^ Measure Signatures
   --
   , consts    :: !(Env (RType r))
-  -- 
+  --
   -- ^ Type aliases
   --
-  , tAlias    :: !(TAliasEnv (RTypeQ RK r))    
-  -- 
+  , tAlias    :: !(TAliasEnv (RTypeQ RK r))
+  --
   -- ^ Predicate aliases
   --
   , pAlias    :: !(PAliasEnv)
-  -- 
+  --
   -- ^ Qualifiers
   --
-  , pQuals    :: ![F.Qualifier]            
-  -- 
+  , pQuals    :: ![F.Qualifier]
+  --
   -- ^ Type Invariants
   --
   , invts     :: ![Located (RType r)]
-  -- 
-  -- ^ Maximum id 
+  --
+  -- ^ Maximum id
   --
   , max_id    :: NodeId
-  -- 
+  --
   -- ^ All fully qualified names
   --
   , fullNames :: H.HashSet AbsName
@@ -107,11 +106,11 @@ data Nano a r = Nano {
   -- ^ All fully qualified namespaces
   --
   , fullPaths :: H.HashSet AbsPath
-  -- 
+  --
   -- ^ Modules
   --
   , pModules  :: QEnv (ModuleDef r)
-  -- 
+  --
   -- ^ CHA
   --
   , pCHA      :: ClassHierarchy r
@@ -131,7 +130,7 @@ newtype Source a = Src [Statement a]
 
 type NanoBareRelR r = Nano  (AnnRel  r) r       -- ^ After parse (relative names)
 type NanoBareR r    = Nano  (AnnBare r) r       -- ^ After Parse
-type NanoSSAR r     = Nano  (AnnSSA  r) r       -- ^ After SSA  
+type NanoSSAR r     = Nano  (AnnSSA  r) r       -- ^ After SSA
 type NanoTypeR r    = Nano  (AnnType r) r       -- ^ After TC
 type NanoRefType    = NanoTypeR F.Reft          -- ^ After Liquid
 
@@ -143,12 +142,12 @@ type UNanoSSA       = NanoSSAR  ()
 type UNanoType      = NanoTypeR ()
 
 
-data ClassHierarchy r = ClassHierarchy { 
-  
+data ClassHierarchy r = ClassHierarchy {
+
     c_graph       :: Gr (IfaceDefQ AK r) ()
 
   , c_nodesToKeys :: HM.HashMap AbsName Int
-  
+
   }
 
 instance Default (ClassHierarchy r) where
@@ -166,24 +165,24 @@ instance Monoid (Source a) where
   mempty                    = Src []
   mappend (Src s1) (Src s2) = Src $ s1 ++ s2
 
-instance Functor Source where 
+instance Functor Source where
   fmap f (Src zs) = Src (map (fmap f) zs)
 
 instance (PP r, F.Reftable r) => PP (Nano a r) where
-  pp pgm@(Nano {code = (Src s) }) 
+  pp pgm@(Nano {code = (Src s) })
     =   text "\n******************* Code **********************"
     $+$ pp s
     $+$ text "\n******************* Constants *****************"
-    $+$ pp (consts pgm) 
+    $+$ pp (consts pgm)
     $+$ text "\n******************* Predicate Aliases *********"
     $+$ pp (pAlias pgm)
     $+$ text "\n******************* Type Aliases **************"
     $+$ pp (tAlias pgm)
     $+$ text "\n******************* Qualifiers ****************"
-    $+$ vcat (F.toFix <$> (take 3 $ pQuals pgm))
+    $+$ vcat (F.toFix <$> take 3 (pQuals pgm))
     $+$ text "..."
     $+$ text "\n******************* Invariants ****************"
-    $+$ vcat (pp <$> (invts pgm))
+    $+$ vcat (pp <$> invts pgm)
     $+$ text "\n***********************************************\n"
 
 instance PP t => PP (I.IntMap t) where
@@ -194,7 +193,7 @@ instance PP t => PP (F.SEnv t) where
 
 instance PP (ClassHierarchy r) where
   pp (ClassHierarchy g _)   =  text "***********************************************"
-                           $+$ text "Class Hierarchy" 
+                           $+$ text "Class Hierarchy"
                            $+$ text "***********************************************"
                            $+$ vcat (ppEdge <$> edges g)
     where
@@ -204,16 +203,16 @@ instance PP (ClassHierarchy r) where
       angles p              =  char '<' <> p <> char '>'
       optPpArgs []          =  text ""
       optPpArgs vs          =  ppArgs angles comma vs
-  
+
 
 ---------------------------------------------------------------------
 -- | Wrappers around `Language.Nano.Syntax` ------------------
 ---------------------------------------------------------------------
 
--- | `IsNano` is a predicate that describes the **syntactic subset** 
+-- | `IsNano` is a predicate that describes the **syntactic subset**
 --   of Nano that comprises `Nano`.
 
-class IsNano a where 
+class IsNano a where
   isNano :: a -> Bool
 
 
@@ -246,7 +245,7 @@ instance IsNano InfixOp where
   isNano OpZfRShift   = True --  @>>>@
   isNano e            = errortext (text "Not Nano InfixOp!" <+> pp e)
 
-instance IsNano (LValue a) where 
+instance IsNano (LValue a) where
   isNano (LVar _ _)        = True
   isNano (LDot _ e _)      = isNano e
   isNano (LBracket _ e e') = isNano e && isNano e'
@@ -255,7 +254,7 @@ instance IsNano (VarDecl a) where
   isNano (VarDecl _ _ (Just e)) = isNano e
   isNano (VarDecl _ _ Nothing)  = True
 
-instance IsNano (Expression a) where 
+instance IsNano (Expression a) where
   isNano (BoolLit _ _)           = True
   isNano (IntLit _ _)            = True
   isNano (HexLit _ _)            = True
@@ -272,8 +271,8 @@ instance IsNano (Expression a) where
   isNano (BracketRef _ e1 e2)    = isNano e1 && isNano e2
   isNano (AssignExpr _ _ l e)    = isNano e && isNano l && isNano e
   isNano (UnaryAssignExpr _ _ l) = isNano l
-  isNano (ThisRef _)             = True 
-  isNano (SuperRef _)            = True 
+  isNano (ThisRef _)             = True
+  isNano (SuperRef _)            = True
   isNano (FuncExpr _ _ _ s)      = isNano s
   isNano (NewExpr _ e es)        = isNano e && all isNano es
   isNano (Cast _ e)              = isNano e
@@ -292,15 +291,15 @@ instance IsNano AssignOp where
   isNano OpAssignBAnd = True
   isNano OpAssignBXor = True
   isNano OpAssignBOr = True
-  isNano x            = errortext (text "Not Nano AssignOp!" <+> pp x) 
+  isNano x            = errortext (text "Not Nano AssignOp!" <+> pp x)
   -- isNano _        = False
 
 instance IsNano PrefixOp where
   isNano PrefixLNot   = True
-  isNano PrefixMinus  = True 
-  isNano PrefixPlus   = True 
-  isNano PrefixTypeof = True 
-  isNano PrefixBNot   = True 
+  isNano PrefixMinus  = True
+  isNano PrefixPlus   = True
+  isNano PrefixTypeof = True
+  isNano PrefixBNot   = True
   isNano e            = errortext (text "Not Nano PrefixOp!" <+> pp e)
   -- isNano _            = False
 
@@ -332,24 +331,24 @@ instance IsNano (ClassElt a) where
   isNano (MemberMethDef _ _ _ _ ss) = all isNano ss
   isNano (MemberVarDecl _ _ _ eo)   = isNano eo
 
-instance IsNano a => IsNano (Maybe a) where 
+instance IsNano a => IsNano (Maybe a) where
   isNano (Just x) = isNano x
   isNano Nothing  = True
 
-instance IsNano [(Statement a)] where 
-  isNano = all isNano 
+instance IsNano [(Statement a)] where
+  isNano = all isNano
 
-instance IsNano (ForInit a) where 
+instance IsNano (ForInit a) where
   isNano NoInit        = True
   isNano (VarInit vds) = all isNano vds
   isNano (ExprInit e)  = isNano e
 
-instance IsNano (ForInInit a) where 
+instance IsNano (ForInInit a) where
   isNano (ForInVar _)  = True
   isNano e             = errortext (text "Not Nano ForInInit:" $$ pp e)
 
 
--- | Holds for `Expression` that is a valid side-effecting `Statement` 
+-- | Holds for `Expression` that is a valid side-effecting `Statement`
 
 isNanoExprStatement :: Expression a -> Bool
 isNanoExprStatement (UnaryAssignExpr _ _ lv) = isNano lv
@@ -381,19 +380,19 @@ instance EndsWithBreak ([Statement a]) where
   endsWithBreak [] = False
   endsWithBreak xs = endsWithBreak $ last xs
 
-instance IsNano [(CaseClause a)] where 
+instance IsNano [(CaseClause a)] where
   isNano [] = False
   isNano xs = all isNano xs && holdsInit (not . defaultC) xs
     where
       defaultC (CaseClause _ _ _) = False
       defaultC (CaseDefault _ _ ) = True
 
--- | Check if `p` hold for all xs but the last one.  
+-- | Check if `p` hold for all xs but the last one.
 holdsInit :: (a -> Bool) -> [a] -> Bool
 holdsInit _ [] = True
 holdsInit p xs = all p $ init xs
 
--- | Trivial Syntax Checking 
+-- | Trivial Syntax Checking
 -- TODO: Add check for top-level classes here.
 
 checkTopStmt :: (IsLocated a) => Statement a -> Statement a
@@ -402,7 +401,7 @@ checkTopStmt s | otherwise     = throw $ errorInvalidTopStmt (srcPos s) s
 
 checkBody :: [Statement a] -> Bool
 -- Adding support for loops so removing the while check
-checkBody stmts = all isNano stmts -- && null (getWhiles stmts) 
+checkBody stmts = all isNano stmts -- && null (getWhiles stmts)
 
 flattenStmt (BlockStmt _ ss) = concatMap flattenStmt ss
 flattenStmt s                = [s]
@@ -413,7 +412,7 @@ flattenStmt s                = [s]
 --------------------------------------------------------------------------------
 
 mkSSAId :: (F.Symbolic x, IsLocated a) => a -> x -> Int -> Id a
-mkSSAId l x n = Id l (F.symbolString (F.symbol x) ++ ssaStr ++ show n)  
+mkSSAId l x n = Id l (F.symbolString (F.symbol x) ++ ssaStr ++ show n)
 
 mkNextId :: Id a -> Id a
 mkNextId (Id a x) =  Id a $ nextStr ++ x
@@ -438,11 +437,11 @@ ctorStr    = "_CTOR_"
 
 
 
-data SyntaxKind = 
-    FuncDefKind 
+data SyntaxKind =
+    FuncDefKind
   | FuncAmbientKind
   | FuncOverloadKind
-  | MethDefKind 
+  | MethDefKind
   | MethDeclKind
   | FieldDefKind
   | CtorDefKind
@@ -465,10 +464,9 @@ instance PP SyntaxKind where
   pp ClassDefKind     = text "ClassDefKind"
   pp ModuleDefKind    = text "ModuleDefKind"
   pp EnumDefKind      = text "EnumDefKind"
-  pp AmbVarDeclKind   = text "AmbVarDeclKind" 
+  pp AmbVarDeclKind   = text "AmbVarDeclKind"
 
 
 data MemberKind = MemDefinition | MemDeclaration deriving ( Eq )
 
 type VarInfo r = (SyntaxKind, Visibility, Assignability, RType r, Initialization)
-

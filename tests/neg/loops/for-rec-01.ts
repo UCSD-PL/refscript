@@ -1,4 +1,4 @@
-/*@ forloop :: forall A. ({v:number | true}, number, (number, A) => A, A) => A */
+/*@ forloop :: forall A. ({v:number | 0 < 1}, number, (number, A) => A, A) => A */
 function forloop(lo, hi, body, acc){
   if (lo < hi) {
     var newAcc = body(acc, lo);

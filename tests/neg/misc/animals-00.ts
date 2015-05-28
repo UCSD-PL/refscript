@@ -33,7 +33,7 @@ class Tiger extends Animal {
   }
 }
 
-/*@ move :: (a: Animal<Immutable>) => { void | true } */
+/*@ move :: (a: Animal<Immutable>) => { void | 0 < 1} */
 function move(a: Animal) {
   var k = a.kind;
   if (a.kind === "horse") {

@@ -12,7 +12,7 @@ function bob(x:number):any {
     return undefined;
 }
 
-/*@ bar :: ({number | true}) => number */
+/*@ bar :: ({number | 0 < 1 }) => number */
 function bar(x:number) : any {
     var z = bob(x);
     return z;

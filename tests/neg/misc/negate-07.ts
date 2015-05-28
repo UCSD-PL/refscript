@@ -12,7 +12,7 @@ function nein(x){
     return !x;
 }
 
-/*@ negate :: /\ (x:number)  => {v:number | true} 
+/*@ negate :: /\ (x:number)  => {v:number | 0 < 1} 
               /\ (x:boolean) => boolean
 
 */

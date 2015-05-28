@@ -1,13 +1,13 @@
 //adapted from splay-typed-octane.ts
 class ListNode {
-    /*@ new () => {ListNode<M> | true} */
+    /*@ new () => {ListNode<M> | 0 < 1 } */
     constructor() { }
     /*@ right : ListNode<Immutable> + null */
     public right = null;
 }
 
 
-/*@ traverse_ :: (ListNode<Immutable>) => {void | true} */
+/*@ traverse_ :: (ListNode<Immutable>) => {void | 0 < 1} */
 function traverse_(x) {
 
     /*@ local current :: ListNode<Immutable> + null */

@@ -16,7 +16,7 @@ function dubble(p) {
 }
 
 
-/*@ main :: (y:number) => {v:number | true} */
+/*@ main :: (y:number) => {v:number | 0 < 1} */
 function main(y) {
     var yy = abs(dubble, y);
     assert(yy >= 0);

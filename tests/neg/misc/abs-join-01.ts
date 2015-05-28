@@ -1,5 +1,5 @@
 
-/*@ abs :: ({ } + number) => { boolean | true } */ 
+/*@ abs :: ({ } + number) => { boolean | 0 < 1 } */ 
 
 function abs(x: any) {
 

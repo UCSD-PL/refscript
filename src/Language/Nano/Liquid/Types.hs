@@ -284,31 +284,30 @@ rTypeSort (TModule _)              = F.FApp (rawStringFTycon $ F.symbol "module"
 rTypeSort (TEnum _)                = F.FApp (rawStringFTycon $ F.symbol "enum"  ) []
 rTypeSort t                        = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
 
-rTypeSortApp TInt _                = F.FInt
+rTypeSortApp TInt _                = F.intSort
 rTypeSortApp TUn  _                = F.FApp (tconFTycon TUn) []
+rTypeSortApp TFPBool _             = F.boolSort
+rTypeSortApp TString _             = F.strSort
 rTypeSortApp c ts                  = F.FApp (tconFTycon c) (rTypeSort <$> ts)
 
+
 tconFTycon :: TCon -> F.FTycon
-tconFTycon TInt                    = F.intFTyCon
-tconFTycon TBV32                   = error "tconFTycon should be unreachable for BV32" -- BV.mkSort BV.S32 -- BV.bvTyCon
 tconFTycon TBool                   = rawStringFTycon "Boolean"
-tconFTycon TFPBool                 = F.boolFTyCon
 tconFTycon TVoid                   = rawStringFTycon "Void"
 tconFTycon TUn                     = rawStringFTycon "Union"
-tconFTycon TString                 = F.strFTyCon
 tconFTycon TTop                    = rawStringFTycon "Top"
 tconFTycon TNull                   = rawStringFTycon "Null"
 tconFTycon TUndef                  = rawStringFTycon "Undefined"
+tconFTycon c                       = error $ "impossible: tconFTycon " ++ show c
 
-
-rTypeSortForAll t    = genSort n θ $ rTypeSort tbody
+rTypeSortForAll t                  = genSort n θ $ rTypeSort tbody
   where
-    (αs, tbody)      = bkAll t
-    n                = length αs
-    θ                = HM.fromList $ zip (F.symbol <$> αs) (F.FVar <$> [0..])
+    (αs, tbody)                    = bkAll t
+    n                              = length αs
+    θ                              = HM.fromList $ zip (F.symbol <$> αs) (F.FVar <$> [0..])
 
-genSort n θ (F.FFunc _ t)  = F.FFunc n (F.sortSubst θ <$> t)
-genSort n θ t              = F.FFunc n [F.sortSubst θ t]
+genSort n θ (F.FFunc _ t)          = F.FFunc n (F.sortSubst θ <$> t)
+genSort n θ t                      = F.FFunc n [F.sortSubst θ t]
 
 ------------------------------------------------------------------------------------------
 stripRTypeBase :: RTypeQ q r -> Maybe r

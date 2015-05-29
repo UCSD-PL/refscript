@@ -11,6 +11,7 @@ import           Control.Monad.State
 
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Visitor as V
 
 import           Language.Nano.Annots
 import           Language.Nano.Env
@@ -30,7 +31,7 @@ import           Language.Nano.Liquid.Types ()
 -- lift above to Annot r
 
 expandAliases   :: NanoBareRelR F.Reft -> NanoBareRelR F.Reft
-expandAliases p =  expandCodePred pe' 
+expandAliases p =  expandCodePred pe'
                 $  expandCodeTAlias te'
                 $  expandPred pe'
                <$> expandRefType te'
@@ -53,7 +54,6 @@ expandCodePred te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <
     patch (Ann i ss f) = Ann i ss (expandPred te <$> f)
 
 
-
 ------------------------------------------------------------------------------
 -- | One-shot expansion for @PAlias@ -----------------------------------------
 ------------------------------------------------------------------------------
@@ -63,18 +63,25 @@ expandPAliasEnv pe = solve pe support expandPAlias
   where
     support        = filter (`envMem` pe) . getPApps . al_body
 
-getPApps       :: F.Pred -> [F.Symbol]
-getPApps p     = everything (++) ([] `mkQ` fromP) p
+-- OLD syb getPApps       :: F.Pred -> [F.Symbol]
+-- OLD syb getPApps p     = everything (++) ([] `mkQ` fromP) p
+-- OLD syb   where
+-- OLD syb     fromP (F.PBexp (F.EApp f _))
+-- OLD syb                = [F.val f]
+-- OLD syb     fromP _    = []
+
+getPApps :: F.Pred -> [F.Symbol]
+getPApps = V.fold pAppVis () []
   where
-    fromP (F.PBexp (F.EApp (F.Loc _ f) _))
-               = [f]
-    fromP _    = []
+    pAppVis = V.defaultVisitor { V.accPred = pA }
+    pA _ (F.PBexp (F.EApp f _)) = [F.val f]
+    pA _ _                      = []
 
 expandPAlias      :: PAliasEnv -> PAlias -> PAlias
 expandPAlias pe a = a { al_body = expandPred pe $ al_body a }
 
 expandPred :: Data a => PAliasEnv -> a -> a
-expandPred pe = everywhere $ mkT $ tx
+expandPred pe = everywhere $ mkT tx
   where
     tx p@(F.PBexp (F.EApp f es))
               = maybe p (applyPAlias p f es) $ envFindTy f pe
@@ -102,18 +109,18 @@ expandTAliasEnv te = solve te support expandTAlias
 getTApps    :: RTypeQ RK F.Reft -> [F.Symbol]
 getTApps    = everything (++) ([] `mkQ` fromT)
   where
-    fromT   :: RTypeQ RK F.Reft -> [F.Symbol] 
+    fromT   :: RTypeQ RK F.Reft -> [F.Symbol]
     fromT (TRef (QN RK_ _ [] c) _ _) = [c]
     fromT _                          = [ ]
 
-expandTAlias  :: TAliasEnv (RTypeQ RK F.Reft) ->  TAlias (RTypeQ RK F.Reft) -> TAlias (RTypeQ RK F.Reft) 
+expandTAlias  :: TAliasEnv (RTypeQ RK F.Reft) ->  TAlias (RTypeQ RK F.Reft) -> TAlias (RTypeQ RK F.Reft)
 expandTAlias te a = a {al_body = expandRefType te $ al_body a}
 
 -- expandRefType :: TAliasEnv RefType -> RefType -> RefType
 -- expandRefType = expandRefType'
 
 expandRefType :: Data a => TAliasEnv (RTypeQ RK F.Reft) -> a -> a
-expandRefType te = everywhere $ mkT $ tx
+expandRefType te = everywhere $ mkT tx
   where
     tx t@(TRef (QN RK_ l [] c) ts r) = maybe t (applyTAlias l t c ts r) $ envFindTy c te
     tx t                             = t
@@ -137,10 +144,10 @@ splitTsEs l t na nx ts_
   | otherwise    = (ts, rTypeExp l t <$> tes)
   where
     n            = length ts_
-    (ts, tes)    = splitAt na ts_ 
+    (ts, tes)    = splitAt na ts_
 
 rTypeExp _ _ (TExp e)     = e
-rTypeExp _ _(TRef r [] _) = F.expr $ F.symbol r 
+rTypeExp _ _(TRef r [] _) = F.expr $ F.symbol r
 rTypeExp l t a            = die $ errorTAliasMismatch l t a
 
 -----------------------------------------------------------------------------
@@ -153,11 +160,11 @@ solve :: (IsLocated a)
       -> (Env a -> a -> a)  -- ^ Expansion function
       -> Env a              -- ^ Output "closed" definitions
 
-solve defs deps exp = ex_solved $ snd $ runState act st0
+solve defs deps exF = ex_solved $ execState act st0
   where
     st0             = ExS defs envEmpty
     xs              = [x `at` d | (x, d) <- envToList defs]
-    act             = forM_ xs $ solveM deps exp []
+    act             = forM_ xs $ solveM deps exF []
 
 
 solveM deps exp stk x

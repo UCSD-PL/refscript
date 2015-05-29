@@ -1,24 +1,29 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE FlexibleInstances         #-} 
-{-# LANGUAGE DeriveDataTypeable        #-} 
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE LambdaCase                #-}
-{-# LANGUAGE ConstraintKinds           #-} 
-{-# LANGUAGE UndecidableInstances      #-} 
-{-# LANGUAGE FlexibleContexts          #-} 
-{-# LANGUAGE TypeSynonymInstances      #-} 
+{-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE UndecidableInstances      #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE DeriveGeneric             #-}
 
 
-module Language.Nano.Typecheck.Parse (parseNanoFromFiles, parseScriptFromJSON, parseIdFromJSON, RawSpec(..)) where
+module Language.Nano.Typecheck.Parse
+       ( parseNanoFromFiles
+       , parseScriptFromJSON
+       , parseIdFromJSON
+       , RawSpec(..))
+       where
 
 import           Prelude                          hiding ( mapM)
 
 import           Data.Either                             (partitionEithers)
 import           Data.Default
 import           Data.Traversable                        (mapAccumL)
-import           Data.Monoid                             (mconcat)
+import           Data.Monoid                             (mempty, mconcat)
 import           Data.Maybe                              (listToMaybe, catMaybes, maybeToList, fromMaybe)
 import           Data.Generics                    hiding (Generic)
 import           Data.Aeson                              (eitherDecode)
@@ -51,10 +56,10 @@ import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Locations
 import           Language.Nano.Names
-import           Language.Nano.Misc                      (fst4) 
+import           Language.Nano.Misc                      (fst4)
 import           Language.Nano.Program
 import           Language.Nano.Types              hiding (Exported)
-import           Language.Nano.Visitor     
+import           Language.Nano.Visitor
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Alias
@@ -87,7 +92,7 @@ jsLexer    = T.makeTokenParser $ emptyDef { identStart  = letter   <|> oneOf "$_
 identifier = T.identifier jsLexer
 
 ----------------------------------------------------------------------------------
--- | Type Binders 
+-- | Type Binders
 ----------------------------------------------------------------------------------
 
 idBindP :: Parser (Id SrcSpan, RTypeQ RK Reft)
@@ -96,7 +101,7 @@ idBindP = withinSpacesP $ xyP identifierP dcolon bareTypeP
 idBindP' :: Parser (Id SrcSpan, Assignability, Maybe (RTypeQ RK Reft))
 idBindP' = withinSpacesP $ axyP identifierP dcolon typeOrHashP
   where
-    typeOrHashP = try (Just <$> bareTypeP) 
+    typeOrHashP = try (Just <$> bareTypeP)
                <|>    (char '#' >> return Nothing)
 
 
@@ -104,53 +109,53 @@ anonFuncP :: Parser (RTypeQ RK Reft)
 anonFuncP = funcSigP
 
 identifierP :: Parser (Id SrcSpan)
-identifierP = withSpan Id identifier 
+identifierP = withSpan Id identifier
 
 binderP     = withSpan Id $  try identifier
                          <|> try (show <$> integer)
-                          
-pAliasP :: Parser (Id SrcSpan, PAlias) 
+
+pAliasP :: Parser (Id SrcSpan, PAlias)
 pAliasP = do name <- identifierP
-             πs   <- pAliasVarsP 
+             πs   <- pAliasVarsP
              reservedOp "="
-             body <- predP 
-             return  (name, Alias name [] πs body) 
+             body <- predP
+             return  (name, Alias name [] πs body)
 
 pAliasVarsP = try (parens $ sepBy symbolP comma)
            <|> many symbolP
 
 tAliasP :: Parser (Id SrcSpan, TAlias (RTypeQ RK Reft))
 tAliasP = do name      <- identifierP
-             (αs, πs)  <- mapEither aliasVarT <$> aliasVarsP 
+             (αs, πs)  <- mapEither aliasVarT <$> aliasVarsP
              reservedOp "="
              body      <- convertTvar αs <$> bareTypeP
-             return      (name, Alias name αs πs body) 
+             return      (name, Alias name αs πs body)
 
 aliasVarsP =  try (brackets avarsP)
           <|> try (angles   avarsP)
           <|> return []
   where
     avarsP = sepBy aliasVarP comma
-    
+
 aliasVarP     = withSpan (,) (wordP $ \_ -> True)
 
 aliasVarT :: (SrcSpan, Symbol) -> Either TVar Symbol
-aliasVarT (l, x)      
+aliasVarT (l, x)
   | isTvar x' = Left  $ tvar l x
-  | otherwise = Right $ x 
+  | otherwise = Right $ x
   where
     x'        = symbolString x
 
--- 
+--
 -- PV: Insert your option parser here
 --
 optionP   = string "REALS" >> return RealOption
 
 iFaceP   :: Parser (Id SrcSpan, IfaceDefQ RK Reft)
-iFaceP   
-  = do  name   <- identifierP 
+iFaceP
+  = do  name   <- identifierP
         as     <- option [] tParP
-        case as of 
+        case as of
           (m:_) -> do h   <- heritageP
                       withSpan (mkTm1 m) (braces propBindP) >>= \case
                         Left err -> fail $ ppshow err
@@ -172,7 +177,7 @@ extendsGenP :: String -> Parser [TypeReferenceQ RK Reft]
 extendsGenP s = option [] $ reserved s >> sepBy1 extendsGen1P comma
 
 extendsGen1P :: Parser (TypeReferenceQ RK Reft)
-extendsGen1P = do qn  <- qnameP 
+extendsGen1P = do qn  <- qnameP
                   ts  <- option [] $ angles $ sepBy bareTypeP comma
                   return (qn, ts)
 
@@ -189,7 +194,7 @@ heritageP = (,) <$> extendsP <*> implementsP
 
 qnameP  :: Parser RelName
 qnameP   = do optionMaybe (char '#')    -- backwards-compatibility fix
-              withSpan qname $ sepBy1 qSymbolP (char '.') 
+              withSpan qname $ sepBy1 qSymbolP (char '.')
   where
     qname s x = QN RK_ s (init x) (last x)
 
@@ -205,7 +210,7 @@ qSymChars   = ['a' .. 'z'] ++
               ['_', '%', '#'] -- omitting '.'
 
 condIdP'  :: [Char] -> (String -> Bool) -> Parser Symbol
-condIdP' chars f 
+condIdP' chars f
   = do c  <- try letter <|> oneOf ['_']
        cs <- many (satisfy (`elem` chars))
        blanks
@@ -227,29 +232,29 @@ xyP lP sepP rP
 axyP lP sepP rP
   = do  a <- assignabilityP
         i <- withinSpacesP lP
-        spaces >> sepP 
-        r <- rP 
-        return (i,a,r) 
+        spaces >> sepP
+        r <- rP
+        return (i,a,r)
         -- (\a x _ y -> (x, a, y)) <$> aP <*> lP <*> (spaces >> sepP) <*> rP
-  
-assignabilityP 
+
+assignabilityP
   =  try (withinSpacesP (reserved "global"  ) >> return WriteGlobal)
  <|> try (withinSpacesP (reserved "local"   ) >> return WriteLocal )
  <|> try (withinSpacesP (reserved "readonly") >> return ReadOnly   )
  <|>     (return WriteGlobal)
 
-postP p post 
+postP p post
   = (\x _ -> x) <$> p <*> post
 
 ----------------------------------------------------------------------------------
--- | RefTypes 
+-- | RefTypes
 ----------------------------------------------------------------------------------
--- | `bareTypeP` parses top-level "bare" types. If no refinements are supplied, 
+-- | `bareTypeP` parses top-level "bare" types. If no refinements are supplied,
 --    then "top" refinement is used.
 ----------------------------------------------------------------------------------
-bareTypeP :: Parser (RTypeQ RK Reft) 
+bareTypeP :: Parser (RTypeQ RK Reft)
 ----------------------------------------------------------------------------------
-bareTypeP = bareAllP $ bodyP 
+bareTypeP = bareAllP $ bodyP
   where
     bodyP =  try bUnP
          <|> try (refP rUnP)
@@ -276,12 +281,12 @@ parenNullP p f =  try (f <$> postP p question) <|> p
 
 -- | `funcSigP` parses a function type that is possibly generic and/or an intersection.
 funcSigP =  try (bareAllP bareFunP)
-        <|> try (intersectP $ bareAllP bareFunP) 
+        <|> try (intersectP $ bareAllP bareFunP)
   where
     intersectP p = mkAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
 
 methSigP =  try (bareAllP bareMethP)
-        <|> try (intersectP $ bareAllP bareMethP) 
+        <|> try (intersectP $ bareAllP bareMethP)
   where
     intersectP p = mkAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
 
@@ -292,30 +297,30 @@ methSigP =  try (bareAllP bareMethP)
 --
 bareFunP
   = do args   <- parens $ sepBy bareArgP comma
-       reserved "=>" 
-       ret    <- bareTypeP 
+       reserved "=>"
+       ret    <- bareTypeP
        r      <- topP
        return $ mkF args ret r
-  where 
+  where
     mkF as ret r = case as of
       (B s t : ts) | s == symbol "this" -> TFun (Just t) ts ret r
       ts                                -> TFun Nothing ts ret r
-  
+
 
 --  (x:t, ...): t
 bareMethP
   = do args   <- parens $ sepBy bareArgP comma
        _      <- colon
-       ret    <- bareTypeP 
+       ret    <- bareTypeP
        r      <- topP
        return  $ mkF args ret r
-  where 
+  where
     mkF as ret r = case as of
       (B s t : ts) | s == symbol "this" -> TFun (Just t) ts ret r
       ts                                -> TFun Nothing ts ret r
 
 
-bareArgP 
+bareArgP
   =   (try boundTypeP)
  <|>  (argBind <$> try (bareTypeP))
 
@@ -334,8 +339,8 @@ bareAtomP p
 ----------------------------------------------------------------------------------
 bbaseP :: Parser (Reft -> RTypeQ RK Reft)
 ----------------------------------------------------------------------------------
-bbaseP 
-  =  try objLitP                               -- {f1: T1; ... ; fn: Tn} 
+bbaseP
+  =  try objLitP                               -- {f1: T1; ... ; fn: Tn}
  <|> try (TApp  <$> tConP  <*> bareTyArgsP)    -- number, boolean, etc...
  <|> try selfP
  <|>     (TRef  <$> qnameP <*> bareTyArgsP)    -- List[A], Tree[A,B] etc...
@@ -343,11 +348,11 @@ bbaseP
 ----------------------------------------------------------------------------------
 objLitP :: Parser (Reft -> RTypeQ RK Reft)
 ----------------------------------------------------------------------------------
-objLitP 
+objLitP
   = do  m <- fromMaybe defMut <$> optionMaybe (toType <$> mutP)
-        withSpan (mkTm m) (braces propBindP) >>= \case 
+        withSpan (mkTm m) (braces propBindP) >>= \case
           Left err -> fail   $ ppshow err
-          Right ms -> return $ TCons m ms 
+          Right ms -> return $ TCons m ms
   where
     defMut     = TRef (QN RK_ (srcPos dummySpan) [] (symbol "Immutable")) [] fTop
     mkTm m l   = mkTypeMembers m . map (mkTup l)
@@ -359,7 +364,7 @@ selfP :: Parser (Reft -> RTypeQ RK Reft)
 selfP = do reserved "Self"
            m <- angles bareTypeP
            return $ \_ -> TSelf m
- 
+
 ----------------------------------------------------------------------------------
 mutP :: Parser (MutabilityQ RK)
 ----------------------------------------------------------------------------------
@@ -372,22 +377,22 @@ bareTyArgsP
  <|> return []
      where
        argsP = sepBy bareTyArgP comma
-    
+
 bareTyArgP
-  = try bareTypeP 
+  = try bareTypeP
  <|> (TExp <$> exprP)
 
 ----------------------------------------------------------------------------------
 tvarP    :: Parser TVar
 ----------------------------------------------------------------------------------
-tvarP    = withSpan tvar $ wordP isTvar 
+tvarP    = withSpan tvar $ wordP isTvar
 
 tvar l x = TV x l
 
 isTvar   = not . isLower . head
 
 wordP p  = condIdP ok p
-  where 
+  where
     ok   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
 ----------------------------------------------------------------------------------
@@ -404,7 +409,7 @@ tConP =  try (reserved "number"      >> return TInt)
      <|> try (reserved "bool"        >> return TFPBool)
 
 bareAllP p
-  = do tvs   <- optionMaybe (reserved "forall" *> many1 tvarP <* dot) 
+  = do tvs   <- optionMaybe (reserved "forall" *> many1 tvarP <* dot)
        t     <- p
        return $ maybe t (`tAll` t) tvs
     where
@@ -412,7 +417,7 @@ bareAllP p
 
 propBindP      =  sepEndBy propEltP semi
   where
-    propEltP   =  try indexEltP 
+    propEltP   =  try indexEltP
               <|> try fieldEltP
               <|> try methEltP
               <|> try callEltP
@@ -421,11 +426,11 @@ propBindP      =  sepEndBy propEltP semi
 -- | [f: string]: t
 -- | [f: number]: t
 indexEltP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
-               case it of 
+               case it of
                  "number" -> return $ IndexSig x NumericIndex t
                  "string" -> return $ IndexSig x StringIndex t
                  _        -> error $ "Index signature can only have " ++
-                                     "string or number as index." 
+                                     "string or number as index."
 
 indexP = xyP id colon sn
   where
@@ -433,9 +438,9 @@ indexP = xyP id colon sn
     sn = withinSpacesP (string "string" <|> string "number")
 
 -- | <[mut]> f<?>: t
-fieldEltP       = do 
+fieldEltP       = do
     x          <- symbol <$> binderP
-    o          <- maybe f_requiredR (\_ -> f_optionalR) 
+    o          <- maybe f_requiredR (\_ -> f_optionalR)
               <$> optionMaybe (withinSpacesP $ char '?')
     _          <- colon
     m          <- option mut (toType <$> mutP)
@@ -457,16 +462,16 @@ callEltP = CallSig <$> withinSpacesP funcSigP
 
 -- | new <forall A .> (t...) => t
 consEltP = reserved "new" >> ConsSig <$> withinSpacesP funcSigP
- 
+
 ----------------------------------------------------------------------------------
 dummyP ::  Parser (Reft -> b) -> Parser b
 ----------------------------------------------------------------------------------
-dummyP fm = fm `ap` topP 
+dummyP fm = fm `ap` topP
 
 ----------------------------------------------------------------------------------
 topP   :: Parser Reft
 ----------------------------------------------------------------------------------
-topP   = (Reft . (, []) . vv . Just) <$> freshIntP'
+topP   = (Reft . (, mempty) . vv . Just) <$> freshIntP'
 
 -- Using a slightly changed version of `freshIntP`
 ----------------------------------------------------------------------------------
@@ -482,29 +487,23 @@ freshIntP' = do n <- stateUser <$> getParserState
 xrefP :: Parser (Reft -> a) -> Parser a
 xrefP kindP
   = braces $ do
-      t   <- kindP
+      t  <- kindP
       reserved "|"
-      ras <- refasP 
-      return $ t (Reft (symbol "v", ras))
+      ra <- refaP
+      return $ t (Reft (symbol "v", ra))
 
-----------------------------------------------------------------------------------
-refasP :: Parser [Refa]
-----------------------------------------------------------------------------------
-refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi)) 
-       <|> liftM ((:[]) . RConc) predP
- 
 
 ----------------------------------------------------------------------------------
 withinSpacesP :: Parser a -> Parser a
 ----------------------------------------------------------------------------------
-withinSpacesP p = do { spaces; a <- p; spaces; return a } 
-             
+withinSpacesP p = do { spaces; a <- p; spaces; return a }
+
 ----------------------------------------------------------------------------------
 classDeclP :: Parser (Id SrcSpan, ClassSigQ RK Reft)
 ----------------------------------------------------------------------------------
 classDeclP = do
     reserved "class"
-    id      <- identifierP 
+    id      <- identifierP
     vs      <- option [] $ angles $ sepBy tvarP comma
     (es,is) <- heritageP
     return (id, (vs,es,is))
@@ -537,8 +536,8 @@ data RawSpec
 data PSpec l r
   = Meas    (Id l, RTypeQ RK r)
   | Bind    (Id l, Assignability, Maybe (RTypeQ RK r))
-  | AmbBind (Id l, RTypeQ RK r) 
-  | AnFunc  (RTypeQ RK r) 
+  | AmbBind (Id l, RTypeQ RK r)
+  | AnFunc  (RTypeQ RK r)
   | Field   (TypeMemberQ RK r)
   | Constr  (TypeMemberQ RK r)
   | Method  (TypeMemberQ RK r)
@@ -546,10 +545,10 @@ data PSpec l r
   | Iface   (Id l, IfaceDefQ RK r)
   | Class   (Id l, ClassSigQ RK r)
   | TAlias  (Id l, TAlias (RTypeQ RK r))
-  | PAlias  (Id l, PAlias) 
+  | PAlias  (Id l, PAlias)
   | Qual    Qualifier
   | Option  RscOption
-  | Invt    l (RTypeQ RK r) 
+  | Invt    l (RTypeQ RK r)
   | CastSp  l (RTypeQ RK r)
   | Exported l
   | RdOnly l
@@ -567,11 +566,11 @@ parseAnnot = go
     go (RawBind     (ss, _)) = Bind    <$> patch3 ss <$> idBindP'
     go (RawAmbBind  (ss, _)) = AmbBind <$> patch2 ss <$> idBindP
     go (RawFunc     (_ , _)) = AnFunc  <$>               anonFuncP
-    go (RawField    (_ , _)) = Field   <$>               fieldEltP 
+    go (RawField    (_ , _)) = Field   <$>               fieldEltP
     go (RawMethod   (_ , _)) = Method  <$>               methEltP
     go (RawConstr   (_ , _)) = Constr  <$>               consEltP
     go (RawIface    (ss, _)) = Iface   <$> patch2 ss <$> iFaceP
-    go (RawClass    (ss, _)) = Class   <$> patch2 ss <$> classDeclP 
+    go (RawClass    (ss, _)) = Class   <$> patch2 ss <$> classDeclP
     go (RawTAlias   (ss, _)) = TAlias  <$> patch2 ss <$> tAliasP
     go (RawPAlias   (ss, _)) = PAlias  <$> patch2 ss <$> pAliasP
     go (RawQual     (_ , _)) = Qual    <$>               qualifierP
@@ -585,54 +584,54 @@ parseAnnot = go
 patch2 ss (id,t)   = (fmap (const ss) id ,t)
 patch3 ss (id,a,t) = (fmap (const ss) id ,a,t)
 
-getSpecString :: RawSpec -> String 
+getSpecString :: RawSpec -> String
 getSpecString = go
   where
-    go (RawMeas     (_, s)) = s 
-    go (RawBind     (_, s)) = s 
-    go (RawAmbBind  (_, s)) = s 
-    go (RawFunc     (_, s)) = s 
-    go (RawIface    (_, s)) = s  
-    go (RawField    (_, s)) = s  
-    go (RawMethod   (_, s)) = s  
-    go (RawConstr   (_, s)) = s  
-    go (RawClass    (_, s)) = s  
-    go (RawTAlias   (_, s)) = s  
-    go (RawPAlias   (_, s)) = s  
-    go (RawQual     (_, s)) = s  
-    go (RawOption   (_, s)) = s  
-    go (RawInvt     (_, s)) = s  
-    go (RawCast     (_, s)) = s  
-    go (RawExported (_, s)) = s  
-    go (RawReadOnly (_, s)) = s  
+    go (RawMeas     (_, s)) = s
+    go (RawBind     (_, s)) = s
+    go (RawAmbBind  (_, s)) = s
+    go (RawFunc     (_, s)) = s
+    go (RawIface    (_, s)) = s
+    go (RawField    (_, s)) = s
+    go (RawMethod   (_, s)) = s
+    go (RawConstr   (_, s)) = s
+    go (RawClass    (_, s)) = s
+    go (RawTAlias   (_, s)) = s
+    go (RawPAlias   (_, s)) = s
+    go (RawQual     (_, s)) = s
+    go (RawOption   (_, s)) = s
+    go (RawInvt     (_, s)) = s
+    go (RawCast     (_, s)) = s
+    go (RawExported (_, s)) = s
+    go (RawReadOnly (_, s)) = s
 
 instance IsLocated RawSpec where
-  srcPos (RawMeas     (s,_)) = s 
-  srcPos (RawBind     (s,_)) = s 
-  srcPos (RawAmbBind  (s,_)) = s 
-  srcPos (RawFunc     (s,_)) = s 
-  srcPos (RawIface    (s,_)) = s  
-  srcPos (RawField    (s,_)) = s  
-  srcPos (RawMethod   (s,_)) = s  
-  srcPos (RawConstr   (s,_)) = s  
-  srcPos (RawClass    (s,_)) = s  
-  srcPos (RawTAlias   (s,_)) = s  
-  srcPos (RawPAlias   (s,_)) = s  
-  srcPos (RawQual     (s,_)) = s  
-  srcPos (RawOption   (s,_)) = s  
-  srcPos (RawInvt     (s,_)) = s  
-  srcPos (RawCast     (s,_)) = s  
-  srcPos (RawExported (s,_)) = s  
-  srcPos (RawReadOnly (s,_)) = s  
+  srcPos (RawMeas     (s,_)) = s
+  srcPos (RawBind     (s,_)) = s
+  srcPos (RawAmbBind  (s,_)) = s
+  srcPos (RawFunc     (s,_)) = s
+  srcPos (RawIface    (s,_)) = s
+  srcPos (RawField    (s,_)) = s
+  srcPos (RawMethod   (s,_)) = s
+  srcPos (RawConstr   (s,_)) = s
+  srcPos (RawClass    (s,_)) = s
+  srcPos (RawTAlias   (s,_)) = s
+  srcPos (RawPAlias   (s,_)) = s
+  srcPos (RawQual     (s,_)) = s
+  srcPos (RawOption   (s,_)) = s
+  srcPos (RawInvt     (s,_)) = s
+  srcPos (RawCast     (s,_)) = s
+  srcPos (RawExported (s,_)) = s
+  srcPos (RawReadOnly (s,_)) = s
 
 
 instance FromJSON SourcePos where
   parseJSON (Array v) = do
-    v0 <- parseJSON (v!0) :: AI.Parser String 
+    v0 <- parseJSON (v!0) :: AI.Parser String
     v1 <- parseJSON (v!1) :: AI.Parser Int
     v2 <- parseJSON (v!2) :: AI.Parser Int
     return $ newPos v0 v1 v2
-  parseJSON _ = error "SourcePos should only be an A.Array" 
+  parseJSON _ = error "SourcePos should only be an A.Array"
 
 instance FromJSON (Expression (SrcSpan, [RawSpec]))
 instance FromJSON (Statement (SrcSpan, [RawSpec]))
@@ -682,7 +681,7 @@ instance ToJSON SourcePos where
 
 
 --------------------------------------------------------------------------------------
--- | Parse File and Type Signatures 
+-- | Parse File and Type Signatures
 --------------------------------------------------------------------------------------
 
 -- Parse the contents of a FilePath list into a program structure with relative
@@ -690,10 +689,10 @@ instance ToJSON SourcePos where
 --------------------------------------------------------------------------------------
 parseNanoFromFiles :: [FilePath] -> IO (Either (FixResult Error) (NanoBareR Reft))
 --------------------------------------------------------------------------------------
-parseNanoFromFiles fs = 
+parseNanoFromFiles fs =
   partitionEithers <$> mapM parseScriptFromJSON fs >>= \case
     ([],ps) -> return $ either Left mkCode $ parseAnnots $ concat ps
-    (es,_ ) -> return $ Left $ mconcat es 
+    (es,_ ) -> return $ Left $ mconcat es
 
 --------------------------------------------------------------------------------------
 getJSON :: MonadIO m => FilePath -> m B.ByteString
@@ -704,7 +703,7 @@ getJSON = liftIO . B.readFile
 parseScriptFromJSON :: FilePath -> IO (Either (FixResult a) [Statement (SrcSpan, [RawSpec])])
 --------------------------------------------------------------------------------------
 parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
-  where 
+  where
     decodeOrDie s =
       case eitherDecode s :: Either String [Statement (SrcSpan, [RawSpec])] of
         Left msg -> Left  $ Crash [] $ "JSON decode error:\n" ++ msg
@@ -715,7 +714,7 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 parseIdFromJSON :: FilePath -> IO (Either (FixResult a) [Id (SrcSpan, [RawSpec])])
 --------------------------------------------------------------------------------------
 parseIdFromJSON filename = decodeOrDie <$> getJSON filename
-  where 
+  where
     decodeOrDie s =
       case eitherDecode s :: Either String [Id (SrcSpan, [RawSpec])] of
         Left msg -> Left  $ Crash [] $ "JSON decode error:\n" ++ msg
@@ -730,21 +729,21 @@ mkCode ss = return   (mkCode' ss)
         >>= return . expandAliases
         >>= return . replaceAbsolute
         >>= return . replaceDotRef
-        >>= return . scrapeQuals 
+        >>= return . scrapeQuals
         >>=          scrapeModules
         >>= return . fixEnums
         >>= return . fixFunBinders
         >>= return . buildCHA
-    
+
 ---------------------------------------------------------------------------------
 mkCode' :: [Statement (SrcSpan, [Spec])] -> NanoBareRelR Reft
 ---------------------------------------------------------------------------------
-mkCode' ss = Nano { 
+mkCode' ss = Nano {
         code          = Src (checkTopStmt <$> ss')
       , consts        = envFromList [ mapSnd (ntrans f g) t | Meas t <- anns ]
       , tAlias        = envFromList [ t | TAlias t <- anns ]
-      , pAlias        = envFromList [ t | PAlias t <- anns ] 
-      , pQuals        =             [ t | Qual   t <- anns ] 
+      , pAlias        = envFromList [ t | PAlias t <- anns ]
+      , pQuals        =             [ t | Qual   t <- anns ]
       , pOptions      =             [ t | Option t <- anns ]
       , invts         = [Loc (srcPos l) (ntrans f g t) | Invt l t <- anns ]
       , max_id        = ending_id
@@ -752,10 +751,10 @@ mkCode' ss = Nano {
       , fullPaths     = paths
       , pModules      = qenvEmpty -- is populated at mkCode
       , pCHA          = def
-    } 
+    }
   where
-    toBare            :: Int -> (SrcSpan, [Spec]) -> AnnRel Reft 
-    toBare n (l,αs)    = Ann n l $ catMaybes $ extractFact <$> αs 
+    toBare            :: Int -> (SrcSpan, [Spec]) -> AnnRel Reft
+    toBare n (l,αs)    = Ann n l $ catMaybes $ extractFact <$> αs
     f (QN RK_ l ss s)  = QN AK_ l ss s
     g (QP RK_ l ss)    = QP AK_ l ss
     starting_id        = 0
@@ -770,7 +769,7 @@ extractFact = go
   where
     go (Bind    (_,a,t)) = Just $ VarAnn (a,t)
     go (AmbBind (_,t)  ) = Just $ AmbVarAnn t
-    go (Constr  c      ) = Just $ ConsAnn   c   
+    go (Constr  c      ) = Just $ ConsAnn   c
     go (Field   f      ) = Just $ FieldAnn  f
     go (Method  m      ) = Just $ MethAnn   m
     go (Static  m      ) = Just $ StatAnn   m
@@ -794,7 +793,7 @@ scrapeQuals p = p { pQuals = qs ++ pQuals p}
 mkUq                  = zipWith tx ([0..] :: [Int])
   where
     tx i (Id l s, t)  = (Id l $ s ++ "_" ++ show i, t)
-    
+
 
 stmtTypeBindings _                = go
   where
@@ -804,13 +803,13 @@ stmtTypeBindings _                = go
                                             , VarAnn  (_, Just t) <- ann_fact l ]
     go _                          = []
 
-celtTypeBindings _                = (mapSnd eltType <$>) . go 
+celtTypeBindings _                = (mapSnd eltType <$>) . go
   where
     go (Constructor l _ _)        = [(x, e) | ConsAnn  e <- ann_fact l
                                             , let x       = Id l "ctor" ]
-    go (MemberVarDecl l _ x _)    = [(x, e) | FieldAnn e <- ann_fact l  ] ++ 
+    go (MemberVarDecl l _ x _)    = [(x, e) | FieldAnn e <- ann_fact l  ] ++
                                     [(x, e) | StatAnn  e <- ann_fact l  ]
-    go (MemberMethDef l _ x _ _)  = [(x, e) | MethAnn  e <- ann_fact l  ] 
+    go (MemberMethDef l _ x _ _)  = [(x, e) | MethAnn  e <- ann_fact l  ]
     go _                          = []
 
 -- debugTyBinds p@(Nano {code = Src ss}) = trace msg p
@@ -819,17 +818,17 @@ celtTypeBindings _                = (mapSnd eltType <$>) . go
 --     msg = unlines $ "debugTyBinds:" : (ppshow <$> xts)
 
 
--- | Class Hierachy 
+-- | Class Hierachy
 ---------------------------------------------------------------------------
 buildCHA           :: PPR r => NanoBareR r -> NanoBareR r
 ---------------------------------------------------------------------------
-buildCHA pgm        = pgm { pCHA = ClassHierarchy graph namesToKeys } 
-  where 
+buildCHA pgm        = pgm { pCHA = ClassHierarchy graph namesToKeys }
+  where
     graph           = mkGraph nodes edges
     nodes           = zip ([0..] :: [Int]) $ fst3 <$> data_
     keysToTypes     = I.fromList $ zip [0..] (fst3 <$> data_)
     namesToKeys     = HM.fromList $ mapFst t_name . swap <$> I.toList keysToTypes
-    edges           = concatMap toEdge data_  
+    edges           = concatMap toEdge data_
     toEdge (_,s,ts) = [ (σ,τ,()) | t <- ts
                                  , σ <- maybeToList $ HM.lookup s namesToKeys
                                  , τ <- maybeToList $ HM.lookup t namesToKeys ]
@@ -840,10 +839,10 @@ buildCHA pgm        = pgm { pCHA = ClassHierarchy graph namesToKeys }
 parentNames :: NanoBareR r -> AbsName -> [AbsName]
 parentNames p = concat . maybeToList . pparentNames p
   where
-    pparentNames p a = do t <- resolveTypeInPgm p a 
+    pparentNames p a = do t <- resolveTypeInPgm p a
                           let (es,is) = t_base t
                           return $ (fst <$> es) ++ (fst <$> is)
- 
+
 type PState = Integer
 
 instance PP Integer where
@@ -851,14 +850,14 @@ instance PP Integer where
 
 
 --------------------------------------------------------------------------------------
-parseAnnots :: [Statement (SrcSpan, [RawSpec])] 
+parseAnnots :: [Statement (SrcSpan, [RawSpec])]
              -> Either (FixResult Error) [Statement (SrcSpan, [Spec])]
 --------------------------------------------------------------------------------------
-parseAnnots ss = 
+parseAnnots ss =
   case mapAccumL (mapAccumL f) (0,[]) ss of
     ((_,[]),b) -> Right $ b
     ((_,es),_) -> Left  $ Unsafe es
-  where 
+  where
     f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
 
 --------------------------------------------------------------------------------------
@@ -869,8 +868,8 @@ parse _ (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
     parser s = do a     <- parseAnnot s
                   state <- getState
                   it    <- getInput
-                  case it of 
-                    ""  -> return $ (state, a) 
+                  case it of
+                    ""  -> return $ (state, a)
                     _   -> unexpected $ "trailing input: " ++ it
 
     failLeft (Left err)      = ((st, (fromError err): errs), ErrorSpec)
@@ -880,10 +879,10 @@ parse _ (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
     --
     -- http://hackage.haskell.org/package/parsec-3.1.5/docs/src/Text-Parsec-Error.html#ParseError
     --
-    showErr = showErrorMessages "or" "unknown parse error" "expecting" 
+    showErr = showErrorMessages "or" "unknown parse error" "expecting"
                 "unexpected" "end of input" . errorMessages
-    fromError err = mkErr ss   $ showErr err 
-                              ++ "\n\nWhile parsing: " 
+    fromError err = mkErr ss   $ showErr err
+                              ++ "\n\nWhile parsing: "
                               ++ show (getSpecString c)
     ss = srcPos c
     f = sourceName $ sp_start ss
@@ -898,35 +897,35 @@ instance PP (RawSpec) where
 
 -- | @convertTvar@ converts @RCon@s corresponding to _bound_ type-variables to @TVar@
 convertTvar    :: (PP r, Reftable r, Transformable t, Show q) => [TVar] -> t q r -> t q r
-convertTvar as = trans tx as []  
+convertTvar as = trans tx as []
   where
-    tx αs _ (TRef c [] r) | Just α <- mkTvar αs c = TVar α r 
-    tx _  _ t             = t 
+    tx αs _ (TRef c [] r) | Just α <- mkTvar αs c = TVar α r
+    tx _  _ t             = t
 
 mkTvar αs r = listToMaybe [ α { tv_loc = srcPos r }  | α <- αs, symbol α == symbol r]
 
-convertTvarVisitor :: (PP r, Reftable r) => Visitor () [TVar] (AnnRel r) 
+convertTvarVisitor :: (PP r, Reftable r) => Visitor () [TVar] (AnnRel r)
 convertTvarVisitor = defaultVisitor {
     ctxStmt = ctxStmtTvar
   , ctxCElt = ctxCEltTvar
-  , txStmt  = transFmap (const . convertTvar) 
-  , txExpr  = transFmap (const . convertTvar) 
+  , txStmt  = transFmap (const . convertTvar)
+  , txExpr  = transFmap (const . convertTvar)
   , txCElt  = transFmap (const . convertTvar)
   }
 
 ctxStmtTvar as s = go s ++ as
   where
     go :: Statement (AnnRel r)  -> [TVar]
-    go s@(FunctionStmt {}) = grab s 
-    go s@(FuncAmbDecl {})  = grab s 
-    go s@(FuncOverload {}) = grab s 
+    go s@(FunctionStmt {}) = grab s
+    go s@(FuncAmbDecl {})  = grab s
+    go s@(FuncOverload {}) = grab s
     go s@(IfaceStmt {})    = grab s
     go s@(ClassStmt {})    = grab s
     go s@(ModuleStmt {})   = grab s
     go _                   = []
 
     grab :: Statement (AnnQ q r) -> [TVar]
-    grab = concatMap factTvars . ann_fact . getAnnotation 
+    grab = concatMap factTvars . ann_fact . getAnnotation
 
 ctxCEltTvar as s = go s ++ as
   where
@@ -936,7 +935,7 @@ ctxCEltTvar as s = go s ++ as
     go _                   = []
 
     grab :: ClassElt (AnnQ q r) -> [TVar]
-    grab = concatMap factTvars . ann_fact . getAnnotation 
+    grab = concatMap factTvars . ann_fact . getAnnotation
 
 
 factTvars :: FactQ q r -> [TVar]
@@ -946,7 +945,7 @@ factTvars = go
                             = HS.toList $ foldUnions $ HS.fromList . fst4 <$> ts
                             | otherwise
                             = []
-    
+
     foldUnions (α:αs)       = foldl HS.intersection α αs
     foldUnions _            = HS.empty
 
@@ -959,4 +958,3 @@ factTvars = go
     go (ClassAnn (as,_,_))  = as
     go (IfaceAnn i)         = t_args i
     go _                    = []
-    

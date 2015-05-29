@@ -1,6 +1,6 @@
 
 /*@ revInc :: forall M . (Array<Mutable,number>) 
-           => { IArray<number> | true } */
+           => { IArray<number> | 0 < 1 } */
 function revInc(a: number[]) {
 
   a.reverse();

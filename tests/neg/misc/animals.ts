@@ -13,7 +13,7 @@ class Snake extends Animal {
   constructor() { super(); }
 }
 
-/*@ move :: (a: Animal) => { void | true } */
+/*@ move :: (a: Animal) => { void | 0 < 1} */
 function move(a: Animal) {
 
   if (a.kind === "snake") {

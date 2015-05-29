@@ -1,5 +1,5 @@
 
-/*@ foo :: (number, boolean) => {number|true} */
+/*@ foo :: (number, boolean) => {number| 0 < 1} */
 function foo(x, y){
   x = x + 1;
   y = y + 1;

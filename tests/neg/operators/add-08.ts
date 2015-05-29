@@ -25,7 +25,7 @@ function num_one(a){
   return d; 
 }
 
-/*@ num_str :: (a:number) => {number | true} */
+/*@ num_str :: (a:number) => {number | 0 < 1} */
 function num_str(a){
   var d = myPlusOk(0, "cat");
   return d; 

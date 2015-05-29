@@ -10,7 +10,7 @@ function bar(x:any, f:any){
     return f(x);
 }
 
-/*@ main :: (number) => {string | true} */
+/*@ main :: (number) => {string | 0 < 1} */
 function main(x){
     return bar(x, idd); // this is actually (idd @ number)
 }

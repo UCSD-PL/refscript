@@ -54,7 +54,7 @@ import           Language.Fixpoint.Misc                  (mapEither, mapSnd, fst
 import           Language.Nano.Annots
 import           Language.Nano.Errors
 import           Language.Nano.Env
-import           Language.Nano.Locations
+import           Language.Nano.Locations hiding (val)
 import           Language.Nano.Names
 import           Language.Nano.Misc                      (fst4)
 import           Language.Nano.Program
@@ -573,7 +573,7 @@ parseAnnot = go
     go (RawClass    (ss, _)) = Class   <$> patch2 ss <$> classDeclP
     go (RawTAlias   (ss, _)) = TAlias  <$> patch2 ss <$> tAliasP
     go (RawPAlias   (ss, _)) = PAlias  <$> patch2 ss <$> pAliasP
-    go (RawQual     (_ , _)) = Qual    <$>               qualifierP
+    go (RawQual     (_ , _)) = Qual    <$>               (qualifierP sortP)
     go (RawOption   (_ , _)) = Option  <$>               optionP
     go (RawInvt     (ss, _)) = Invt               ss <$> bareTypeP
     go (RawCast     (ss, _)) = CastSp             ss <$> bareTypeP
@@ -958,3 +958,36 @@ factTvars = go
     go (ClassAnn (as,_,_))  = as
     go (IfaceAnn i)         = t_args i
     go _                    = []
+
+
+sortP
+  =   try (parens $ sortP)
+  <|> try (string "@"    >> varSortP)
+  -- <|> try (string "func" >> funcSortP)
+ --  <|> try (fApp (Left listFTyCon) . single <$> brackets sortP)
+  <|> try bvSortP
+  -- <|> try baseSortP
+  <|> try (fApp' <$> locLowerIdP)
+  <|> try (fApp  <$> (Left <$> fTyConP) <*> sepBy sortP blanks)
+  <|> (FObj . symbol <$> lowerIdP)
+
+varSortP  = FVar  <$> parens intP
+
+intP :: Parser Int
+intP = fromInteger <$> integer
+
+fTyConP :: Parser FTycon
+fTyConP = symbolFTycon <$> locUpperIdP
+
+fApp' :: LocSymbol -> Sort
+fApp' ls
+  | s == "int"     = intSort
+  | s == "Integer" = intSort
+  | s == "Int"     = intSort
+  | s == "int"     = intSort
+  | s == "real"    = realSort
+  | s == "bool"    = boolSort
+  | otherwise      = fTyconSort . symbolFTycon $ ls
+  where
+    s              = symbolString $ val ls
+

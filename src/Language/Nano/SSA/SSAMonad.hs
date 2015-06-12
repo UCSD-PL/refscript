@@ -1,5 +1,6 @@
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE FlexibleContexts          #-}
 
 -------------------------------------------------------------------------------------
 -- | SSA Monad 
@@ -68,7 +69,6 @@ import           Language.Nano.Locations
 import           Language.Nano.Program
 import           Language.Nano.Types
 import           Language.Nano.Syntax
-
 import           Language.Fixpoint.Errors
 
 -- import           Debug.Trace                        (trace)

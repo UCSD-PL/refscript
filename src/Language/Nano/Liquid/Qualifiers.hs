@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Language.Nano.Liquid.Qualifiers (qualifiers) where
 
 import Language.Fixpoint.Errors

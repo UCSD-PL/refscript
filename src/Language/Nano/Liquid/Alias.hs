@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Language.Nano.Liquid.Alias (expandAliases) where
 
 import           Data.Maybe

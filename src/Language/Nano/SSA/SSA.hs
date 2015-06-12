@@ -2,6 +2,7 @@
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE FlexibleContexts          #-}
 
 module Language.Nano.SSA.SSA (ssaTransform) where
 

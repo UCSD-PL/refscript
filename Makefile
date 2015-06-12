@@ -4,7 +4,7 @@ CABAL=cabal
 CABALP=$(CABAL) install -p
 FASTOPTS="-O0"
 DISTOPTS="-W -O2 -XStandaloneDeriving"
-PROFOPTS="-O2 -rtsopts -prof -auto-all -caf-all -XStandaloneDeriving -XDeriveDataTypeable"
+PROFOPTS="" # -O2 -rtsopts -prof -auto-all -caf-all -XStandaloneDeriving -XDeriveDataTypeable"
 
 ##############################################################################
 ##############################################################################

@@ -58,6 +58,7 @@ Executable rsc
                   , attoparsec
                   , RefScript
 
+
 --   extensions:       ExistentialQuantification
 --                   , FlexibleInstances
 --                   , OverlappingInstances

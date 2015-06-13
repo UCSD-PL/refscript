@@ -135,7 +135,6 @@ reportUrl                  = text "Please submit a bug report at: https://github
 
 pprManyOrdered = map pp . sort
 
-
 ----------------------------------------------------------------------------------
 renderAnnotations :: PP t => FilePath -> F.FixResult Error -> UAnnSol t -> IO ()
 ----------------------------------------------------------------------------------
@@ -159,4 +158,3 @@ renderAnnotations srcFile res (SomeAnn ann sol)
        vimFile  = extFileName Annot (srcFile ++ ".vim")
        annFile  = extFileName Annot srcFile
        ann'     = sol ann
-

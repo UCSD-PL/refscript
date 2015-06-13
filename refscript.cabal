@@ -13,8 +13,7 @@ category:            Language
 cabal-version:       >=1.18
 
 data-files:          README.md, 
-                     include/prelude.ts
-                     include/dom.ts
+                     include/*.ts
 
 Source-Repository this
   Tag:         0.1

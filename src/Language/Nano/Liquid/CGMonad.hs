@@ -142,13 +142,14 @@ cgStateCInfo :: NanoRefType -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGI
 -------------------------------------------------------------------------------
 cgStateCInfo pgm ((fcs, fws), cg) = CGI (patchSymLits fi) (cg_ann cg)
   where
-    fi   = F.FI { F.cm    = HM.fromList $ F.addIds fcs
-                , F.ws    = fws
-                , F.bs    = binds cg
-                , F.gs    = measureEnv pgm
-                , F.lits  = []
-                , F.kuts  = F.ksEmpty
-                , F.quals = pQuals pgm
+    fi   = F.FI { F.cm       = HM.fromList $ F.addIds fcs
+                , F.ws       = fws
+                , F.bs       = binds cg
+                , F.gs       = measureEnv pgm
+                , F.lits     = []
+                , F.kuts     = F.ksEmpty
+                , F.quals    = pQuals pgm
+                , F.bindInfo = mempty
                 }
 
 patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }

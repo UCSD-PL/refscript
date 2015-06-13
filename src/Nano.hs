@@ -2,7 +2,6 @@
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances         #-}
-{-# LANGUAGE DeriveGeneric             #-}
 
 import qualified Language.Nano.Typecheck.Typecheck  as TC
 import qualified Language.Nano.Liquid.Liquid        as LQ
@@ -17,6 +16,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Files
 import           Language.Nano.SystemUtils
 import           Language.Nano.Misc                 (mapi)
+import           Control.Applicative                ((<$>), (<*>))
 import           Control.Exception                  (catch)
 import           Control.Monad
 import           Data.Monoid
@@ -42,52 +42,56 @@ main = do cfg  <- cmdArgs config
 -------------------------------------------------------------------------------
 verifier           :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult Error)
 -------------------------------------------------------------------------------
-verifier cfg f 
-  = json f >>= \case 
+verifier cfg f
+  = json cfg f >>= \case
       Left  e     -> return (NoAnn, e)
       Right jsons -> case cfg of
                        TC     {} -> TC.verifyFile cfg   jsons
                        Liquid {} -> LQ.verifyFile cfg f jsons
 
 -------------------------------------------------------------------------------
-json :: FilePath -> IO (Either (F.FixResult Error) [FilePath])
+json :: Config -> FilePath -> IO (Either (F.FixResult Error) [FilePath])
 -------------------------------------------------------------------------------
-json f = do fileExists <- doesFileExist f
-            if fileExists then withExistingFile f
-                          else return $ Left $ F.Crash [] $ "File does not exist: " ++ f
+json cfg f = do
+  fileExists <- doesFileExist f
+  if fileExists then withExistingFile cfg f
+                else return $ Left $ F.Crash [] $ "File does not exist: " ++ f
 
-withExistingFile f 
-  | ext `elem` oks 
-  = do  preludeTSPath     <- getPreludeTSPath 
-        domTSPath         <- getDomTSPath 
-        (code, stdOut, _) <- readProcessWithExitCode tsCmd (mkArgs [preludeTSPath, domTSPath]) ""
-        case code of 
+withExistingFile cfg f
+  | ext `elem` oks
+  = do  libs              <- getIncludeLibs cfg
+        (code, stdOut, _) <- readProcessWithExitCode tsCmd (mkArgs libs) ""
+        case code of
           ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
                                 Left  s  -> return $ Left  $ F.UnknownError $ "withExistingFile1: " ++ s
-                                Right fs -> return $ Right $ fs
-          ExitFailure _   -> case eitherDecode (B.pack $ stdOut) :: Either String (F.FixResult Error) of
+                                Right fs -> return $ Right fs
+          ExitFailure _   -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
                                 Left  s  -> return $ Left $ F.UnknownError $ "withExistingFile2: " ++ s
-                                Right e  -> return $ Left $ e
+                                Right e  -> return $ Left e
   | otherwise
   = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
-  where 
+  where
     ext            = takeExtension f
-    tsCmd          = "tsc" 
+    tsCmd          = "tsc"
     oks            = [".ts", ".js"]
     mkArgs libs    = [ "--outDir", tempDirectory f
                      , "--refscript"] ++
                      concatMap (("--lib":) . single) libs ++
                      [ f ]
 
+getIncludeLibs :: Config -> IO [FilePath]
+getIncludeLibs cfg = case prelude cfg of
+  Nothing -> (\p1 p2 -> [p1, p2]) <$> getPreludeTSPath <*> getDomTSPath
+  Just p  -> return [p]
 
 instance FromJSON (F.FixResult Error)
 instance ToJSON (F.FixResult Error)
 
 instance FromJSON Error
-instance ToJSON Error 
+instance ToJSON Error
 
 
-run verifyFile cfg 
+run verifyFile cfg
   = do mapM_ (createDirectoryIfMissing False. tmpDir) (files cfg)
        rs   <- mapM (runOne cfg verifyFile) $ files cfg
        let r = mconcat rs
@@ -99,9 +103,7 @@ run verifyFile cfg
 runOne cfg verifyFile f
   = do createDirectoryIfMissing False tmpDir
        (u, r) <- verifyFile f `catch` handler
-       case cfg of 
-         Liquid _ _ _ True -> renderAnnotations f r u
-         _                 -> return ()
+       when (renderAnns cfg) $ renderAnnotations f r u
        return r
     where
        handler e = return (NoAnn, F.Unsafe [e])
@@ -112,7 +114,7 @@ runOne cfg verifyFile f
 writeResult :: (Ord a, PP a) => F.FixResult a -> IO ()
 -------------------------------------------------------------------------------
 writeResult r            = mapM_ (writeDoc c) $ zip [0..] $ resDocs r
-  where 
+  where
     c                    = F.colorResult r
 
 writeDoc c (i, d)    = writeBlock c i $ procDoc d
@@ -124,7 +126,7 @@ procDoc              = mapi pad . filter (not . null . words) . lines . render
   where
     pad 0 x          = x
     pad _ x          = "  " ++ x
-    
+
 resDocs F.Safe             = [text "SAFE"]
 resDocs (F.Crash xs s)     = text ("CRASH: " ++ s) : pprManyOrdered xs
 resDocs (F.Unsafe xs)      = text "UNSAFE"         : pprManyOrdered (nub xs)
@@ -158,6 +160,3 @@ renderAnnotations srcFile res (SomeAnn ann sol)
        annFile  = extFileName Annot srcFile
        ann'     = sol ann
 
--- Local Variables:
--- flycheck-disabled-checkers: (haskell-liquid)
--- End:

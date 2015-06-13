@@ -124,7 +124,7 @@ instance IsLocated Cinfo where
   srcPos = ci_srcspan
 
 instance F.Fixpoint Cinfo where
-  toFix = pp
+  toFix = pp . ci_srcspan
 
 ----------------------------------------------------------------------------
 -- | Constraints

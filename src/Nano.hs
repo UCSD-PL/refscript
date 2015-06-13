@@ -28,7 +28,6 @@ import           System.FilePath.Posix
 import           Language.Fixpoint.Interface        (resultExit)
 import qualified Language.Fixpoint.Types      as    F
 import           Language.Fixpoint.Misc
-
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Files
 import           Text.PrettyPrint.HughesPJ

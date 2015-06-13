@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | This module contains Haskell variables representing globally visible 
+-- | This module contains Haskell variables representing globally visible
 -- names for files, paths, extensions.
 
 
@@ -10,13 +10,19 @@ module Language.Nano.Files (
   , getPreludeTSPath
   , getDomJSONPath
   , getDomTSPath
-  ) 
+  )
   where
+
+import Control.Applicative
+import System.FilePath
 
 import Paths_RefScript
 
-getPreludeJSONPath = getDataFileName "include/prelude.json"
 getPreludeTSPath   = getDataFileName "include/prelude.ts"
+getDomTSPath       = getDataFileName "include/ambient/dom.ts"
 
-getDomJSONPath = getDataFileName "include/dom.json"
-getDomTSPath   = getDataFileName "include/dom.ts"
+getPreludeJSONPath = (`replaceExtension` ".json") <$> getPreludeTSPath
+getDomJSONPath     = (`replaceExtension` ".json") <$> getDomTSPath
+
+-- getPreludeJSONPath = getDataFileName "include/prelude.json"
+-- getDomJSONPath     = getDataFileName "include/dom.json"

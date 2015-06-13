@@ -13,6 +13,8 @@ category:            Language
 cabal-version:       >=1.18
 
 data-files:          README.md, 
+                     include/ambient/*.ts,
+                     include/rsc/*.ts,
                      include/*.ts
 
 Source-Repository this

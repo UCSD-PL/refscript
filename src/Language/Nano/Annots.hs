@@ -7,7 +7,7 @@
 
 module Language.Nano.Annots (
 
-  -- * SSA 
+  -- * SSA
     SsaInfo(..), Var
 
   -- * Annotations
@@ -16,7 +16,7 @@ module Language.Nano.Annots (
   -- * Casts
   , CastQ(..), Cast, CastDirection(..), castDirection, noCast, upCast, dnCast, ddCast, castType
 
-  -- * Aliases for annotated Source 
+  -- * Aliases for annotated Source
   , AnnQ, AnnR, AnnRel, AnnBare, UAnnBare, AnnSSA , UAnnSSA
   , AnnType, UAnnType, AnnInfo, UAnnInfo
 
@@ -25,7 +25,7 @@ module Language.Nano.Annots (
 
   -- Options
   , RscOption (..)
-                                  
+
 ) where
 
 import           Control.Applicative            hiding (empty)
@@ -33,8 +33,8 @@ import           Data.Default
 import           Data.Monoid
 import qualified Data.Map.Strict                as M
 import qualified Data.IntMap.Strict             as I
-import           Data.Generics                   
-import           Text.PrettyPrint.HughesPJ 
+import           Data.Generics
+import           Text.PrettyPrint.HughesPJ
 
 import           Language.Nano.Types
 import           Language.Nano.Env
@@ -42,7 +42,7 @@ import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Typecheck.Types
 
-import           Language.Nano.Syntax 
+import           Language.Nano.Syntax
 import           Language.Nano.Syntax.Annotations
 import           Language.Nano.Syntax.PrettyPrint
 
@@ -52,7 +52,7 @@ import qualified Language.Fixpoint.Types        as F
 
 
 -----------------------------------------------------------------------------
--- | Casts 
+-- | Casts
 -----------------------------------------------------------------------------
 
 data CastQ q r = CNo                                            -- .
@@ -137,10 +137,10 @@ data FactQ q r
   | AmbVarAnn   !(RTypeQ q r)
   -- Class member annotations
   | FieldAnn    !(TypeMemberQ q r)
-  | MethAnn     !(TypeMemberQ q r) 
-  | StatAnn     !(TypeMemberQ q r) 
+  | MethAnn     !(TypeMemberQ q r)
+  | StatAnn     !(TypeMemberQ q r)
   | ConsAnn     !(TypeMemberQ q r)
-    
+
   | UserCast    !(RTypeQ q r)
   | FuncAnn     !(RTypeQ q r)
   | TCast       !IContext  !(CastQ q r)
@@ -165,14 +165,14 @@ data Annot b a = Ann { ann_id   :: NodeId
                      , ann_fact :: [b] } deriving (Show, Data, Typeable)
 
 type AnnQ q  r = Annot (FactQ q r) SrcSpan
-type AnnR    r = AnnQ AK r                      -- absolute paths,  
+type AnnR    r = AnnQ AK r                      -- absolute paths,
 type AnnRel  r = AnnQ RK r                      -- relative paths, NO facts, parsed versioin
 type AnnBare r = AnnR r                         -- absolute paths, NO facts
 type AnnSSA  r = AnnR r                         -- absolute paths, Phi facts
 type AnnType r = AnnR r                         -- absolute paths, Phi + t. annot. + Cast facts
-type AnnInfo r = I.IntMap [Fact r] 
+type AnnInfo r = I.IntMap [Fact r]
 
-type UAnnBare  = AnnBare () 
+type UAnnBare  = AnnBare ()
 type UAnnSSA   = AnnSSA  ()
 type UAnnType  = AnnType ()
 type UAnnInfo  = AnnInfo ()
@@ -188,22 +188,22 @@ instance PP (SsaInfo r) where
   pp (SI i) =  pp $ fmap (const ()) i
 
 instance Eq (SsaInfo r) where
-  SI i1 == SI i2 =  i1 == i2 
+  SI i1 == SI i2 =  i1 == i2
 
 
-instance HasAnnotation (Annot b) where 
-  getAnnotation = ann 
+instance HasAnnotation (Annot b) where
+  getAnnotation = ann
 
 instance Default a => Default (Annot b a) where
   def = Ann def def []
 
 instance Default SrcSpan where
   def = srcPos dummySpan
-  
-instance Ord (AnnSSA  r) where 
+
+instance Ord (AnnSSA  r) where
   compare (Ann i1 s1 _) (Ann i2 s2 _) = compare (i1,s1) (i2,s2)
 
-instance Eq (Annot a SrcSpan) where 
+instance Eq (Annot a SrcSpan) where
   (Ann i1 s1 _) == (Ann i2 s2 _) = (i1,s1) == (i2,s2)
 
 
@@ -212,7 +212,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVarTy x)      = text "phi-ty"                 <+> pp x
   pp (PhiVarTC x)      = text "phi-tc"                 <+> pp x
   pp (PhiPost _)       = text "phi-post"
-  pp (TypInst i ξ ts)  = text "inst"                   <+> pp i <+> pp ξ <+> pp ts 
+  pp (TypInst i ξ ts)  = text "inst"                   <+> pp i <+> pp ξ <+> pp ts
   pp (Overload ξ i)    = text "overload"               <+> pp ξ <+> pp i
   pp (EltOverload ξ i) = text "elt_overload"           <+> pp ξ <+> pp i
   pp (TCast  ξ c)      = text "cast"                   <+> pp ξ <+> pp c
@@ -230,11 +230,11 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (IfaceAnn _)      = text "UNIMPLEMENTED:pp:IfaceAnn"
   pp (ModuleAnn s)     = text "module"                 <+> pp s
   pp (EnumAnn s)       = text "enum"                   <+> pp s
-  pp (BypassUnique)    = text "BypassUnique" 
+  pp (BypassUnique)    = text "BypassUnique"
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
-  pp             = vcat . (ppB <$>) . I.toList 
-    where 
+  pp             = vcat . (ppB <$>) . I.toList
+    where
       ppB (x, t) = pp x <+> dcolon <+> pp t
 
 instance (PP a, PP b) => PP (Annot b a) where
@@ -247,7 +247,7 @@ factRTypes = go
   where
     go (TypInst _ _ ts)    = ts
     go (EltOverload _ m)   = [f_type m]
-    go (Overload _ t)      = [t] 
+    go (Overload _ t)      = [t]
     go (VarAnn (_,Just t)) = [t]
     go (VarAnn (_,_))      = [ ]
     go (AmbVarAnn t)       = [t]
@@ -268,4 +268,3 @@ factRTypes = go
 
 data RscOption = RealOption
     deriving (Eq, Show, Data, Typeable)
-

@@ -16,10 +16,10 @@ import           Language.Nano.Errors
 import           Language.Nano.Files
 import           Language.Nano.SystemUtils
 import           Language.Nano.Misc                 (mapi)
-import           Control.Applicative                ((<$>), (<*>))
+-- import           Control.Applicative                ((<$>), (<*>))
 import           Control.Exception                  (catch)
 import           Control.Monad
-import           Data.Monoid
+-- import           Data.Monoid
 import           Data.List                          (sort, nub)
 import           System.Exit
 import           System.Directory                   (createDirectoryIfMissing, doesFileExist)
@@ -34,7 +34,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Language.Nano.Syntax.PrettyPrint
 import qualified Data.ByteString.Lazy.Char8   as    B
 
-
+main :: IO a
 main = do cfg  <- cmdArgs config
           run (verifier cfg) cfg
 
@@ -81,7 +81,7 @@ withExistingFile cfg f
 getIncludeLibs :: Config -> IO [FilePath]
 getIncludeLibs cfg = case prelude cfg of
   Nothing -> (\p1 p2 -> [p1, p2]) <$> getPreludeTSPath <*> getDomTSPath
-  Just p  -> return [p]
+  Just p  -> (\x -> [x])          <$> getIncludePath p
 
 instance FromJSON (F.FixResult Error)
 instance ToJSON (F.FixResult Error)

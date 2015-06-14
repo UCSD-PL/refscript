@@ -2,20 +2,6 @@
 // PV: Type binder names should be "hard to guess" -- add an "_" in the end 
 
 
-
-/*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]} */
-
-/*@ invariant {v:null | [(ttag(v) = "object"); not (Prop v) ]} */
-
-/*@ invariant {v:boolean | [(ttag(v) = "boolean")]} */ 
-
-/*@ invariant {v:string | [(ttag(v) = "string"); (Prop(v) <=> v /= "" )]} */
-
-/*@ invariant {v:number | [(ttag(v)  =  "number"); (Prop(v) <=> v /= 0  )]}	*/
-
-
-
-
 /*************************************************************************
  *        
  *  GENERAL PURPOSE AUXILIARY DEFINITIONS 

@@ -1,5 +1,4 @@
 {-# LANGUAGE OverlappingInstances      #-}
-{-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LambdaCase                #-}
@@ -55,10 +54,7 @@ import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T
 import           System.Console.CmdArgs.Default
-
-import           Debug.Trace                        (trace)
--- import           Text.PrettyPrint.HughesPJ
--- import qualified Data.Foldable                      as FO
+-- import           Debug.Trace                        (trace)
 
 type PPRS r = (PPR r, Substitutable r (Fact r))
 
@@ -89,18 +85,13 @@ refTc cfg f p
   = do donePhase Loud "Generate Constraints"
        solveConstraints p f cgi
   where
-    -- cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
     cgi = generateConstraints cfg p
 
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x
 
--- ppCasts (Nano { code = Src fs }) =
---   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
---                                 , TCast _ c <- ann_fact a ]
 
--- | solveConstraints
---   Call solve with `ueqAllSorts` enabled.
+-- | solveConstraint: solve with `ueqAllSorts` enabled.
 --------------------------------------------------------------------------------
 solveConstraints :: NanoRefType
                  -> FilePath

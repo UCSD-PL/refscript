@@ -2,20 +2,6 @@
 // PV: Type binder names should be "hard to guess" -- add an "_" in the end 
 
 
-
-/*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]} */
-
-/*@ invariant {v:null | [(ttag(v) = "object"); not (Prop v) ]} */
-
-/*@ invariant {v:boolean | [(ttag(v) = "boolean")]} */ 
-
-/*@ invariant {v:string | [(ttag(v) = "string"); (Prop(v) <=> v /= "" )]} */
-
-/*@ invariant {v:number | [(ttag(v)  =  "number"); (Prop(v) <=> v /= 0  )]}	*/
-
-
-
-
 /*************************************************************************
  *        
  *  GENERAL PURPOSE AUXILIARY DEFINITIONS 
@@ -370,6 +356,86 @@ declare var Object: {
 }
 
 
+
+/**
+ *  STRING
+ *  
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L259
+ *
+ */
+
+interface String {
+
+    /*@ __proto__ : [Immutable] StringConstructor<Immutable> */
+    __proto__: StringConstructor;
+
+    toString(): string;
+
+    charAt(pos: number): string;
+
+    charCodeAt(index: number): number;
+
+    // concat(...strings: string[]): string;
+
+    indexOf(searchString: string, position?: number): number;
+
+    lastIndexOf(searchString: string, position: number): number;
+
+    localeCompare(that: string): number;
+
+    match(regexp: string): string[];
+
+    // match(regexp: RegExp): string[];
+
+    replace(searchValue: string, replaceValue: string): string;
+
+    // replace(searchValue: string, replaceValue: (substring: string, ...args: any[]) => string): string;
+
+    // replace(searchValue: RegExp, replaceValue: string): string;
+
+    // replace(searchValue: RegExp, replaceValue: (substring: string, ...args: any[]) => string): string;
+
+    search(regexp: string): number;
+
+    // search(regexp: RegExp): number;
+
+    slice(start?: number, end?: number): string;
+
+    split(separator: string, limit?: number): string[];
+
+    // split(separator: RegExp, limit?: number): string[];
+
+    substring(start: number, end?: number): string;
+
+    toLowerCase(): string;
+
+    toLocaleLowerCase(): string;
+
+    toUpperCase(): string;
+
+    toLocaleUpperCase(): string;
+
+    trim(): string;
+
+    /*@ length: { number | v >= 0 } */
+    length: number;
+
+    substr(from: number, length?: number): string;
+
+    // [index: number]: string;
+}
+
+/*@ String :: StringConstructor<Immutable> */
+declare var String /*@ readonly */: StringConstructor;
+
+interface StringConstructor {
+    new (value?: any): String;
+    (value?: any): string;
+    prototype: String;
+    // fromCharCode(...codes: number[]): string;
+    fromCharCode(code: number): string;
+}
+
 interface Boolean { }
 
 
@@ -507,6 +573,92 @@ declare var Array: {
     prototype: Array<any>;
 }
 
+
+interface IArguments {
+    [index: number]: any;
+    length: number;
+    // callee: Function;
+}
+
+
+/*** Function ************************************************************/
+
+interface Function {
+    /**
+      * Calls the function, substituting the specified object for the this 
+      * value of the function, and the specified array for the arguments of the function.
+      * @param thisArg The object to be used as the this object.
+      * @param argArray A set of arguments to be passed to the function.
+      */
+    apply(thisArg: any, argArray?: any): any;
+
+    /**
+      * Calls a method of an object, substituting another object for the current object.
+      * @param thisArg The object to be used as the current object.
+      * @param argArray A list of arguments to be passed to the method.
+      */
+    call(thisArg: any, ...argArray: any[]): any;
+
+    /**
+      * For a given function, creates a bound function that has the same body 
+      * as the original function. 
+      * The this object of the bound function is associated with the specified 
+      * object, and has the specified initial parameters.
+      * @param thisArg An object to which the this keyword can refer inside the new function.
+      * @param argArray A list of arguments to be passed to the new function.
+      */
+    bind(thisArg: any, ...argArray: any[]): any;
+
+    prototype: any;
+    length: number;
+
+    // Non-standard extensions
+    arguments: any;
+    caller: Function;
+}
+
+declare var Function: {
+    /** 
+      * Creates a new function.
+      * @param args A list of arguments the function accepts.
+      */
+    //new (...args: string[]): Function;
+    //(...args: string[]): Function;
+    prototype: Function;
+}
+
+
+/*** Console ************************************************************/
+interface Console {
+    info(message?: any, ...optionalParams: any[]): void;
+    warn(message?: any, ...optionalParams: any[]): void;
+    error(message?: any, ...optionalParams: any[]): void;
+    log(message?: any, ...optionalParams: any[]): void;
+    profile(reportName?: string): void;
+    assert(test?: boolean, message?: string, ...optionalParams: any[]): void;
+    //msIsIndependentlyComposed(element: Element): boolean;
+    clear(): void;
+    dir(value?: any, ...optionalParams: any[]): void;
+    profileEnd(): void;
+    count(countTitle?: string): void;
+    groupEnd(): void;
+    time(timerName?: string): void;
+    timeEnd(timerName?: string): void;
+    trace(): void;
+    group(groupTitle?: string): void;
+    dirxml(value: any): void;
+    debug(message?: string, ...optionalParams: any[]): void;
+    groupCollapsed(groupTitle?: string): void;
+    //select(element: Element): void;
+}
+declare var Console: {
+    prototype: Console;
+    new(): Console;
+}
+declare var console: Console;
+
+
+
 /**
  *
  * An empty object -- not tobe referenced by client code 
@@ -532,7 +684,8 @@ interface EmptyObject {
 
 /*@ measure Prop :: forall A . (A) => bool */
 
-/*@ builtin_PrefixTypeof :: forall A. (x:A) => {v:string | (ttag x) = v }                
+/*@ builtin_PrefixTypeof :: 
+    forall A. (x:A) => {v:string | (ttag x) = v }                
  */
 declare function builtin_PrefixTypeof<A>(x: A): string; 
 
@@ -546,6 +699,17 @@ declare function builtin_BITruthy<A>(x: A): boolean;
     forall A. (x:A) => { v:boolean | ((Prop v) <=> (not Prop(x))) }          
 */
 declare function builtin_BIFalsy<A>(x: A): boolean; 
+
+/*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]} */
+
+/*@ invariant {v:null | [(ttag(v) = "object"); not (Prop v) ]} */
+
+/*@ invariant {v:boolean | [(ttag(v) = "boolean")]} */ 
+
+/*@ invariant {v:string | [(ttag(v) = "string"); (Prop(v) <=> v /= "" )]} */
+
+/*@ invariant {v:number | [(ttag(v)  =  "number"); (Prop(v) <=> v /= 0  )]}	*/
+
 
 
 /**

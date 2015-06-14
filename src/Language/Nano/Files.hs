@@ -10,6 +10,7 @@ module Language.Nano.Files (
   , getPreludeTSPath
   , getDomJSONPath
   , getDomTSPath
+  , getIncludePath
   )
   where
 
@@ -18,8 +19,9 @@ import System.FilePath
 
 import Paths_RefScript
 
-getPreludeTSPath   = getDataFileName "include/prelude.ts"
-getDomTSPath       = getDataFileName "include/ambient/dom.ts"
+getIncludePath f   = getDataFileName $ "include" </> f
+getPreludeTSPath   = getIncludePath "prelude.ts"
+getDomTSPath       = getIncludePath "ambient/dom.ts"
 
 getPreludeJSONPath = (`replaceExtension` ".json") <$> getPreludeTSPath
 getDomJSONPath     = (`replaceExtension` ".json") <$> getDomTSPath

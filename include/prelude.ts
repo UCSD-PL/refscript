@@ -806,7 +806,6 @@ declare function builtin_BITruthy<A>(x: A): boolean;
 */
 declare function builtin_BIFalsy<A>(x: A): boolean; 
 
-// HACK
 /*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]} */
 
 /*@ invariant {v:null | [(ttag(v) = "object"); not (Prop v) ]} */

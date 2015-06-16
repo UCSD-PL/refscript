@@ -26,7 +26,7 @@ class LogWriter (threading.Thread):
 
 class TestConfig:
     def __init__ (self, testdirs, logfile = None, threadcount = 1):
-        self.testdirs    = testdirs
+        self.testdirs    = testdirs        
         self.valid_exits = [x for d, x, fs in self.testdirs]
         if logfile != None:
             self.logq   = Queue.Queue ()
@@ -53,31 +53,31 @@ class TestConfig:
 
         if ok not in self.valid_exits:
             self.exceptions.append (file)
-  
+
 class TestRunner:
     def __init__ (self, config):
         self.config = config
 
     def run_test (self, (file, expected_statuses, flags)):
-      start   = time.time ()
-      status  = self.config.run_test (file, flags)
-      runtime = time.time () - start
+        start   = time.time ()
+        status  = self.config.run_test (file, flags)
+        runtime = time.time () - start
 
-      ## tsc time
-      #FNULL = open(os.devnull, 'w')
-      #tsc_start   = time.time ()
-      #subprocess.call(["node", "../ext/tsc-bin/built/local/tsc.js", "--lib", "../include/prelude.ts",
-      # "--lib", "../include/dom.ts", "--refscript", file], stdout=FNULL, stderr=None)
-      #tsc_runtime = time.time () - tsc_start
+        ## tsc time
+        #FNULL = open(os.devnull, 'w')
+        #tsc_start   = time.time ()
+        #subprocess.call(["node", "../ext/tsc-bin/built/local/tsc.js", "--lib", "../include/prelude.ts",
+        # "--lib", "../include/dom.ts", "--refscript", file], stdout=FNULL, stderr=None)
+        #tsc_runtime = time.time () - tsc_start
 
-      if hasattr (expected_statuses, '__iter__'):
-        ok = (status in expected_statuses)
-      else:
-        ok = (status == expected_statuses)
-        if ok:
-          print "\033[1;32mSUCCESS!\033[1;0m   %70s %10f seconds" % (file, runtime)
+        if hasattr (expected_statuses, '__iter__'):
+            ok = (status in expected_statuses)
         else:
-          print "\033[1;31mFAILURE :(\033[1;0m %70s %10f seconds" % (file, runtime)
+            ok = (status == expected_statuses)
+        if ok:
+            print "\033[1;32mSUCCESS!\033[1;0m   %70s %10f seconds" % (file, runtime)
+        else:
+            print "\033[1;31mFAILURE :(\033[1;0m %70s %10f seconds" % (file, runtime)
         self.config.log_test(file, runtime, ok)
 
         return (file, ok, status not in self.config.valid_exits)
@@ -102,10 +102,10 @@ class TestRunner:
     # NOTE: Empty folders in the test dirs will cause a crash !
     def directory_tests (self, dir, expected_status, flags):
         return it.chain(*[[(os.path.join (dir, file), expected_status, flags) 
-              for file in files if self.config.is_test (file)] 
-              for dir, dirs, files in os.walk(dir)])
+            for file in files if self.config.is_test (file)] 
+            for dir, dirs, files in os.walk(dir)])
 
     def run (self):
         return self.run_tests (it.chain (*[(self.directory_tests(dir,expected_status, flags))
-          for dir, expected_status, flags in self.config.testdirs]))
+            for dir, expected_status, flags in self.config.testdirs]))
 

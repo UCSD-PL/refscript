@@ -1,3 +1,4 @@
+
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
@@ -9,6 +10,7 @@ import qualified Language.Nano.Liquid.Types         as L
 
 import           System.Console.CmdArgs     hiding  (Loud)
 
+
 import           Data.Aeson                         (eitherDecode)
 import           Data.Aeson.Types            hiding (Parser, Error, parse)
 import           Language.Nano.CmdLine
@@ -16,10 +18,8 @@ import           Language.Nano.Errors
 import           Language.Nano.Files
 import           Language.Nano.SystemUtils
 import           Language.Nano.Misc                 (mapi)
--- import           Control.Applicative                ((<$>), (<*>))
 import           Control.Exception                  (catch)
 import           Control.Monad
--- import           Data.Monoid
 import           Data.List                          (sort, nub)
 import           System.Exit
 import           System.Directory                   (createDirectoryIfMissing, doesFileExist)
@@ -56,6 +56,8 @@ json cfg f = do
   if fileExists then withExistingFile cfg f
                 else return $ Left $ F.Crash [] $ "File does not exist: " ++ f
 
+
+withExistingFile :: Config -> FilePath -> IO (Either (F.FixResult Error) [FilePath])
 withExistingFile cfg f
   | ext `elem` oks
   = do  libs              <- getIncludeLibs cfg
@@ -81,7 +83,7 @@ withExistingFile cfg f
 getIncludeLibs :: Config -> IO [FilePath]
 getIncludeLibs cfg = case prelude cfg of
   Nothing -> (\p1 p2 -> [p1, p2]) <$> getPreludeTSPath <*> getDomTSPath
-  Just p  -> (\x -> [x])          <$> getIncludePath p
+  Just p  -> (: [])               <$> getIncludePath p
 
 instance FromJSON (F.FixResult Error)
 instance ToJSON (F.FixResult Error)

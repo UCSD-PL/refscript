@@ -99,7 +99,7 @@ solveConstraints :: NanoRefType
                  -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
 solveConstraints p f cgi
-  = do (r, s)  <- solve fpConf $ cgi_finfo cgi
+  = do F.Result r s <- solve fpConf $ cgi_finfo cgi
        let r'   = fmap (ci_info . F.sinfo) r
        let anns = cgi_annot cgi
        let sol  = applySolution s

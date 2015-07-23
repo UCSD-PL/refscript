@@ -1,10 +1,10 @@
-name:                RefScript 
+name:                refscript 
 version:             0.1.0.0
 Copyright:           2010-14 Regents of the University of California 
 build-type:          Custom
 synopsis:            Refinement Types for Scripting Languages
 Description:         Refinement Types for Scripting Languages
-homepage:            https://github.com/UCSD-PL/RefScript
+homepage:            https://github.com/UCSD-PL/refscript
 license:             BSD3
 license-file:        LICENSE
 author:              Panagiotis Vekris, Ranjit Jhala
@@ -20,11 +20,11 @@ data-files:          README.md,
 Source-Repository this
   Tag:         0.1
   Type:        git
-  Location:    https://github.com/UCSD-PL/RefScript
+  Location:    https://github.com/UCSD-PL/refscript
 
 Source-Repository head
   Type:        git
-  Location:    https://github.com/UCSD-PL/RefScript
+  Location:    https://github.com/UCSD-PL/refscript
 
 Executable rsc 
   Default-language:
@@ -57,7 +57,7 @@ Executable rsc
                   , text-format
                   , array
                   , attoparsec
-                  , RefScript
+                  , refscript
 
 --  ghc-options:    -W -O2  
   Main-is:        Nano.hs
@@ -95,7 +95,7 @@ Library
                   , attoparsec
 
   hs-source-dirs:   src
-  Exposed-Modules:  Paths_RefScript,
+  Exposed-Modules:  Paths_refscript,
                     Language.Nano.Errors,
                     Language.Nano.Files,
                     Language.Nano.Types,
@@ -127,7 +127,7 @@ test-suite test
                     directory,
                     filepath,
                     process,
-                    RefScript,
+                    refscript,
                     tasty >= 0.10,
                     tasty-hunit,
                     tasty-rerun >= 1.1,

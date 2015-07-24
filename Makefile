@@ -36,7 +36,7 @@ lint:
 	hlint --colour --report .
 
 tags:
-	hasktags -b src/
+	hasktags -x -c src/
 
 tasty:
 	cabal configure -fdevel --enable-tests --disable-library-profiling
@@ -47,4 +47,3 @@ tasty-dist:
 	cabal configure -fdevel --enable-tests --disable-library-profiling -O2
 	cabal build
 	$(TASTY)
-

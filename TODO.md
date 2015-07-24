@@ -6,6 +6,10 @@ Option Parser
 * See what vekris does with REAL and do it to Config
 
 
+tests/pos/oopsla/octane/mulThms.ts
+2:/*@ option REALS */
+
+
 Tests / Benchmarks
 ------------------
 

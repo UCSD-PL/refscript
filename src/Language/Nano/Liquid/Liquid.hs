@@ -33,7 +33,7 @@ import           Language.Fixpoint.Interface        (solve)
 
 import           Language.Nano.Misc                 (mseq)
 import           Language.Nano.Annots
-import           Language.Nano.CmdLine              (Config)
+import           Language.Nano.CmdLine              (Config (real))
 import           Language.Nano.Errors
 import qualified Language.Nano.Env                  as E
 import           Language.Nano.Environment
@@ -61,32 +61,40 @@ type PPRS r = (PPR r, Substitutable r (Fact r))
 --------------------------------------------------------------------------------
 verifyFile    :: Config -> FilePath -> [FilePath] -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
-verifyFile cfg f fs = parse     fs
+verifyFile cfg f fs = parse  fs
+                    $ config cfg
                     $ ssa
-                    $ tc    cfg
-                    $ refTc cfg f
+                    $ tc
+                    $ refTc  f
 
 parse fs next
   = do  r <- parseNanoFromFiles fs
         donePhase Loud "Parse Files"
         nextPhase r next
 
+config cfg next p = next p'
+  where
+    p'   = p { pConfig = mappend cfg cfg'}
+    cfg' = pConfig p
 
 ssa next p
   = do  r <- ssaTransform p
         donePhase Loud "SSA Transform"
         nextPhase r next
 
-tc cfg next p
+tc next p
   = do  r <- typeCheck cfg p
         donePhase Loud "Typecheck"
         nextPhase r next
+    where
+       cfg = pConfig p
 
-refTc cfg f p
+refTc f p
   = do donePhase Loud "Generate Constraints"
        solveConstraints p f cgi
-  where
-    cgi = generateConstraints cfg p
+    where
+       cgi = generateConstraints cfg p
+       cfg = pConfig p
 
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x
@@ -106,8 +114,8 @@ solveConstraints p f cgi
        let sol  = applySolution s
        return (A.SomeAnn anns sol, r')
   where
-    real        = RealOption `elem` pOptions p
-    fpConf      = def { C.real        = real
+    -- real        = RealOption `elem` pOptions p
+    fpConf      = def { C.real        = real (pConfig p)
                       , C.ueqAllSorts = C.UAS True
                       , C.srcFile     = f
                       }
@@ -178,21 +186,21 @@ initGlobalEnv pgm@(Nano { code = Src s }) = do
 initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> CGM CGEnv
 -------------------------------------------------------------------------------
 initModuleEnv g n s = do
-    g' <- freshenCGEnvM $ CGE nms bds grd ctx mod cha pth (Just g) cst
+    g' <- freshenCGEnvM $ CGE nms bds grd ctx mod_ cha_ pth (Just g) cst
     mapM_ (uncurry $ checkSyms "initFunc" g' []) xts
     return g'
   where
-    reshuffle1 = \(_,_,c,d,e) -> EE c e d
-    reshuffle2 = \(_,c,d,e)   -> EE c e d
-    nms        = (E.envMap reshuffle1 $ mkVarEnv vars) `E.envUnion`
-                 (E.envMap reshuffle2 $ E.envUnionList $ maybeToList
-                                      $ m_variables <$> E.qenvFindTy pth mod)
+    resh1 (_,_,c,d,e) = EE c e d
+    resh2 (_,c,d,e)   = EE c e d
+    nms        = (E.envMap resh1 $ mkVarEnv vars) `E.envUnion`
+                 (E.envMap resh2 $ E.envUnionList $ maybeToList
+                                      $ m_variables <$> E.qenvFindTy pth mod_)
     vars       = visibleVars s
     xts        = [(x,t) | (x,(_,_,_,t,_))<- vars]
     bds        = cge_fenv g
     grd        = []
-    mod        = cge_mod g
-    cha        = cge_cha g
+    mod_       = cge_mod g
+    cha_       = cge_cha g
     ctx        = emptyContext
     pth        = extendAbsPath (cge_path g) n
     cst        = cge_consts g

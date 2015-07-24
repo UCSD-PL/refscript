@@ -58,6 +58,7 @@ import           Language.Nano.Locations hiding (val)
 import           Language.Nano.Names
 import           Language.Nano.Misc                      (fst4)
 import           Language.Nano.Program
+import           Language.Nano.CmdLine
 import           Language.Nano.Types              hiding (Exported)
 import           Language.Nano.Visitor
 import           Language.Nano.Typecheck.Types
@@ -81,7 +82,7 @@ import           Text.Parsec.Language                    (emptyDef)
 
 import           GHC.Generics
 
--- import           Debug.Trace                             ( trace, traceShow)
+import           Debug.Trace                             ( trace, traceShow)
 
 dot        = T.dot        lexer
 plus       = T.symbol     lexer "+"
@@ -149,7 +150,7 @@ aliasVarT (l, x)
 --
 -- PV: Insert your option parser here
 --
-optionP   = string "REALS" >> return RealOption
+-- optionP   = string "REALS" >> return RealOption
 
 iFaceP   :: Parser (Id SrcSpan, IfaceDefQ RK Reft)
 iFaceP
@@ -549,7 +550,7 @@ data PSpec l r
   | TAlias  (Id l, TAlias (RTypeQ RK r))
   | PAlias  (Id l, PAlias)
   | Qual    Qualifier
-  | Option  RscOption
+  | Option  Config
   | Invt    l (RTypeQ RK r)
   | CastSp  l (RTypeQ RK r)
   | Exported l
@@ -576,11 +577,15 @@ parseAnnot = go
     go (RawTAlias   (ss, _)) = TAlias  <$> patch2 ss <$> tAliasP
     go (RawPAlias   (ss, _)) = PAlias  <$> patch2 ss <$> pAliasP
     go (RawQual     (_ , _)) = Qual    <$>               qualifierP sortP
-    go (RawOption   (_ , _)) = Option  <$>               optionP
     go (RawInvt     (ss, _)) = Invt               ss <$> bareTypeP
     go (RawCast     (ss, _)) = CastSp             ss <$> bareTypeP
-    go (RawExported (ss, _)) = return  $ Exported ss
-    go (RawReadOnly (ss, _)) = return  $ RdOnly ss
+    go (RawExported (ss, _)) = return   $ Exported ss
+    go (RawReadOnly (ss, _)) = return   $ RdOnly ss
+    go (RawOption   (ss, s)) = optionP ss (trace ("PARSING" ++ s) s)
+
+optionP ss s = string s >> return (Option cfg)
+  where
+    cfg      = parseConfig (ss, s)
 
 
 patch2 ss (id,t)   = (fmap (const ss) id ,t)
@@ -746,7 +751,7 @@ mkCode' ss = Nano {
       , tAlias        = envFromList [ t | TAlias t <- anns ]
       , pAlias        = envFromList [ t | PAlias t <- anns ]
       , pQuals        =             [ t | Qual   t <- anns ]
-      , pOptions      =             [ t | Option t <- anns ]
+      , pConfig       = mconcat     [ c | Option c <- anns ]
       , invts         = [Loc (srcPos l) (ntrans f g t) | Invt l t <- anns ]
       , max_id        = ending_id
       , fullNames     = names

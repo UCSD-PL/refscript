@@ -71,6 +71,7 @@ parse fs next
         donePhase Loud "Parse Files"
         nextPhase r next
 
+
 ssa next p
   = do  r <- ssaTransform p
         donePhase Loud "SSA Transform"
@@ -259,7 +260,7 @@ consFun g (FunctionStmt l f xs body)
   = case envFindTy f g of
       Just spec -> do ft        <- cgFunTys l f xs spec
                       forM_ ft   $ consFun1 l g f xs body
-                      return     $ g
+                      return g
       Nothing   -> cgError $ errorMissingSpec (srcPos l) f
 
 consFun _ s

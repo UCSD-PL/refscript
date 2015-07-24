@@ -7,8 +7,25 @@ PROFOPTS="-rtsopts -auto-all -caf-all"
 
 TASTY=./dist/build/test/test
 
+
 ##############################################################################
+## STACK #####################################################################
 ##############################################################################
+
+quick:
+	stack build --ghc-options -O0
+
+build:
+	stack build 
+
+install:
+	stack install
+
+test:
+	stack test
+
+##############################################################################
+## CABAL #####################################################################
 ##############################################################################
 
 fast:
@@ -26,7 +43,7 @@ prof710:
 clean:
 	cabal clean
 
-test:
+test-py:
 	cd tests && ./regrtest.py -t $(THREADS) && cd ../
 
 docs:
@@ -36,7 +53,7 @@ lint:
 	hlint --colour --report .
 
 tags:
-	hasktags -b src/
+	hasktags -x -c src/
 
 tasty:
 	cabal configure -fdevel --enable-tests --disable-library-profiling
@@ -47,4 +64,3 @@ tasty-dist:
 	cabal configure -fdevel --enable-tests --disable-library-profiling -O2
 	cabal build
 	$(TASTY)
-

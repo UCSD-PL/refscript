@@ -58,6 +58,7 @@ import           Language.Nano.Locations hiding (val)
 import           Language.Nano.Names
 import           Language.Nano.Misc                      (fst4)
 import           Language.Nano.Program
+import           Language.Nano.CmdLine
 import           Language.Nano.Types              hiding (Exported)
 import           Language.Nano.Visitor
 import           Language.Nano.Typecheck.Types
@@ -81,7 +82,7 @@ import           Text.Parsec.Language                    (emptyDef)
 
 import           GHC.Generics
 
--- import           Debug.Trace                             ( trace, traceShow)
+import           Debug.Trace                             ( trace, traceShow)
 
 dot        = T.dot        lexer
 plus       = T.symbol     lexer "+"
@@ -137,19 +138,19 @@ aliasVarsP =  try (brackets avarsP)
   where
     avarsP = sepBy aliasVarP comma
 
-aliasVarP     = withSpan (,) (wordP $ \_ -> True)
+aliasVarP     = withSpan (,) (wordP $ const True)
 
 aliasVarT :: (SrcSpan, Symbol) -> Either TVar Symbol
 aliasVarT (l, x)
   | isTvar x' = Left  $ tvar l x
-  | otherwise = Right $ x
+  | otherwise = Right x
   where
     x'        = symbolString x
 
 --
 -- PV: Insert your option parser here
 --
-optionP   = string "REALS" >> return RealOption
+-- optionP   = string "REALS" >> return RealOption
 
 iFaceP   :: Parser (Id SrcSpan, IfaceDefQ RK Reft)
 iFaceP
@@ -209,7 +210,7 @@ qSymChars   = ['a' .. 'z'] ++
               ['0' .. '9'] ++
               ['_', '%', '#'] -- omitting '.'
 
-condIdP'  :: [Char] -> (String -> Bool) -> Parser Symbol
+condIdP'  :: String -> (String -> Bool) -> Parser Symbol
 condIdP' chars f
   = do c  <- try letter <|> oneOf ['_']
        cs <- many (satisfy (`elem` chars))
@@ -241,10 +242,10 @@ assignabilityP
   =  try (withinSpacesP (reserved "global"  ) >> return WriteGlobal)
  <|> try (withinSpacesP (reserved "local"   ) >> return WriteLocal )
  <|> try (withinSpacesP (reserved "readonly") >> return ReadOnly   )
- <|>     (return WriteGlobal)
+ <|>     return WriteGlobal
 
 postP p post
-  = (\x _ -> x) <$> p <*> post
+  = const <$> p <*> post
 
 ----------------------------------------------------------------------------------
 -- | RefTypes
@@ -254,11 +255,11 @@ postP p post
 ----------------------------------------------------------------------------------
 bareTypeP :: Parser (RTypeQ RK Reft)
 ----------------------------------------------------------------------------------
-bareTypeP = bareAllP $ bodyP
+bareTypeP = bareAllP bodyP
   where
     bodyP =  try bUnP
          <|> try (refP rUnP)
-         <|>     (xrefP rUnP)
+         <|>     xrefP rUnP
 
 rUnP        = mkU <$> parenNullP (bareTypeNoUnionP `sepBy1` plus) toN
   where
@@ -274,7 +275,9 @@ bUnP        = parenNullP (bareTypeNoUnionP `sepBy1` plus) toN >>= mkU
 
 -- FIXME: disallow functions in unions?
 -- | `bareTypeNoUnionP` parses a type that does not contain a union at the top-level.
-bareTypeNoUnionP = try funcSigP <|> (bareAllP $ bareAtomP bbaseP)
+bareTypeNoUnionP
+  =  (try funcSigP)
+ <|> (bareAllP $ bareAtomP bbaseP)
 
 -- | `optNullP` optionally parses "( `a` )?", where `a` is parsed by the input parser @pr@.
 parenNullP p f =  try (f <$> postP p question) <|> p
@@ -321,8 +324,8 @@ bareMethP
 
 
 bareArgP
-  =   (try boundTypeP)
- <|>  (argBind <$> try (bareTypeP))
+  =   try boundTypeP
+ <|>  (argBind <$> try bareTypeP)
 
 boundTypeP = do s <- symbol <$> identifierP
                 withinSpacesP colon
@@ -333,7 +336,7 @@ argBind t = B (rTypeValueVar t) t
 bareAtomP p
   =  try (xrefP  p)
  <|> try (refP p)
- <|>     (dummyP p)
+ <|>     dummyP p
 
 
 ----------------------------------------------------------------------------------
@@ -391,7 +394,7 @@ tvar l x = TV x l
 
 isTvar   = not . isLower . head
 
-wordP p  = condIdP ok p
+wordP    = condIdP ok
   where
     ok   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
@@ -440,7 +443,7 @@ indexP = xyP id colon sn
 -- | <[mut]> f<?>: t
 fieldEltP       = do
     x          <- symbol <$> binderP
-    o          <- maybe f_requiredR (\_ -> f_optionalR)
+    o          <- maybe f_requiredR (const f_optionalR)
               <$> optionMaybe (withinSpacesP $ char '?')
     _          <- colon
     m          <- option mut (toType <$> mutP)
@@ -547,7 +550,7 @@ data PSpec l r
   | TAlias  (Id l, TAlias (RTypeQ RK r))
   | PAlias  (Id l, PAlias)
   | Qual    Qualifier
-  | Option  RscOption
+  | Option  Config
   | Invt    l (RTypeQ RK r)
   | CastSp  l (RTypeQ RK r)
   | Exported l
@@ -573,12 +576,16 @@ parseAnnot = go
     go (RawClass    (ss, _)) = Class   <$> patch2 ss <$> classDeclP
     go (RawTAlias   (ss, _)) = TAlias  <$> patch2 ss <$> tAliasP
     go (RawPAlias   (ss, _)) = PAlias  <$> patch2 ss <$> pAliasP
-    go (RawQual     (_ , _)) = Qual    <$>               (qualifierP sortP)
-    go (RawOption   (_ , _)) = Option  <$>               optionP
+    go (RawQual     (_ , _)) = Qual    <$>               qualifierP sortP
     go (RawInvt     (ss, _)) = Invt               ss <$> bareTypeP
     go (RawCast     (ss, _)) = CastSp             ss <$> bareTypeP
-    go (RawExported (ss, _)) = return  $ Exported ss
-    go (RawReadOnly (ss, _)) = return  $ RdOnly ss
+    go (RawExported (ss, _)) = return   $ Exported ss
+    go (RawReadOnly (ss, _)) = return   $ RdOnly ss
+    go (RawOption   (ss, s)) = optionP ss (trace ("PARSING" ++ s) s)
+
+optionP ss s = string s >> return (Option cfg)
+  where
+    cfg      = parseConfig (ss, s)
 
 
 patch2 ss (id,t)   = (fmap (const ss) id ,t)
@@ -707,7 +714,7 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
     decodeOrDie s =
       case eitherDecode s :: Either String [Statement (SrcSpan, [RawSpec])] of
         Left msg -> Left  $ Crash [] $ "JSON decode error:\n" ++ msg
-        Right p  -> Right $ p
+        Right p  -> Right p
 
 
 --------------------------------------------------------------------------------------
@@ -718,7 +725,7 @@ parseIdFromJSON filename = decodeOrDie <$> getJSON filename
     decodeOrDie s =
       case eitherDecode s :: Either String [Id (SrcSpan, [RawSpec])] of
         Left msg -> Left  $ Crash [] $ "JSON decode error:\n" ++ msg
-        Right p  -> Right $ p
+        Right p  -> Right p
 
 
 ---------------------------------------------------------------------------------
@@ -744,7 +751,7 @@ mkCode' ss = Nano {
       , tAlias        = envFromList [ t | TAlias t <- anns ]
       , pAlias        = envFromList [ t | PAlias t <- anns ]
       , pQuals        =             [ t | Qual   t <- anns ]
-      , pOptions      =             [ t | Option t <- anns ]
+      , pConfig       = mconcat     [ c | Option c <- anns ]
       , invts         = [Loc (srcPos l) (ntrans f g t) | Invt l t <- anns ]
       , max_id        = ending_id
       , fullNames     = names
@@ -776,8 +783,8 @@ extractFact = go
     go (Class   (_,t)  ) = Just $ ClassAnn  t
     go (Iface   (_,t)  ) = Just $ IfaceAnn  t
     go (CastSp  _ t    ) = Just $ UserCast  t
-    go (Exported  _    ) = Just $ ExportedElt
-    go (RdOnly  _      ) = Just $ ReadOnlyVar
+    go (Exported  _    ) = Just   ExportedElt
+    go (RdOnly  _      ) = Just   ReadOnlyVar
     go (AnFunc  t      ) = Just $ FuncAnn   t
     go _                 = Nothing
 
@@ -855,10 +862,10 @@ parseAnnots :: [Statement (SrcSpan, [RawSpec])]
 --------------------------------------------------------------------------------------
 parseAnnots ss =
   case mapAccumL (mapAccumL f) (0,[]) ss of
-    ((_,[]),b) -> Right $ b
+    ((_,[]),b) -> Right b
     ((_,es),_) -> Left  $ Unsafe es
   where
-    f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
+    f st (ss,sp) = mapSnd (ss,) $ L.mapAccumL (parse ss) st sp
 
 --------------------------------------------------------------------------------------
 parse :: SrcSpan -> (PState, [Error]) -> RawSpec -> ((PState, [Error]), Spec)
@@ -869,10 +876,10 @@ parse _ (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
                   state <- getState
                   it    <- getInput
                   case it of
-                    ""  -> return $ (state, a)
+                    ""  -> return (state, a)
                     _   -> unexpected $ "trailing input: " ++ it
 
-    failLeft (Left err)      = ((st, (fromError err): errs), ErrorSpec)
+    failLeft (Left err)      = ((st, fromError err : errs), ErrorSpec)
     failLeft (Right (s, r))  = ((s, errs), r)
 
     -- Slight change from this one:
@@ -961,7 +968,7 @@ factTvars = go
 
 
 sortP
-  =   try (parens $ sortP)
+  =   try (parens   sortP)
   <|> try (string "@"    >> varSortP)
   -- <|> try (string "func" >> funcSortP)
  --  <|> try (fApp (Left listFTyCon) . single <$> brackets sortP)
@@ -990,4 +997,3 @@ fApp' ls
   | otherwise      = fTyconSort . symbolFTycon $ ls
   where
     s              = symbolString $ val ls
-

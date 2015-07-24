@@ -52,7 +52,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Types
-
+import           Language.Nano.CmdLine
 import           Language.Nano.Syntax
 import           Language.Nano.Syntax.PrettyPrint
 
@@ -118,7 +118,7 @@ data Nano a r = Nano {
   --
   -- ^ Options
   --
-  , pOptions  :: [RscOption]
+  , pConfig   :: Config
 
   } deriving (Functor) -- , Data, Typeable)
 

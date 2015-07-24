@@ -1,4 +1,4 @@
-# RefScript
+# refscript
 
 Refinement Types for Scripting Languages
 
@@ -6,7 +6,7 @@ Refinement Types for Scripting Languages
 
 ### Dependencies
 
-RefScript requires: 
+refscript requires: 
 
 * [ghc](http://www.haskell.org/ghc/) version 7.8.3 
 * [cabal](http://www.haskell.org/cabal/) version > 1.18
@@ -25,23 +25,31 @@ install a newer version from the following PPA:
     sudo apt-get update
     sudo apt-get install nodejs npm
 
-### Download and Build 
+### Download and Build (stack)
 
 Suppose you want to work in a directory `$ROOT`. First `cd $ROOT`, and then:
 
     git clone https://github.com/ucsd-progsys/liquid-fixpoint
-    git clone https://github.com/UCSD-PL/RefScript
-    cd RefScript
+    git clone https://github.com/UCSD-PL/refscript
+    cd refscript
+    stack install
+
+### Download and Build (cabal)
+
+Suppose you want to work in a directory `$ROOT`. First `cd $ROOT`, and then:
+
+    git clone https://github.com/ucsd-progsys/liquid-fixpoint
+    git clone https://github.com/UCSD-PL/refscript
+    cd refscript
     cabal sandbox init
     cabal sandbox add-source ../liquid-fixpoint
     cabal install
-	
 
 ### Building typescript (optional) 
 
-You can **optionally** get the latest version of our TypeScript to RefScript
+You can **optionally** get the latest version of our TypeScript to refscript
 translation phase, as an alternative to using the precompiled scripts in
-`RefScript/ext/tsc-bin`. In this case you will have to get the sources:
+`refscript/ext/tsc-bin`. In this case you will have to get the sources:
 
     git clone https://github.com/panagosg7/typescript
 
@@ -49,10 +57,10 @@ After acquiring the code you should have the following folder structure:
 
     ROOT
       ├── liquid-fixpoint
-      ├── RefScript
+      ├── refscript
       └── typescript
 
-If you downloaded the TypeScript to RefScript translation, you can now build it: 
+If you downloaded the TypeScript to refscript translation, you can now build it: 
 
     cd typescript          && jake
 
@@ -80,7 +88,7 @@ or, if this fails:
 
 ## Usage
 
-To run RefScript on a single TypeScript file:
+To run refscript on a single TypeScript file:
 
     rsc /path/to/file.ts
 
@@ -90,7 +98,7 @@ To run RefScript on a single TypeScript file:
 
 To build with profiling support it is recommended that a new sandbox is used, as all library dependencies will have to be compiled with profiling support.
 
-To do so, while in `$ROOT/RefScript`:
+To do so, while in `$ROOT/refscript`:
 
     mv .cabal-sandbox .cabal-sandbox.backup
     mv cabal.sandbox.config cabal.sandbox.backup.config
@@ -142,7 +150,7 @@ All specifications are added in comments of the following form:
 
     /*@ <specification> */
 
-RefScript currently allows the following forms of specifications:
+refscript currently allows the following forms of specifications:
 
 ### Signatures
 
@@ -367,7 +375,7 @@ We have some support for `rsc` in vim and emacs.
 
 ### Emacs
 
-There is a `flycheck` plugin for RefScript. 
+There is a `flycheck` plugin for refscript. 
 
 1. Copy `ext/emacs/typescript-rsc.el` into your emacs PATH.
 

@@ -1,6 +1,6 @@
 /// <reference path="include/d3.d.ts" />
 
-/*@ option REALS */
+/*@ option --real */
 
 //TODO: move to prelude? why does the annotation make rsc stall?
 /* Infinity :: {number | v = numeric_positive_infinity} */

@@ -35,8 +35,9 @@ import           Language.Nano.Syntax.PrettyPrint
 import qualified Data.ByteString.Lazy.Char8   as    B
 
 main :: IO a
-main = do cfg  <- cmdArgs config
-          run (verifier cfg) cfg
+main = do 
+  cfg  <- cmdArgs config
+  run (verifier cfg) cfg
 
 -------------------------------------------------------------------------------
 verifier           :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult Error)
@@ -44,9 +45,15 @@ verifier           :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult E
 verifier cfg f
   = json cfg f >>= \case
       Left  e     -> return (NoAnn, e)
-      Right jsons -> case cfg of
-                       TC     {} -> TC.verifyFile cfg   jsons
-                       Liquid {} -> LQ.verifyFile cfg f jsons
+      Right jsons -> verifyJsons cfg f jsons
+
+      -- case cfg of
+      --                 TC     {} -> TC.verifyFile cfg   jsons
+      --                 Liquid {} -> LQ.verifyFile cfg f jsons
+
+verifyJsons cfg f jsons
+  | typeCheck cfg = TC.verifyFile cfg   jsons
+  | otherwise     = LQ.verifyFile cfg f jsons
 
 -------------------------------------------------------------------------------
 json :: Config -> FilePath -> IO (Either (F.FixResult Error) [FilePath])

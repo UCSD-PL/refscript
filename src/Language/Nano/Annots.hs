@@ -24,7 +24,7 @@ module Language.Nano.Annots (
   , factRTypes
 
   -- Options
-  , RscOption (..)
+  -- , RscOption (..)
 
 ) where
 
@@ -266,5 +266,5 @@ factRTypes = go
 -- | RSC Options
 -----------------------------------------------------------------------------
 
-data RscOption = RealOption
-    deriving (Eq, Show, Data, Typeable)
+-- data RscOption = RealOption
+--     deriving (Eq, Show, Data, Typeable)

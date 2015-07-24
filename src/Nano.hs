@@ -35,8 +35,9 @@ import           Language.Nano.Syntax.PrettyPrint
 import qualified Data.ByteString.Lazy.Char8   as    B
 
 main :: IO a
-main = do cfg  <- cmdArgs config
-          run (verifier cfg) cfg
+main = do 
+  cfg  <- cmdArgs config
+  run (verifier cfg) cfg
 
 -------------------------------------------------------------------------------
 verifier           :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult Error)

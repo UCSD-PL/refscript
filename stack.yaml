@@ -7,7 +7,7 @@
 resolver: nightly-2015-06-16
 
 packages:
-- ../../../liquid/liquid-fixpoint
+- ../liquid-fixpoint
 - .
 extra-deps:
 - intern-0.9.1.4

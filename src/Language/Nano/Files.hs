@@ -17,7 +17,7 @@ module Language.Nano.Files (
 import Control.Applicative
 import System.FilePath
 
-import Paths_RefScript
+import Paths_refscript
 
 getIncludePath f   = getDataFileName $ "include" </> f
 getPreludeTSPath   = getIncludePath "prelude.ts"

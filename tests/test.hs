@@ -4,6 +4,7 @@
 
 module Main where
 
+import Data.List (isInfixOf)
 import Control.Applicative
 import System.Directory
 import System.Environment
@@ -23,8 +24,24 @@ unitTests
     , testGroup "neg" <$> dirTests rscCmd "tests/neg"  []  (ExitFailure 1)
    ]
 
-isTest   :: FilePath -> Bool
-isTest f = takeExtension f `elem` [".ts"]
+isTest    :: FilePath -> Bool
+isTest f  = isTs && isCat 
+  where
+    isTs  = takeExtension f `elem` [".ts"]
+    isCat = any (`isInfixOf` f) testCategories
+
+testCategories = [ "objects"
+                 , "arrays"
+                 , "classes"
+                 , "loops"
+                 , "misc"
+                 , "operators"
+                 , "simple"
+                 , "unions"
+                 , "typealias"
+                 , "fb"
+                 , "inclusion"
+                 ]
 
 rscCmd :: TestCmd
 rscCmd bin dir file = printf "cd %s && %s %s" dir bin file

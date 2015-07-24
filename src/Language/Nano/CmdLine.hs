@@ -19,6 +19,7 @@ data Config
            , extraInvs   :: Bool           -- ^ add extra invariants to object types
            , renderAnns  :: Bool           -- ^ render annotations
            , prelude     :: Maybe FilePath -- ^ use this prelude file
+           , real        :: Bool           -- ^ use real-arithmetic
            }
   deriving (Data, Typeable, Show, Eq)
 
@@ -53,6 +54,8 @@ liquid = Liquid {
  , renderAnns   = def  &= help "Render annotations"
 
  , prelude      = def  &= help "Use given prelude.ts file (debug)"
+ 
+ , real         = def  &= help "Use real arithmetic in SMT solver (slow!)"
 
  } &= help    "RefScript Refinement Type Checker"
 
@@ -65,14 +68,6 @@ config = modes [
                ]
             &= help    "rsc is an optional refinement type checker for TypeScript"
             &= program "rsc"
-            &= summary "rsc © Copyright 2013-14 Regents of the University of California."
+            &= summary "rsc © Copyright 2013-15 Regents of the University of California."
             &= verbosity
 
--- getOpts :: IO Config
--- getOpts = do md <- cmdArgs config
---              whenLoud $ putStrLn $ banner md
---              return   $ md
-
--- banner args =  "rsc © Copyright 2013-14 Regents of the University of California.\n"
---             ++ "All Rights Reserved.\n"
---             ++ "rsc" ++ show args ++ "\n"

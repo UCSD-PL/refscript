@@ -38,87 +38,83 @@ import           Text.PrettyPrint.HughesPJ
 
 
 -- | Type parameter
-data TParam q r = TP  { tp_sym    :: F.Symbol               -- Parameter symbol
-                      , tp_constr :: RTypeQ q r             -- Constraint
-                      , tp_loc    :: SrcSpan 
-                      } deriving (Data, Typeable, Functor, Foldable, Traversable)
+data TVarQ q r        = TV { tv_sym    :: F.Symbol                -- Parameter symbol
+                           , tv_loc    :: SrcSpan 
+                           } 
+                        deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data TIntrinsic = TAny | TString | TNumber | TBoolean | TVoid | TUndefined | TNull deriving (Eq, Show, Data, Typeable)
-
-
--- | (Raw) Refined Types
-data RTypeQ q r = Intrinsic         TIntrinsic              -- Intrinsic
-                                    r                       -- Refinement
-
-                | StringLitType     String                  -- String literal type
-
-                | TypeParam         (TParam q r) r
-
-                | UnionType         [RTypeQ q r]            -- Union members
-
-                | ITypeWithBase     [RTypeQ q r]            -- Type parameters
-                                    [ObjectTypeQ q r]       -- Base types
-                                    r 
-
-                | TypeReference     (GenericTypeQ q r) r 
-
-                | ITypeWithMembers  (TypeMembersQ q r) r
-
-                {- Internal -}
-
-                | TExp              F.Expr
-
-                {- TODO: Fill in with more cases -}
-
-  deriving (Data, Typeable, Functor, Foldable, Traversable)
+data BTVarQ q r       = BTV { btv_sym    :: F.Symbol              -- Parameter symbol
+                            , btv_constr :: Maybe (RTypeQ q r)    -- Constraint
+                            , btv_loc    :: SrcSpan 
+                            } 
+                        deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 
-type GenericTypeQ q r = (QN q, [RTypeQ q r])
-type ObjectTypeQ  q r = RTypeQ q r
-type TypeParamQ   q r = RTypeQ q r
-
-data ArrowSigQ    q r = ArrSig [TypeParamQ q r] [BindQ q r] (RTypeQ q r) r  deriving (Data, Typeable, Functor, Foldable, Traversable)
-data BindQ        q r = B { b_sym  :: F.Symbol, b_type :: !(RTypeQ  q r) } deriving (Eq, Data, Typeable, Functor, Foldable, Traversable)
-
-type FieldSigQ    q r = (F.Symbol, OptionalityQ q, MutabilityQ q, RTypeQ q r)
-type CallSigQ     q r = (F.Symbol, ArrowSigQ q r)
-type CtorSigQ     q r = ArrowSigQ q r
-
-type TypeMembersQ q r = ( [FieldSigQ q r]       -- properties
-                        , [CallSigQ  q r]       -- call signatures
-                        , [CtorSigQ  q r]       -- contructor signatures
-                        , Maybe (RTypeQ q r)    -- string indexer
-                        , Maybe (RTypeQ q r)    -- numeric indexer
-                        ) 
+data TPrim            = TString | TStrLit String | TNumber | TBoolean | TBV32 | TVoid | TUndefined | TNull 
+                      {- Internal -}
+                      | TTop | TBot 
+                        deriving (Eq, Show, Data, Typeable)
 
 
+-- | Refined Types
+data RTypeQ q r       = TPrim TPrim r                           -- Primitive
+                      | TVar  (TVarQ q r) r                     -- Type parameter
+                      | TOr   [RTypeQ q r]                      -- Union type
+                      | TAnd  [RTypeQ q r]                      -- Intersection type
+                      | TRef  (TGenQ q r) r                     -- Type Reference
+                      | TObj  (TypeMembersQ q r) r              -- Object type
+                      | TType [TGenQ q r]                       -- Interface or class Type
+                      | TAll  (BTVarQ q r) (RTypeQ q r)         -- Forall [A <: T] . S
+                      | TFun  [BindQ q r] (RTypeQ q r) r        -- Function type
+                      {- Internal -}
+                      | TExp  F.Expr
+                        deriving (Data, Typeable, Functor, Foldable, Traversable)
 
--- | 
-type RType            = RTypeQ AK
-type Type             = RType ()
-type Bind             = BindQ AK
-type TypeMembers r    = TypeMembersQ AK r
+data TGenQ q r        = Gen (QN q) [RTypeQ q r] deriving (Data, Typeable, Functor, Foldable, Traversable)
 
+data BTGenQ q r       = BGen (QN q) [BTVarQ q r] deriving (Data, Typeable, Functor, Foldable, Traversable)
 
----------------------------------------------------------------------------------
--- | Type (Class, Interface) definitions
----------------------------------------------------------------------------------
+data BindQ q r        = B { b_sym  :: F.Symbol
+                          , b_type :: RTypeQ  q r 
+                          } 
+                        deriving (Eq, Data, Typeable, Functor, Foldable, Traversable)
 
-data TypeDeclQ q r = ClassDecl     F.Symbol                       -- Name
-                                   [TParam q r]                   -- Type parameters
-                                   (Maybe (GenericTypeQ q r))     -- Extends
-                                   [GenericTypeQ q r]             -- Implements
-                                   (TypeMembersQ q r)             -- Body
+data TypeMembersQ q r = TM (F.SEnv (FieldInfoQ q r))            -- Properties
+                           (F.SEnv (MethodInfoQ q r))           -- Method signatures
+                           (Maybe (RTypeQ q r))                 -- Call signatures
+                           (Maybe (RTypeQ q r))                 -- Contructor signatures
+                           (Maybe (RTypeQ q r))                 -- String indexer
+                           (Maybe (RTypeQ q r))                 -- Numeric indexer
+                        deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-                   | InterfaceDecl F.Symbol                       -- Name
-                                   [TParam q r]                   -- Type parameters
-                                   [GenericTypeQ q r]             -- Extends
-                                   (TypeMembersQ q r)             -- Body
+data FieldInfoQ q r   = FI [MemberMod]                          -- Modifiers
+                           (RTypeQ q r)                         -- Mutability                           
+                           (RTypeQ q r)                         -- Type
+                        deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-  deriving (Data, Typeable, Foldable, Traversable, Functor)
+data MethodInfoQ q r  = MI [MemberMod]                          -- Modifiers
+                           (RTypeQ q r)                         -- Mutability                           
+                           (RTypeQ q r)                         -- Type
+                        deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data Modifier = Public | Private | Abstract | Final | Static | Local | Exported 
-  deriving (Data, Typeable)
+data MemberMod        = {- Sharing -} 
+                        Private 
+                        {- Optional -}
+                      | Optional
+                        {- Static -}
+                      | Static
+                        deriving (Eq, Data, Typeable)
+
+data TypeDeclQ q r    = TD  TypeDeclKind              -- Class or interface
+                            (BTGenQ q r)              -- Name & bounded type parameters
+                            (HeritageQ q r)           -- Extends
+                            (TypeMembersQ q r)        -- Body
+                        deriving (Data, Typeable, Foldable, Traversable, Functor)
+
+type HeritageQ q r    = (Maybe (TGenQ q r), [TGenQ q r])
+
+data TypeDeclKind     = InterfaceKind | ClassKind
+                        deriving (Data, Typeable)
 
 
 ---------------------------------------------------------------------------------
@@ -131,6 +127,24 @@ data EnumDef = EnumDef {
     , e_mapping    :: Env (Expression ())
 
 } deriving (Data, Typeable)
+
+
+-- | Aliases
+--
+type RType r          = RTypeQ AK r
+type Bind r           = BindQ AK r
+type TGen r           = TGenQ AK r
+type BTGen r          = BTGenQ AK r
+type TypeMembers r    = TypeMembersQ AK r
+type TVar r           = TVarQ AK r
+type BTVar r          = BTVarQ AK r
+
+type TypeDecl r       = TypeDeclQ AK r
+type FieldInfo r      = FieldInfoQ AK r
+
+type Type             = RType ()
+
+type Mutability       = Type
 
 
 ------------------------------------------------------------------------------------------
@@ -150,12 +164,14 @@ data EnumDef = EnumDef {
 --
 data ModuleDefQ q r = ModuleDef {
   --
-  -- ^ Contents of a module (local and exported)
+  -- ^ Contents of a module 
+  --
+  --   XXX: local/exported info not included atm
   --
   --   * Interfaces are _not_ included here (because thery don't appear as
   --   bindings in the language)
   --
-    m_variables   :: Env ([Modifier], Assignability, RTypeQ q r, Initialization)
+    m_variables   :: Env (VarInfo q r) 
   --
   -- ^ Types
   --
@@ -187,53 +203,45 @@ instance Monoid (ModuleDefQ q r) where
 
 data Assignability
   --
-  -- ^ Import,  cannot be modified
+  -- ^ Import, cannot be modified
   -- ^ Contains: FunctionStmts, Measures, Classes, Modules.
   -- ^ Can appear in refinements
   --
-  = ReadOnly
-  --
-  -- ^ Like ReadOnly but for function declarations with no body
-  -- ^ Can appear in refinements.
-  --
-  | ImportDecl
+  = Ambient
+--   --
+--   -- ^ Like ReadOnly but for function declarations with no body
+--   -- ^ Can appear in refinements.
+--   --
+--   | ImportDecl
   --
   -- ^ written in local-scope, can be SSA-ed
   -- ^ Can appear in refinements
   --
   | WriteLocal
   --
-  -- ^ Local but not in current scope.
-  -- ^ CANNOT appear in refinements, cannot be read at SSA
+  -- ^ Declared in uouter scope
+  -- ^ CANNOT appear in refinements, NOT SSA-ed
   --
   | ForeignLocal
   --
-  -- ^ Written in non-local-scope, cannot do SSA
-  -- ^ CANNOT appear in refinements
+  -- ^ Written in non-local-scope
+  -- ^ CANNOT appear in refinements, NOT SSA-ed
   --
   | WriteGlobal
-  --
-  -- ^ Used to denote return variable
-  -- ^ CANNOT appear in refinements
-  --
+--   --
+--   -- ^ Used to denote return variable
+--   -- ^ CANNOT appear in refinements
+--   --
   | ReturnVar
   deriving (Show, Eq, Data, Typeable)
 
 
----------------------------------------------------------------------------------
--- | Mutability
----------------------------------------------------------------------------------
 
-type MutabilityQ q = RTypeQ q ()
-type Mutability    = Type
-
-
----------------------------------------------------------------------------------
--- | Optional Argument
----------------------------------------------------------------------------------
-
-type OptionalityQ q = RTypeQ q ()
-type Optionality    = Type
+data VarInfo q r = VI { 
+    v_asgn :: Assignability
+  , v_init :: Initialization
+  , v_type :: RTypeQ q r 
+  } deriving (Data, Typeable, Functor)
 
 
 ---------------------------------------------------------------------------------
@@ -244,10 +252,9 @@ data Initialization = Initialized | Uninitialized
   deriving (Show, Eq, Data, Typeable)
 
 instance Monoid Initialization where
-  mempty                                = Uninitialized
-  _             `mappend` Uninitialized = Uninitialized
-  Uninitialized `mappend` _             = Uninitialized
-  Initialized   `mappend` Initialized   = Initialized
+  mempty                              = Uninitialized
+  Initialized `mappend` Initialized   = Initialized
+  _           `mappend` _             = Uninitialized
 
 
 ---------------------------------------------------------------------------------
@@ -255,21 +262,33 @@ instance Monoid Initialization where
 ---------------------------------------------------------------------------------
 
 
-instance Eq q => Eq (TParam q r) where
-  TP s1 c1 _ == TP s2 c2 _ = s1 == s2 && c1 == c2
+instance Eq q => Eq (TVarQ q r) where
+  TV s1 _ == TV s2 _ = s1 == s2
 
-instance IsLocated (TParam q r) where
-  srcPos = tp_loc
+instance IsLocated (TVarQ q r) where
+  srcPos = tv_loc
 
-instance Hashable (TParam q r) where
-  hashWithSalt i α = hashWithSalt i $ tp_sym α
+instance IsLocated (BTVarQ q r) where
+  srcPos = btv_loc
+
+instance Hashable (TVarQ q r) where
+  hashWithSalt i α = hashWithSalt i $ tv_sym α
 
 
-instance F.Symbolic (TParam q r) where
-  symbol = tp_sym
+instance F.Symbolic (TVarQ q r) where
+  symbol = tv_sym
+
+instance F.Symbolic (BTVarQ q r) where
+  symbol = btv_sym
 
 instance F.Symbolic a => F.Symbolic (Located a) where
   symbol = F.symbol . val
+
+instance F.Symbolic (TGenQ q r) where
+  symbol (Gen n _) = F.symbol n
+
+instance F.Symbolic (BTGenQ q r) where
+  symbol (BGen n _) = F.symbol n
 
 
 -- Ignoring refinements in equality check
@@ -280,6 +299,8 @@ instance Eq q => Eq (RTypeQ  q r) where
 instance Eq q => Ord (RTypeQ q r) where
   compare = undefined -- compare `on` rTypeCode
 
+instance Default SrcSpan where
+  def = srcPos dummySpan 
 
 -----------------------------------------------------------------------
 -- | Operator Types
@@ -361,7 +382,7 @@ data Alias a s t = Alias {
   , al_body   :: !t             -- ^ alias body
   } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
--- type TAlias t    = Alias TParam F.Symbol t
+-- type TAlias t    = Alias TVar F.Symbol t
 -- type PAlias      = Alias ()   F.Symbol F.Pred
 -- type TAliasEnv t = Env (TAlias t)
 -- type PAliasEnv   = Env PAlias

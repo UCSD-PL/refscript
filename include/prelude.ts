@@ -57,15 +57,13 @@ declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 declare function builtin_BIBracketAssign<A>(a: A[], n: number, v: A): void;
 
 /*@ builtin_BISetProp :: 
-    /\ forall A M. ([UniqueMutable] { f ? : [M] A }, A) => { A | true }
-    /\ forall A M. ([M] { f ? : [Mutable] A }      , A) => { A | true }
+    /\ forall A M. ([UniqueMutable] { f ? : [M]       A }, A) => { A | true }
+    /\ forall A M. ([M]             { f ? : [Mutable] A }, A) => { A | true }
  */
 declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
-/*@ builtin_BIArrayLit :: 
-    forall M A. (A) => {v: Array<M,A> | (len v) = builtin_BINumArgs }
- */
-declare function builtin_BIArrayLit<A>(a: A): A[];
+/*@ builtin_BIArrayLit :: <M extends ReadOnly, A>(x: A) => {v: Array<M,A> | (len v) = builtin_BINumArgs } */
+declare function builtin_BIArrayLit<M extends ReadOnly, A>(a: A): Array</*M,*/A>;
 
 /*@ builtin_BICondExpr :: 
     forall C T . (c: C, t: T, x: T, y: T) => { v: T | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) } 

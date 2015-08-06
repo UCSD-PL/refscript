@@ -48,12 +48,6 @@ class EnvLike r t where
   parent          :: t r -> Maybe (t r)
 
 
-data EnvEntry r = EE { 
-    ee_asgn :: Assignability 
-  , ee_init :: Initialization
-  , ee_type :: RType r
-  } deriving (Functor)
-
 
 instance (F.Reftable r, PP r) => PP (EnvEntry r) where  
   pp (EE _ _ t) = pp t

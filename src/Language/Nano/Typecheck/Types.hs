@@ -423,7 +423,7 @@ instance (F.Reftable r, PP r) => PP (TGenQ q r) where
 instance (F.Reftable r, PP r) => PP (BTGenQ q r) where
   pp (BGen x ts) = pp x <> ppArgs angles comma ts
 
-instance (F.Reftable r, PP r) => PP (TVarQ q r) where 
+instance PP TVar where 
   pp = pprint . F.symbol
 
 instance (F.Reftable r, PP r) => PP (BTVarQ q r) where 
@@ -511,7 +511,7 @@ instance (PP r, F.Reftable r) => PP (ModuleDef r) where
 
 toTV  (BTV s _ l) = TV s l
 
-tVar :: (F.Reftable r) => TVar r -> RType r
+tVar :: (F.Reftable r) => TVar -> RType r
 tVar = (`TVar` fTop) 
 
 tNum, tBV32, tBool, tString, tTop, tVoid, tBot, tUndef, tNull, tErr :: F.Reftable r => RTypeQ q r

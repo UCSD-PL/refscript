@@ -38,10 +38,10 @@ import           Text.PrettyPrint.HughesPJ
 
 
 -- | Type parameter
-data TVarQ q r        = TV { tv_sym    :: F.Symbol                -- Parameter symbol
+data TVar             = TV { tv_sym    :: F.Symbol                -- Parameter symbol
                            , tv_loc    :: SrcSpan 
                            } 
-                        deriving (Data, Typeable, Functor, Foldable, Traversable)
+                        deriving (Data, Typeable)
 
 data BTVarQ q r       = BTV { btv_sym    :: F.Symbol              -- Parameter symbol
                             , btv_constr :: Maybe (RTypeQ q r)    -- Constraint
@@ -58,7 +58,7 @@ data TPrim            = TString | TStrLit String | TNumber | TBoolean | TBV32 | 
 
 -- | Refined Types
 data RTypeQ q r       = TPrim TPrim r                           -- Primitive
-                      | TVar  (TVarQ q r) r                     -- Type parameter
+                      | TVar  TVar r                     -- Type parameter
                       | TOr   [RTypeQ q r]                      -- Union type
                       | TAnd  [RTypeQ q r]                      -- Intersection type
                       | TRef  (TGenQ q r) r                     -- Type Reference
@@ -136,7 +136,6 @@ type Bind r           = BindQ AK r
 type TGen r           = TGenQ AK r
 type BTGen r          = BTGenQ AK r
 type TypeMembers r    = TypeMembersQ AK r
-type TVar r           = TVarQ AK r
 type BTVar r          = BTVarQ AK r
 
 type TypeDecl r       = TypeDeclQ AK r
@@ -262,20 +261,20 @@ instance Monoid Initialization where
 ---------------------------------------------------------------------------------
 
 
-instance Eq q => Eq (TVarQ q r) where
+instance Eq TVar where
   TV s1 _ == TV s2 _ = s1 == s2
 
-instance IsLocated (TVarQ q r) where
+instance IsLocated TVar where
   srcPos = tv_loc
 
 instance IsLocated (BTVarQ q r) where
   srcPos = btv_loc
 
-instance Hashable (TVarQ q r) where
+instance Hashable TVar where
   hashWithSalt i α = hashWithSalt i $ tv_sym α
 
 
-instance F.Symbolic (TVarQ q r) where
+instance F.Symbolic TVar where
   symbol = tv_sym
 
 instance F.Symbolic (BTVarQ q r) where
@@ -382,10 +381,10 @@ data Alias a s t = Alias {
   , al_body   :: !t             -- ^ alias body
   } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
--- type TAlias t    = Alias TVar F.Symbol t
--- type PAlias      = Alias ()   F.Symbol F.Pred
--- type TAliasEnv t = Env (TAlias t)
--- type PAliasEnv   = Env PAlias
+type TAlias t    = Alias TVar F.Symbol t
+type PAlias      = Alias ()   F.Symbol F.Pred
+type TAliasEnv t = Env (TAlias t)
+type PAliasEnv   = Env PAlias
 
 instance IsLocated (Alias a s t) where
   srcPos = srcPos . al_name

@@ -26,7 +26,6 @@ module Language.Nano.Program (
   -- * Types
   , SyntaxKind(..)
   , MemberKind(..)
-  , VarInfo
 
   -- * CHA
   , ClassHierarchy (..)
@@ -127,7 +126,6 @@ newtype Source a = Src [Statement a]
   deriving (Data, Typeable)
 
 
-
 type NanoBareRelR r = Nano  (AnnRel  r) r       -- ^ After parse (relative names)
 type NanoBareR r    = Nano  (AnnBare r) r       -- ^ After Parse
 type NanoSSAR r     = Nano  (AnnSSA  r) r       -- ^ After SSA
@@ -143,11 +141,8 @@ type UNanoType      = NanoTypeR ()
 
 
 data ClassHierarchy r = ClassHierarchy {
-
-    c_graph       :: Gr (IfaceDefQ AK r) ()
-
+    c_graph       :: Gr (TypeDeclQ AK r) ()
   , c_nodesToKeys :: HM.HashMap AbsName Int
-
   }
 
 instance Default (ClassHierarchy r) where
@@ -191,7 +186,7 @@ instance PP t => PP (I.IntMap t) where
 instance PP t => PP (F.SEnv t) where
   pp m = vcat $ pp <$> F.toListSEnv m
 
-instance PP (ClassHierarchy r) where
+instance (F.Reftable r, PP r) => PP (ClassHierarchy r) where
   pp (ClassHierarchy g _)   =  text "***********************************************"
                            $+$ text "Class Hierarchy"
                            $+$ text "***********************************************"
@@ -199,10 +194,7 @@ instance PP (ClassHierarchy r) where
     where
       ppEdge (a,b)          =  ppNode a <+> text "->" <+> ppNode b
       ppNode                =  ppSig . lab' . context g
-      ppSig (ID n _ vs _ _) =  pp n <> optPpArgs vs
-      angles p              =  char '<' <> p <> char '>'
-      optPpArgs []          =  text ""
-      optPpArgs vs          =  ppArgs angles comma vs
+      ppSig (TD _ n _ _)    =  pp n
 
 
 ---------------------------------------------------------------------
@@ -466,7 +458,5 @@ instance PP SyntaxKind where
   pp EnumDefKind      = text "EnumDefKind"
   pp AmbVarDeclKind   = text "AmbVarDeclKind"
 
-
 data MemberKind = MemDefinition | MemDeclaration deriving ( Eq )
 
-type VarInfo r = (SyntaxKind, Visibility, Assignability, RType r, Initialization)

@@ -61,13 +61,7 @@ module Language.Nano.Typecheck.Types (
   , requiredMember, optionalMember
 
   -- * Operator Types
-  , infixOpId 
-  , prefixOpId 
-  , builtinOpId 
-  , arrayLitTy
-  , objLitTy
-  , setPropTy
-  , localTy
+  , infixOpId, prefixOpId, builtinOpId, arrayLitTy, objLitTy, setPropTy, localTy
 
   -- * Builtin: Binders
   , mkId, argId, mkArgTy, returnTy
@@ -189,13 +183,12 @@ instance F.Reftable r => ExprReftable BV.Bv r where
   uexprReft = F.ofReft . F.uexprReft
 
 
-funTys l f xs ft 
-  = case bkFuns ft of
-      Nothing -> Left $ errorNonFunction (srcPos l) f ft 
-      Just ts -> 
-        case partitionEithers [funTy l xs t | t <- ts] of 
-          ([], fts) -> Right $ zip ([0..] :: [Int]) fts
-          (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
+funTys l f xs ft | Just ts <- bkFuns ft
+                 = case partitionEithers [funTy l xs t | t <- ts] of 
+                     ([], fts) -> Right $ zip ([0..] :: [Int]) fts
+                     (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
+                 | otherwise
+                 = Left $ errorNonFunction (srcPos l) f ft 
 
 
 funTy l xs (αs, yts, t) =
@@ -633,20 +626,15 @@ setPropTy :: (F.Reftable r, IsLocated l) => l -> F.Symbol -> RType r -> RType r
 --------------------------------------------------------------------------------------------
 setPropTy l f ty = mkAll [bvt, bvm] t
   where
-    ft    = TFun [b1, b2] t fTop
-
-    b1    = B (F.symbol "o") $ TObj (fromFieldList [(f, FI [Optional] m t)]) fTop
-    b2    = B (F.symbol "x") $ t
-    m    :: F.Reftable r => RType r
-    m     = toTTV bvm
-    t     = toTTV bvt
-
-    bvt   = BTV (F.symbol "A") Nothing     def
-    bvm  :: F.Reftable r => BTVar r 
-    bvm   = BTV (F.symbol "M") (Just tMut) def
-
-    toTTV :: F.Reftable r => BTVar r -> RType r
-    toTTV = (`TVar` fTop) . toTV
+    ft           = TFun [b1, b2] t fTop
+    b1           = B (F.symbol "o") $ TObj (fromFieldList [(f, FI [Optional] m t)]) fTop
+    b2           = B (F.symbol "x") $ t
+    m            = toTTV bvm :: F.Reftable r => RType r
+    t            = toTTV bvt
+    bvt          = BTV (F.symbol "A") Nothing     def
+    bvm          = BTV (F.symbol "M") (Just tMut) def :: F.Reftable r => BTVar r 
+    toTTV        :: F.Reftable r => BTVar r -> RType r
+    toTTV        = (`TVar` fTop) . toTV
 
 --------------------------------------------------------------------------------------------
 fromFieldList :: (F.Symbolic s) => [(s, FieldInfo r)] -> TypeMembers r
@@ -728,11 +716,8 @@ prefixOpId PrefixTypeof     = builtinId "PrefixTypeof"
 prefixOpId PrefixBNot       = builtinId "PrefixBNot"
 prefixOpId o                = errorstar $ "prefixOpId: Cannot handle: " ++ ppshow o
 
-
-mkId            = Id (initialPos "") 
-builtinId       = mkId . ("builtin_" ++)
-
-
+mkId      = Id (initialPos "") 
+builtinId = mkId . ("builtin_" ++)
 
 
 -- | BitVectors

@@ -20,7 +20,7 @@ module Language.Nano.Annots (
   , AnnQ, AnnR, AnnRel, AnnBare, UAnnBare, AnnSSA , UAnnSSA
   , AnnType, UAnnType, AnnInfo, UAnnInfo
 
-  -- * Deconstructing Facts
+  -- * Gather fact types
   , factRTypes
 
   -- Options
@@ -30,6 +30,7 @@ module Language.Nano.Annots (
 
 import           Control.Applicative            hiding (empty)
 import           Data.Default
+import           Data.Maybe                     (maybeToList)
 import           Data.Monoid
 import qualified Data.Map.Strict                as M
 import qualified Data.IntMap.Strict             as I
@@ -59,7 +60,7 @@ data CastQ q r = CNo                                            -- .
                | CDead { err :: Error     , tgt :: RTypeQ q r } -- |dead code|
                | CUp   { org :: RTypeQ q r, tgt :: RTypeQ q r } -- <t1 UP t2>
                | CDn   { org :: RTypeQ q r, tgt :: RTypeQ q r } -- <t1 DN t2>
-               deriving (Eq, Show, Data, Typeable, Functor)
+               deriving (Eq, Data, Typeable, Functor)
 
 type Cast  = CastQ AK   -- Version with absolute types
 
@@ -127,33 +128,38 @@ data FactQ q r
   | PhiVarTC    !(Var r)
   | PhiVarTy    !(Var r, RTypeQ q ())
   | PhiPost     ![(Var r, Var r, Var r)]
+
   -- Unification
   | TypInst     Int !IContext ![RTypeQ q r]
+
   -- Overloading
-  | EltOverload !IContext  !(TypeMemberQ q r)
+  | EltOverload !IContext  !(MethodInfoQ q r)
   | Overload    !IContext  !(RTypeQ q r)
+
   -- Type annotations
   | VarAnn      !(Assignability, Maybe (RTypeQ q r))
   | AmbVarAnn   !(RTypeQ q r)
+
   -- Class member annotations
-  | FieldAnn    !(TypeMemberQ q r)
-  | MethAnn     !(TypeMemberQ q r) 
-  | StatAnn     !(TypeMemberQ q r) 
-  | ConsAnn     !(TypeMemberQ q r)
+  | FieldAnn    !(FieldInfoQ q r)
+  | MethAnn     !(MethodInfoQ q r) 
+  | ConsAnn     !(RTypeQ q r)
     
   | UserCast    !(RTypeQ q r)
   | FuncAnn     !(RTypeQ q r)
   | TCast       !IContext  !(CastQ q r)
+
   -- Named type annotation
-  | IfaceAnn    !(IfaceDefQ q r)
-  | ClassAnn    !(ClassSigQ q r)
+  | TypeAnn     !(TypeDeclQ q r)
+
   | ExportedElt
   | ReadOnlyVar
   | ModuleAnn   !(F.Symbol)
   | EnumAnn     !(F.Symbol)
+
   -- Auxiliary
   | BypassUnique
-    deriving (Eq, Show, Data, Typeable)
+    deriving (Data, Typeable)
 
 type Fact      = FactQ AK
 type UFact     = Fact ()
@@ -181,9 +187,6 @@ type UAnnInfo  = AnnInfo ()
 newtype SsaInfo r = SI (Var r) deriving (Ord, Typeable, Data)
 type    Var     r = Id (AnnSSA r)
 
-instance Show r => Show (SsaInfo r) where
-  show (SI v) = show v
-
 instance PP (SsaInfo r) where
   pp (SI i) =  pp $ fmap (const ()) i
 
@@ -197,9 +200,6 @@ instance HasAnnotation (Annot b) where
 instance Default a => Default (Annot b a) where
   def = Ann def def []
 
-instance Default SrcSpan where
-  def = srcPos dummySpan
-  
 instance Ord (AnnSSA  r) where 
   compare (Ann i1 s1 _) (Ann i2 s2 _) = compare (i1,s1) (i2,s2)
 
@@ -208,29 +208,27 @@ instance Eq (Annot a SrcSpan) where
 
 
 instance (F.Reftable r, PP r) => PP (Fact r) where
-  pp (PhiVar x)        = text "phi"                    <+> pp x
-  pp (PhiVarTy x)      = text "phi-ty"                 <+> pp x
-  pp (PhiVarTC x)      = text "phi-tc"                 <+> pp x
-  pp (PhiPost _)       = text "phi-post"
-  pp (TypInst i ξ ts)  = text "inst"                   <+> pp i <+> pp ξ <+> pp ts 
-  pp (Overload ξ i)    = text "overload"               <+> pp ξ <+> pp i
-  pp (EltOverload ξ i) = text "elt_overload"           <+> pp ξ <+> pp i
-  pp (TCast  ξ c)      = text "cast"                   <+> pp ξ <+> pp c
-  pp (VarAnn (_,t))    = text "Var Annotation"         <+> pp t
-  pp (AmbVarAnn t)     = text "Amb Var Annotation"     <+> pp t
-  pp (ConsAnn c)       = text "Constructor Annotation" <+> pp c
-  pp (UserCast c)      = text "Cast Annotation"        <+> pp c
-  pp (ExportedElt)     = text "Exported"
-  pp (ReadOnlyVar)     = text "ReadOnlyVar"
-  pp (FuncAnn t)       = text "Func Annotation"        <+> pp t
-  pp (FieldAnn f)      = text "Field Annotation"       <+> pp f
-  pp (MethAnn m)       = text "Method Annotation"      <+> pp m
-  pp (StatAnn s)       = text "Static Annotation"      <+> pp s
-  pp (ClassAnn _)      = text "UNIMPLEMENTED:pp:ClassAnn"
-  pp (IfaceAnn _)      = text "UNIMPLEMENTED:pp:IfaceAnn"
-  pp (ModuleAnn s)     = text "module"                 <+> pp s
-  pp (EnumAnn s)       = text "enum"                   <+> pp s
-  pp (BypassUnique)    = text "BypassUnique" 
+  pp (PhiVar x)                 = text "phi"             <+> pp x
+  pp (PhiVarTy x)               = text "phi-ty"          <+> pp x
+  pp (PhiVarTC x)               = text "phi-tc"          <+> pp x
+  pp (PhiPost _)                = text "phi-post"
+  pp (TypInst i ξ ts)           = text "inst"            <+> pp i <+> pp ξ <+> pp ts
+  pp (Overload ξ i)             = text "overload"        <+> pp ξ <+> pp i
+  pp (EltOverload ξ (MI _ _ t)) = text "elt_overload"    <+> pp ξ <+> pp t
+  pp (TCast  ξ c)               = text "cast"            <+> pp ξ <+> pp c
+  pp (VarAnn (_,t))             = text "Var Ann"         <+> pp t
+  pp (AmbVarAnn t)              = text "Amb Var Ann"     <+> pp t
+  pp (ConsAnn c)                = text "Ctor Ann"        <+> pp c
+  pp (UserCast c)               = text "Cast Ann"        <+> pp c
+  pp (ExportedElt)              = text "Exported"
+  pp (ReadOnlyVar)              = text "ReadOnlyVar"
+  pp (FuncAnn t)                = text "Func Ann"        <+> pp t
+  pp (FieldAnn (FI _ _ t))      = text "Field Ann"       <+> pp t
+  pp (MethAnn (MI _ _ t))       = text "Method Ann"      <+> pp t
+  pp (TypeAnn _)                = text "UNIMPLEMENTED:pp:TypeAnn"
+  pp (ModuleAnn s)              = text "module"          <+> pp s
+  pp (EnumAnn s)                = text "enum"            <+> pp s
+  pp (BypassUnique)             = text "BypassUnique"
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
   pp             = vcat . (ppB <$>) . I.toList 
@@ -242,24 +240,30 @@ instance (PP a, PP b) => PP (Annot b a) where
 
 phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
 
-factRTypes :: (Show r) => Fact r -> [RType r]
+factRTypes :: Fact r -> [RType r]
 factRTypes = go
   where
-    go (TypInst _ _ ts)    = ts
-    go (EltOverload _ m)   = [f_type m]
-    go (Overload _ t)      = [t] 
-    go (VarAnn (_,Just t)) = [t]
-    go (VarAnn (_,_))      = [ ]
-    go (AmbVarAnn t)       = [t]
-    go (UserCast t)        = [t]
-    go (FuncAnn t)         = [t]
-    go (FieldAnn m)        = [f_type m]
-    go (MethAnn m)         = [f_type m]
-    go (StatAnn m)         = [f_type m]
-    go (ConsAnn m)         = [f_type m]
-    go (IfaceAnn ifd)      = f_type . snd <$> M.toList (t_elts ifd)
-    go (ClassAnn (_,e,i))  = concatMap snd e ++ concatMap snd i
-    go f                   = error ("factRTypes: TODO :" ++ show f)
+    go (TypInst _ _ ts)           = ts
+    go (EltOverload _ (MI _ _ t)) = [t]
+    go (Overload _ t)             = [t]
+    go (VarAnn (_,Just t))        = [t]
+    go (VarAnn (_,_))             = [ ]
+    go (AmbVarAnn t)              = [t]
+    go (UserCast t)               = [t]
+    go (FuncAnn t)                = [t]
+    go (FieldAnn fi)              = [fromFI fi]
+    go (MethAnn mi)               = [fromMI mi]
+    go (ConsAnn t)                = [t]
+    go (TypeAnn (TD _ _ _ ts))    = fromTM ts
+    go f                          = error "UNIMPLEMENTED: factRTypes"
+    fromTM (TM ps ms cl ct s n)   = map (fromFI . snd) (F.toListSEnv ps) ++ 
+                                    map (fromMI . snd) (F.toListSEnv ms) ++ 
+                                    maybeToList cl ++ 
+                                    maybeToList ct ++ 
+                                    maybeToList s ++ 
+                                    maybeToList n
+    fromFI (FI _ _ t)             = t
+    fromMI (MI _ _ t)             = t
 
 
 -----------------------------------------------------------------------------

@@ -33,13 +33,13 @@ module Language.Nano.Typecheck.Types (
   
   , rTypeR
 
+  , btvToTV
+
   , renameBinds
 
   -- * Mutability primitives
   , tMut, tUqMut, tImm, tIM, tRO, trMut, trImm, trIM, trRO
   , isMut, isImm, isUM
-
-  , finalizeTy
 
   -- * Primitive Types
 
@@ -57,11 +57,10 @@ module Language.Nano.Typecheck.Types (
   , fTop
 
   -- * Element ops 
-  -- , sameBinder, baseType, mutability, eltType, allEltType
   , requiredMember, optionalMember
 
   -- * Operator Types
-  , infixOpId, prefixOpId, builtinOpId, arrayLitTy, objLitTy, setPropTy, localTy
+  , infixOpId, prefixOpId, builtinOpId, arrayLitTy, objLitTy, setPropTy, localTy, finalizeTy
 
   -- * Builtin: Binders
   , mkId, argId, mkArgTy, returnTy
@@ -509,7 +508,7 @@ instance (PP r, F.Reftable r) => PP (ModuleDef r) where
 -- | Primitive / Base Types Constructors
 -----------------------------------------------------------------------
 
-toTV  (BTV s _ l) = TV s l
+btvToTV  (BTV s _ l) = TV s l
 
 tVar :: (F.Reftable r) => TVar -> RType r
 tVar = (`TVar` fTop) 
@@ -634,7 +633,7 @@ setPropTy l f ty = mkAll [bvt, bvm] t
     bvt          = BTV (F.symbol "A") Nothing     def
     bvm          = BTV (F.symbol "M") (Just tMut) def :: F.Reftable r => BTVar r 
     toTTV        :: F.Reftable r => BTVar r -> RType r
-    toTTV        = (`TVar` fTop) . toTV
+    toTTV        = (`TVar` fTop) . btvToTV
 
 --------------------------------------------------------------------------------------------
 fromFieldList :: (F.Symbolic s) => [(s, FieldInfo r)] -> TypeMembers r
@@ -656,9 +655,9 @@ finalizeTy t  | TRef (Gen x (m:ts)) _ <- t, isUM m
               = mkFun ([mV], [B (F.symbol "x") tV], tV)
   where 
     sx        = F.symbol "x_"
-    tOut      = tVar $ toTV mOut
+    tOut      = tVar $ btvToTV mOut
     mOut      = BTV (F.symbol "N") Nothing def
-    tV        = tVar $ toTV mV
+    tV        = tVar $ btvToTV mV
     mV        = BTV (F.symbol "V") Nothing def
 
 localTy t = mkFun ([], [B sx t], t `strengthen` uexprReft sx)

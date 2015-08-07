@@ -20,6 +20,8 @@ import qualified Language.Fixpoint.Types            as F
 -- | Typecheck Environment
 -------------------------------------------------------------------------------
 
+type EnvEntry r = VarInfo AK r 
+
 class EnvLike r t where
   -- 
   -- ^ Bindings in scope
@@ -48,10 +50,6 @@ class EnvLike r t where
   parent          :: t r -> Maybe (t r)
 
 
-
-instance (F.Reftable r, PP r) => PP (EnvEntry r) where  
-  pp (EE _ _ t) = pp t
-
 -------------------------------------------------------------------------------
 envLikeFindTy' :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (EnvEntry r)
 -------------------------------------------------------------------------------
@@ -62,7 +60,7 @@ envLikeFindTy' x γ | Just t  <- envFindTy x $ names γ = Just t
 -------------------------------------------------------------------------------
 envLikeFindTy :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-envLikeFindTy x = fmap ee_type . envLikeFindTy' x
+envLikeFindTy x = fmap v_type . envLikeFindTy' x
 
 envLikeMember x = isJust . envLikeFindTy x
 

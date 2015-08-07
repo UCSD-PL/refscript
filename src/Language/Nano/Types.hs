@@ -140,6 +140,7 @@ type BTVar r          = BTVarQ AK r
 
 type TypeDecl r       = TypeDeclQ AK r
 type FieldInfo r      = FieldInfoQ AK r
+type MethodInfo r     = MethodInfoQ AK r
 
 type Type             = RType ()
 

@@ -126,7 +126,7 @@ data FactQ q r
   -- SSA
   = PhiVar      ![Var r]
   | PhiVarTC    !(Var r)
-  | PhiVarTy    !(Var r, RTypeQ q ())
+  | PhiVarTy    !(Var r, RTypeQ q r)
   | PhiPost     ![(Var r, Var r, Var r)]
 
   -- Unification

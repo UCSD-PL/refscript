@@ -87,47 +87,65 @@ class Free a where
   free  :: a -> S.HashSet TVar
 
 instance Free (RType r) where
-  free (TApp _ ts _)        = free ts
+  free (TPrim _ r)          = S.empty
   free (TVar α _)           = S.singleton α 
-  free (TFun s xts t _)     = free $ [t] ++ maybeToList s ++ (b_type <$> xts)
-  free (TAll α t)           = S.delete α $ free t 
+  free (TOr ts)             = free ts 
   free (TAnd ts)            = free ts 
+  free (TRef n _)           = free n
+  free (TObj es _)          = free $ es
+  free (TType ts)           = free ts
+  free (TAll α t)           = S.delete (btvToTV α) $ free t 
+  free (TFun xts t _)       = free $ [t] ++ (b_type <$> xts)
   free (TExp _)             = error "free should not be applied to TExp"
-  free (TCons m xts _)      = free (snd <$> M.toList xts) `mappend` free m
-  free _                    = S.empty
+
+instance Free (TGen r) where 
+  free (Gen n ts)           = free ts
+
+instance Free (TypeMembers r) where 
+  free (TM fs ms cl ct s n) = S.unions [free fs, free ms, free cl, free ct, free s, free n]
+
+instance Free t => Free (F.SEnv t) where 
+  free                      = free . map snd . F.toListSEnv
+
+instance Free (FieldInfo r) where 
+  free (FI _ _ t)           = free t
+
+instance Free (MethodInfo r) where 
+  free (MI _ _ t)           = free t
 
 instance Free a => Free [a] where 
   free                      = S.unions . map free
 
 instance Free (Cast r) where
-  free CNo         = S.empty
-  free (CDead _ t) = free t
-  free (CUp t t')  = free [t,t']
-  free (CDn t t')  = free [t,t']
+  free CNo                  = S.empty
+  free (CDead _ t)          = free t
+  free (CUp t t')           = free [t,t']
+  free (CDn t t')           = free [t,t']
 
 instance Free (Fact r) where
-  free (PhiVarTy t)         = free (snd t)
+  free (PhiVarTy (_,t))     = free t
   free (TypInst _ _ ts)     = free ts
-  free (Overload _ t)       = free t
   free (EltOverload _ t)    = free t
-  free (TCast _ c)          = free c
+  free (Overload _ t)       = free t
   free (VarAnn (_,t))       = free t
   free (AmbVarAnn t)        = free t
   free (FieldAnn f)         = free f
   free (MethAnn m)          = free m
-  free (StatAnn m)          = free m
   free (ConsAnn c)          = free c
-  free (FuncAnn c)          = free c
-  free (ClassAnn (vs,e,i))  = foldr S.delete (free $ e ++ i) vs
   free (UserCast t)         = free t
+  free (FuncAnn c)          = free c
+  free (TCast _ c)          = free c
+  free (TypeAnn t)          = free t --  foldr S.delete (free $ e ++ i) vs
   free _                    = S.empty
 
-instance Free (TypeMember r) where
-  free (FieldSig _ o m t)   = free o `mappend` free m `mappend` free t
-  free (MethSig  _ t)       = free t
-  free (CallSig t)          = free t
-  free (ConsSig t)          = free t
-  free (IndexSig _ _ t)     = free t
+instance Free (TypeDecl r) where
+  free (TD _ n h ms)        = S.unions [free n, free h, free ms]
+
+instance Free (BTGen r) where
+  free (BGen n ts)          = S.unions [free n, free ts]
+
+instance Free (BTVar r) where
+  free (BTV _ t _)          = free t
 
 instance Free a => Free (RelName, a) where
   free (_, a)               = free a
@@ -162,13 +180,6 @@ instance F.Reftable r => SubstitutableQ q r (BindQ q r) where
 instance (SubstitutableQ q r t) => SubstitutableQ q r (Env t) where 
   apply                     = envMap . apply
 
-instance F.Reftable r => SubstitutableQ q r (TypeMemberQ q r) where 
-  apply θ (FieldSig x o m t) = FieldSig x   (appTy (toSubstQ θ) o) (appTy (toSubstQ θ) m) (apply θ t)
-  apply θ (MethSig  x t)     = MethSig  x   (apply θ t)
-  apply θ (CallSig t)        = CallSig      (apply θ t)
-  apply θ (ConsSig t)        = ConsSig      (apply θ t)
-  apply θ (IndexSig x b t)   = IndexSig x b (apply θ t)
-
 instance F.Reftable r => SubstitutableQ q r (CastQ q r) where
   apply _ CNo         = CNo
   apply θ (CDead z t) = CDead z         (apply θ t)
@@ -176,24 +187,39 @@ instance F.Reftable r => SubstitutableQ q r (CastQ q r) where
   apply θ (CDn t t')  = CDn (apply θ t) (apply θ t')
 
 instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
-  apply _ (PhiVar φ)         = PhiVar φ
-  apply θ (TypInst i ξ ts)   = TypInst i ξ   $ apply θ ts
-  apply θ (Overload ξ t)     = Overload ξ    $ apply θ t
-  apply θ (EltOverload ξ t)  = EltOverload ξ $ apply θ t
-  apply θ (TCast   ξ c)      = TCast ξ       $ apply θ c
-  apply θ (VarAnn (a,t))     = VarAnn . (a,) $ apply θ t
-  apply θ (FieldAnn f)       = FieldAnn      $ apply θ f
-  apply θ (MethAnn t)        = MethAnn       $ apply θ t
-  apply θ (StatAnn t)        = StatAnn       $ apply θ t
-  apply θ (ConsAnn t)        = ConsAnn       $ apply θ t
-  apply θ (FuncAnn t)        = FuncAnn       $ apply θ t
-  apply θ (ClassAnn (c,e,i)) = ClassAnn      $ (c, apply θ e, apply θ i)
-  apply θ (UserCast t)       = UserCast      $ apply θ t
-  apply _ a                  = a
+  apply θ (PhiVarTy (v,t))  = PhiVarTy . (v,) $ apply θ t
+  apply θ (TypInst i ξ ts)  = TypInst i ξ     $ apply θ ts
+  apply θ (EltOverload ξ t) = EltOverload ξ   $ apply θ t
+  apply θ (Overload ξ t)    = Overload ξ      $ apply θ t
+  apply θ (VarAnn (a,t))    = VarAnn . (a,)   $ apply θ t
+  apply θ (AmbVarAnn t)     = AmbVarAnn       $ apply θ t
+  apply θ (FieldAnn f)      = FieldAnn        $ apply θ f
+  apply θ (MethAnn t)       = MethAnn         $ apply θ t
+  apply θ (ConsAnn t)       = ConsAnn         $ apply θ t
+  apply θ (UserCast t)      = UserCast        $ apply θ t
+  apply θ (FuncAnn t)       = FuncAnn         $ apply θ t
+  apply θ (TCast ξ t)       = TCast ξ         $ apply θ t
+  apply θ (TypeAnn t)       = TypeAnn         $ apply θ t
+  apply _ a                 = a
+
+instance F.Reftable r => SubstitutableQ q r (MethodInfoQ q r) where
+  apply θ (MI ms m t)       = MI ms (apply θ m) (apply θ t) 
+
+instance F.Reftable r => SubstitutableQ q r (FieldInfoQ q r) where
+  apply θ (FI ms m t)       = FI ms (apply θ m) (apply θ t) 
 
 instance SubstitutableQ q r a => SubstitutableQ q r (Maybe a) where
   apply θ (Just a)          = Just $ apply θ a
   apply _ Nothing           = Nothing
+
+instance F.Reftable r => SubstitutableQ q r (TGenQ q r) where
+  apply θ (Gen n ts)        = Gen n $ apply θ ts
+
+instance F.Reftable r => SubstitutableQ q r (TypeMembersQ q r) where
+  apply θ (TM fs ms cl ct s n) = TM (apply θ fs) (apply θ ms) (apply θ cl) (apply θ ct) (apply θ s) (apply θ n)
+
+instance SubstitutableQ q r a => SubstitutableQ q r (F.SEnv a) where
+  apply                     = fmap . apply
 
 instance SubstitutableQ q r (Id a) where
   apply _ i                 = i
@@ -210,14 +236,11 @@ instance SubstitutableQ q r (QN l) where
 instance SubstitutableQ q r (QP l) where
   apply _ s                 = s 
 
-instance F.Reftable r => SubstitutableQ q r (IfaceDefQ q r) where
-  apply θ (ID n c v p e)    = ID n c v (apply θ p) (M.map (apply θ) e)
+instance F.Reftable r => SubstitutableQ q r (TypeDeclQ q r) where
+  apply θ (TD k n h m)      = TD k n (apply θ h) (apply θ m)
 
 instance (F.Reftable r, SubstitutableQ q r a) => SubstitutableQ q r (Statement a) where
   apply θ s                 = fmap (apply θ) s
-
-instance (F.Reftable r, SubstitutableQ q r t) => SubstitutableQ q r (FuncInputs t) where
-  apply θ (FI a b)          = FI (apply θ a) (apply θ b)
 
 instance SubstitutableQ q r Assignability where
   apply _ s                 = s
@@ -228,24 +251,18 @@ instance SubstitutableQ q r Initialization where
 instance (SubstitutableQ q r a, SubstitutableQ q r b, SubstitutableQ q r c) => SubstitutableQ q r (a,b,c) where
   apply θ (a,b,c)           = (apply θ a, apply θ b, apply θ c)
 
-instance SubstitutableQ q r (RType r) => SubstitutableQ q r (EnvEntry r) where
-  apply θ (EE a i t)        = EE a i $ apply θ t
-
  
 ---------------------------------------------------------------------------------
 appTy :: F.Reftable r => RSubstQ q r -> RTypeQ q r -> RTypeQ q r
 ---------------------------------------------------------------------------------
-appTy θ        (TApp c ts r)   = flattenUnions $ TApp c (apply θ ts) r
-appTy θ        (TRef x ts r)   = TRef x (apply θ ts) r
-appTy θ        (TSelf m)       = TSelf (apply θ m)
-appTy θ        (TAnd ts)       = TAnd (apply θ ts) 
-appTy (Su m) t@(TVar α r)      = (HM.lookupDefault t α m) `strengthen` r
-appTy θ        (TFun s ts t r) = TFun (apply θ <$> s) (apply θ ts) (apply θ t) r
-appTy (Su m)   (TAll α t)      = TAll α $ apply (Su $ HM.delete α m) t
-appTy θ        (TCons m es r)  = TCons (appTy (toSubstQ θ) m) (M.map (apply θ) es) r
-appTy _        (TClass c)      = TClass c
-appTy _        (TModule m)     = TModule m
-appTy _        (TEnum e)       = TEnum e
-appTy _        (TExp _)        = error "appTy should not be applied to TExp"
-
+appTy θ        (TPrim p r)   = TPrim p r
+appTy (Su m) t@(TVar α r)    = (HM.lookupDefault t α m) `strengthen` r
+appTy θ        (TOr ts)      = TOr (apply θ ts)
+appTy θ        (TAnd ts)     = TAnd (apply θ ts)
+appTy θ        (TRef n r)    = TRef (apply θ n) r
+appTy θ        (TObj es r)   = TObj (apply θ es) r
+appTy θ        (TType ts)    = TType (apply θ ts)
+appTy (Su m)   (TAll α t)    = TAll α $ apply (Su $ HM.delete (btvToTV α) m) t
+appTy θ        (TFun ts t r) = TFun (apply θ ts) (apply θ t) r
+appTy _        (TExp _)      = error "appTy should not be applied to TExp"
 

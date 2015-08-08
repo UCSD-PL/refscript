@@ -58,33 +58,44 @@ data TPrim            = TString | TStrLit String | TNumber | TBoolean | TBV32 | 
 
 -- | Refined Types
 data RTypeQ q r       = TPrim TPrim r                           -- Primitive
-                      | TVar  TVar r                     -- Type parameter
+                      | TVar  TVar r                            -- Type parameter
                       | TOr   [RTypeQ q r]                      -- Union type
                       | TAnd  [RTypeQ q r]                      -- Intersection type
                       | TRef  (TGenQ q r) r                     -- Type Reference
                       | TObj  (TypeMembersQ q r) r              -- Object type
-                      | TType [TGenQ q r]                       -- Interface or class Type
+                      | TType NamedTypeKind (TGenQ q r)         -- Class / Enum
+                      | TMod  AbsPath                           -- Namespace
                       | TAll  (BTVarQ q r) (RTypeQ q r)         -- Forall [A <: T] . S
                       | TFun  [BindQ q r] (RTypeQ q r) r        -- Function type
                       {- Internal -}
                       | TExp  F.Expr
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data TGenQ q r        = Gen (QN q) [RTypeQ q r] deriving (Data, Typeable, Functor, Foldable, Traversable)
+data NamedTypeKind    = EnumK | ClassK
+                        deriving (Data, Typeable)
 
-data BTGenQ q r       = BGen (QN q) [BTVarQ q r] deriving (Data, Typeable, Functor, Foldable, Traversable)
+data TGenQ q r        = Gen { g_name :: QN q
+                            , g_args :: [RTypeQ q r] 
+                            }
+                        deriving (Data, Typeable, Functor, Foldable, Traversable)
+
+data BTGenQ q r       = BGen (QN q) [BTVarQ q r] 
+                        deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data BindQ q r        = B { b_sym  :: F.Symbol
                           , b_type :: RTypeQ  q r 
                           } 
                         deriving (Eq, Data, Typeable, Functor, Foldable, Traversable)
 
-data TypeMembersQ q r = TM (F.SEnv (FieldInfoQ q r))            -- Properties
-                           (F.SEnv (MethodInfoQ q r))           -- Method signatures
-                           (Maybe (RTypeQ q r))                 -- Call signatures
-                           (Maybe (RTypeQ q r))                 -- Contructor signatures
-                           (Maybe (RTypeQ q r))                 -- String indexer
-                           (Maybe (RTypeQ q r))                 -- Numeric indexer
+data TypeMembersQ q r = TM { tm_prop  :: F.SEnv (FieldInfoQ q r)    -- Properties
+                           , tm_meth  :: F.SEnv (MethodInfoQ q r)   -- Method signatures
+                           , tm_sprop :: F.SEnv (FieldInfoQ q r)    -- Static Properties
+                           , tm_smeth :: F.SEnv (MethodInfoQ q r)   -- Static Method signatures 
+                           , tm_call  :: Maybe (RTypeQ q r)         -- Call signatures
+                           , tm_ctor  :: Maybe (RTypeQ q r)         -- Contructor signatures
+                           , tm_sidx  :: Maybe (RTypeQ q r)         -- String indexer
+                           , tm_nidx  :: Maybe (RTypeQ q r)         -- Numeric indexer
+                           }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data FieldInfoQ q r   = FI [MemberMod]                          -- Modifiers
@@ -101,8 +112,6 @@ data MemberMod        = {- Sharing -}
                         Private 
                         {- Optional -}
                       | Optional
-                        {- Static -}
-                      | Static
                         deriving (Eq, Data, Typeable)
 
 data TypeDeclQ q r    = TD  TypeDeclKind              -- Class or interface
@@ -114,7 +123,10 @@ data TypeDeclQ q r    = TD  TypeDeclKind              -- Class or interface
 type HeritageQ q r    = (Maybe (TGenQ q r), [TGenQ q r])
 
 data TypeDeclKind     = InterfaceKind | ClassKind
-                        deriving (Data, Typeable)
+                        deriving (Eq, Data, Typeable)
+
+data StaticKind       = StaticMember | InstanceMember
+                        deriving (Eq, Ord, Show, Data, Typeable)
 
 
 ---------------------------------------------------------------------------------
@@ -295,12 +307,24 @@ instance F.Symbolic (BTGenQ q r) where
 instance Eq q => Eq (RTypeQ  q r) where
   _ == _ = False
 
--- USE CAREFULLY !!!
-instance Eq q => Ord (RTypeQ q r) where
-  compare = undefined -- compare `on` rTypeCode
+-- -- USE CAREFULLY !!!
+-- instance Eq q => Ord (RTypeQ q r) where
+--   compare = compare `on` rTypeCode
 
 instance Default SrcSpan where
   def = srcPos dummySpan 
+
+instance Monoid (TypeMembers r) where  
+  mempty = TM mempty mempty mempty mempty Nothing Nothing Nothing Nothing
+  TM f1 m1 sf1 sm1 c1 ct1 s1 n1 `mappend` TM f2 m2 sf2 sm2 c2 ct2 s2 n2 
+    = TM (f1  `mappend` f2)  (m1  `mappend` m2) 
+         (sf1 `mappend` sf2) (sm1 `mappend` sm2) 
+         (c1 `orElse` c2) (ct1 `orElse` ct2) 
+         (s1 `orElse` s2) (n1 `orElse` n2) 
+    where
+      Just x  `orElse` _ = Just x
+      Nothing `orElse` y = y
+
 
 -----------------------------------------------------------------------
 -- | Operator Types

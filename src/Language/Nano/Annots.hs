@@ -256,12 +256,14 @@ factRTypes = go
     go (ConsAnn t)                = [t]
     go (TypeAnn (TD _ _ _ ts))    = fromTM ts
     go f                          = error "UNIMPLEMENTED: factRTypes"
-    fromTM (TM ps ms cl ct s n)   = map (fromFI . snd) (F.toListSEnv ps) ++ 
-                                    map (fromMI . snd) (F.toListSEnv ms) ++ 
-                                    maybeToList cl ++ 
-                                    maybeToList ct ++ 
-                                    maybeToList s ++ 
-                                    maybeToList n
+    fromTM (TM fs ms sfs sms cl ct s n) = map (fromFI . snd) (F.toListSEnv fs) ++ 
+                                          map (fromMI . snd) (F.toListSEnv ms) ++ 
+                                          map (fromFI . snd) (F.toListSEnv sfs) ++ 
+                                          map (fromMI . snd) (F.toListSEnv sms) ++ 
+                                          maybeToList cl ++ 
+                                          maybeToList ct ++ 
+                                          maybeToList s ++ 
+                                          maybeToList n
     fromFI (FI _ _ t)             = t
     fromMI (MI _ _ t)             = t
 

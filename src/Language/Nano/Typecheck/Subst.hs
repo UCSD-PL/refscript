@@ -93,7 +93,8 @@ instance Free (RType r) where
   free (TAnd ts)            = free ts 
   free (TRef n _)           = free n
   free (TObj es _)          = free $ es
-  free (TType ts)           = free ts
+  free (TType _ t)          = free t
+  free (TMod _)             = S.empty
   free (TAll α t)           = S.delete (btvToTV α) $ free t 
   free (TFun xts t _)       = free $ [t] ++ (b_type <$> xts)
   free (TExp _)             = error "free should not be applied to TExp"
@@ -102,7 +103,9 @@ instance Free (TGen r) where
   free (Gen n ts)           = free ts
 
 instance Free (TypeMembers r) where 
-  free (TM fs ms cl ct s n) = S.unions [free fs, free ms, free cl, free ct, free s, free n]
+  free (TM fs ms sfs sms cl ct s n) 
+                            = S.unions [free fs, free ms, free sfs, free sms, 
+                                        free cl, free ct, free s, free n]
 
 instance Free t => Free (F.SEnv t) where 
   free                      = free . map snd . F.toListSEnv
@@ -216,7 +219,10 @@ instance F.Reftable r => SubstitutableQ q r (TGenQ q r) where
   apply θ (Gen n ts)        = Gen n $ apply θ ts
 
 instance F.Reftable r => SubstitutableQ q r (TypeMembersQ q r) where
-  apply θ (TM fs ms cl ct s n) = TM (apply θ fs) (apply θ ms) (apply θ cl) (apply θ ct) (apply θ s) (apply θ n)
+  apply θ (TM fs ms sfs sms cl ct s n) 
+                            = TM (apply θ fs) (apply θ ms) 
+                                 (apply θ sfs) (apply θ sms) 
+                                 (apply θ cl) (apply θ ct) (apply θ s) (apply θ n)
 
 instance SubstitutableQ q r a => SubstitutableQ q r (F.SEnv a) where
   apply                     = fmap . apply
@@ -261,7 +267,8 @@ appTy θ        (TOr ts)      = TOr (apply θ ts)
 appTy θ        (TAnd ts)     = TAnd (apply θ ts)
 appTy θ        (TRef n r)    = TRef (apply θ n) r
 appTy θ        (TObj es r)   = TObj (apply θ es) r
-appTy θ        (TType ts)    = TType (apply θ ts)
+appTy θ        (TType k t)   = TType k (apply θ t)
+appTy _        (TMod n)      = TMod n
 appTy (Su m)   (TAll α t)    = TAll α $ apply (Su $ HM.delete (btvToTV α) m) t
 appTy θ        (TFun ts t r) = TFun (apply θ ts) (apply θ t) r
 appTy _        (TExp _)      = error "appTy should not be applied to TExp"

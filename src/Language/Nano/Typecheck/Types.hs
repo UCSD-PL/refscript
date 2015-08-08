@@ -24,12 +24,12 @@ module Language.Nano.Typecheck.Types (
   , PPR, ExprReftable(..) 
 
   -- * Constructing Types
-  , mkUnion, mkFun, mkAll, mkAnd, mkInitFldTy, mkTCons
-
+  , mkUnion, mkFun, mkAll, mkAnd, mkInitFldTy, mkTCons 
+  
   -- * Deconstructing Types
   , bkFun, bkFuns, bkAll, bkAnd, bkUnion
   
-  , orUndef, funTys, padUndefineds
+  , orUndef, padUndefineds
   
   , rTypeR
 
@@ -39,7 +39,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Mutability primitives
   , tMut, tUqMut, tImm, tIM, tRO, trMut, trImm, trIM, trRO
-  , isMut, isImm, isUM
+  , isRO, isMut, isImm, isUM, mutRelated
 
   -- * Primitive Types
 
@@ -56,8 +56,14 @@ module Language.Nano.Typecheck.Types (
   -- * Refinements
   , fTop
 
+  -- * Function Types
+  , toOverloads
+
   -- * Element ops 
   , requiredMember, optionalMember
+  
+  -- * Type Definitions
+  , tmFromFields, tmFromFieldList
 
   -- * Operator Types
   , infixOpId, prefixOpId, builtinOpId, arrayLitTy, objLitTy, setPropTy, localTy, finalizeTy
@@ -141,9 +147,12 @@ typeName (Gen (QN _ _ _ s) _)  = s
 
 isNamed s t | TRef n _ <- t, typeName n == F.symbol s = True | otherwise = False
 
+isRO  = isNamed "ReadOnly"
 isMut = isNamed "Mutable"
 isImm = isNamed "Immutable"
 isUM  = isNamed "UniqueMutable"
+
+mutRelated t = isMut t || isImm t || isUM t || isRO t 
 
 
 ---------------------------------------------------------------------
@@ -182,12 +191,13 @@ instance F.Reftable r => ExprReftable BV.Bv r where
   uexprReft = F.ofReft . F.uexprReft
 
 
-funTys l f xs ft | Just ts <- bkFuns ft
-                 = case partitionEithers [funTy l xs t | t <- ts] of 
-                     ([], fts) -> Right $ zip ([0..] :: [Int]) fts
-                     (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
-                 | otherwise
-                 = Left $ errorNonFunction (srcPos l) f ft 
+toOverloads l f xs ft 
+  | Just ts <- bkFuns ft
+  = case partitionEithers [funTy l xs t | t <- ts] of 
+     ([], fts) -> Right $ zip ([0..] :: [Int]) fts
+     (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
+  | otherwise
+  = Left $ errorNonFunction (srcPos l) f ft 
 
 
 funTy l xs (αs, yts, t) =
@@ -319,19 +329,20 @@ isBV32    = isPrim TBV32
 isTVar   t | TVar _ _ <- t = True | otherwise = False
 isTUnion t | TOr  _   <- t = True | otherwise = False
 
-maybeTObj (TRef _ _) = True
-maybeTObj (TObj _ _) = True
-maybeTObj (TType _ ) = True
-maybeTObj (TAll _ t) = maybeTObj t
-maybeTObj (TOr ts)   = any maybeTObj ts
-maybeTObj _          = False
+maybeTObj (TRef _ _)  = True
+maybeTObj (TObj _ _)  = True
+maybeTObj (TType _ _) = True
+maybeTObj (TMod _ )   = True
+maybeTObj (TAll _ t)  = maybeTObj t
+maybeTObj (TOr ts)    = any maybeTObj ts
+maybeTObj _           = False
 
-isExpandable v       = maybeTObj v || isTNum v || isTBool v || isTStr v
+isExpandable v        = maybeTObj v || isTNum v || isTBool v || isTStr v
 
-isTFun (TFun _ _ _)  = True
-isTFun (TAnd ts)     = all isTFun ts
-isTFun (TAll _ t)    = isTFun t
-isTFun _             = False
+isTFun (TFun _ _ _)   = True
+isTFun (TAnd ts)      = all isTFun ts
+isTFun (TAll _ t)     = isTFun t
+isTFun _              = False
 
 isArr t | TRef x _ <- t = F.symbol x == F.symbol "Array" | otherwise = False
 
@@ -349,7 +360,8 @@ rTypeR' (TOr _ )     = Just fTop
 rTypeR' (TFun _ _ r) = Just r
 rTypeR' (TRef _ r)   = Just r
 rTypeR' (TObj _ r)   = Just r
-rTypeR' (TType _)    = Just fTop
+rTypeR' (TType _ _)  = Just fTop
+rTypeR' (TMod _)     = Just fTop
 rTypeR' (TAnd _ )    = Nothing 
 rTypeR' (TAll _ _)   = Nothing 
 rTypeR' (TExp _)     = Nothing 
@@ -401,20 +413,27 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp (TAnd ts)       = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TRef t r)      = F.ppTy r $ pp t
   pp (TObj ms r)     = F.ppTy r $ braces $ pp ms
-  pp (TType t)       = text "typeof" <+> pp t
+  pp (TType k t)     = pp k <+> pp t
+  pp (TMod t)        = text "module" <+> pp t
   pp t@(TAll _ _)    = ppArgs angles comma αs <> text "." <+> pp t' where (αs, t') = bkAll t
   pp (TFun xts t _)  = ppArgs parens comma xts <+> text "=>" <+> pp t  
   pp (TExp e)        = pprint e 
 
-instance (F.Reftable r, PP r) => PP (TypeMembersQ q r) where
-  pp (TM ps ms cs ctors sidx nidx) =  ppProp ps <+> ppMeth ms <+> ppCall cs 
-                                  <+> ppCtor ctors <+> ppIndexer sidx <+> ppIndexer nidx
+instance PP NamedTypeKind where
+  pp ClassK          = text "class"
+  pp EnumK           = text "enum"
 
-ppProp    = undefined
-ppMeth    = undefined
-ppCall    = undefined
-ppCtor    = undefined
-ppIndexer = undefined
+instance (F.Reftable r, PP r) => PP (TypeMembersQ q r) where
+  pp (TM fs ms sfs sms cs cts sidx nidx) = ppProp fs  <+> ppMeth ms  <+> 
+                                           ppProp sfs <+> ppMeth sms <+> 
+                                           ppCall cs  <+> ppCtor cts <+>
+                                           ppIdx sidx <+> ppIdx nidx
+
+ppProp  = undefined
+ppMeth  = undefined
+ppCall  = undefined
+ppCtor  = undefined
+ppIdx   = undefined
 
 instance (F.Reftable r, PP r) => PP (TGenQ q r) where
   pp (Gen x ts) = pp x <> ppArgs angles comma ts
@@ -564,17 +583,9 @@ objLitTy l ps     = mkFun (vs, bs, undefined) -- rt)
     vs            = mvs ++ avs
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
     rt            = TObj tms fTop
-
-    tms           = TM (F.fromListSEnv [ (s, FI [] m a) | (s,m,a) <- zip3 ss mts ats ])  -- Props
-                       mempty -- meths
-                       mempty -- calls
-                       mempty -- ctors
-                       mempty -- indexer
-                       mempty -- indexer
-
+    tms           = tmFromFieldList [ (s, FI [] m a) | (s,m,a) <- zip3 ss mts ats ]
     (mvs, mts)    = unzip $ map (freshBTV l mSym Nothing) [1..length ps]  -- field mutability
     (avs, ats)    = unzip $ map (freshBTV l aSym Nothing) [1..length ps]  -- field type vars
-
     ss            = [F.symbol p | p <- ps]
     mSym          = F.symbol "M"
     aSym          = F.symbol "A"
@@ -616,7 +627,7 @@ immObjectLitTy l ps ts  | length ps == length ts
                         | otherwise
                         = die $ bug (srcPos l) $ "Mismatched args for immObjectLit"
   where
-    elts                = fromFieldList [ (F.symbol p, FI [] tImm t) | (p,t) <- safeZip "immObjectLitTy" ps ts ]
+    elts                = tmFromFieldList [ (F.symbol p, FI [] tImm t) | (p,t) <- safeZip "immObjectLitTy" ps ts ]
 
 -- | setProp<A, M extends Mutable>(o: { f[M]: A }, x: A) => A
 --
@@ -626,7 +637,7 @@ setPropTy :: (F.Reftable r, IsLocated l) => l -> F.Symbol -> RType r -> RType r
 setPropTy l f ty = mkAll [bvt, bvm] t
   where
     ft           = TFun [b1, b2] t fTop
-    b1           = B (F.symbol "o") $ TObj (fromFieldList [(f, FI [Optional] m t)]) fTop
+    b1           = B (F.symbol "o") $ TObj (tmFromFieldList [(f, FI [Optional] m t)]) fTop
     b2           = B (F.symbol "x") $ t
     m            = toTTV bvm :: F.Reftable r => RType r
     t            = toTTV bvt
@@ -635,10 +646,17 @@ setPropTy l f ty = mkAll [bvt, bvm] t
     toTTV        :: F.Reftable r => BTVar r -> RType r
     toTTV        = (`TVar` fTop) . btvToTV
 
+
 --------------------------------------------------------------------------------------------
-fromFieldList :: (F.Symbolic s) => [(s, FieldInfo r)] -> TypeMembers r
+tmFromFields :: F.SEnv (FieldInfoQ q r) -> TypeMembersQ q r
 --------------------------------------------------------------------------------------------
-fromFieldList f = TM (F.fromListSEnv $ mapFst F.symbol <$> f) mempty Nothing Nothing Nothing Nothing
+tmFromFields f = TM f mempty mempty mempty Nothing Nothing Nothing Nothing
+
+--------------------------------------------------------------------------------------------
+tmFromFieldList :: F.Symbolic s => [(s, FieldInfo r)] -> TypeMembers r
+--------------------------------------------------------------------------------------------
+tmFromFieldList f = TM (F.fromListSEnv $ mapFst F.symbol <$> f) 
+                     mempty mempty mempty Nothing Nothing Nothing Nothing
 
 ---------------------------------------------------------------------------------
 returnTy :: (PP r, F.Reftable r) => RType r -> Bool -> RType r

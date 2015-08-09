@@ -47,7 +47,7 @@ module Language.Nano.Typecheck.Types (
   , tNum, tBV32, tBool, tString, tTop, tVoid, tErr, tVar, tUndef, tNull, tObject
 
   --   # Tests
-  , isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
+  , isTPrim, isTTop, isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
   , isExpandable, isTNull, isTVoid, isTFun, isArr
   
   --   # Operations
@@ -318,6 +318,9 @@ strengthen t _              = t    -- TAnd, TType, TAll, TExp fall through
 
 isPrim c t | TPrim c _ <- t = True | otherwise = False
 
+isTPrim t  | TPrim _ _ <- t = True | otherwise = False
+
+isTTop    = isPrim TTop
 isTUndef  = isPrim TUndefined
 isTNull   = isPrim TNull
 isTVoid   = isPrim TVoid

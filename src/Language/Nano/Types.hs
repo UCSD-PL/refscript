@@ -72,7 +72,7 @@ data RTypeQ q r       = TPrim TPrim r                           -- Primitive
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data NamedTypeKind    = EnumK | ClassK
-                        deriving (Data, Typeable)
+                        deriving (Eq, Data, Typeable)
 
 data TGenQ q r        = Gen { g_name :: QN q
                             , g_args :: [RTypeQ q r] 
@@ -85,7 +85,7 @@ data BTGenQ q r       = BGen (QN q) [BTVarQ q r]
 data BindQ q r        = B { b_sym  :: F.Symbol
                           , b_type :: RTypeQ  q r 
                           } 
-                        deriving (Eq, Data, Typeable, Functor, Foldable, Traversable)
+                        deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data TypeMembersQ q r = TM { tm_prop  :: F.SEnv (FieldInfoQ q r)    -- Properties
                            , tm_meth  :: F.SEnv (MethodInfoQ q r)   -- Method signatures
@@ -301,15 +301,6 @@ instance F.Symbolic (TGenQ q r) where
 
 instance F.Symbolic (BTGenQ q r) where
   symbol (BGen n _) = F.symbol n
-
-
--- Ignoring refinements in equality check
-instance Eq q => Eq (RTypeQ  q r) where
-  _ == _ = False
-
--- -- USE CAREFULLY !!!
--- instance Eq q => Ord (RTypeQ q r) where
---   compare = compare `on` rTypeCode
 
 instance Default SrcSpan where
   def = srcPos dummySpan 

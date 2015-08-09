@@ -349,7 +349,7 @@ castM :: PPR r => TCEnv r -> Expression (AnnSSA r) -> RType r -> RType r -> TCM 
 --------------------------------------------------------------------------------
 castM γ e t1 t2 
   = case convert (srcPos e) γ t1 t2 of
-      Left  e   -> tcError e
+      Left e    -> tcError e
       Right CNo -> return e
       Right c   -> addCast (tce_ctx γ) e c
 

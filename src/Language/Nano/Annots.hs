@@ -14,7 +14,7 @@ module Language.Nano.Annots (
   , NodeId, Annot (..), UFact, FactQ (..), Fact, phiVarsAnnot
 
   -- * Casts
-  , CastQ(..), Cast, CastDirection(..), castDirection, noCast, upCast, dnCast, ddCast, castType
+  , CastQ(..), Cast, SubTRes(..), castType
 
   -- * Aliases for annotated Source 
   , AnnQ, AnnR, AnnRel, AnnBare, UAnnBare, AnnSSA , UAnnSSA
@@ -57,10 +57,10 @@ import qualified Language.Fixpoint.Types        as F
 -----------------------------------------------------------------------------
 
 data CastQ q r = CNo                                            -- .
-               | CDead { err :: Error     , tgt :: RTypeQ q r } -- |dead code|
+               | CDead { err :: [Error]   , tgt :: RTypeQ q r } -- |dead code|
                | CUp   { org :: RTypeQ q r, tgt :: RTypeQ q r } -- <t1 UP t2>
                | CDn   { org :: RTypeQ q r, tgt :: RTypeQ q r } -- <t1 DN t2>
-               deriving (Eq, Data, Typeable, Functor)
+               deriving (Data, Typeable, Functor)
 
 type Cast  = CastQ AK   -- Version with absolute types
 
@@ -68,28 +68,24 @@ castType CNo = tNull
 castType c   = tgt c
 
 
-data CastDirection  = CDNo    -- .
-                    | CDDead  -- |dead code|
-                    | CDUp    -- <UP>
-                    | CDDn    -- <DN>
+data SubTRes = EqT              -- .
+             | SubErr  [Error]   -- |dead code|
+             | SubT              -- <UP>
+             | SupT              -- <DN>
              deriving (Eq, Ord, Show, Data, Typeable)
 
-instance Monoid CastDirection where
- mempty             = CDNo
- mappend CDDead _   = CDDead
- mappend _ CDDead   = CDDead
-
- mappend CDUp CDDn  = CDDead
- mappend CDDn CDUp  = CDDead
-
- mappend CDDn _     = CDDn
- mappend _    CDDn  = CDDn
-
- mappend CDUp _     = CDUp
- mappend _    CDUp  = CDUp
-
- mappend CDNo CDNo  = CDNo
-
+instance Monoid SubTRes where
+ mempty                          = EqT
+ mappend (SubErr e1) (SubErr e2) = SubErr $ e1 ++ e2
+ mappend _           (SubErr e2) = SubErr e2
+ mappend (SubErr e1) _           = SubErr e1
+ mappend SubT        SupT        = SubErr []
+ mappend SupT        SubT        = SubErr []
+ mappend SupT        _           = SupT
+ mappend _           SupT        = SupT
+ mappend SubT        _           = SubT
+ mappend _           SubT        = SubT
+ mappend EqT        EqT          = EqT
 
 instance (PP r, F.Reftable r) => PP (Cast r) where
   pp CNo         = text "No cast"
@@ -97,25 +93,11 @@ instance (PP r, F.Reftable r) => PP (Cast r) where
   pp (CUp t1 t2) = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
   pp (CDn t1 t2) = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
 
-instance PP CastDirection where
-  pp CDNo   = text "="
-  pp CDDead = text "dead"
-  pp CDUp   = text "UP"
-  pp CDDn   = text "DN"
-
-noCast = (`elem` [CDNo])
-upCast = (`elem` [CDNo, CDUp])
-dnCast = (`elem` [CDNo, CDDn])
-ddCast = (`elem` [CDDead])
-
--- upCast = (`elem` [CDNo, CDUp])
--- dnCast = (`elem` [CDNo, CDDn])
--- ddCast = (`elem` [CDDead])
-
-castDirection (CNo  {}) = CDNo
-castDirection (CDead{}) = CDDead
-castDirection (CUp  {}) = CDUp
-castDirection (CDn  {}) = CDDn
+instance PP SubTRes where
+  pp EqT        = text "="
+  pp (SubErr _) = text "dead"
+  pp SubT       = text "UP"
+  pp SupT       = text "DN"
 
 
 -----------------------------------------------------------------------------

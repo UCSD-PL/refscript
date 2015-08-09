@@ -13,24 +13,26 @@
 {-# LANGUAGE DoAndIfThenElse           #-}
 
 
-module Language.Nano.Typecheck.Sub (convert, isSubtype, Related (..)) where
+module Language.Nano.Typecheck.Sub (convert, isSubtype) where
 
 import           Control.Applicative                ((<$>))
 
+import           Data.Default
 import           Data.Tuple                         (swap)
 import           Data.Monoid
 import qualified Data.HashSet                       as S
 import qualified Data.Map.Strict                    as M
 import           Data.Maybe                         (fromMaybe)
+import           Data.List                          (elem)
 import           Control.Monad.State
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
+import           Language.Fixpoint.Types            (toListSEnv, differenceSEnv, intersectWithSEnv)
 
 import           Language.Nano.Syntax.PrettyPrint
 
 import           Language.Nano.Annots
 import           Language.Nano.Types
-import           Language.Nano.Misc                 (mappendM)
 import           Language.Nano.Names
 import           Language.Nano.Locations
 import           Language.Nano.Environment
@@ -40,374 +42,251 @@ import           Language.Nano.Errors
 
 -- import           Debug.Trace                      (trace)
 
-instance PP a => PP (S.HashSet a) where
-  pp = pp . S.toList 
+type FE g = (EnvLike () g, Functor g)
 
 --------------------------------------------------------------------------------
-isSubtype :: (PPR r, Functor g, EnvLike () g) => g r -> RType r -> RType r -> Bool
+isSubtype :: (PPR r, FE g) => g r -> RType r -> RType r -> Bool
 --------------------------------------------------------------------------------
 isSubtype γ t1 t2 =
-  case convert (srcPos dummySpan) γ t1 t2 of
-    Right CNo       -> True
-    Right (CUp _ _) -> True
-    _               -> False
+  case convert def γ t1 t2 of
+    CNo     -> True
+    CUp _ _ -> True
+    _       -> False
 
 --------------------------------------------------------------------------------
-isConvertible :: (EnvLike () g, Functor g) => g () -> Type -> Type -> Bool
+isConvertible :: FE g => g () -> Type -> Type -> Bool
 --------------------------------------------------------------------------------
 isConvertible γ t1 t2 =
-  case convert' (srcPos dummySpan) γ t1 t2 of
-    Left _          -> False
-    Right CDDead    -> False
-    _               -> True
+  case compareTypes def γ t1 t2 of
+    SubErr _ -> False
+    _        -> True
 
-
--- | `convert`
 --------------------------------------------------------------------------------
-convert :: (PPR r, Functor g, EnvLike () g) 
-        => SrcSpan -> g r -> RType r -> RType r -> Either Error (Cast r)
+convert :: (PPR r, FE g) => SrcSpan -> g r -> RType r -> RType r -> Cast r
 --------------------------------------------------------------------------------
 convert l γ t1 t2  
-  =  do c <- convert' l γ' τ1 τ2
-        case c of 
-          CDNo   -> return $ CNo
-          CDUp   -> return $ CUp (rType t1) (rType t2)
-          CDDn   -> return $ CDn (rType t1) (rType t2)
-          CDDead -> return $ CDead (errorDeadCast l (toType t1) (toType t2)) (rType t1)
+  = case compareTypes l γ' τ1 τ2 of
+      EqT      -> CNo
+      SubT     -> CUp (rType t1) (rType t2)
+      SupT     -> CDn (rType t1) (rType t2)
+      SubErr e -> CDead e (rType t1) -- (errorDeadCast l (toType t1) (toType t2)) (rType t1)
   where
     rType = ofType . toType
     τ1    = toType t1
     τ2    = toType t2
     γ'    = fmap (\_ -> ()) γ
 
+--------------------------------------------------------------------------------
+compareTypes :: FE g => SrcSpan -> g () -> Type -> Type -> SubTRes
+--------------------------------------------------------------------------------
+compareTypes _ _ _  t2 | isTTop t2                  = SubT
+compareTypes l γ t1 t2 | isTPrim t1, isTPrim t2     = comparePrims t1 t2
+compareTypes l γ t1 t2 | isTVar t1, isTVar t2       = compareVars t1 t2
+compareTypes l γ t1 t2 | isTUnion t1 || isTUnion t2 = compareUnions γ t1 t2
+compareTypes l γ t1 t2 | maybeTObj t1, maybeTObj t2 = compareObjs l γ t1 t2
+compareTypes l γ t1 t2 | isTFun t1, isTFun t2       = compareFuns l γ t1 t2
+compareTypes l γ t1 t2                              = SubErr [] -- TODO
+
+comparePrims (TPrim c1 _) (TPrim c2 _) | c1 == c2  = EqT
+                                       | otherwise = SubErr []  -- TODO 
+
+compareVars (TVar v1 _) (TVar v2 _) | v1 == v2  = EqT
+                                    | otherwise = SubErr []     -- TODO
 
 --------------------------------------------------------------------------------
-convert' :: (Functor g, EnvLike () g)
-         => SrcSpan -> g () -> Type -> Type -> Either Error CastDirection
+compareUnions :: FE g => g () -> Type -> Type -> SubTRes
 --------------------------------------------------------------------------------
-convert' _ _ t1 t2 | toType t1 == toType t2   = Right CDNo
-convert' _ _ _  t2 | isTop t2                 = Right CDUp
-convert' l γ t1 t2 | any isUnion      [t1,t2] = convertUnion   l γ t1 t2
-convert' l γ t1 t2 | all isPrimitive  [t1,t2] = convertSimple  l γ t1 t2
-convert' l γ t1 t2 | all isTObj       [t1,t2] = convertObj     l γ t1 t2
-convert' l γ t1 t2 | all isTFun       [t1,t2] = convertFun     l γ t1 t2
-convert' l γ t1 t2                            = convertSimple  l γ t1 t2
+compareUnions γ t1 t2
+  | upcast     = SubT 
+  | downcast   = SupT
+  | otherwise  = SubErr [] -- TODO 
+  where 
+    (t1s, t2s) = mapPair bkUnion (t1, t2)
+    sub        = isSubtype γ
+    conv       = isConvertible γ
+    upcast     = all ((`any` t2s) . sub ) t1s
+    downcast   = any ((`any` t2s) . conv) t1s 
 
-
--- | `convertObj`
 --------------------------------------------------------------------------------
-convertObj :: (Functor g, EnvLike () g)
-           => SrcSpan -> g () -> Type -> Type -> Either Error CastDirection
+compareObjs :: FE g => SrcSpan -> g () -> Type -> Type -> SubTRes
 --------------------------------------------------------------------------------
-
 -- | Cannot convert a structural object type to a nominal class type. 
 --   Interfaces are OK.
 --
-convertObj l γ t1 t2
+compareObjs l γ t1 t2
   | not (isClassType γ t1) && isClassType γ t2
-  = Left $ errorObjectType l t1 t2
+  = SubErr [errorObjectType l t1 t2]
 
-convertObj l γ t1@(TCons μ1 e1s _) t2@(TCons μ2 e2s _)
-  | mutabilitySub && isImmutable μ2 = covariantConvertObj l γ (t1,μ1,e1s) (t2,μ2,e2s)
-  | mutabilitySub                   = invariantConvertObj l γ (μ1,e1s) (μ2,e2s)
-  | otherwise                       = Left $ errorIncompMutTy l t1 t2
-  where
-      mutabilitySub = isSubtype γ μ1 μ2
+compareObjs l γ t1@(TObj e1s _) t2@(TObj e2s _)
+  = compareObjMembers l γ t1 e1s t2 e2s
 
-convertObj l γ (TSelf m1) (TSelf m2) 
-  = convertObj l γ m1 m2
-
-
-convertObj l γ t1@(TRef x1 (m1:t1s) _) t2@(TRef x2 (m2:t2s) _)
+compareObjs l γ t1@(TRef (Gen x1 (m1:t1s)) _) t2@(TRef (Gen x2 (m2:t2s)) _)
   --
   -- * Incompatible mutabilities
   --
   | not (isSubtype γ m1 m2) 
-  = Left $ errorIncompMutTy l t1 t2
+  = SubErr [errorIncompMutTy l t1 t2]
   --  
   -- * Both immutable, same name, non arrays: co-variant subtyping on arguments
   --
-  | x1 == x2 && isImmutable m2 && not (isArr t1) 
-  = do c1    <- convert' l γ m1 m2
-       c2    <- zipWithM (convert' l γ) t1s t2s
-       return $ mconcat $ c1 : c2
+  | x1 == x2 && isImm m2 && not (isArr t1) 
+  = mconcat $ compareTypes l γ m1 m2 
+            : zipWith (compareTypes l γ) t1s t2s
   -- 
   -- * Non-immutable, same name: co- and contra-variant subtyping on arguments
   --
   | x1 == x2 
-  = do c1    <- convert' l γ m1 m2
-       c2    <- zipWithM (convert' l γ) t1s t2s
-       c3    <- zipWithM (convert' l γ) t2s t1s
-       return $ mconcat $ [c1] ++ c2 ++ c3
+  = mconcat $ compareTypes l γ m1 m2 
+            :  zipWith (compareTypes l γ) t1s t2s 
+            ++ zipWith (compareTypes l γ) t2s t1s
   -- 
   -- * Compatible mutabilities, differenet names:
   --
   | isAncestor γ x1 x2 || isAncestor γ x2 x1
-  = case (weaken γ (x1,m1:t1s) x2, weaken γ (x2,m2:t2s) x1) of
-  -- 
-  -- * Adjusting `t1` to reach `t2` moving upward in the type 
-  --   hierarchy -- this is equivalent to Upcast
-  --
-      (Just (_,m1':t1s'), _) -> mconcat . (CDUp:) <$> zipWithM (convert' l γ) (m1':t1s') (m2:t2s)
-  -- 
-  -- * Adjusting `t2` to reach `t1` moving upward in the type 
-  --   hierarchy -- this is equivalent to DownCast
-  --
-      (_, Just (_,m2':t2s')) -> mconcat . (CDDn:) <$> zipWithM (convert' l γ) (m1:t1s) (m2':t2s')
-      (_, _) -> Left $ bugWeakenAncestors (srcPos l) x1 x2
+  = case (weaken γ (Gen x1 (m1:t1s)) x2, weaken γ (Gen x2 (m2:t2s)) x1) of
+      -- 
+      -- * Adjusting `t1` to reach `t2` moving upward in the type 
+      --   hierarchy -- this is equivalent to Upcast
+      --
+      (Just (Gen _ (m1':t1s')), _) -> mconcat $ SubT : zipWith (compareTypes l γ) (m1':t1s') (m2:t2s)
+      -- 
+      -- * Adjusting `t2` to reach `t1` moving upward in the type 
+      --   hierarchy -- this is equivalent to DownCast
+      --
+      (_, Just (Gen _ (m2':t2s'))) -> mconcat $ SupT : zipWith (compareTypes l γ) (m1:t1s) (m2':t2s')
+      
+      (_, _) -> SubErr [bugWeakenAncestors (srcPos l) x1 x2]
 
-convertObj l γ (TClass  c1) (TClass  c2) = convertTClass  l γ c1 c2
+compareObjs l γ (TType k1 c1) (TType k2 c2) | k1 == k2 = convertTClass l γ c1 c2
 
-convertObj l γ (TModule m1) (TModule m2) = convertTModule l γ m1 m2
-
-convertObj l γ (TEnum e1) (TEnum e2) = convertTEnum l γ e1 e2
-
--- convertObj l γ (TRef x1 _ _) (TRef x2 _ _) | isEnumValue γ x1 && isEnumValue γ x2 = return CDUp
--- convertObj l γ (TRef x1 _ _) t2            | isEnumValue γ x1 && isTNum t2        = return CDUp
--- convertObj l γ t1            (TRef x2 _ _) | isTNum t1        && isEnumValue γ x2 = return CDUp
-
+compareObjs l γ (TMod m1) (TMod m2) = convertTModule l m1 m2
 -- 
 -- * Fall back to structural subtyping
 --
-convertObj l γ t1 t2 =
+compareObjs l γ t1 t2 =
   case (expandType NonCoercive γ t1, expandType NonCoercive γ t2) of 
-    (Just ft1, Just ft2) -> convertObj l γ ft1 ft2
-    (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2
-    (Nothing , _       ) -> Left $ errorNonObjectType l t1 
-    (_       , Nothing ) -> Left $ errorNonObjectType l t2
+    (Just ft1, Just ft2) -> compareObjs l γ ft1 ft2
+    (Nothing , Nothing ) -> SubErr [errorUnresolvedTypes l t1 t2]
+    (Nothing , _       ) -> SubErr [errorNonObjectType l t1]
+    (_       , Nothing ) -> SubErr [errorNonObjectType l t2]
 
 
-covariantConvertObj l γ (t1,μ1,e1s) (t2,μ2,e2s)
-  -- 
-  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn'}
-  --
-  | M.null uq1s && M.null uq2s = mconcat           <$> subEs  
-  --
-  -- {x1:t1,..,xn:tn,..,xm:tm} ?? {x1:t1',..,xn:tn'}
-  --
-  |                M.null uq2s = mconcat . (CDUp:) <$> subEs  
-  -- 
-  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn',..,xm:tm'}
-  --
-  -- There is no point in adding a DownCast here -- no way to prove it currently.
-  --
-  | M.null uq1s                = Left $ errorObjSubtype l t1 t2 (fst <$> M.keys uq2s)
-  -- 
-  -- String Indexer
-  --
-  | hasStringIndexer l2s       = mconcat . (CDUp:) <$> subStringIndexer
+compareObjMembers l γ t1 (TM p1 m1 _ _ c1 k1 s1 n1) t2 (TM p2 m2 _ _ c2 k2 s2 n2)
+  = compareProps l γ t1 p1 t2 p2 <> 
+    compareMeths l γ t1 m1 t2 m2 <>
+    compareCalls l γ t1 c1 t2 c2 <> 
+    compareCtors l γ t1 k1 t2 k2 <> 
+    compareSIdxs l γ t1 s1 t2 s2 <> 
+    compareNIdxs l γ t1 n1 t2 n2
 
-  | otherwise                  = Left $ errorIncompatCovFields l e1s e2s
+compareProps = compareMembers compareProp
+compareMeths = compareMembers compareMeth
+
+compareMembers op l γ t1 p1 t2 p2
+  | null diff12, null diff21                              -- Same exact fields in @t1@ and @t2@
+  = mconcat $ op l γ <$> match
+  | null diff21                                           -- Width-subtyping: fields of @t1@ are a 
+                                                          -- superset of fields of @t2@.
+  = mconcat $ SubT : map (op l γ) match
+  | otherwise                                             -- No subtype
+  = SubErr [errorObjSubtype l t1 t2 $ fst <$> diff21]
   where
-    l2s                        = M.elems e2s
-    -- TODO: Remove comb...
-    -- e1s'                       = (M.map (combMutInField μ1) . M.filter subtypeable) e1s
-    -- e2s'                       = (M.map (combMutInField μ2) . M.filter subtypeable) e2s
-    e1s'                       = (M.filter subtypeable) e1s
-    e2s'                       = (M.filter subtypeable) e2s
-    -- Optional fields should not take part in width subtyping
-    (e1s'', e2s'')             = mapPair (M.filter requiredField) (e1s',e2s')
-    -- Subtyping equivalent type-members
-    subEs                      = mapM (uncurry $ convertElt l γ True) es
-    -- Type-members unique in the 1st group
-    uq1s                       = e1s'' `M.difference` e2s''
-   -- Type-members unique in the 2nd group
-    uq2s                       = e2s'' `M.difference` e1s'' 
-    -- Pairs of equivalent type-members in `e1s` and `e2s`
-    es                         = M.elems $ M.intersectionWith (,) e1s' e2s'
-    -- String Indexer -- checks all field elements 
-    subStringIndexer           = mapM convStrIdx (fieldSigs $ M.elems e1s)
-    convStrIdx e1              = convertStringIndexer l γ True e1 (getStringIndexer l2s)
+    diff21 = toListSEnv $ p2 `differenceSEnv` p1
+    diff12 = toListSEnv $ p1 `differenceSEnv` p2 
+    match  = toListSEnv $ intersectWithSEnv (,) p1 p2 
 
--- | `invariantConvertObj l γ e1s e2s` determines if an object type containing
---   members @e1s@ can be converted (used as) an object type with members @e2s@. 
---
-invariantConvertObj l γ (μ1,e1s) (μ2,e2s)
-  | M.null uq1s && M.null uq2s = mconcat           <$> subEs  -- {x1:t1,..,xn:tn}          == {x1:t1',..,xn:tn'}
-  |                M.null uq2s = mconcat . (CDUp:) <$> subEs  -- {x1:t1,..,xn:tn,..,xm:tm} UP {x1:t1',..,xn:tn'}
-  -- FIXME: Add case for string indexer
-  | hasStringIndexer l2s       = mconcat . (CDUp:) <$> subStringIndexer
-  -- {x1:t1,..,xn:tn, y1:...} DD {x1:t1',..,xn:tn',..,xm:tm'} 
-  | otherwise                  = Left $ errorIncompatInvFields l e1s e2s
+compareProp l γ (f, (FI a1 m1 t1, FI a2 m2 t2))
+  | opt1 /= opt2 
+  = SubErr [errorIncompatOptional (srcPos l) f]
+  | isSubtype γ m1 m2 && isImm m2                         -- Co-Variance
+  = compareTypes l γ t1 t2
+  | isSubtype γ m1 m2                                     -- Co-& Contra-Variance
+  = compareTypes l γ t1 t2 <> compareTypes l γ t2 t1
+  | otherwise
+  = SubErr [errorIncompMutElt (srcPos l) f]
   where
-    l2s                        = M.elems e2s
-    -- TODO: The COMB MUT business should not need to happen 
-    -- e1s'                       = (M.map (combMutInField μ1) . M.filter subtypeable) e1s
-    -- e2s'                       = (M.map (combMutInField μ2) . M.filter subtypeable) e2s
-    e1s'                       = (M.filter subtypeable) e1s
-    e2s'                       = (M.filter subtypeable) e2s
-    -- Optional fields should not take part in width subtyping
-    (e1s'', e2s'')             = mapPair (M.filter requiredField) (e1s', e2s')
-    -- Subtyping equivalent type-members
-    subEs                      = mapM (uncurry $ convertElt l γ False) $ es ++ es'
-    es'                        = swap <$> es
-    -- Type-members unique in the 1st group
-    uq1s                       = e1s'' `M.difference` e2s''
-   -- Type-members unique in the 2nd group
-    uq2s                       = e2s'' `M.difference` e1s'' 
-    -- Pairs of equivalent type-members in `e1s` and `e2s`
-    es                         = M.elems $ M.intersectionWith (,) e1s' e2s'
-    -- String Indexer -- checks all field elements 
-    subStringIndexer           = mapM convStrIdx (fieldSigs $ M.elems e1s)
-    convStrIdx e1              = convertStringIndexer l γ False e1 (getStringIndexer l2s)
+    opt1 = Optional `elem` a1 
+    opt2 = Optional `elem` a2
 
+compareMeth l γ (m, (MI a1 m1 t1, MI a2 m2 t2))
+  | opt1 /= opt2 
+  = SubErr [errorIncompatOptional (srcPos l) m]
+  | m1 `eqMutability` m2 
+  = SubErr [errorIncompMethMut (srcPos l) m]
+  | otherwise
+  = compareTypes l γ t1 t2
+  where
+    opt1 = Optional `elem` a1 
+    opt2 = Optional `elem` a2
 
--- | `convertElt l γ mut e1 e2` performs a subtyping check between elements @e1@ and
---   @e2@ given that they belong to:
---
---    * an immutable structure if @mut@ is True, 
---    * a mutable one if @mut@ is False.
---
-convertElt l γ _ (CallSig t1) (CallSig t2) 
-  = convert' l γ t1 t2 
+compareCalls l γ _  (Just f1) _  (Just f2) = compareFuns l γ f1 f2
+compareCalls l _ t1 _         t2 _         = SubErr [errorIncompCallSigs (srcPos l) t1 t2]
 
-convertElt l γ False f1@(FieldSig _ _ m1 t1) f2@(FieldSig _ _ m2 t2)          -- mutable container
-  -- | o1 /= o2
-  -- = Left $ errorOptionalElt (srcPos l) f1 f2 
-  | isSubtype γ t1 t2 && isSubtype γ m2 m1 
-  = convert' l γ t1 t2 `mappendM` convert' l γ t2 t1
-  | otherwise                           
-  = Left $ errorIncompMutElt (srcPos l) f1 f2
+compareCtors l γ _  (Just k1) _  (Just k2) = compareFuns l γ k1 k2
+compareCtors l _ t1 _         t2 _         = SubErr [errorIncompCtorSigs (srcPos l) t1 t2]
 
-convertElt l γ True f1@(FieldSig _ _ m1 t1) f2@(FieldSig _ _ m2 t2)   -- immutable container
-  -- | o1 == Optional && o2 == Mandatory 
-  -- = Left $ errorIncompatOptional (srcPos l) f1 f2 
-  | isSubtype γ m1 m2 && isImmutable m2 
-  = convert' l γ t1 t2
-  | isSubtype γ m1 m2
-  = convert' l γ t1 t2 `mappendM` convert' l γ t2 t1
-  | otherwise                           
-  = Left $ errorIncompMutElt (srcPos l) f1 f2
+compareSIdxs l γ _  (Just s1) _  (Just s2) = compareTypes l γ s1 s2 <> compareTypes l γ s2 s1
+compareSIdxs l _ t1 _         t2 _         = SubErr [errorIncompSIdxSigs (srcPos l) t1 t2]
 
-convertElt l γ _ (MethSig _ t1) (MethSig _ t2) 
-  = convert' l γ t1 t2 
+compareNIdxs l γ _  (Just n1) _  (Just n2) = compareTypes l γ n1 n2 <> compareTypes l γ n2 n1
+compareNIdxs l _ t1 _         t2 _         = SubErr [errorIncompNIdxSigs (srcPos l) t1 t2]
+
+t1 `eqMutability` t2 | isMut t1, isMut t2  = True 
+                     | isImm t1, isImm t2  = True 
+                     | isRO  t1, isRO  t2  = True
+                     | isUM  t1, isUM  t2  = True
+                     | otherwise           = False
+
+--------------------------------------------------------------------------------
+compareFuns :: FE g => SrcSpan -> g () -> Type -> Type -> SubTRes
+--------------------------------------------------------------------------------
+compareFuns l γ (TFun b1s o1 _) (TFun b2s o2 _) 
+  = mconcat   $ lengthSub 
+              : compareTypes l γ o1 o2 
+              : zipWith (compareTypes l γ) args2 args1 
+  where
+    lengthSub | length b1s == length b2s = EqT
+              | otherwise                = SubErr [] -- TODO 
+    args1     = map b_type b1s
+    args2     = map b_type b2s
+
+compareFuns l γ t1@(TAnd _) t2@(TAnd t2s) 
+  | and $ isSubtype γ t1 <$> t2s 
+  = SubT
+  | otherwise
+  = SubErr [errorFuncSubtype l t1 t2]
+
+compareFuns l γ t1@(TAnd t1s) t2 
+  | or $ f <$> t1s 
+  = SubT
+  | otherwise      
+  = SubErr [errorFuncSubtype l t1 t2]
+  where
+    f t1 = isSubtype γ t1 t2 
+
  
-convertElt l γ _ (ConsSig t1) (ConsSig t2) 
-  = convert' l γ t1 t2 
+compareFuns l _ t1 t2 = SubErr [unsupportedConvFun l t1 t2]
 
-convertElt l γ _ (IndexSig _ _ t1) (IndexSig _ _ t2)
-  = convert' l γ t1 t2 `mappendM` convert' l γ t2 t1
-
--- | otherwise fail
-convertElt l _ _ f1 f2 = Left $ bugEltSubt (srcPos l) f1 f2
-
-
-convertStringIndexer l γ True e1 e2 
-  = convert' l γ (eltType e1) (eltType e2) 
-convertStringIndexer l γ False e1 e2 
-  = liftM2 mappend (convert' l γ (eltType e1) (eltType e2)) 
-                   (convert' l γ (eltType e2) (eltType e1))
-
-
--- | `convertFun`
---  
---   * (t1,t2,..,tk) => t <: (t1,t2,..,tk,..,tl) => t
---
---       forall i . ti' <: ti   t <: t'
---   * ----------------------------------
---       (ti,..) => t <: (ti',..) => t'
---
 --------------------------------------------------------------------------------
-convertFun :: (Functor g, EnvLike () g)
-           => SrcSpan -> g () -> Type -> Type -> Either Error CastDirection
+convertTClass :: FE g => SrcSpan -> g () -> TGen () -> TGen () -> SubTRes
 --------------------------------------------------------------------------------
-convertFun l γ (TFun s1 b1s o1 _) (TFun s2 b2s o2 _) 
-  = mappend lengthSub <$> 
-    mconcat           <$> liftM2 (:) (convert' l γ o1 o2) 
-                            (zipWithM (convert' l γ) args2 args1)
-  where
-    lengthSub | length b1s == length b2s = CDNo
-    --           | length b1s >  length b2s = CDDn
-              | otherwise                = CDDead
-    s1'       = fromMaybe tTop s1 
-    s2'       = fromMaybe tTop s2
-    args1     = s1' : map b_type b1s
-    args2     = s2' : map b_type b2s
+convertTClass l γ t1@(Gen c1 ts1) t2@(Gen c2 ts2) 
+  | c1 == c2
+  , and $ zipWith (isSubtype γ) ts1 ts2
+  , and $ zipWith (isSubtype γ) ts2 ts1
+  = EqT
+  | otherwise 
+  = SubErr [errorTClassSubtype l t1 t2]
 
-convertFun l γ t1@(TAnd _) t2@(TAnd t2s) = 
-  if and $ isSubtype γ t1 <$> t2s then Right CDUp
-                                  else Left  $ errorFuncSubtype l t1 t2
-
-convertFun l γ t1@(TAnd t1s) t2 = 
-  let f t1 = isSubtype γ t1 t2 in 
-  if or $ f <$> t1s then Right CDUp
-                    else Left  $ errorFuncSubtype l t1 t2
- 
-convertFun l _ t1 t2 = Left $ unsupportedConvFun l t1 t2
-
-
--- | `convertTClass`
 --------------------------------------------------------------------------------
-convertTClass :: (Functor g, EnvLike () g)
-              => SrcSpan -> g () -> AbsName -> AbsName -> Either Error CastDirection
+convertTModule :: SrcSpan -> AbsPath -> AbsPath -> SubTRes
 --------------------------------------------------------------------------------
-convertTClass l _ c1 c2 | c1 == c2  = Right CDNo  
-                        | otherwise = Left  $ errorTClassSubtype l c1 c2
+convertTModule l c1 c2 | c1 == c2  = EqT
+                       | otherwise = SubErr [errorTModule l c1 c2]
 
--- | `convertTModule`
 --------------------------------------------------------------------------------
-convertTModule :: (Functor g, EnvLike () g)
-              => SrcSpan -> g () -> AbsPath -> AbsPath -> Either Error CastDirection
+convertTEnum :: SrcSpan -> AbsName -> AbsName -> SubTRes
 --------------------------------------------------------------------------------
-convertTModule l _ c1 c2 | c1 == c2  = Right CDNo
-                         | otherwise = Left $ errorTModule l c1 c2
-
--- | `convertTEnum`
---------------------------------------------------------------------------------
-convertTEnum :: (Functor g, EnvLike () g)
-              => SrcSpan -> g () -> AbsName -> AbsName -> Either Error CastDirection
---------------------------------------------------------------------------------
-convertTEnum l _ e1 e2 | e1 == e2  = Right CDNo  
-                       | otherwise = Left  $ errorTEnumSubtype l e1 e2
-
--- | `convertSimple`
---------------------------------------------------------------------------------
-convertSimple :: (Functor g, EnvLike () g)
-              => SrcSpan -> g r -> Type -> Type -> Either Error CastDirection
---------------------------------------------------------------------------------
-convertSimple _ _ t1 t2 | t1 == t2  = Right CDNo
-                        | otherwise = Right CDDead 
-
--- | `convertUnion`
---------------------------------------------------------------------------------
-convertUnion :: (Functor g, EnvLike () g)
-             => SrcSpan -> g () -> Type -> Type -> Either Error CastDirection
---------------------------------------------------------------------------------
-convertUnion _ γ t1 t2  
-  | upcast    = Right CDUp 
-  | downcast  = Right CDDn
-  | otherwise = Right CDDead
-  where 
-    upcast        = all (\t1 -> any (\t2 -> isSubtype     γ t1 t2) t2s) t1s
-    downcast      = any (\t1 -> any (\t2 -> isConvertible γ t1 t2) t2s) t1s 
-    (t1s, t2s)    = chk $ mapPair bkUnion (t1, t2)
-    chk ([ ],[ ]) = errorstar "unionParts', called on too small input"
-    chk ([_],[ ]) = errorstar "unionParts', called on too small input"
-    chk ([ ],[_]) = errorstar "unionParts', called on too small input"
-    chk ([_],[_]) = errorstar "unionParts', called on too small input"
-    chk p         = p
-
-
--- | Related types ( ~~ ) -- Cannot be parts of the same union. 
---  
---   Reflexive, symmetric, transitive
---   
-class Related t where
-  related :: (Functor g, EnvLike r g, PPR r) 
-          => g r -> t r -> t r -> Bool
-
-instance Related RType where
-  related _ (TSelf _)    (TSelf _)              = True
-
-  related γ (TRef x _ _) (TRef y _ _)           = isAncestor γ x y || isAncestor γ y x
-
-  related _ TRef{}       TCons{}                = True
-  related _ TCons{}      TRef{}                 = True
-
-  related _ TCons{}      TCons{}                = True
-
-  related _ t t' | all isPrimitive [t,t']       = toType t == toType t'
-                 | all isTFun      [t,t']       = True
-                 | toType t == toType t'        = True
-                 | otherwise                    = False
+convertTEnum l e1 e2 | e1 == e2  = EqT  
+                     | otherwise = SubErr [errorTEnumSubtype l e1 e2]
 

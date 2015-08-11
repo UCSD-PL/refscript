@@ -64,12 +64,12 @@ resolveTypeInPgm    :: NanoBareR r -> AbsName -> Maybe (TypeDecl r)
 resolveEnumInPgm    :: NanoBareR r -> AbsName -> Maybe EnumDef
 resolveModuleInPgm  :: NanoBareR r -> AbsPath -> Maybe (ModuleDef r)
 --------------------------------------------------------------------------------
-resolveModuleInEnv γ s = qenvFindTy s (modules γ)
+resolveModuleInEnv γ s             = qenvFindTy s (modules γ)
 resolveTypeInEnv γ (QN AK_ l ss s) = resolveModuleInEnv γ (QP AK_ l ss) >>= envFindTy s . m_types
 resolveEnumInEnv γ (QN AK_ l ss s) = resolveModuleInEnv γ (QP AK_ l ss) >>= envFindTy s . m_enums
 resolveTypeInPgm p (QN AK_ l ss s) = resolveModuleInPgm p (QP AK_ l ss) >>= envFindTy s . m_types
 resolveEnumInPgm p (QN AK_ l ss s) = resolveModuleInPgm p (QP AK_ l ss) >>= envFindTy s . m_enums
-resolveModuleInPgm p s = qenvFindTy s $ pModules p
+resolveModuleInPgm p s             = qenvFindTy s $ pModules p
 
 --------------------------------------------------------------------------------
 isClassType :: EnvLike r g => g r -> RType r -> Bool
@@ -152,9 +152,9 @@ expandType _ γ (TType EnumK (Gen x _))
                             = [(k, FI [] tImm (tBV32 `strengthen` e))]
     mkField _               = []
 
+-- Common cases end here. The rest are only valid if non-coercive
 expandType NonCoercive γ t = Nothing
 
--- FIXME: Even these should inherit from Object
 expandType _ γ (TPrim TNumber _)  = (`TObj` fTop) <$> (expand γ <$> resolveTypeInEnv γ numberInterface)
 expandType _ γ (TPrim TString _)  = (`TObj` fTop) <$> (expand γ <$> resolveTypeInEnv γ stringInterface)
 expandType _ γ (TPrim TBoolean _) = (`TObj` fTop) <$> (expand γ <$> resolveTypeInEnv γ booleanInterface)

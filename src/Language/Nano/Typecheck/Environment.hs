@@ -23,11 +23,13 @@ import           Text.PrettyPrint.HughesPJ
 
 data TCEnv r  = TCE {
     tce_names       :: Env (EnvEntry r)
+  , tce_bounds      :: Env (RType r)
+  , tce_ctx         :: IContext
+  , tce_path        :: AbsPath
   , tce_mod         :: QEnv (ModuleDef r)
   , tce_cha         :: ClassHierarchy r
-  , tce_ctx         :: !IContext
-  , tce_path        :: AbsPath
-  , tce_parent      :: Maybe (TCEnv r)
+
+  -- , tce_parent      :: Maybe (TCEnv r)
   }
   deriving (Functor) -- , Data, Typeable)
 
@@ -41,12 +43,14 @@ type TCEnvO r = Maybe (TCEnv r)
 
 
 instance EnvLike r TCEnv where
-  names           = tce_names
+  names     = tce_names
+  bounds    = tce_bounds
+  absPath   = tce_path
+  context   = tce_ctx
   modules         = tce_mod
   cha             = tce_cha
-  absPath         = tce_path
-  context         = tce_ctx
-  parent          = tce_parent
+
+  -- parent          = tce_parent
  
 
 instance (PP r, F.Reftable r) => PP (TCEnv r) where
@@ -57,8 +61,8 @@ ppTCEnv :: (PP r, F.Reftable r) => TCEnv r -> Doc
 ppTCEnv g
   =   text "******************** Environment ************************"
   $+$ pp (names g)
-  $+$ text "******************** Modules ****************************"
-  $+$ pp (modules g)
+  -- $+$ text "******************** Modules ****************************"
+  -- $+$ pp (modules g)
   $+$ text "******************** Absolute path **********************"
   $+$ pp (absPath g)
 

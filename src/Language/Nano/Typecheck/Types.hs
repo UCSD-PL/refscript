@@ -303,15 +303,6 @@ strengthen t _              = t    -- TAnd, TType, TAll, TExp fall through
 --       e.g. function types. Sigh. Should have used a separate function binder.
 
 
--- -- XXX : add to env
--- ----------------------------------------------------------------------------------------
--- bound :: F.Reftable r       => RType r -> RType r 
--- ----------------------------------------------------------------------------------------
--- bound (TVar  (TV _ c _ ) _) = c
--- bound (TOr ts)              = TOr $ bound <$> ts
--- boudn t                     = t
-
-
 ----------------------------------------------------------------------------------------
 -- | Predicates on Types 
 ----------------------------------------------------------------------------------------

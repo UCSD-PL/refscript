@@ -80,19 +80,31 @@ convert l γ t1 t2
 compareTypes :: FE g => SrcSpan -> g () -> Type -> Type -> SubTRes
 --------------------------------------------------------------------------------
 compareTypes _ _ _  t2 | isTTop t2                  = SubT
-compareTypes l γ t1 t2 | isTPrim t1, isTPrim t2     = comparePrims t1 t2
-compareTypes l γ t1 t2 | isTVar t1, isTVar t2       = compareVars t1 t2
+compareTypes l γ t1 t2 | isTPrim t1  ,  isTPrim t2  = comparePrims t1 t2
+compareTypes l γ t1 t2 | isTVar t1   || isTVar t2   = compareVars l γ t1 t2
 compareTypes l γ t1 t2 | isTUnion t1 || isTUnion t2 = compareUnions γ t1 t2
 compareTypes l γ t1 t2 | maybeTObj t1, maybeTObj t2 = compareObjs l γ t1 t2
-compareTypes l γ t1 t2 | isTFun t1, isTFun t2       = compareFuns l γ t1 t2
-compareTypes l γ t1 t2                              = SubErr [] -- TODO
+compareTypes l γ t1 t2 | isTFun t1   , isTFun t2    = compareFuns l γ t1 t2
+compareTypes l γ t1 t2                              = SubErr []     -- TODO
 
-comparePrims (TPrim c1 _) (TPrim c2 _) | c1 == c2  = EqT
-                                       | otherwise = SubErr []  -- TODO 
+--------------------------------------------------------------------------------
+comparePrims :: Type -> Type -> SubTRes
+--------------------------------------------------------------------------------
+comparePrims (TPrim c1 _) (TPrim c2 _)  | c1 == c2  = EqT
+                                        | otherwise = SubErr []     -- TODO 
+comparePrims _            _             = SubErr [{- BUG -}]
 
-compareVars (TVar v1 _) (TVar v2 _) | v1 == v2  = EqT
-                                    | otherwise = SubErr []     -- TODO
+--------------------------------------------------------------------------------
+compareVars :: FE g => SrcSpan -> g () -> Type -> Type -> SubTRes
+--------------------------------------------------------------------------------
+compareVars l γ (TVar v1 _) (TVar v2 _) | v1 == v2  = EqT
+                                        | otherwise = SubErr []     -- TODO
+compareVars l γ (TVar v1 _) t2          = compareTypes l γ bt1 t2
+                                          where bt1 = fromMaybe tTop $ envFindBound v1 γ
+compareVars _ _ _           (TVar _ _)  = SubErr []                 -- TODO
 
+compareVars _ _ _           _           = SubErr [{- BUG -}]
+  
 --------------------------------------------------------------------------------
 compareUnions :: FE g => g () -> Type -> Type -> SubTRes
 --------------------------------------------------------------------------------

@@ -273,3 +273,40 @@ appTy (Su m)   (TAll α t)    = TAll α $ apply (Su $ HM.delete (btvToTV α) m) 
 appTy θ        (TFun ts t r) = TFun (apply θ ts) (apply θ t) r
 appTy _        (TExp _)      = error "appTy should not be applied to TExp"
 
+
+---------------------------------------------------------------------------------
+-- | Type equality (module α-renaming) 
+---------------------------------------------------------------------------------
+
+instance (F.Reftable r) => Eq (TGen r) where
+  Gen n ts    == Gen n' ts'    = n == n' && ts == ts' 
+
+instance (F.Reftable r) => Eq (TypeMembers r) where
+  TM p m sp sm c k s n == TM p' m' sp' sm' c' k' s' n' =  
+    p == p' && m == m' && sp == sp' && sm == sm' && c == c' && k == k' && s == s' && n == n'
+
+instance (F.Reftable r) => Eq (FieldInfo r) where
+  FI k t1 t2 == FI k' t1' t2' = k == k' && t1 == t1' && t2 == t2'
+
+instance (F.Reftable r) => Eq (MethodInfo r) where
+  MI k t1 t2 == MI k' t1' t2' = k == k' && t1 == t1' && t2 == t2'
+
+instance (F.Reftable r) => Eq (Bind r) where
+  B x t == B x' t' = x == x' && t == t'
+
+instance (F.Reftable r) => Eq (RType r) where
+  TPrim p _ == TPrim p' _  = p == p'
+  TVar α _  == TVar α' _   = α == α'
+  TOr ts    == TOr ts'     = ts == ts'
+  TAnd ts   == TAnd ts'    = ts == ts'
+  TRef g _  == TRef g' _   = g == g'
+  TObj m _  == TObj m' _   = m == m'
+  TType k g == TType k' g' = k == k' && g == g'
+  TMod n    == TMod n'     = n == n'
+  TAll v@(BTV s b _) t == TAll v'@(BTV s' b' _) t' 
+                           = b == b' && t == appTy θ t'
+    where 
+      θ = fromList [(btvToTV v', tVar $ btvToTV v')]
+  TFun bs o _ == TFun bs' o' _ = bs == bs' && o == o'
+  _           == _             = False
+

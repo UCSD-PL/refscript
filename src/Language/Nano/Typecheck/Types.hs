@@ -74,6 +74,8 @@ module Language.Nano.Typecheck.Types (
   -- * BitVector
   , bitVectorValue
 
+  , eqV
+
   ) where 
 
 import           Data.Data
@@ -737,3 +739,6 @@ bitVectorValue ('0':x) = Just $ exprReft $ BV.Bv BV.S32  $ "#" ++ x
 bitVectorValue _       = Nothing
 
 
+TVar (TV s1 _) _ `eqV` TVar (TV s2 _) _ = s1 == s2 
+_                `eqV` _                = False
+  

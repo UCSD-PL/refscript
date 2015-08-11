@@ -188,7 +188,7 @@ addSubst l θ
                               | eqT t t'           = Nothing
                               | otherwise          = Just (t,t')
     eqT                       = on (==) toType
-    uninstantiated k t        = eqT (tVar k) t
+    uninstantiated k t        = tVar k `eqV` t
 
 
 -------------------------------------------------------------------------------
@@ -311,8 +311,8 @@ isCastId (Id _ s) = castPrefix `isPrefixOf` s
 --------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------
-unifyTypesM :: PPR r => SrcSpan -> TCEnv r -> FuncInputs (RType r) 
-                     -> FuncInputs (RType r) -> TCM r (RSubst r)
+unifyTypesM :: PPR r => SrcSpan -> TCEnv r -> FunArgs (RType r) 
+                     -> FunArgs (RType r) -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
 unifyTypesM l γ t1s t2s 
   | sameLength t1s t2s = do θ <- getSubst
@@ -403,7 +403,7 @@ freshenAnn (Ann _ l a)
 tcFunTys :: (PPRSF r, F.Subable (RType r), F.Symbolic s, PP a) 
          => AnnSSA r -> a -> [s] -> RType r -> TCM r [(Int, ([TVar], Maybe (RType r), [RType r], RType r))]
 --------------------------------------------------------------------------------
-tcFunTys l f xs ft = either tcError return $ funTys l f xs ft 
+tcFunTys l f xs ft = either tcError return $ toOverloads l f xs ft 
 
 --------------------------------------------------------------------------------
 checkTypes :: PPR r => TCEnv r -> TCM r ()
@@ -421,9 +421,9 @@ checkTypes γ  = mapM_ (\(a,ts) -> mapM_ (safeExtends $ setAP a γ) ts) types
 --   * [TODO] No conflicts between inherited types
 --
 --------------------------------------------------------------------------------
-safeExtends :: (IsLocated l, PPR r) => TCEnv r -> (l, IfaceDef r) -> TCM r ()
+safeExtends :: (IsLocated l, PPR r) => TCEnv r -> (l, TypeDecl r) -> TCM r ()
 --------------------------------------------------------------------------------
-safeExtends γ (l, t@(ID c _ _ (es,_) _)) 
+safeExtends γ (l, t@(TD k (BGen c bvs) (es,_) _)) 
   | Just ms <- expand' InstanceMember γ t
   = forM_ es $ safeExtends1 γ l c ms 
   | otherwise 
@@ -432,14 +432,14 @@ safeExtends γ (l, t@(ID c _ _ (es,_) _))
 safeExtends1 γ l c ms (p,ps)
   | Just d  <- resolveTypeInEnv γ p 
   , Just ns <- expand InstanceMember γ d ps
-  = if isSubtype γ (mkTCons t_immutable ms) (mkTCons t_immutable ns) 
+  = if isSubtype γ (mkTCons tImm ms) (mkTCons tImm ns) 
       then return ()
-      else tcError $ errorClassExtends (srcPos l) c p (mkTCons t_immutable ms) 
-                                                      (mkTCons t_immutable ns)
+      else tcError $ errorClassExtends (srcPos l) c p (mkTCons tImm ms) 
+                                                      (mkTCons tImm ns)
   | otherwise 
   = tcError $ bugExpandType (srcPos l) p
   where
-    mkTCons m es = TCons m (MM.filter (not . isConstr) es) fTop
+    mkTCons m es = TObj es fTop
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

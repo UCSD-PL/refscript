@@ -87,6 +87,9 @@ data BindQ q r        = B { b_sym  :: F.Symbol
                           } 
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
+data FunArgs t        = FA (Maybe t) [t]
+                        deriving (Functor, Traversable, Foldable)
+
 data TypeMembersQ q r = TM { tm_prop  :: F.SEnv (FieldInfoQ q r)    -- Properties
                            , tm_meth  :: F.SEnv (MethodInfoQ q r)   -- Method signatures
                            , tm_sprop :: F.SEnv (FieldInfoQ q r)    -- Static Properties

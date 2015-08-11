@@ -40,8 +40,6 @@ import           Data.Function                   (on)
 -- | Unification
 -----------------------------------------------------------------------------
 
--- | Unify types @t@ and @t'@, in substitution environment @θ@ and type
--- definition environment @γ@.
 -----------------------------------------------------------------------------
 unify :: (Data r, PPR r) 
       => SrcSpan 
@@ -61,11 +59,6 @@ unify l _ θ t          (TVar α _) = varAsn l θ α t
 unify l γ θ t t' 
   | any isTUnion [t,t'] 
   = unifyUnions l γ θ t t'
-
-unify l γ θ (TFun t1s o1 _) (TFun t2s o2 _)
-  = unifys l γ θ (o1 : map b_type t1s') (o2 : map b_type t2s')
-  where 
-    (t1s',t2s') = unzip $ zip t1s t2s -- get their common parts
 
 unify l γ θ (TFun t1s o1 _) (TFun t2s o2 _)
   = unifys l γ θ (o1 : map b_type t1s') (o2 : map b_type t2s')
@@ -203,9 +196,6 @@ varAsn l θ α t
   | unassigned α θ                         = Right $ θ `mappend` (Su $ HM.singleton α t)
   | otherwise                              = Left  $ errorRigidUnify l α (toType t)
 
-TVar (TV s1 _) _ `eqV` TVar (TV s2 _) _ = s1 == s2 
-_                `eqV` _                = False
-  
 unassigned α (Su m) | Just t <- HM.lookup α m = t `eqV` TVar α ()
                     | otherwise               = False
 

@@ -130,10 +130,10 @@ instance Free (Fact r) where
   free (TypInst _ _ ts)     = free ts
   free (EltOverload _ t)    = free t
   free (Overload _ t)       = free t
-  free (VarAnn (_,t))       = free t
+  free (VarAnn  _ t )       = free t
   free (AmbVarAnn t)        = free t
-  free (FieldAnn f)         = free f
-  free (MethAnn m)          = free m
+  free (FieldAnn _ f)       = free f
+  free (MethAnn _ m)        = free m
   free (ConsAnn c)          = free c
   free (UserCast t)         = free t
   free (FuncAnn c)          = free c
@@ -198,10 +198,10 @@ instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   apply θ (TypInst i ξ ts)  = TypInst i ξ     $ apply θ ts
   apply θ (EltOverload ξ t) = EltOverload ξ   $ apply θ t
   apply θ (Overload ξ t)    = Overload ξ      $ apply θ t
-  apply θ (VarAnn (a,t))    = VarAnn . (a,)   $ apply θ t
+  apply θ (VarAnn a t)      = VarAnn a        $ apply θ t
   apply θ (AmbVarAnn t)     = AmbVarAnn       $ apply θ t
-  apply θ (FieldAnn f)      = FieldAnn        $ apply θ f
-  apply θ (MethAnn t)       = MethAnn         $ apply θ t
+  apply θ (FieldAnn m f)    = FieldAnn m      $ apply θ f
+  apply θ (MethAnn m t)     = MethAnn m       $ apply θ t
   apply θ (ConsAnn t)       = ConsAnn         $ apply θ t
   apply θ (UserCast t)      = UserCast        $ apply θ t
   apply θ (FuncAnn t)       = FuncAnn         $ apply θ t
@@ -211,7 +211,7 @@ instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   apply _ a                 = a
 
 instance F.Reftable r => SubstitutableQ q r (MethodInfoQ q r) where
-  apply θ (MI ms m t)       = MI ms (apply θ m) (apply θ t) 
+  apply θ (MI ms m t)       = MI ms m (apply θ t) 
 
 instance F.Reftable r => SubstitutableQ q r (FieldInfoQ q r) where
   apply θ (FI ms m t)       = FI ms (apply θ m) (apply θ t) 

@@ -71,10 +71,53 @@ ssaNano p@(Nano { code = Src fs })
       patch ms (Ann i l fs) = Ann i l (fs ++ IM.findWithDefault [] i ms)
 
 
+-- | Find all language level bindings in the scope of @s@.
+--   This includes: 
+--
+--    * function definitions/declarations, 
+--    * classes,
+--    * modules,
+--    * variables
+--
+--   E.g. declarations in the If-branch of a conditional expression. Note how 
+--   declarations do not escape module or function blocks.
+--
 ----------------------------------------------------------------------------------
 varsInScope :: Data r => [Statement (AnnSSA r)] -> Env Assignability
 ----------------------------------------------------------------------------------
-varsInScope s = envFromList' [ (x,a) | (x,_,_,a,_) <- hoistBindings s ]
+varsInScope s = envFromList' [ (x,a) | (x,_,_,a,_) <- snd $ visitStmts vs () s ]
+  where
+    vs = scopeVisitor { accStmt = accStmt', accVDec = accVDec' }
+
+    accStmt' _ (FunctionStmt l n _ _)  = [(n, l, fdk, am, ii)]
+    accStmt' _ (FuncAmbDecl l n _)     = [(n, l, fak, am, ii)]
+    accStmt' _ (FuncOverload l n _  )  = [(n, l, fok, am, ii)]
+    accStmt' _ (ClassStmt l n _ _ _ )  = [(n, l, cdk, am, ii)]
+    accStmt' _ (ModuleStmt l n _)      = [(n, l { ann_fact = modAnn  n l }, mdk, am, ii)]
+    accStmt' _ (EnumStmt l n _)        = [(n, l { ann_fact = enumAnn n l }, edk, am, ii)]
+    accStmt' _ _                       = []
+
+    accVDec' _ (VarDecl l n init)      = [(n, l, vdk, varAsgn l, fromInit init)] ++
+                                         [(n, l, vdk, wg, fromInit init) | AmbVarAnn _  <- ann_fact l]
+
+    fromInit (Just _) = ii
+    fromInit _        = ui
+    varAsgn l         = fromMaybe WriteLocal 
+                      $ listToMaybe [ a | VarAnn (a,_) <- ann_fact l ] 
+
+    vdk  = VarDeclKind
+    fdk  = FuncDefKind
+    fak  = FuncAmbientKind
+    fok  = FuncOverloadKind
+    cdk  = ClassDefKind
+    mdk  = ModuleDefKind
+    edk  = EnumDefKind
+    wg   = WriteGlobal
+    am   = Ambient
+    ui   = Uninitialized
+    ii   = Initialized
+    modAnn  n l = ModuleAnn (F.symbol n) : ann_fact l
+    enumAnn n l = EnumAnn   (F.symbol n) : ann_fact l
 
  
 -- Assignability ::= ReadOnly | ImportDecl | WriteLocal | ForeignLocal | WriteGlobal | ReturnVar

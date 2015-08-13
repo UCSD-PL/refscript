@@ -207,8 +207,8 @@ compareMembers op l γ t1 p1 t2 p2
     diff12 = toListSEnv $ p1 `differenceSEnv` p2 
     match  = toListSEnv $ intersectWithSEnv (,) p1 p2 
 
-compareProp l γ (f, (FI a1 m1 t1, FI a2 m2 t2))
-  | opt1 /= opt2 
+compareProp l γ (f, (FI o1 m1 t1, FI o2 m2 t2))
+  | o1 /= o2
   = SubErr [errorIncompatOptional (srcPos l) f]
   | isSubtype γ m1 m2 && isImm m2                         -- Co-Variance
   = compareTypes l γ t1 t2
@@ -216,20 +216,14 @@ compareProp l γ (f, (FI a1 m1 t1, FI a2 m2 t2))
   = compareTypes l γ t1 t2 <> compareTypes l γ t2 t1
   | otherwise
   = SubErr [errorIncompMutElt (srcPos l) f]
-  where
-    opt1 = Optional `elem` a1 
-    opt2 = Optional `elem` a2
 
-compareMeth l γ (m, (MI a1 m1 t1, MI a2 m2 t2))
-  | opt1 /= opt2 
+compareMeth l γ (m, (MI o1 m1 t1, MI o2 m2 t2))
+  | o1 /= o2 
   = SubErr [errorIncompatOptional (srcPos l) m]
-  | m1 `eqMutability` m2 
+  | m1 /= m2 
   = SubErr [errorIncompMethMut (srcPos l) m]
   | otherwise
   = compareTypes l γ t1 t2
-  where
-    opt1 = Optional `elem` a1 
-    opt2 = Optional `elem` a2
 
 compareCalls l γ _  (Just f1) _  (Just f2) = compareFuns l γ f1 f2
 compareCalls l _ t1 _         t2 _         = SubErr [errorIncompCallSigs (srcPos l) t1 t2]

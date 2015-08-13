@@ -35,16 +35,11 @@ module Language.Nano.Locations (
   
   , sourceSpanSrcSpan
 
-
-
 ) where
 
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
-import           Language.Nano.Syntax 
-import           Language.Nano.Syntax.Annotations
-import           Language.Nano.Syntax.PrettyPrint   (PP (..))
--- import           Language.ECMAScript3.Parser.Type   (SrcSpan (..))
+import           Language.Nano.AST
 
 import qualified Language.Fixpoint.Types as F
 
@@ -106,18 +101,7 @@ instance Eq a => Eq (Located a) where
 instance Ord a => Ord (Located a) where 
   x `compare` y = val x `compare` val y
 
-instance F.Fixpoint SrcSpan where
-  toFix = pp 
-
 sourceSpanSrcSpan sp = SS (sp_start sp') (sp_stop sp') where sp' = srcPos sp
-
-
---------------------------------------------------------------------------------
--- | SrcSpans ---------------------------------------------------------------
---------------------------------------------------------------------------------
-
-instance PP SrcSpan where
-  pp    = pprint
 
 srcSpanStartLine = snd3 . sourcePosElts . sp_start . sourceSpanSrcSpan   
 srcSpanEndLine   = snd3 . sourcePosElts . sp_stop  . sourceSpanSrcSpan

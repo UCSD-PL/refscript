@@ -8,7 +8,7 @@
 {-# LANGUAGE TupleSections             #-}
 
 -- | Top Level for Refinement Type checker
-module Language.Nano.Liquid.Liquid (verifyFile) where
+module Language.Nano.Liquid.Typecheck (verifyFile) where
 
 import           Control.Monad
 import           Control.Applicative                ((<$>), (<*>))

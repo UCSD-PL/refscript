@@ -1,8 +1,7 @@
--- | A few helpers to work with the AST annotations
-module Language.Nano.Syntax.Annotations where
 
-import Language.Nano.Syntax.PrettyPrint
-import Language.Nano.Syntax
+module Language.Nano.AST.Annotations where
+
+import Language.Nano.AST.Syntax
 
 import Data.Traversable
 import Control.Applicative
@@ -104,7 +103,7 @@ getAnnotationStmt = go
     go (ModuleStmt a _ _         ) = a
     go (IfaceStmt a _            ) = a
     go (EnumStmt a _ _           ) = a
-    go s                           = error $ "getAnnotationStmt: " ++ (renderStatements [s])
+    go s                           = error "AST.Annotations.getAnnotationStmt"
 
    
 instance HasAnnotation LValue where

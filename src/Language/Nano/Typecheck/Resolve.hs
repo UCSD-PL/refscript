@@ -62,8 +62,8 @@ resolveTypeInEnv    :: EnvLike r t => t r -> AbsName -> Maybe (TypeDecl r)
 resolveEnumInEnv    :: EnvLike r t => t r -> AbsName -> Maybe EnumDef
 --------------------------------------------------------------------------------
 resolveModuleInEnv (modules -> m) s = qenvFindTy s m
-resolveTypeInEnv γ (QN AK_ l ss s) = resolveModuleInEnv γ (QP AK_ l ss) >>= envFindTy s . m_types
-resolveEnumInEnv γ (QN AK_ l ss s) = resolveModuleInEnv γ (QP AK_ l ss) >>= envFindTy s . m_enums
+resolveTypeInEnv γ (QN p s) = resolveModuleInEnv γ p >>= envFindTy s . m_types
+resolveEnumInEnv γ (QN p s) = resolveModuleInEnv γ p >>= envFindTy s . m_enums
  
 --------------------------------------------------------------------------------
 isClassType :: EnvLike r g => g r -> RType r -> Bool
@@ -127,7 +127,7 @@ expandType _ γ (TMod n)
                    .  m_variables 
                   <$> resolveModuleInEnv γ n
   where
-    toFieldInfo (val -> VI _ _ t) = FI [] tImm t
+    toFieldInfo (val -> VI _ _ t) = FI Req tImm t
 
 expandType _ γ (TType EnumK (Gen x _))
   = (`TObj` fTop) <$> tmFromFieldList
@@ -137,9 +137,9 @@ expandType _ γ (TType EnumK (Gen x _))
                   <$> resolveEnumInEnv γ x
   where
     -- TODO 
-    mkField (k, IntLit _ i) = [(k, FI [] tImm (tNum `strengthen` exprReft i))]
+    mkField (k, IntLit _ i) = [(k, FI Req tImm (tNum `strengthen` exprReft i))]
     mkField (k, HexLit _ s) | Just e <- bitVectorValue s
-                            = [(k, FI [] tImm (tBV32 `strengthen` e))]
+                            = [(k, FI Req tImm (tBV32 `strengthen` e))]
     mkField _               = []
 
 -- Common cases end here. The rest are only valid if non-coercive
@@ -202,14 +202,14 @@ nonStaticFields :: ClassHierarchy r -> QEnv (ModuleDef r) -> AbsName -> [F.Symbo
 nonStaticFields (ClassHierarchy g m) modules x 
   = HS.toList . HS.unions $ HS.fromList . flds <$> ps
   where
-    flds (QN k l p y) = [ s | mod     <- maybeToList $ qenvFindTy (QP k l p) modules
-                            , TD _ es <- maybeToList $ envFindTy y $ m_types mod  
-                            , s       <- map fst $ F.toListSEnv $ tm_prop es ]
+    flds (QN p y) = [ s | mod     <- maybeToList $ qenvFindTy p modules
+                        , TD _ es <- maybeToList $ envFindTy y $ m_types mod  
+                        , s       <- map fst $ F.toListSEnv $ tm_prop es ]
 
-    ps                = [ n | cur <- maybeToList $ HM.lookup x m
-                            , anc <- reachable cur g 
-                            , TS k (BGen n _) _ <- maybeToList $ lab g anc
-                            , k == ClassKind ]
+    ps            = [ n | cur <- maybeToList $ HM.lookup x m
+                        , anc <- reachable cur g 
+                        , TS k (BGen n _) _ <- maybeToList $ lab g anc
+                        , k == ClassKind ]
 
 ---------------------------------------------------------------------------
 inheritedNonStaticFields :: ClassHierarchy r -> QEnv (ModuleDef r) -> AbsName -> [F.Symbol]
@@ -217,15 +217,15 @@ inheritedNonStaticFields :: ClassHierarchy r -> QEnv (ModuleDef r) -> AbsName ->
 inheritedNonStaticFields (ClassHierarchy g m) modules x
   = HS.toList . HS.unions $ HS.fromList . flds <$> ps
   where
-    flds (QN k l p y) = [ s | mod     <- maybeToList $ qenvFindTy (QP k l p) modules
-                            , TD _ es <- maybeToList $ envFindTy  y $ m_types mod
-                            , s       <- map fst $ F.toListSEnv $ tm_prop es ] 
+    flds (QN p y) = [ s | mod     <- maybeToList $ qenvFindTy p modules
+                        , TD _ es <- maybeToList $ envFindTy  y $ m_types mod
+                        , s       <- map fst $ F.toListSEnv $ tm_prop es ] 
 
-    ps                = [ n | cur <- maybeToList $ HM.lookup x m
-                            , anc <- reachable cur g
-                            , cur /= anc      -- only gather parents
-                            , TS k (BGen n _) _ <- maybeToList $ lab g anc
-                            , k == ClassKind ]
+    ps            = [ n | cur <- maybeToList $ HM.lookup x m
+                        , anc <- reachable cur g
+                        , cur /= anc      -- only gather parents
+                        , TS k (BGen n _) _ <- maybeToList $ lab g anc
+                        , k == ClassKind ]
 
 ---------------------------------------------------------------------------
 classAncestors     :: EnvLike r t => t r -> AbsName -> [AbsName]

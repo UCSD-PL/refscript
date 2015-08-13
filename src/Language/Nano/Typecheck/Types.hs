@@ -21,7 +21,7 @@ module Language.Nano.Typecheck.Types (
   -- * Type operations
     toType, ofType, rTop, strengthen 
 
-  , PPR, ExprReftable(..) 
+  , ExprReftable(..) 
 
   -- * Constructing Types
   , mkUnion, mkFun, mkAll, mkAnd, mkInitFldTy, mkTCons 
@@ -55,12 +55,6 @@ module Language.Nano.Typecheck.Types (
   
   -- * Refinements
   , fTop
-
-  -- * Function Types
-  , toOverloads
-
-  -- * Element ops 
-  , requiredMember, optionalMember
   
   -- * Type Definitions
   , tmFromFields, tmFromFieldList, typesOfTM
@@ -87,12 +81,10 @@ import           Data.Maybe                     (fromMaybe, isJust, fromJust, ma
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.Map.Strict                as M
 import           Data.Typeable                  ()
-import           Language.Nano.Syntax 
-import           Language.Nano.Syntax.PrettyPrint
+import           Language.Nano.AST
 import qualified Language.Nano.Env              as E
 import           Language.Nano.Misc
 import           Language.Nano.Types
-import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Names
 
@@ -110,16 +102,13 @@ import           Control.Exception              (throw)
 -- import           Debug.Trace (trace)
 
 
-type PPR  r = (ExprReftable F.Symbol r, ExprReftable Int r, PP r, F.Reftable r, Data r)
+-- type PPR  r = (ExprReftable F.Symbol r, ExprReftable Int r, PP r, F.Reftable r, Data r)
 
 ---------------------------------------------------------------------
 -- | Primitive Types
 ---------------------------------------------------------------------
 
-mkAName p s = QN AK_ (srcPos dummySpan) p (F.symbol s)
-mkRName p s = QN RK_ (srcPos dummySpan) p (F.symbol s)
-
-mkPrimTy s m = TRef (Gen (mkAName [] s) [m]) fTop
+mkPrimTy s m = TRef (Gen (mkAbsName [] s) [m]) fTop
 
 tObject = mkPrimTy "Object" tImm
 
@@ -128,11 +117,8 @@ tObject = mkPrimTy "Object" tImm
 -- | Mutability
 ---------------------------------------------------------------------
 
-instance Default Mutability where
-  def = mkMut "Immutable"
-
-mkMut s    = TRef (Gen (mkAName [] s) []) fTop
-mkRelMut s = TRef (Gen (mkRName [] s) []) fTop
+mkMut s    = TRef (Gen (mkAbsName [] s) []) fTop
+mkRelMut s = TRef (Gen (mkRelName [] s) []) fTop
 
 tMut    = mkMut "Mutable"
 tUqMut  = mkMut "UniqueMutable"
@@ -145,7 +131,7 @@ trImm   = mkRelMut "Immutable"
 trRO    = mkRelMut "ReadOnly"
 trIM    = mkRelMut "InheritedMut"
 
-typeName (Gen (QN _ _ _ s) _)  = s
+typeName (Gen (QN _ s) _)  = s
 
 isNamed s t | TRef n _ <- t, typeName n == F.symbol s = True | otherwise = False
 
@@ -191,25 +177,6 @@ instance F.Expression a => ExprReftable a F.Reft where
 instance F.Reftable r => ExprReftable BV.Bv r where
   exprReft  = F.ofReft . F.exprReft
   uexprReft = F.ofReft . F.uexprReft
-
-----------------------------------------------------------------------------------------
-toOverloads :: (IsLocated l, F.Subable (RType r), PP f, PPR r, F.Symbolic b) 
-            => l -> f -> [b] -> RType r -> Either Error [IOverloadSig r]
-----------------------------------------------------------------------------------------
-toOverloads l f xs ft 
-  | Just ts <- bkFuns ft
-  = case partitionEithers [funTy l xs t | t <- ts] of 
-     ([], fts) -> Right $ zip ([0..] :: [Int]) fts
-     (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
-  | otherwise
-  = Left $ errorNonFunction (srcPos l) f ft 
-
-funTy l xs (αs, yts, t) =
-  case padUndefineds xs yts of
-    Nothing   -> Left  $ errorArgMismatch (srcPos l)
-    Just yts' -> Right $ (αs, ts', F.subst su t)
-                   where
-                    (su, ts') = renameBinds yts' xs 
 
 padUndefineds xs yts
   | nyts <= nxs = Just $ yts ++ xundefs
@@ -365,163 +332,15 @@ rTypeR' (TAll _ _)   = Nothing
 rTypeR' (TExp _)     = Nothing 
 
 ----------------------------------------------------------------------------------
-rTypeR :: (PP r, F.Reftable r) => RType r -> r
+rTypeR :: F.Reftable r => RType r -> r
 ----------------------------------------------------------------------------------
 rTypeR t | Just r <- rTypeR' t = r
-         | otherwise           = errorstar $ "Unimplemented: rTypeR" ++ ppshow t
+         | otherwise           = errorstar $ "Unimplemented: rTypeR"
  
-
--- | Modifier predicates
---
-optionalMember ms = Optional `elem` ms
-requiredMember    = not . optionalMember
-
--- subtypeable e = not (isConstr e)
-
 isBvEnum              = all hex . map snd . E.envToList . e_mapping
   where
     hex (HexLit _ _ ) = True 
     hex _             = False
-
-
-----------------------------------------------------------------------------------
--- | Pretty Printer Instances
-----------------------------------------------------------------------------------
-
-angles p = char '<' <> p <> char '>'
-ppHMap p = map (p . snd) . M.toList 
-
-instance PP Bool where
-  pp True   = text "True"
-  pp False  = text "False"
-
-instance PP () where 
-  pp _ = text ""
-
-instance PP a => PP (Maybe a) where 
-  pp = maybe (text "Nothing") pp 
-
-instance PP Char where
-  pp = char
-
-instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
-  pp (TPrim c r)     = F.ppTy r $ pp c
-  pp (TVar α r)      = F.ppTy r $ (text "#" <> pp α)
-  pp (TOr ts)        = ppArgs id (text " +") ts
-  pp (TAnd ts)       = vcat [text "/\\" <+> pp t | t <- ts]
-  pp (TRef t r)      = F.ppTy r $ pp t
-  pp (TObj ms r)     = F.ppTy r $ braces $ pp ms
-  pp (TType k t)     = pp k <+> pp t
-  pp (TMod t)        = text "module" <+> pp t
-  pp t@(TAll _ _)    = ppArgs angles comma αs <> text "." <+> pp t' where (αs, t') = bkAll t
-  pp (TFun xts t _)  = ppArgs parens comma xts <+> text "=>" <+> pp t  
-  pp (TExp e)        = pprint e 
-
-instance PP NamedTypeKind where
-  pp ClassK          = text "class"
-  pp EnumK           = text "enum"
-
-instance (F.Reftable r, PP r) => PP (TypeMembersQ q r) where
-  pp (TM fs ms sfs sms cs cts sidx nidx) = ppProp fs  <+> ppMeth ms  <+> 
-                                           ppProp sfs <+> ppMeth sms <+> 
-                                           ppCall cs  <+> ppCtor cts <+>
-                                           ppIdx sidx <+> ppIdx nidx
-
-ppProp  = undefined
-ppMeth  = undefined
-ppCall  = undefined
-ppCtor  = undefined
-ppIdx   = undefined
-
-instance (F.Reftable r, PP r) => PP (TGenQ q r) where
-  pp (Gen x ts) = pp x <> ppArgs angles comma ts
-
-instance (F.Reftable r, PP r) => PP (BTGenQ q r) where
-  pp (BGen x ts) = pp x <> ppArgs angles comma ts
-
-instance PP TVar where 
-  pp = pprint . F.symbol
-
-instance (F.Reftable r, PP r) => PP (BTVarQ q r) where 
-  pp (BTV v t _) = pprint v <+> text "<:" <+> pp t
-
-instance PP TPrim where
-  pp TString     = text "string"
-  pp (TStrLit s) = text "\"" <> text s <> text "\"" 
-  pp TNumber     = text "number" 
-  pp TBoolean    = text "boolean" 
-  pp TBV32       = text "bitvector32" 
-  pp TVoid       = text "void" 
-  pp TUndefined  = text "undefined"
-  pp TNull       = text "null"
-  pp TBot        = text "_|_"
-  pp TTop        = text " T "
-
-instance (PP r, F.Reftable r) => PP (BindQ q r) where 
-  pp (B x t)          = pp x <> colon <> pp t 
-
-instance (PP s, PP t) => PP (M.Map s t) where
-  pp m = vcat $ pp <$> M.toList m
-
-instance PP Assignability where
-  pp Ambient      = text "Ambient"
-  pp WriteLocal   = text "WriteLocal"
-  pp ForeignLocal = text "ForeignLocal"
-  pp WriteGlobal  = text "WriteGlobal"
-  pp ReturnVar    = text "ReturnVar"
-
-instance (PP r, F.Reftable r) => PP (TypeDeclQ q r) where
-  pp (TD s m) = pp s <+> lbrace $+$ nest 2 (pp m) $+$ rbrace
-
-instance (PP r, F.Reftable r) => PP (TypeSigQ q r) where
-  pp (TS k n h) = pp k <+> pp n <+> ppHeritage h
-
-instance PP TypeDeclKind where
-  pp InterfaceKind  = text "interface"
-  pp ClassKind      = text "class"
-
-ppHeritage (es,is) = ppExtends es <+> ppImplements is
-
-ppExtends Nothing  = text ""
-ppExtends (Just n) = text "extends" <+> pp n
-
-ppImplements [] = text ""
-ppImplements ts = text "implements" <+> intersperse comma (pp <$> ts)
-
-mutSym (TRef n _) | s == F.symbol "Mutable"       = Just "_MU_"
-                  | s == F.symbol "UniqueMutable" = Just "_UM_"
-                  | s == F.symbol "Immutable"     = Just "_IM_"
-                  | s == F.symbol "ReadOnly"      = Just "_RO_"
-                  | s == F.symbol "AssignsFields" = Just "_AF"
-  where s = F.symbol n
-mutSym _ = Nothing
-
-ppMut t@TVar{} = pp t
-ppMut t        | Just s <- mutSym t = pp s
-               | otherwise          = pp "_??_"
-
-instance PP EnumDef where
-  pp (EnumDef n m) = pp n <+> braces (pp m)
-
-instance (F.Reftable r, PP r) => PP (VarInfo q r) where 
-  pp (VI _ _ t) = pp t
- 
-instance (PP r, F.Reftable r) => PP (ModuleDef r) where
-  pp (ModuleDef vars tys enums path) =  
-          text "==================="
-      $+$ text "module" <+> pp path 
-      $+$ text "==================="
-      $+$ text "Variables" 
-      $+$ text "----------"
-      $+$ braces (pp vars)
-      $+$ text "-----"
-      $+$ text "Types" 
-      $+$ text "-----"
-      $+$ pp tys
-      $+$ text "-----"
-      $+$ text "Enums" 
-      $+$ text "-----"
-      $+$ pp enums
 
 
 -----------------------------------------------------------------------
@@ -557,7 +376,7 @@ arrayLitTy :: (F.Subable (RType r), IsLocated a) => a -> Int -> RType r -> RType
 arrayLitTy l n (TAll μ (TAll α (TFun [xt] t r))) = mkAll [μ,α] $ TFun αs rt r
   where αs       = arrayLitBinds n xt
         rt       = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
-arrayLitTy l n _ = die $ bug (srcPos l) $ "Bad Type for ArrayLit Constructor"
+arrayLitTy l n _ = error "Bad Type for ArrayLit Constructor"
       
 arrayLitBinds n (B x t) = [B (x_ i) t | i <- [1..n]] 
   where xs       = F.symbolString x
@@ -584,7 +403,7 @@ objLitTy l ps     = mkFun (vs, bs, undefined) -- rt)
     vs            = mvs ++ avs
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
     rt            = TObj tms fTop
-    tms           = tmFromFieldList [ (s, FI [] m a) | (s,m,a) <- zip3 ss mts ats ]
+    tms           = tmFromFieldList [ (s, FI Req m a) | (s,m,a) <- zip3 ss mts ats ]
     (mvs, mts)    = unzip $ map (freshBTV l mSym Nothing) [1..length ps]  -- field mutability
     (avs, ats)    = unzip $ map (freshBTV l aSym Nothing) [1..length ps]  -- field type vars
     ss            = [F.symbol p | p <- ps]
@@ -596,7 +415,7 @@ argId l           = Id l "arguments"
 
 instance F.Symbolic (LValue a) where
   symbol (LVar _ x) = F.symbol x
-  symbol lv         = convertError "F.Symbol" lv
+  symbol lv         = F.symbol "DummyLValue"
 
 
 instance F.Symbolic (Prop a) where 
@@ -626,9 +445,9 @@ immObjectLitTy :: (F.Reftable r, IsLocated l) => l -> [Prop l] -> [RType r] -> R
 immObjectLitTy l ps ts  | length ps == length ts 
                         = TObj elts fTop
                         | otherwise
-                        = die $ bug (srcPos l) $ "Mismatched args for immObjectLit"
+                        = error "Mismatched args for immObjectLit"
   where
-    elts                = tmFromFieldList [ (F.symbol p, FI [] tImm t) | (p,t) <- safeZip "immObjectLitTy" ps ts ]
+    elts                = tmFromFieldList [ (F.symbol p, FI Req tImm t) | (p,t) <- safeZip "immObjectLitTy" ps ts ]
 
 -- | setProp<A, M extends Mutable>(o: { f[M]: A }, x: A) => A
 --
@@ -638,7 +457,7 @@ setPropTy :: (F.Reftable r, IsLocated l) => l -> F.Symbol -> RType r -> RType r
 setPropTy l f ty = mkAll [bvt, bvm] t
   where
     ft           = TFun [b1, b2] t fTop
-    b1           = B (F.symbol "o") $ TObj (tmFromFieldList [(f, FI [Optional] m t)]) fTop
+    b1           = B (F.symbol "o") $ TObj (tmFromFieldList [(f, FI Opt m t)]) fTop
     b2           = B (F.symbol "x") $ t
     m            = toTTV bvm :: F.Reftable r => RType r
     t            = toTTV bvt
@@ -664,19 +483,19 @@ typesOfTM :: TypeMembers r -> [RType r]
 --------------------------------------------------------------------------------------------
 typesOfTM (TM p m sp sm c k s n) = 
   concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv p) ++
-  concatMap (\(MI _ t t') -> [t,t']) (map snd $ F.toListSEnv m) ++ 
+  concatMap (\(MI _ _ t') -> [t']) (map snd $ F.toListSEnv m) ++ 
   concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv sp) ++ 
-  concatMap (\(MI _ t t') -> [t,t']) (map snd $ F.toListSEnv sm) ++ 
+  concatMap (\(MI _ _ t') -> [t']) (map snd $ F.toListSEnv sm) ++ 
   concatMap maybeToList [c, k, s, n]
 
 ---------------------------------------------------------------------------------
-returnTy :: (PP r, F.Reftable r) => RType r -> Bool -> RType r
+returnTy :: F.Reftable r => RType r -> Bool -> RType r
 ---------------------------------------------------------------------------------
 returnTy t True  = mkFun ([], [B (F.symbol "r") t], tVoid)
 returnTy _ False = mkFun ([], [], tVoid)
 
 ---------------------------------------------------------------------------------
-finalizeTy :: (PP r, F.Reftable r, ExprReftable F.Symbol r) => RType r -> RType r
+finalizeTy :: (F.Reftable r, ExprReftable F.Symbol r) => RType r -> RType r
 ---------------------------------------------------------------------------------
 finalizeTy t  | TRef (Gen x (m:ts)) _ <- t, isUM m 
               = mkFun ([mOut], [B sx t], TRef (Gen x (tOut:ts)) (uexprReft sx))
@@ -742,7 +561,7 @@ prefixOpId PrefixPlus       = builtinId "PrefixPlus"
 prefixOpId PrefixLNot       = builtinId "PrefixLNot"
 prefixOpId PrefixTypeof     = builtinId "PrefixTypeof"
 prefixOpId PrefixBNot       = builtinId "PrefixBNot"
-prefixOpId o                = errorstar $ "prefixOpId: Cannot handle: " ++ ppshow o
+prefixOpId o                = errorstar $ "prefixOpId: Cannot handle: " ++ show o
 
 mkId      = Id (initialPos "") 
 builtinId = mkId . ("builtin_" ++)
@@ -752,7 +571,6 @@ builtinId = mkId . ("builtin_" ++)
 
 bitVectorValue ('0':x) = Just $ exprReft $ BV.Bv BV.S32  $ "#" ++ x
 bitVectorValue _       = Nothing
-
 
 TVar (TV s1 _) _ `eqV` TVar (TV s2 _) _ = s1 == s2 
 _                `eqV` _                = False

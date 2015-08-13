@@ -2,22 +2,21 @@
 {-# LANGUAGE OverlappingInstances     #-}
 
 -- | Pretty-printing JavaScript.
-module Language.Nano.Syntax.PrettyPrint
-  ( 
-  javaScript
+module Language.Nano.Pretty.Syntax ( 
+    javaScript
   , renderStatements
   , renderExpression
-  , PP (..)
-  ) where
+) where
 
-import Text.PrettyPrint.HughesPJ
-import Language.Nano.Syntax
-import Prelude hiding (maybe)
+import           Control.Applicative            ((<$>))
 
-------------------------------------------------------------------------------
+import           Language.Nano.AST
+import           Language.Nano.Program
+import           Language.Nano.Pretty.Common
+import qualified Language.Fixpoint.Types        as F
 
-class PP a where 
-  pp :: a -> Doc
+import           Text.PrettyPrint.HughesPJ
+import           Prelude                        hiding (maybe)
 
 instance PP [Statement a] where 
   pp = stmtList 
@@ -58,13 +57,8 @@ instance PP PrefixOp where
 instance PP (Prop a) where
   pp = prop
 
-instance (PP a, PP b) => PP (a,b) where
-  pp (x, y) = (pp x) <+> (text ":") <+> (pp y)
-
-instance (PP a, PP b, PP c) => PP (a,b,c) where
-  pp (x, y, z) = (pp x) <+> (text ":") <+> (pp y) <+> (text ":") <+> (pp z)
-
-----------------------------------------------------------------------------
+instance PP (Id a) where
+  pp (Id _ x) = text x
 
 
 
@@ -498,3 +492,7 @@ maybe (Just a) f = f a
 -- 'Doc' will pretty-print it automatically
 javaScript :: JavaScript a -> Doc
 javaScript (Script _ ss) = stmtList ss
+
+instance PP BuiltinOp where
+  pp = text . show
+

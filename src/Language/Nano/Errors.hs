@@ -9,40 +9,15 @@ import Debug.Trace
 import Text.Printf 
 import Text.PrettyPrint.HughesPJ
 import Language.Nano.Locations
-import Language.Nano.Syntax.PrettyPrint
+import Language.Nano.AST.Syntax
+import Language.Nano.Pretty.Common
+
 import Language.Fixpoint.Errors
 import Language.Fixpoint.Misc
 import Language.Fixpoint.PrettyPrint
 
 
 mkErr = err . sourceSpanSrcSpan 
-
----------------------------------------------------------------------
-ppshow :: (PP a) => a -> String
----------------------------------------------------------------------
-ppshow = render . pp
-
----------------------------------------------------------------------
-tracePP     ::  (PP a) => String -> a -> a
----------------------------------------------------------------------
-tracePP s x = trace (printf "\nTrace: [%s]: %s" s (ppshow x)) x
-
----------------------------------------------------------------------
-ltracePP     ::  (PP a, IsLocated l) => l -> String -> a -> a
----------------------------------------------------------------------
-ltracePP l s x = trace (printf "\nTrace: [%s: %s]: %s" (ppshow (srcPos l)) s (ppshow x)) x
-
-
-instance PP a => PP (Either String a) where 
-  pp (Left s)  = text $ "ERROR!" ++ s
-  pp (Right x) = pp x 
-
-instance PP String where
-  pp = text
-
-instance PP Error where
-  pp = pprint
-
 
 ---------------------------------------------------------------------------
 -- | Bugs

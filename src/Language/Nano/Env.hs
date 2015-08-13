@@ -50,16 +50,15 @@ import           Control.Applicative
 import           Control.Exception (throw)
 import           Data.Maybe             (isJust)
 import           Data.Monoid            (Monoid (..))
-import qualified Data.HashMap.Strict as M
+import qualified Data.HashMap.Strict      as M
 import           Data.Data
-import qualified Data.List               as L
+import qualified Data.List                as L
 
-import           Language.Nano.Syntax
-import           Language.Nano.Syntax.PrettyPrint
 import           Language.Nano.Locations
-import           Language.Nano.Errors
 import           Language.Nano.Names
-import qualified Language.Fixpoint.Types as F
+import           Language.Nano.AST
+
+import qualified Language.Fixpoint.Types  as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
@@ -103,16 +102,17 @@ envAddWith f i t γ = case envFind i γ of
 envSEnv           :: Env a -> F.SEnv a
 envSEnv            = F.fromListSEnv . map (mapFst F.symbol) . envToList
 
-envFromList       :: (PP x, IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t
+envFromList       :: (IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t
 envFromList        = L.foldl' step envEmpty
   where
     step γ (i, t)  = case envFindLoc i γ of
                        Nothing -> envAdd i t γ
-                       Just l' | l' /= srcPos i -> throw $ errorDuplicate i (srcPos i) l'
+                       Just l' | l' /= srcPos i -> error "Duplicate specification" -- TODO: remove this error
+                               -- | l' /= srcPos i -> throw $ errorDuplicate i (srcPos i) l'
                                | otherwise      -> γ
 
 -- Allows duplicates in list -- last one in list will be used
-envFromList'      :: (PP x, IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t
+envFromList'      :: (IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t
 envFromList'       = L.foldl' step envEmpty
   where
     step γ (i, t)  = envAdd i t γ
@@ -162,13 +162,6 @@ isLeft             = not . isRight
 qenvToList :: QEnv t -> [(AbsPath, t)]
 qenvToList  (QE γ)  = [ (x, t) | (x, Loc _ t) <- M.toList γ]
 
--- qenvFromList       :: [(AbsPath, t)] -> QEnv t
--- qenvFromList        = L.foldl' step qenvEmpty
---   where
---     step γ (q, t)   = case qenvFindLoc q γ of
---                         Nothing -> qenvAdd q t γ
---                         Just l' -> throw $ errorDuplicate q (srcPos q) l'
-
 qenvFromList       :: Monoid t => [(AbsPath, t)] -> QEnv t
 qenvFromList        = L.foldl' step qenvEmpty
   where
@@ -200,14 +193,3 @@ instance Monoid (Env t) where
   mappend = envUnion
 
 
---------------------------------------------------------------------------------
--- | Printing Instance
---------------------------------------------------------------------------------
-
-instance PP t => PP (Env t) where
-  pp = vcat . (ppBind <$>) . F.toListSEnv . fmap val
-
-instance PP t => PP (QEnv t) where
-  pp (QE m) = vcat $ (ppBind <$>) $ M.toList m
-
-ppBind (x, t) = pprint x <+> dcolon <+> pp t

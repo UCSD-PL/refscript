@@ -56,10 +56,8 @@ import           Data.Hashable
 import           Data.Data
 import           Data.Traversable
 import           Data.Foldable                      (Foldable()) 
-import           Language.Nano.Syntax
-import           Language.Nano.Syntax.PrettyPrint
+import           Language.Nano.AST
 import           Language.Nano.Locations
-import           Language.Nano.Errors()
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
@@ -129,36 +127,6 @@ idLoc  (Id l _) = l
 instance F.Fixpoint String where
   toFix = text 
  
-instance PP F.Symbol where 
-  pp = pprint
- 
-instance PP (QN l) where
-  pp (QN (QP _ _ []) s) = pp s
-  pp (QN p s) = pp p <> dot <> pp s
-
- 
-instance PP (QP l) where
-  pp (QP _ _ []) = pp "<global>"
-  pp (QP _ _ ms) = hcat $ punctuate dot $ map pp ms
-
-instance PPrint (QP l) where
-  pprint (QP _ _ []) = pp "<global>"
-  pprint (QP _ _ ms) = hcat $ punctuate dot $ map pp ms
-
--- instance PP NameSpacePath where
---   pp = hcat . punctuate dot . map pp
- 
-instance (Ord a, F.Fixpoint a) => PP (F.FixResult a) where
-  pp = F.resultDoc
- 
-instance PP F.Pred where 
-  pp = pprint
- 
-instance PP (Id a) where
-  pp (Id _ x) = text x
-
-instance PP a => PP (Located a) where
-  pp x = pp (val x) <+> text "at:" <+> pp (loc x)
 
 extendAbsPath :: F.Symbolic s => AbsPath -> s -> AbsPath
 extendAbsPath (QP _ l ps) s = QP AK_ l $ ps ++ [F.symbol s]
@@ -181,10 +149,11 @@ returnId x = Id x returnName
 returnSymbol :: F.Symbol
 returnSymbol = F.symbol returnName
 
-mkRelName :: NameSpacePath -> F.Symbol -> RelName
-mkRelName n s = QN (QP RK_ def n) s
+mkRelName :: F.Symbolic s => NameSpacePath -> s -> RelName
+mkRelName n = QN (QP RK_ def n) . F.symbol
 
-mkAbsName n s = QN (QP AK_ def n) s
+mkAbsName n = QN (QP AK_ def n) . F.symbol
+
 mkAbsPath = QP AK_ $ srcPos dummySpan
 
 

@@ -365,7 +365,7 @@ emapReftTM f γ (TM p m sp sm c k s n)
        (emapReft f γ <$> n)
 
 emapReftFI f γ (FI m t1 t2) = FI m (emapReft f γ t1) (emapReft f γ t2)
-emapReftMI f γ (MI m t1 t2) = MI m (emapReft f γ t1) (emapReft f γ t2)
+emapReftMI f γ (MI m n  t2) = MI m n (emapReft f γ t2)
 
 ------------------------------------------------------------------------------------------
 mapReftM :: (F.Reftable r, PP r, Applicative f, Monad f)
@@ -397,7 +397,7 @@ mapReftTM f (TM p m sp sm c k s n)
        <*> T.mapM (mapReftM f) n
 
 mapReftFI f (FI m t1 t2) = FI m <$> mapReftM f t1 <*> mapReftM f t2
-mapReftMI f (MI m t1 t2) = MI m <$> mapReftM f t1 <*> mapReftM f t2
+mapReftMI f (MI m n t2) = MI m n <$> mapReftM f t2
 
 
 ------------------------------------------------------------------------------------------

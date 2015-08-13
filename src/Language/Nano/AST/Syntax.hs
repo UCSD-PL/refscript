@@ -7,28 +7,30 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DeriveFoldable #-}
 
-module Language.Nano.Syntax (JavaScript(..)
-                            ,unJavaScript
-                            ,Statement(..)
-                            ,ClassElt(..)
-                            ,isIterationStmt
-                            ,CaseClause(..)
-                            ,CatchClause(..)
-                            ,ForInit(..)
-                            ,ForInInit(..)
-                            ,VarDecl(..)
-                            ,Expression(..)
-                            ,InfixOp(..)
-                            ,AssignOp(..)
-                            ,Id(..)
-                            ,unId
-                            ,PrefixOp(..)
-                            ,Prop(..)
-                            ,UnaryAssignOp(..)
-                            ,LValue (..)
-                            ,EnumElt(..)
-                            ,SourcePos
-                            ) where
+module Language.Nano.AST.Syntax (
+    JavaScript(..)
+  , unJavaScript
+  , Statement(..)
+  , ClassElt(..)
+  , isIterationStmt
+  , CaseClause(..)
+  , CatchClause(..)
+  , ForInit(..)
+  , ForInInit(..)
+  , VarDecl(..)
+  , Expression(..)
+  , InfixOp(..)
+  , AssignOp(..)
+  , Id(..)
+  , unId
+  , PrefixOp(..)
+  , Prop(..)
+  , UnaryAssignOp(..)
+  , LValue (..)
+  , EnumElt(..)
+  , SourcePos
+  , BuiltinOp(..)
+  ) where
 
 import Text.Parsec.Pos(SourcePos) -- used by data JavaScript
 import Data.Generics(Data,Typeable)
@@ -292,4 +294,27 @@ isIterationStmt s = case s of
   ForStmt {}     -> True
   ForInStmt {}   -> True
   _              -> False
+
+
+-----------------------------------------------------------------------
+-- | Operators
+-----------------------------------------------------------------------
+
+data BuiltinOp = BIUndefined
+               | BIBracketRef
+               | BIBracketAssign
+               | BIArrayLit
+               | BIObjectLit
+               | BINumArgs
+               | BITruthy
+               | BISetProp
+               | BICondExpr
+               | BICastExpr
+               | BISuper
+               | BISuperVar
+               | BIForInKeys
+               | BICtorExit
+               | BICtor
+               | BIThis
+                 deriving (Eq, Ord, Show)
 

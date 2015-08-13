@@ -404,7 +404,20 @@ freshenAnn (Ann _ l a)
 tcFunTys :: (PPRSF r, F.Subable (RType r), F.Symbolic s, PP a) 
          => AnnSSA r -> a -> [s] -> RType r -> TCM r [IOverloadSig r]
 --------------------------------------------------------------------------------
-tcFunTys l f xs ft = either tcError return $ toOverloads l f xs ft 
+tcFunTys l f xs ft = either tcError return $ go l f xs ft 
+  where
+    go l f xs ft | Just ts <- bkFuns ft
+                 = case partitionEithers [funTy l xs t | t <- ts] of 
+                    ([], fts) -> Right $ zip ([0..] :: [Int]) fts
+                    (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
+                 | otherwise
+                 = Left $ errorNonFunction (srcPos l) f ft 
+
+    funTy l xs (αs, yts, t) | Just yts' <- padUndefineds xs yts 
+                            = Right $ (αs, ts', F.subst su t) where (su, ts') = renameBinds yts' xs 
+                            | otherwise 
+                            = Left  $ errorArgMismatch (srcPos l)
+
 
 --------------------------------------------------------------------------------
 checkTypes :: PPR r => TCEnv r -> TCM r ()

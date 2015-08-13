@@ -20,13 +20,12 @@ import           Data.Generics                      (Data)
 import           Data.List                          ((\\))
 import           Data.Traversable            hiding (sequence, mapM)
 import           Data.Foldable                      (Foldable())
-import           Language.Nano.Syntax
-import           Language.Nano.Syntax.PrettyPrint          (PP (..))
 
 import qualified Language.Fixpoint.Types         as F
 
 import           Language.Fixpoint.Misc
 import           Language.Nano.Env
+import           Language.Nano.AST
 import           Language.Nano.Names
 import           Language.Nano.Locations
 import           Text.PrettyPrint.HughesPJ
@@ -134,21 +133,23 @@ data TypeMembersQ q r = TM { tm_prop  :: F.SEnv (FieldInfoQ q r)    -- Propertie
                            }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data FieldInfoQ q r   = FI [MemberMod]                          -- Modifiers
+data FieldInfoQ q r   = FI Optionality                          -- Optional
                            (RTypeQ q r)                         -- Mutability                           
                            (RTypeQ q r)                         -- Type
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data MethodInfoQ q r  = MI [MemberMod]                          -- Modifiers
-                           (RTypeQ q r)                         -- Mutability                           
+data MethodInfoQ q r  = MI Optionality                          -- Optional
+                           MutabilityMod                        -- Mutability                           
                            (RTypeQ q r)                         -- Type
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data MemberMod        = {- Sharing -} 
-                        Private 
-                        {- Optional -}
-                      | Optional
+data MutabilityMod    = Mutable
+                      | Immutable
+                      | ReadOnly
+                      | AssignsFields
                         deriving (Eq, Data, Typeable)
+
+type Mutability r     = RType r
 
 data TypeSigQ q r     = TS TypeDeclKind (BTGenQ q r) (HeritageQ q r)
                         deriving (Data, Typeable, Foldable, Traversable, Functor)
@@ -164,6 +165,7 @@ data TypeDeclKind     = InterfaceKind | ClassKind
 data StaticKind       = StaticMember | InstanceMember
                         deriving (Eq, Ord, Show, Data, Typeable)
 
+data Optionality      = Opt | Req deriving (Eq, Ord, Show, Data, Typeable)
 
 ---------------------------------------------------------------------------------
 -- | Enumeration definition
@@ -190,10 +192,9 @@ type TypeDecl r       = TypeDeclQ AK r
 type TypeSig r        = TypeSigQ AK r
 type FieldInfo r      = FieldInfoQ AK r
 type MethodInfo r     = MethodInfoQ AK r
+type VarInfo r        = VarInfoQ AK r 
 
 type Type             = RType ()
-
-type Mutability       = Type
 
 type OverloadSig r    = ([BTVar r], [RType r], RType r)
 type IOverloadSig r   = (Int, OverloadSig r)
@@ -223,7 +224,7 @@ data ModuleDefQ q r = ModuleDef {
   -- 2. Interfaces are _not_ included here (because thery don't 
   --    appear as bindings in the language)
   --
-    m_variables   :: Env (VarInfo q r) 
+    m_variables   :: Env (VarInfoQ q r) 
   --
   -- Types definitions
   --
@@ -297,11 +298,11 @@ data Initialization =
 -- | Variable information
 ---------------------------------------------------------------------------------
 
-data VarInfo q r = VI { v_asgn :: Assignability
-                      , v_init :: Initialization
-                      , v_type :: RTypeQ q r 
-                      }
-                      deriving (Data, Typeable, Functor)
+data VarInfoQ q r = VI { v_asgn :: Assignability
+                       , v_init :: Initialization
+                       , v_type :: RTypeQ q r 
+                       }
+                       deriving (Data, Typeable, Functor)
 
 
 ---------------------------------------------------------------------------------
@@ -342,9 +343,6 @@ instance F.Symbolic NamedTypeKind where
   symbol EnumK = F.symbol "enum"
   symbol ClassK = F.symbol "class"
 
-instance Default SrcSpan where
-  def = srcPos dummySpan 
-
 
 -- | Monoid
 
@@ -365,32 +363,6 @@ instance Monoid Initialization where
   _           `mappend` _             = Uninitialized
 
 
------------------------------------------------------------------------
--- | Operator Types
------------------------------------------------------------------------
-
-data BuiltinOp = BIUndefined
-               | BIBracketRef
-               | BIBracketAssign
-               | BIArrayLit
-               | BIObjectLit
-               | BINumArgs
-               | BITruthy
-               | BISetProp
-               | BICondExpr
-               | BICastExpr
-               | BISuper
-               | BISuperVar
-               | BIForInKeys
-               | BICtorExit
-               | BICtor
-               | BIThis
-                 deriving (Eq, Ord, Show)
-
-instance PP BuiltinOp where
-  pp = text . show
-
-
 -----------------------------------------------------------------------------
 -- | IContext keeps track of context of intersection-type cases
 -----------------------------------------------------------------------------
@@ -408,30 +380,13 @@ class CallSite a where
 instance CallSite Int where
   siteIndex i = i
 
-newtype IContext = IC [Int]
-                   deriving (Eq, Ord, Show, Data, Typeable)
+newtype IContext = IC [Int] deriving (Eq, Ord, Show, Data, Typeable)
 
-emptyContext         :: IContext
-emptyContext         = IC []
+emptyContext :: IContext
+emptyContext = IC []
 
-pushContext          :: (CallSite a) => a -> IContext -> IContext
+pushContext :: (CallSite a) => a -> IContext -> IContext
 pushContext s (IC c) = IC ((siteIndex s) : c)
-
-
-instance PP Int where
-  pp = int
-
-ppArgs p sep l = p $ intersperse sep $ map pp l
-
-instance PP a => PP [a] where
-  pp = ppArgs brackets comma
-
-instance PP IContext where
-  pp (IC x) = text "Context: " <+> pp x
-
-instance PP Initialization where
-  pp Initialized   = text "init"
-  pp Uninitialized = text "non-init"
 
 
 -----------------------------------------------------------------------
@@ -452,12 +407,6 @@ type PAliasEnv   = Env PAlias
 
 instance IsLocated (Alias a s t) where
   srcPos = srcPos . al_name
-
-instance (PP a, PP s, PP t) => PP (Alias a s t) where
-  pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body
-
----------------------------------------------------------------------------------
----------------------------------------------------------------------------------
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

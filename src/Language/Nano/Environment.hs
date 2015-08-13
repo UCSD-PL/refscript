@@ -21,7 +21,7 @@ import qualified Language.Fixpoint.Types            as F
 -- | Typecheck Environment
 -------------------------------------------------------------------------------
 
-type EnvEntry r = VarInfo AK r 
+type EnvEntry r = VarInfo r 
 
 class EnvLike r t where
   -- 

@@ -37,9 +37,6 @@ module Language.Nano.Misc (
   , isProperSubsetOf, isEqualSet, isProperSubmapOf
   , equalKeys
 
-  -- * Error message
-  , convertError
-
   , foldM1
   
   , withSingleton, withSingleton'
@@ -67,7 +64,6 @@ import qualified Data.List                            as L
 
 import qualified Language.Fixpoint.Types              as F
 import           Language.Fixpoint.Misc
-import           Language.Nano.Syntax.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 
 -------------------------------------------------------------------------------
@@ -205,19 +201,6 @@ isProperSubmapOf = isProperSubsetOf `on` (fromList . M.keys)
 
 equalKeys :: (Eq a, Ord a, Hashable a) => M.HashMap a b -> M.HashMap a b -> Bool
 equalKeys =  (==) `on` (L.sort . M.keys)
-
-
-convertError tgt e  = errortext $ msg <+> pp e
-  where 
-    msg             = text $ "Cannot convert to: " ++ tgt
-
-
-
-instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
-  pp (a,b,c,d) = pp a <+> text ":" <+>  pp b <+> text ":" <+> pp c <+> text ":" <+> pp d
-
-instance (PP a, PP b, PP c, PP d, PP e) => PP (a,b,c,d,e) where
-  pp (a,b,c,d,e) = pp a <+> text ":" <+>  pp b <+> text ":" <+> pp c <+> text ":" <+> pp d <+> text ":" <+> pp e 
 
 foldM1 :: (Monad m) => (a -> a -> m a) -> [a] -> m a
 foldM1 _ [] = error "foldM1" "empty list"

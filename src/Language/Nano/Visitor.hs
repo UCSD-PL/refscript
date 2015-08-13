@@ -37,7 +37,6 @@ module Language.Nano.Visitor (
   , scrapeModules
   , writeGlobalVars
   , scrapeVarDecl
-  , extractQualifiedNames
   , replaceAbsolute
   , replaceDotRef
   , fixEnums
@@ -394,7 +393,8 @@ transFact f = go
     go αs xs (FuncAnn  t)      = FuncAnn       $ trans f αs xs t
     go αs xs (TCast x c)       = TCast x       $ trans f αs xs c 
     
-    go αs xs (TypeAnn td)      = TypeAnn       $ trans f αs xs td
+    go αs xs (ClassAnn ts)     = ClassAnn      $ trans f αs xs ts
+    go αs xs (InterfaceAnn td) = InterfaceAnn  $ trans f αs xs td
 
     go _ _   t                 = t
 
@@ -496,7 +496,8 @@ ntransFact f g = go
     go (UserCast t)      = UserCast      $ ntrans f g t
     go (FuncAnn  t)      = FuncAnn       $ ntrans f g t
     go (TCast x c)       = TCast x       $ ntrans f g c 
-    go (TypeAnn t)       = TypeAnn       $ ntrans f g t
+    go (ClassAnn t)      = ClassAnn      $ ntrans f g t
+    go (InterfaceAnn t)  = InterfaceAnn  $ ntrans f g t
     go (ExportedElt)     = ExportedElt
     go (ReadOnlyVar)     = ReadOnlyVar
     go (ModuleAnn m)     = ModuleAnn     $ m
@@ -671,11 +672,9 @@ extractQualifiedNames stmts = (namesSet, modulesSet)
 ---------------------------------------------------------------------------------------
 replaceAbsolute :: PPR r => NanoBareRelR r -> NanoBareR r
 ---------------------------------------------------------------------------------------
-replaceAbsolute pgm@(Nano { code      = Src ss
-                          , fullNames = ns
-                          , fullPaths = ps }) 
-                    = pgm { code = Src $ (tr <$>) <$> ss }
+replaceAbsolute pgm@(Nano { code = Src ss }) = pgm { code = Src $ (tr <$>) <$> ss }
   where
+    (ns, ps)        = extractQualifiedNames ss
     tr l            = ntransAnnR (safeAbsName l) (safeAbsPath l) l
     safeAbsName l a = case absAct (absoluteName ns) l a of
                         Just a' -> a'

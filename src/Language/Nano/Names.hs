@@ -82,34 +82,37 @@ data AK = AK_ deriving (Eq, Data, Typeable, Show)
 data RK = RK_ deriving (Eq, Data, Typeable, Show)
 
 -- Qualified Name
-data QN l = QN l SrcSpan NameSpacePath F.Symbol deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
+data QN l = QN (QP l) F.Symbol deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
 
 -- Qualified Path
 data QP l = QP l SrcSpan NameSpacePath deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
 
 instance Eq l => Eq (QN l) where
-  QN k1 _ n1 s1 == QN k2 _ n2 s2 = (k1,n1,s1) == (k2,n2,s2)
+  QN p1 s1 == QN p2 s2 = (p1,s1) == (p2,s2)
 
 instance Eq l => Eq (QP l) where
   QP k1 _ n1 == QP k2 _ n2 = (k1,n1) == (k2,n2)
 
 instance F.Symbolic (QN l) where
-  symbol (QN _ _ _ s) = s
+  symbol (QN _ s) = s
  
 instance Hashable (QN l) where
-  hashWithSalt i (QN _ _ n s) = hashWithSalt i (s:n)
+  hashWithSalt i (QN p s) = hashWithSalt i (p,s)
  
 instance Hashable (QP l) where
   hashWithSalt i (QP _ _ n) = hashWithSalt i n
  
 instance IsLocated (QN l) where
-  srcPos (QN _ a _ _) = a
+  srcPos (QN p _) = srcPos p
 
 instance IsLocated (QP l) where
   srcPos (QP _ a _) = a
 
 instance Default l => Default (QP l) where
   def = QP def (srcPos dummySpan) []
+
+instance Default SrcSpan where
+  def = srcPos dummySpan
 
 instance Default AK where
   def = AK_
@@ -130,8 +133,8 @@ instance PP F.Symbol where
   pp = pprint
  
 instance PP (QN l) where
-  pp (QN _ _ [] s) = pp s
-  pp (QN _ _ ms s) = (hcat $ punctuate dot $ map pp ms) <> dot <> pp s
+  pp (QN (QP _ _ []) s) = pp s
+  pp (QN p s) = pp p <> dot <> pp s
 
  
 instance PP (QP l) where
@@ -161,7 +164,7 @@ extendAbsPath :: F.Symbolic s => AbsPath -> s -> AbsPath
 extendAbsPath (QP _ l ps) s = QP AK_ l $ ps ++ [F.symbol s]
 
 nameInPath  :: (IsLocated l, F.Symbolic s) => l -> AbsPath -> s -> AbsName
-nameInPath l (QP _ _ ps) s = QN AK_ (srcPos l) ps (F.symbol s)
+nameInPath l (QP _ _ ps) s = QN (QP AK_ (srcPos l) ps) (F.symbol s)
 
 pathInPath  :: (IsLocated l, F.Symbolic s) => l -> AbsPath -> s -> AbsPath
 pathInPath l (QP _ _ ps) s = QP AK_ (srcPos l) $ ps ++ [F.symbol s]
@@ -179,9 +182,9 @@ returnSymbol :: F.Symbol
 returnSymbol = F.symbol returnName
 
 mkRelName :: NameSpacePath -> F.Symbol -> RelName
-mkRelName = QN RK_ $ srcPos dummySpan
+mkRelName n s = QN (QP RK_ def n) s
 
-mkAbsName = QN AK_ $ srcPos dummySpan
+mkAbsName n s = QN (QP AK_ def n) s
 mkAbsPath = QP AK_ $ srcPos dummySpan
 
 
@@ -204,15 +207,16 @@ mkAbsPath = QP AK_ $ srcPos dummySpan
 ---------------------------------------------------------------------------------
 absoluteName :: H.HashSet AbsName -> AbsPath -> RelName -> Maybe AbsName
 ---------------------------------------------------------------------------------
-absoluteName ns (QP AK_ _ p) (QN RK_ _ ss s) = 
+absoluteName ns (QP AK_ _ p) (QN (QP RK_ _ ss) s) = 
     find (`H.member` ns) $ (`mkAbsName` s) . (++ ss) <$> prefixes p
   where
     prefixes        = map reverse . suffixes . reverse
     suffixes []     = [[]]
     suffixes (x:xs) = (x:xs) : suffixes xs
     
-
+---------------------------------------------------------------------------------
 absolutePath :: H.HashSet AbsPath -> AbsPath -> RelPath -> Maybe AbsPath
+---------------------------------------------------------------------------------
 absolutePath ps (QP AK_ _ p) (QP RK_ _ ss) = 
     find (`H.member` ps) $ mkAbsPath . (++ ss) <$> prefixes p
   where
@@ -220,7 +224,7 @@ absolutePath ps (QP AK_ _ p) (QP RK_ _ ss) =
     suffixes []     = [[]]
     suffixes (x:xs) = (x:xs) : suffixes xs
 
-toAbsoluteName (QN RK_ l ss s) = QN AK_ l ss s
+toAbsoluteName (QN (QP RK_ l ss) s) = QN (QP AK_ l ss) s
 
 toLocSym        = F.dummyLoc . F.symbol 
 extClassSym     = toLocSym "extends_class"

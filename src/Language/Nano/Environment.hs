@@ -50,6 +50,7 @@ class EnvLike r t where
   -- 
   cha             :: t r -> ClassHierarchy r
 
+
 --   -- 
 --   -- ^ Parent environment
 --   --

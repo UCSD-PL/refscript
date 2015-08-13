@@ -38,38 +38,71 @@ import           Text.PrettyPrint.HughesPJ
 
 
 -- | Type parameter
-data TVar             = TV { tv_sym    :: F.Symbol                -- Parameter symbol
-                           , tv_loc    :: SrcSpan 
-                           } 
-                        deriving (Data, Typeable)
+data TVar         = TV { tv_sym    :: F.Symbol                -- Parameter symbol
+                       , tv_loc    :: SrcSpan 
+                       } 
+                    deriving (Data, Typeable)
 
-data BTVarQ q r       = BTV { btv_sym    :: F.Symbol              -- Parameter symbol
-                            , btv_constr :: Maybe (RTypeQ q r)    -- Constraint
-                            , btv_loc    :: SrcSpan 
-                            } 
-                        deriving (Data, Typeable, Functor, Foldable, Traversable)
+data BTVarQ q r   = BTV { btv_sym    :: F.Symbol              -- Parameter symbol
+                        , btv_loc    :: SrcSpan 
+                        , btv_constr :: Maybe (RTypeQ q r)    -- Constraint
+                        } 
+                    deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 
-data TPrim            = TString | TStrLit String | TNumber | TBoolean | TBV32 | TVoid | TUndefined | TNull 
-                      {- Internal -}
-                      | TTop | TBot 
-                        deriving (Eq, Show, Data, Typeable)
+data TPrim        = TString | TStrLit String | TNumber | TBoolean | TBV32 | TVoid | TUndefined | TNull 
+                  {- Internal -}
+                  | TTop | TBot 
+                  deriving (Eq, Show, Data, Typeable)
 
 
 -- | Refined Types
-data RTypeQ q r       = TPrim TPrim r                           -- Primitive
-                      | TVar  TVar r                            -- Type parameter
-                      | TOr   [RTypeQ q r]                      -- Union type
-                      | TAnd  [RTypeQ q r]                      -- Intersection type
-                      | TRef  (TGenQ q r) r                     -- Type Reference
-                      | TObj  (TypeMembersQ q r) r              -- Object type
-                      | TType NamedTypeKind (TGenQ q r)         -- Class / Enum
-                      | TMod  AbsPath                           -- Namespace
-                      | TAll  (BTVarQ q r) (RTypeQ q r)         -- Forall [A <: T] . S
-                      | TFun  [BindQ q r] (RTypeQ q r) r        -- Function type
-                      {- Internal -}
-                      | TExp  F.Expr
-                        deriving (Data, Typeable, Functor, Foldable, Traversable)
+data RTypeQ q r = 
+  -- 
+  -- Primitive
+  --
+    TPrim TPrim r
+  -- 
+  -- Type parameter
+  --
+  | TVar TVar r
+  --
+  -- Union
+  --
+  | TOr [RTypeQ q r]
+  -- 
+  -- Intersection
+  --
+  | TAnd [RTypeQ q r]                      
+  -- 
+  -- Type Reference
+  --
+  | TRef (TGenQ q r) r 
+  -- 
+  -- Object
+  --
+  | TObj (TypeMembersQ q r) r
+  -- 
+  -- Class / Enum
+  --
+  | TType NamedTypeKind (TGenQ q r)
+  -- 
+  -- Namespace
+  --
+  | TMod AbsPath
+  --
+  -- Forall [A <: T] . S
+  -- 
+  | TAll  (BTVarQ q r) (RTypeQ q r)         
+  -- 
+  -- Function
+  --
+  | TFun  [BindQ q r] (RTypeQ q r) r
+  -- 
+  -- /// Internal ///
+  --
+  | TExp  F.Expr
+  deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data NamedTypeKind    = EnumK | ClassK
                         deriving (Eq, Data, Typeable)
@@ -117,10 +150,10 @@ data MemberMod        = {- Sharing -}
                       | Optional
                         deriving (Eq, Data, Typeable)
 
-data TypeDeclQ q r    = TD  TypeDeclKind              -- Class or interface
-                            (BTGenQ q r)              -- Name & bounded type parameters
-                            (HeritageQ q r)           -- Extends
-                            (TypeMembersQ q r)        -- Body
+data TypeSigQ q r     = TS TypeDeclKind (BTGenQ q r) (HeritageQ q r)
+                        deriving (Data, Typeable, Foldable, Traversable, Functor)
+
+data TypeDeclQ q r    = TD (TypeSigQ q r) (TypeMembersQ q r)
                         deriving (Data, Typeable, Foldable, Traversable, Functor)
 
 type HeritageQ q r    = (Maybe (TGenQ q r), [TGenQ q r])
@@ -154,12 +187,16 @@ type TypeMembers r    = TypeMembersQ AK r
 type BTVar r          = BTVarQ AK r
 
 type TypeDecl r       = TypeDeclQ AK r
+type TypeSig r        = TypeSigQ AK r
 type FieldInfo r      = FieldInfoQ AK r
 type MethodInfo r     = MethodInfoQ AK r
 
 type Type             = RType ()
 
 type Mutability       = Type
+
+type OverloadSig r    = ([BTVar r], [RType r], RType r)
+type IOverloadSig r   = (Int, OverloadSig r)
 
 
 ------------------------------------------------------------------------------------------
@@ -179,24 +216,24 @@ type Mutability       = Type
 --
 data ModuleDefQ q r = ModuleDef {
   --
-  -- ^ Contents of a module 
+  -- Contents of a module 
   --
-  --   XXX: local/exported info not included atm
+  -- 1. XXX: local/exported info not included atm
   --
-  --   * Interfaces are _not_ included here (because thery don't appear as
-  --   bindings in the language)
+  -- 2. Interfaces are _not_ included here (because thery don't 
+  --    appear as bindings in the language)
   --
     m_variables   :: Env (VarInfo q r) 
   --
-  -- ^ Types
+  -- Types definitions
   --
   , m_types       :: Env (TypeDeclQ q r)
   --
-  -- ^ Enumerations
+  -- Enumerations definitions
   --
   , m_enums       :: Env EnumDef
   --
-  -- ^ Absolute path of definition
+  -- Absolute path of module
   --
   , m_path        :: AbsPath
   }
@@ -216,66 +253,60 @@ instance Monoid (ModuleDefQ q r) where
 -- | Assignability
 ------------------------------------------------------------------------------------------
 
-data Assignability
+data Assignability =
   --
-  -- ^ Import, cannot be modified
-  -- ^ Contains: FunctionStmts, Measures, Classes, Modules.
-  -- ^ Can appear in refinements
+  -- Import, cannot be modified, appears in refinements
   --
-  = Ambient
---   --
---   -- ^ Like ReadOnly but for function declarations with no body
---   -- ^ Can appear in refinements.
---   --
---   | ImportDecl
+    Ambient
   --
-  -- ^ written in local-scope, can be SSA-ed
-  -- ^ Can appear in refinements
+  -- Written in local-scope, SSA-ed, appears in refinements
   --
   | WriteLocal
   --
-  -- ^ Declared in uouter scope
-  -- ^ CANNOT appear in refinements, NOT SSA-ed
+  -- Declared in outer scope, CANNOT appear in refinements, NOT SSA-ed
   --
   | ForeignLocal
   --
-  -- ^ Written in non-local-scope
-  -- ^ CANNOT appear in refinements, NOT SSA-ed
+  -- Written in non-local-scope, CANNOT appear in refinements, NOT SSA-ed
   --
   | WriteGlobal
---   --
---   -- ^ Used to denote return variable
---   -- ^ CANNOT appear in refinements
---   --
+  --
+  -- Return variable, CANNOT appear in refinements
+  --
   | ReturnVar
   deriving (Show, Eq, Data, Typeable)
-
-
-
-data VarInfo q r = VI { 
-    v_asgn :: Assignability
-  , v_init :: Initialization
-  , v_type :: RTypeQ q r 
-  } deriving (Data, Typeable, Functor)
 
 
 ---------------------------------------------------------------------------------
 -- | Initialization
 ---------------------------------------------------------------------------------
 
-data Initialization = Initialized | Uninitialized
+data Initialization = 
+  -- 
+  -- Variable initialized
+  --
+    Initialized 
+  -- 
+  -- Variable uninitialized (undefined)
+  --
+  | Uninitialized
   deriving (Show, Eq, Data, Typeable)
 
-instance Monoid Initialization where
-  mempty                              = Uninitialized
-  Initialized `mappend` Initialized   = Initialized
-  _           `mappend` _             = Uninitialized
+
+---------------------------------------------------------------------------------
+-- | Variable information
+---------------------------------------------------------------------------------
+
+data VarInfo q r = VI { v_asgn :: Assignability
+                      , v_init :: Initialization
+                      , v_type :: RTypeQ q r 
+                      }
+                      deriving (Data, Typeable, Functor)
 
 
 ---------------------------------------------------------------------------------
 -- | Instances
 ---------------------------------------------------------------------------------
-
 
 instance Eq TVar where
   TV s1 _ == TV s2 _ = s1 == s2
@@ -289,6 +320,8 @@ instance IsLocated (BTVarQ q r) where
 instance Hashable TVar where
   hashWithSalt i α = hashWithSalt i $ tv_sym α
 
+
+-- | Symbolic
 
 instance F.Symbolic TVar where
   symbol = tv_sym
@@ -305,8 +338,15 @@ instance F.Symbolic (TGenQ q r) where
 instance F.Symbolic (BTGenQ q r) where
   symbol (BGen n _) = F.symbol n
 
+instance F.Symbolic NamedTypeKind where
+  symbol EnumK = F.symbol "enum"
+  symbol ClassK = F.symbol "class"
+
 instance Default SrcSpan where
   def = srcPos dummySpan 
+
+
+-- | Monoid
 
 instance Monoid (TypeMembers r) where  
   mempty = TM mempty mempty mempty mempty Nothing Nothing Nothing Nothing
@@ -318,6 +358,11 @@ instance Monoid (TypeMembers r) where
     where
       Just x  `orElse` _ = Just x
       Nothing `orElse` y = y
+
+instance Monoid Initialization where
+  mempty                              = Uninitialized
+  Initialized `mappend` Initialized   = Initialized
+  _           `mappend` _             = Uninitialized
 
 
 -----------------------------------------------------------------------

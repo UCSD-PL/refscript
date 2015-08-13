@@ -11,15 +11,15 @@ module Language.Nano.Typecheck.Resolve (
   
   -- * Resolve names
     resolveTypeInEnv, resolveEnumInEnv, resolveModuleInEnv
-  , resolveModuleInPgm, resolveTypeInPgm, resolveEnumInPgm
+  -- , resolveModuleInPgm, resolveTypeInPgm, resolveEnumInPgm
 
   -- * expand a type definition applying subs
   , expand, expand', CoercionKind(..), expandType
 
   -- * Ancestors
   , weaken, allAncestors, classAncestors, interfaceAncestors, isAncestor
-  , onlyInheritedFields
-  , fieldSymbols
+  , inheritedNonStaticFields
+  , nonStaticFields
 
   -- * Field Access
   , boundKeys, immFields
@@ -60,26 +60,19 @@ import           Language.Nano.Syntax
 resolveModuleInEnv  :: EnvLike r t => t r -> AbsPath -> Maybe (ModuleDef r)
 resolveTypeInEnv    :: EnvLike r t => t r -> AbsName -> Maybe (TypeDecl r)
 resolveEnumInEnv    :: EnvLike r t => t r -> AbsName -> Maybe EnumDef
-resolveTypeInPgm    :: NanoBareR r -> AbsName -> Maybe (TypeDecl r)
-resolveEnumInPgm    :: NanoBareR r -> AbsName -> Maybe EnumDef
-resolveModuleInPgm  :: NanoBareR r -> AbsPath -> Maybe (ModuleDef r)
 --------------------------------------------------------------------------------
-resolveModuleInEnv γ s             = qenvFindTy s (modules γ)
+resolveModuleInEnv (modules -> m) s = qenvFindTy s m
 resolveTypeInEnv γ (QN AK_ l ss s) = resolveModuleInEnv γ (QP AK_ l ss) >>= envFindTy s . m_types
 resolveEnumInEnv γ (QN AK_ l ss s) = resolveModuleInEnv γ (QP AK_ l ss) >>= envFindTy s . m_enums
-resolveTypeInPgm p (QN AK_ l ss s) = resolveModuleInPgm p (QP AK_ l ss) >>= envFindTy s . m_types
-resolveEnumInPgm p (QN AK_ l ss s) = resolveModuleInPgm p (QP AK_ l ss) >>= envFindTy s . m_enums
-resolveModuleInPgm p s             = qenvFindTy s $ pModules p
-
+ 
 --------------------------------------------------------------------------------
 isClassType :: EnvLike r g => g r -> RType r -> Bool
 --------------------------------------------------------------------------------
-isClassType γ (TRef (Gen x ts) _) | Just (TD k _ _ _) <- resolveTypeInEnv γ x
+isClassType γ (TRef (Gen x ts) _) | Just (TD (TS k _ _) _) <- resolveTypeInEnv γ x
                                   = k == ClassKind
                                   | otherwise
                                   = False
 isClassType _ _                   = False
-
 
 numberInterface      = mkAbsName [] $ F.symbol "Number"
 stringInterface      = mkAbsName [] $ F.symbol "String"
@@ -91,7 +84,7 @@ emptyObjectInterface = mkAbsName [] $ F.symbol "EmptyObject"
 ---------------------------------------------------------------------------
 expand :: (EnvLike r g, PPR r) => g r -> TypeDecl r -> TypeMembers r
 ---------------------------------------------------------------------------
-expand γ (TD _ _ (h,_) es)      = es `mappend` heritage h
+expand γ (TD (TS _ _ (h,_)) es) = es `mappend` heritage h
   where
     exp                         = expand' γ
     res                         = resolveTypeInEnv γ
@@ -101,12 +94,9 @@ expand γ (TD _ _ (h,_) es)      = es `mappend` heritage h
 ---------------------------------------------------------------------------
 expand' :: (EnvLike r g, PPR r) => g r -> TypeDecl r -> [RType r] -> TypeMembers r
 ---------------------------------------------------------------------------
-expand' γ t@(TD _ (BGen _ bvs) _ _) ts = apply θ $ expand γ t
+expand' γ t@(TD (TS _ (BGen _ bvs) _) _) ts = apply θ $ expand γ t
   where 
     θ = fromList $ zip (btvToTV <$> bvs) ts
-
--- | expand'' also returns the interface's type parameters
--- expand'' γ d@(ID _ _ vs _ _)    = (vs,) <$> expand st γ d (tVar <$> vs)
 
 
 data CoercionKind = Coercive | NonCoercive
@@ -191,65 +181,51 @@ weaken γ tr@(Gen s _) t
 doEdge :: PPR r => ClassHierarchy r -> TGen r -> Edge -> Maybe (TGen r)
 ---------------------------------------------------------------------------
 doEdge (ClassHierarchy g _) (Gen _ t1) (n1, n2)
-  = do  TD _ (BGen c1 v1) (e1,i1) _ <- lab g n1
-        TD _ (BGen c2 v2) _       _ <- lab g n2
-        let θ                        = fromList $ zip (btvToTV <$> v1) t1
-        Gen n2 t2             <-  find ((c2 ==) . g_name) (maybeToList e1)
-                              <|> find ((c2 ==) . g_name) i1
-        return                 $  Gen n2 $ apply θ t2
+  = do  TS _ (BGen c1 v1) (e1,i1) <- lab g n1
+        TS _ (BGen c2 v2) _ <- lab g n2
+        let θ = fromList $ zip (btvToTV <$> v1) t1
+        Gen n2 t2 <-  find ((c2 ==) . g_name) (maybeToList e1)
+                  <|> find ((c2 ==) . g_name) i1
+        return $  Gen n2 $ apply θ t2
 
 ---------------------------------------------------------------------------
 ancestors :: EnvLike r t => TypeDeclKind -> t r -> AbsName -> [AbsName]
 ---------------------------------------------------------------------------
 ancestors k (cha -> ClassHierarchy g m) s = [ n | cur <- maybeToList $ HM.lookup s m
                       , anc <- reachable cur g
-                      , TD k' (BGen n _) _ _ <- maybeToList $ lab g anc
+                      , TS k' (BGen n _) _ <- maybeToList $ lab g anc
                       , k' == k ]
 
--- XXX : only strict parents 
 ---------------------------------------------------------------------------
-strictAncestorsFromPgm :: Nano a r -> AbsName -> [AbsName]
+nonStaticFields :: ClassHierarchy r -> QEnv (ModuleDef r) -> AbsName -> [F.Symbol]
 ---------------------------------------------------------------------------
-strictAncestorsFromPgm (pCHA -> ClassHierarchy g m) s 
-  = [ n | cur <- maybeToList $ HM.lookup s m
-        , anc <- reachable cur g
-        , cur /= anc      -- only gather parents
-        , TD k (BGen n _) _ _ <- maybeToList $ lab g anc
-        , k == ClassKind ]
-
--- XXX : includes search in all parent classes (including the current one)
----------------------------------------------------------------------------
-classAncestorsFromPgm :: Nano a r -> AbsName -> [AbsName]
----------------------------------------------------------------------------
-classAncestorsFromPgm (pCHA -> ClassHierarchy g m) s 
-  = [ n | cur <- maybeToList (HM.lookup s m)
-        , anc <- reachable cur g
-        , TD k (BGen n _) _ _ <- maybeToList $ lab g anc
-        , k == ClassKind ]
-
----------------------------------------------------------------------------
-fieldSymbols :: StaticKind -> NanoBareR r -> AbsName -> [F.Symbol]
----------------------------------------------------------------------------
-fieldSymbols k p a   = HS.toList . HS.unions 
-                                $ HS.fromList . flds 
-                               <$> classAncestorsFromPgm p a 
+nonStaticFields (ClassHierarchy g m) modules x 
+  = HS.toList . HS.unions $ HS.fromList . flds <$> ps
   where
-    flds a = [ s | TD _ _ _ es <- maybeToList (resolveTypeInPgm p a)
-                 , s <- map fst $ F.toListSEnv $ (props k) es ]
-    props StaticMember         = tm_sprop
-    props InstanceMember        = tm_prop
+    flds (QN k l p y) = [ s | mod     <- maybeToList $ qenvFindTy (QP k l p) modules
+                            , TD _ es <- maybeToList $ envFindTy y $ m_types mod  
+                            , s       <- map fst $ F.toListSEnv $ tm_prop es ]
+
+    ps                = [ n | cur <- maybeToList $ HM.lookup x m
+                            , anc <- reachable cur g 
+                            , TS k (BGen n _) _ <- maybeToList $ lab g anc
+                            , k == ClassKind ]
 
 ---------------------------------------------------------------------------
-onlyInheritedFields :: StaticKind -> NanoBareR r -> AbsName -> [F.Symbol]
+inheritedNonStaticFields :: ClassHierarchy r -> QEnv (ModuleDef r) -> AbsName -> [F.Symbol]
 ---------------------------------------------------------------------------
-onlyInheritedFields k p a = HS.toList . HS.unions 
-                                     $ HS.fromList . flds 
-                                    <$> strictAncestorsFromPgm p a 
+inheritedNonStaticFields (ClassHierarchy g m) modules x
+  = HS.toList . HS.unions $ HS.fromList . flds <$> ps
   where
-    flds a = [ s | TD _ _ _ es <- maybeToList (resolveTypeInPgm p a)
-                 , s <- map fst $ F.toListSEnv $ (props k) es ] 
-    props StaticMember         = tm_sprop
-    props InstanceMember        = tm_prop
+    flds (QN k l p y) = [ s | mod     <- maybeToList $ qenvFindTy (QP k l p) modules
+                            , TD _ es <- maybeToList $ envFindTy  y $ m_types mod
+                            , s       <- map fst $ F.toListSEnv $ tm_prop es ] 
+
+    ps                = [ n | cur <- maybeToList $ HM.lookup x m
+                            , anc <- reachable cur g
+                            , cur /= anc      -- only gather parents
+                            , TS k (BGen n _) _ <- maybeToList $ lab g anc
+                            , k == ClassKind ]
 
 ---------------------------------------------------------------------------
 classAncestors     :: EnvLike r t => t r -> AbsName -> [AbsName]

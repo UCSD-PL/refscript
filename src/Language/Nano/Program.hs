@@ -70,52 +70,35 @@ import qualified Language.Fixpoint.Types        as F
 
 data Nano a r = Nano {
   --
-  -- ^ Code to check
+  -- Source AST
   --
     code      :: !(Source a)
   --
-  -- ^ Measure Signatures
+  -- Measure Signatures
   --
   , consts    :: !(Env (RType r))
   --
-  -- ^ Type aliases
+  -- Type aliases
   --
   , tAlias    :: !(TAliasEnv (RTypeQ RK r))
   --
-  -- ^ Predicate aliases
+  -- Predicate aliases
   --
   , pAlias    :: !(PAliasEnv)
   --
-  -- ^ Qualifiers
+  -- Qualifiers
   --
   , pQuals    :: ![F.Qualifier]
   --
-  -- ^ Type Invariants
+  -- Type Invariants
   --
   , invts     :: ![Located (RType r)]
   --
-  -- ^ Maximum id
+  -- Maximum id
   --
   , max_id    :: NodeId
   --
-  -- ^ All fully qualified names
-  --
-  , fullNames :: H.HashSet AbsName
-  --
-  -- ^ All fully qualified namespaces
-  --
-  , fullPaths :: H.HashSet AbsPath
-  --
-  -- ^ Modules
-  --
-  , pModules  :: QEnv (ModuleDef r)
-  --
-  -- ^ CHA
-  --
-  , pCHA      :: ClassHierarchy r
-
-  --
-  -- ^ Options
+  -- Options
   --
   , pOptions  :: [RscOption]
 
@@ -141,7 +124,7 @@ type UNanoType      = NanoTypeR ()
 
 
 data ClassHierarchy r = ClassHierarchy {
-    c_graph       :: Gr (TypeDeclQ AK r) ()
+    c_graph       :: Gr (TypeSig r) ()
   , c_nodesToKeys :: HM.HashMap AbsName Int
   }
 
@@ -193,8 +176,7 @@ instance (F.Reftable r, PP r) => PP (ClassHierarchy r) where
                            $+$ vcat (ppEdge <$> edges g)
     where
       ppEdge (a,b)          =  ppNode a <+> text "->" <+> ppNode b
-      ppNode                =  ppSig . lab' . context g
-      ppSig (TD _ n _ _)    =  pp n
+      ppNode                =  pp . lab' . context g
 
 
 ---------------------------------------------------------------------
@@ -426,7 +408,6 @@ ssaStr     = "_SSA_"
 keysIdxStr = "_KEYS_IDX_"
 keysStr    = "_KEYS_"
 ctorStr    = "_CTOR_"
-
 
 
 data SyntaxKind =

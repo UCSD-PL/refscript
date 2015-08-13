@@ -351,94 +351,99 @@ instance Transformable RTypeQ where
   trans = transRType
 
 instance Transformable BindQ where
-  trans f as xs b = b { b_type = trans f as xs $ b_type b }
+  trans f αs xs b = b { b_type = trans f αs xs $ b_type b }
  
-instance Transformable TypeMemberQ where
-  trans f as xs = mapElt' (trans f as xs) 
-
 instance Transformable FactQ where
   trans = transFact
 
 instance Transformable CastQ where
   trans = transCast
 
-instance Transformable IfaceDefQ where
+instance Transformable TypeDeclQ where
   trans = transIFD
 
-transIFD f as xs idf = idf { t_base = transIFDBase f as' xs  $  t_base idf  
-                           , t_elts = trans        f as' xs <$> t_elts idf
-                           } 
+transIFD f αs xs (TD k bs h es) 
+  = TD k (trans f αs bs) (transIFDBase f αs' xs h) (trans f αs' xs es)
     where
-      as'            = (t_args idf) ++ as
+      αs' = btvToTV <$> bs ++ αs
 
-transIFDBase f as xs (es,is) = (transClassAnn1 f as xs <$> es, transClassAnn1 f as xs <$> is)
+transIFDBase f αs xs (es,is) = (transClassAnn1 f αs xs <$> es, transClassAnn1 f αs xs <$> is)
 
-
+--------------------------------------------------------------------------------------------
 transFact :: F.Reftable r 
           => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
           -> [TVar] -> [BindQ q r] -> FactQ q r -> FactQ q r
+--------------------------------------------------------------------------------------------
 transFact f = go
   where
-    go as xs (VarAnn (a,t))    = VarAnn        $ (a,trans f as xs <$> t)
-    go as xs (AmbVarAnn t)     = AmbVarAnn     $ trans f as xs t  
-    go as xs (FieldAnn m)      = FieldAnn      $ trans f as xs m
-    go as xs (MethAnn  m)      = MethAnn       $ trans f as xs m
-    go as xs (StatAnn  m)      = StatAnn       $ trans f as xs m 
-    go as xs (ConsAnn  m)      = ConsAnn       $ trans f as xs m
-    go as xs (UserCast t)      = UserCast      $ trans f as xs t
-    go as xs (FuncAnn  t)      = FuncAnn       $ trans f as xs t
-    go as xs (IfaceAnn ifd)    = IfaceAnn      $ trans f as xs ifd
-    go as xs (ClassAnn c)      = ClassAnn      $ transClassAnn f as xs c
-    go as xs (TypInst x y ts)  = TypInst x y   $ trans f as xs <$> ts
-    go as xs (EltOverload x m) = EltOverload x $ trans f as xs m
-    go as xs (Overload x t)    = Overload x    $ trans f as xs t 
-    go as xs (TCast x c)       = TCast x       $ trans f as xs c 
+    go αs xs (PhiVarTy (v,t))  = PhiVarTy      $ (v, trans f αs xs t)
+
+    go αs xs (TypInst x y ts)  = TypInst x y   $ trans f αs xs <$> ts
+
+    go αs xs (EltOverload x m) = EltOverload x $ trans f αs xs m
+    go αs xs (Overload x t)    = Overload x    $ trans f αs xs t 
+
+    go αs xs (VarAnn (a,t))    = VarAnn        $ (a, trans f αs xs <$> t)
+    go αs xs (AmbVarAnn t)     = AmbVarAnn     $ trans f αs xs t  
+
+    go αs xs (FieldAnn m)      = FieldAnn      $ trans f αs xs m
+    go αs xs (MethAnn  m)      = MethAnn       $ trans f αs xs m
+    go αs xs (ConsAnn  m)      = ConsAnn       $ trans f αs xs m
+
+    go αs xs (UserCast t)      = UserCast      $ trans f αs xs t
+    go αs xs (FuncAnn  t)      = FuncAnn       $ trans f αs xs t
+    go αs xs (TCast x c)       = TCast x       $ trans f αs xs c 
+    
+    go αs xs (TypeAnn td)      = TypeAnn       $ trans f αs xs td
+
     go _ _   t                 = t
 
 transCast f = go
   where
     go _  _ CNo          = CNo
-    go as xs (CDead e t) = CDead e $ trans f as xs t
-    go as xs (CUp t1 t2) = CUp (trans f as xs t1) (trans f as xs t2)
-    go as xs (CDn t1 t2) = CUp (trans f as xs t1) (trans f as xs t2)
+    go αs xs (CDead e t) = CDead e $ trans f αs xs t
+    go αs xs (CUp t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
+    go αs xs (CDn t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
     
-transClassAnn f as xs (as',es,is) = (as', transClassAnn1 f (as' ++ as) xs <$> es
-                                        , transClassAnn1 f (as' ++ as) xs <$> is)
+transClassAnn f αs xs (αs',es,is) = (αs', transClassAnn1 f (αs' ++ αs) xs <$> es
+                                        , transClassAnn1 f (αs' ++ αs) xs <$> is)
 
-transClassAnn1 f as xs (n,ts) =  (n, trans f as xs <$> ts)
+transClassAnn1 f αs xs (n,ts) =  (n, trans f αs xs <$> ts)
 
 
+--------------------------------------------------------------------------------------------
 transRType :: F.Reftable r 
            => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r) 
            ->  [TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r
-
-transRType f                  = go 
+--------------------------------------------------------------------------------------------
+transRType f               = go 
   where
-    go as xs (TAnd ts)        = f as xs $ TAnd ts'            where ts' = go as xs <$> ts
-    go as xs (TApp c ts r)    = f as xs $ TApp c ts' r        where ts' = go as xs <$> ts
-    go as xs (TFun to bs t r) = f as xs $ TFun to' bs' t' r   where to' = go as xs'      <$> to
-                                                                    bs' = trans f as xs' <$> bs
-                                                                    t'  = go as xs'       $  t
-                                                                    xs' = bs ++ xs
-    go as xs (TCons m ms r)   = f as xs $ TCons m' ms' r      where ms' = trans f as xs <$> ms
-                                                                    m'  = toType $ trans f as xs (ofType m)
-    go as xs (TAll a t)       = f as xs $ TAll a t'           where t'  = go (a:as) xs t 
-    go as xs (TRef n ts r)    = f as xs $ TRef n ts' r        where ts' = go  as xs <$> ts
-    go as xs (TSelf m)        = f as xs $ TSelf m'            where m'  = go  as xs m
-    go _  _  t                = t
+    go αs xs (TPrim c r)   = f αs xs $ TPrim c r 
+    go αs xs (TVar v r)    = f αs xs $ TVar v r 
+    go αs xs (TOr ts)      = f αs xs $ TOr ts'       where ts' = go αs xs <$> ts
+    go αs xs (TAnd ts)     = f αs xs $ TAnd ts'      where ts' = go αs xs <$> ts
+    go αs xs (TRef n r)    = f αs xs $ TRef n' r     where n'  = trans f αs xs n
+    go αs xs (TObj ms r)   = f αs xs $ TObj ms' r    where ms' = trans f αs xs ms
+    go αs xs (TType k n)   = f αs xs $ TType k n'    where n'  = trans f αs xs n
+    go αs xs (TMod m)      = f αs xs $ TMod m 
+    go αs xs (TAll a t)    = f αs xs $ TAll a t'     where t'  = go (a:αs) xs t 
+    go αs xs (TFun bs t r) = f αs xs $ TFun bs' t' r where bs' = trans f αs xs' bs
+                                                           t'  = go αs xs' t
+                                                           xs' = bs ++ xs
+    go _  _  (TExp e)      = TExp e
 
 -- RJ: use newtype for AnnR and NanoBareR so we just make the below instances
 
 transAnnR :: F.Reftable r => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
           -> [TVar] -> AnnQ q r  -> AnnQ q r
-transAnnR f as ann = ann { ann_fact = trans f as [] <$> ann_fact ann}
+transAnnR f αs ann = ann { ann_fact = trans f αs [] <$> ann_fact ann}
 
 transFmap ::  (F.Reftable r, Functor thing) 
           => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
           -> [TVar] 
           -> thing (AnnQ q r)  
           -> thing (AnnQ q r)
-transFmap f as = fmap (transAnnR f as) 
+transFmap f αs = fmap (transAnnR f αs) 
 
 
  
@@ -455,59 +460,51 @@ instance NameTransformable RTypeQ where
 instance NameTransformable BindQ where
   ntrans f g b = b { b_type = ntrans f g $ b_type b }
  
-instance NameTransformable TypeMemberQ where
-  ntrans f g = mapElt' (ntrans f g) 
-
 instance NameTransformable FactQ where
   ntrans = ntransFact
 
 instance NameTransformable CastQ where
   ntrans = ntransCast
 
-instance NameTransformable IfaceDefQ where
-  ntrans = ntransIFD
+instance NameTransformable TypeDeclQ where
+  ntrans = ntransTD
 
+---------------------------------------------------------------------------
 ntransFmap ::  (F.Reftable r, Functor t) => (QN p -> QN q) -> (QP p -> QP q) -> t (AnnQ p r) -> t (AnnQ q r)
+---------------------------------------------------------------------------
 ntransFmap f g = fmap (ntransAnnR f g) 
 
-
-ntransIFD :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> IfaceDefQ p r -> IfaceDefQ q r
-ntransIFD f g idf = idf { t_name =            f    $  t_name idf
-                        , t_base = ntransBase f g  $  t_base idf 
-                        , t_elts = ntrans     f g <$> t_elts idf } 
-
-ntransBase f g (es,is) = (ntransBase1 f g <$> es, ntransBase1 f g <$> is)
-ntransBase1 :: (F.Reftable r) => (QN p -> QN q) -> (QP p -> QP q) -> (QN p, [RTypeQ p r]) -> (QN q, [RTypeQ q r]) 
-ntransBase1 f g (n,ts) = (f n, ntrans f g <$> ts)
+---------------------------------------------------------------------------
+ntransTD :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> TypeDeclQ p r -> TypeDeclQ q r
+---------------------------------------------------------------------------
+ntransTD f g (TD k b h m) = TD k (ntrans f g b) (ntrans f g h) (ntrans f g m)
 
 ntransFact f g = go
   where
     go (PhiVar v)        = PhiVar        $ v
     go (PhiVarTC v)      = PhiVarTC      $ v
-    go (PhiPost v)       = PhiPost       $ v
     go (PhiVarTy (v,t))  = PhiVarTy      $ (v, ntrans f g t)
-    go (VarAnn (a, t))   = VarAnn        $ (a, ntrans f g <$> t)
-    go (AmbVarAnn t)     = AmbVarAnn     $ ntrans f g t  
-    go (ExportedElt)     = ExportedElt
-    go (ReadOnlyVar)     = ReadOnlyVar
-    go (BypassUnique)    = BypassUnique
-    go (FieldAnn m)      = FieldAnn      $ ntrans f g m
-    go (MethAnn  m)      = MethAnn       $ ntrans f g m
-    go (StatAnn  m)      = StatAnn       $ ntrans f g m 
-    go (ConsAnn  m)      = ConsAnn       $ ntrans f g m
-    go (UserCast t)      = UserCast      $ ntrans f g t
-    go (FuncAnn  t)      = FuncAnn       $ ntrans f g t
-    go (IfaceAnn ifd)    = IfaceAnn      $ ntrans f g ifd
-    go (ClassAnn c)      = ClassAnn      $ ntransClassAnn f g c
-    go (EnumAnn c)       = EnumAnn       $ c
-    go (ModuleAnn c)     = ModuleAnn     $ c
+    go (PhiPost v)       = PhiPost       $ v
     go (TypInst x y ts)  = TypInst x y   $ ntrans f g <$> ts
     go (EltOverload x m) = EltOverload x $ ntrans f g m
     go (Overload x t)    = Overload x    $ ntrans f g t 
+    go (VarAnn (a, t))   = VarAnn        $ (a, ntrans f g <$> t)
+    go (AmbVarAnn t)     = AmbVarAnn     $ ntrans f g t  
+    go (FieldAnn m)      = FieldAnn      $ ntrans f g m
+    go (MethAnn  m)      = MethAnn       $ ntrans f g m
+    go (ConsAnn  m)      = ConsAnn       $ ntrans f g m
+    go (UserCast t)      = UserCast      $ ntrans f g t
+    go (FuncAnn  t)      = FuncAnn       $ ntrans f g t
     go (TCast x c)       = TCast x       $ ntrans f g c 
+    go (TypeAnn t)       = TypeAnn       $ ntrans f g t
+    go (ExportedElt)     = ExportedElt
+    go (ReadOnlyVar)     = ReadOnlyVar
+    go (ModuleAnn m)     = ModuleAnn     $ m
+    go (EnumAnn e)       = EnumAnn       $ e
 
-
+---------------------------------------------------------------------------
 ntransCast :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> CastQ p r -> CastQ q r
+---------------------------------------------------------------------------
 ntransCast f g = go
   where
     go CNo         = CNo
@@ -518,33 +515,26 @@ ntransCast f g = go
 ntransClassAnn f g (as,es,is) = (as, ntransClassAnn1 f g <$> es, ntransClassAnn1 f g <$> is)
 ntransClassAnn1 f g (n,ts) =  (f n, ntrans f g <$> ts)
 
+---------------------------------------------------------------------------
 ntransRType :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> RTypeQ p r -> RTypeQ q r
+---------------------------------------------------------------------------
 ntransRType f g         = go 
   where
-    go (TApp c ts r)    = TApp c ts' r        where ts' = go <$> ts
-    go (TVar v r)       = TVar v r
-    go (TFun to bs t r) = TFun to' bs' t' r   where to' = go <$> to
-                                                    bs' = ntrans f g <$> bs
-                                                    t'  = go t
-    go (TCons m ms r)   = TCons m' ms' r      where ms' = ntrans f g <$> ms
-                                                    m'  = ntrans f g m
-    go (TAll a t)       = TAll a t'           where t'  = go t 
-    go (TAnd ts)        = TAnd ts'            where ts' = go <$> ts
-    go (TRef n ts r)    = TRef n' ts' r       where n'  = f n
-                                                    ts' = go <$> ts
-    go (TSelf m)        = TSelf m'            where m'  = go m
-    go (TClass n)       = TClass n'           where n'  = f n
-    go (TModule p)      = TModule p'          where p'  = g p
-    go (TEnum n)        = TEnum n'            where n'  = f n
-    go (TExp e)         = TExp e
--- 
--- RJ: use newtype for AnnR and NanoBareR so we just make the below instances
+    go (TPrim p r)   = TPrim p r
+    go (TVar v r)    = TVar v r
+    go (TOr ts)      = TOr ts'        where ts' = go <$> ts
+    go (TAnd ts)     = TAnd ts'       where ts' = go <$> ts
+    go (TRef n r)    = TRef n' r      where n'  = ntrans f g n
+    go (TObj ms r)   = TObj ms' r     where ms' = ntrans f g <$> ms
+    go (TType k n)   = TType k n'     where n'  = ntrans f g n
+    go (TMod p)      = TMod p'        where p'  = g p
+    go (TAll a t)    = TAll a t'      where t'  = go t 
+    go (TFun bs t r) = TFun bs' t' r  where bs' = ntrans f g <$> bs
+                                            t'  = go t
+    go (TExp e)      = TExp e
 
 ntransAnnR :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> AnnQ p r -> AnnQ q r
 ntransAnnR f g ann = ann { ann_fact = ntrans f g <$> ann_fact ann}
-
--- ntransFmap :: (Functor (t r)) => (QN p -> QN q) -> (QP p -> QP q) -> t p r -> t q r
--- ntransFmap f g = fmap (ntransAnnR f g) 
 
 
 ---------------------------------------------------------------------------
@@ -571,12 +561,12 @@ hoistBindings = snd . visitStmts vs ()
   where
     vs = scopeVisitor { accStmt = accStmt', accVDec = accVDec' }
 
-    accStmt' _ (FunctionStmt l n _ _)  = [(n, l, fdk, ro, ii)]
-    accStmt' _ (FuncAmbDecl l n _)     = [(n, l, fak, id, ii)]
-    accStmt' _ (FuncOverload l n _  )  = [(n, l, fok, id, ii)]
-    accStmt' _ (ClassStmt l n _ _ _ )  = [(n, l, cdk, ro, ii)]
-    accStmt' _ (ModuleStmt l n _)      = [(n, l { ann_fact = modAnn  n l }, mdk, ro, ii)]
-    accStmt' _ (EnumStmt l n _)        = [(n, l { ann_fact = enumAnn n l }, edk, ro, ii)]
+    accStmt' _ (FunctionStmt l n _ _)  = [(n, l, fdk, am, ii)]
+    accStmt' _ (FuncAmbDecl l n _)     = [(n, l, fak, am, ii)]
+    accStmt' _ (FuncOverload l n _  )  = [(n, l, fok, am, ii)]
+    accStmt' _ (ClassStmt l n _ _ _ )  = [(n, l, cdk, am, ii)]
+    accStmt' _ (ModuleStmt l n _)      = [(n, l { ann_fact = modAnn  n l }, mdk, am, ii)]
+    accStmt' _ (EnumStmt l n _)        = [(n, l { ann_fact = enumAnn n l }, edk, am, ii)]
     accStmt' _ _                       = []
 
     accVDec' _ (VarDecl l n init)      = [(n, l, vdk, varAsgn l, fromInit init)] ++
@@ -595,8 +585,7 @@ hoistBindings = snd . visitStmts vs ()
     mdk  = ModuleDefKind
     edk  = EnumDefKind
     wg   = WriteGlobal
-    ro   = ReadOnly
-    id   = ImportDecl
+    am   = Ambient
     ui   = Uninitialized
     ii   = Initialized
     modAnn  n l = ModuleAnn (F.symbol n) : ann_fact l
@@ -650,20 +639,22 @@ collectModules ss = topLevel : rest ss
     f _                    s  = ([], s, True)
     topLevel                  = (QP AK_ (srcPos dummySpan) [], ss)
 
+
+type DeclInfo r = (SyntaxKind, VarInfo r)
+
 -- Not including class, module, enum names
 ---------------------------------------------------------------------------------------
 visibleVars :: Data r => [Statement (AnnSSA r)] -> [(Id SrcSpan, VarInfo r)]
 ---------------------------------------------------------------------------------------
-visibleVars s = [ (ann <$> n, (k,v,a,t,i))  | (n,l,k,a,i) <- hoistBindings s 
-                                            , f           <- ann_fact l
-                                            , t           <- annToType (ann l) n a f
-                                            , let v        = visibility l ]
+visibleVars s = [ (ann <$> n, (a,i,t))  | (n,l,k,a,i) <- hoistBindings s 
+                                        , f           <- ann_fact l
+                                        , t           <- annToType a f ]
   where
-    annToType _ _ ReadOnly   (VarAnn (_,t)) = maybeToList t -- Hoist ReadOnly vars (i.e. function defs)
-    annToType _ _ ImportDecl (VarAnn (_,t)) = maybeToList t -- Hoist ImportDecl (i.e. function decls)
-    annToType _ _ ReadOnly   (AmbVarAnn t)  = [t] -- Hoist ReadOnly vars (i.e. function defs)
-    annToType _ _ ImportDecl (AmbVarAnn t)  = [t] -- Hoist ImportDecl (i.e. function decls)
-    annToType _ _ _          _              = [ ]
+    annToType Ambient (VarAnn (_,t)) = maybeToList t -- Hoist ReadOnly vars (i.e. function defs)
+    annToType Ambient (VarAnn (_,t)) = maybeToList t -- Hoist ImportDecl (i.e. function decls)
+    annToType Ambient (AmbVarAnn t)  = [t] -- Hoist ReadOnly vars (i.e. function defs)
+    annToType Ambient (AmbVarAnn t)  = [t] -- Hoist ImportDecl (i.e. function decls)
+    annToType _       _              = [ ]
 
 ---------------------------------------------------------------------------------------
 extractQualifiedNames :: PPR r => [Statement (AnnRel r)] 
@@ -744,7 +735,7 @@ fixEnums p@(Nano { code = Src ss, pModules = m })
 
 fixEnumInType p (TRef x [] r) | Just e <- resolveEnumInPgm p x
                               = if isBvEnum e then tBV32 `strengthen` r
-                                              else tInt  `strengthen` r
+                                              else tNum  `strengthen` r
 fixEnumInType _ t             = t
 
 fixEnumsInModule p m@(ModuleDef { m_variables = mv, m_types = mt })
@@ -822,17 +813,17 @@ scrapeModules pgm@(Nano { code = Src stmts })
 
     vStmts                         = concatMap . vStmt
 
-    vStmt _ (VarDeclStmt _ vds)    = [(ss x,(vdk, vis l, a , t, ui)) | VarDecl l x _ <- vds
-                                                                     , VarAnn (a, Just t) <- ann_fact l ]
-                                  ++ [(ss x,(vdk, vis l, wg, t, ii)) | VarDecl l x _ <- vds
-                                                                     , AmbVarAnn t <- ann_fact l ]
+    vStmt _ (VarDeclStmt _ vds)    = [(ss x, (vdk, a, t, ui)) | VarDecl l x _ <- vds
+                                                              , VarAnn (a, Just t) <- ann_fact l ]
+                                  ++ [(ss x, (vdk, wg, t, ii)) | VarDecl l x _ <- vds
+                                                               , AmbVarAnn t <- ann_fact l ]
     -- The Assignabilities below are overwitten to default values
-    vStmt _ (FunctionStmt l x _ _) = [(ss x,(fdk, vis l, ro, t, ii)) | VarAnn (_,Just t) <- ann_fact l ]
-    vStmt _ (FuncAmbDecl l x _)    = [(ss x,(fak, vis l, id, t, ii)) | VarAnn (_,Just t) <- ann_fact l ]
-    vStmt _ (FuncOverload l x _)   = [(ss x,(fok, vis l, id, t, ii)) | VarAnn (_,Just t) <- ann_fact l ]
-    vStmt p (ClassStmt l x _ _ _)  = [(ss x,(cdk, vis l, ro, TClass  $ nameInPath l p x, ii)) ]
-    vStmt p (ModuleStmt l x _)     = [(ss x,(mdk, vis l, ro, TModule $ pathInPath l p x, ii)) ]
-    vStmt p (EnumStmt l x _)       = [(ss x,(edk, vis l, ro, TEnum   $ nameInPath l p x, ii)) ]
+    vStmt _ (FunctionStmt l x _ _) = [(ss x,(fdk, am, t, ii)) | VarAnn (_,Just t) <- ann_fact l]
+    vStmt _ (FuncAmbDecl l x _)    = [(ss x,(fak, am, t, ii)) | VarAnn (_,Just t) <- ann_fact l]
+    vStmt _ (FuncOverload l x _)   = [(ss x,(fok, am, t, ii)) | VarAnn (_,Just t) <- ann_fact l]
+    vStmt p (ClassStmt l x _ _ _)  = [(ss x,(cdk, am, TType ClassK $ nameInPath l p x, ii))]
+    vStmt p (ModuleStmt l x _)     = [(ss x,(mdk, am, TMod $ pathInPath l p x, ii))]
+    vStmt p (EnumStmt l x _)       = [(ss x,(edk, am, TType EnumK $ nameInPath l p x, ii))]
     vStmt _ _                      = []
 
     vdk  = VarDeclKind
@@ -842,10 +833,8 @@ scrapeModules pgm@(Nano { code = Src stmts })
     cdk  = ClassDefKind
     mdk  = ModuleDefKind
     edk  = EnumDefKind
-    vis  = visibility
     wg   = WriteGlobal
-    ro   = ReadOnly
-    id   = ImportDecl
+    am   = Ambient
     ui   = Uninitialized
     ii   = Initialized
 
@@ -872,10 +861,10 @@ typeNames (QP AK_ _ ss) = concatMap go
     go _                     = []
 
  
--- visibility :: Annot (Fact r) a -> Visibility
-visibility l | ExportedElt `elem` ann_fact l = Exported
-             | otherwise                     = Local
-
+-- -- visibility :: Annot (Fact r) a -> Visibility
+-- visibility l | ExportedElt `elem` ann_fact l = Exported
+--              | otherwise                     = Local
+-- 
 
 ---------------------------------------------------------------------------------------
 mkVarEnv :: PPR r => F.Symbolic s => [(s, VarInfo r)] -> Env (VarInfo r)
@@ -906,12 +895,12 @@ mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
 ---------------------------------------------------------------------------------------
 resolveType :: PPR r => AbsPath 
                      -> Statement (AnnR r) 
-                     -> Either (F.FixResult Error) (Id SrcSpan, IfaceDef r)
+                     -> Either (F.FixResult Error) (Id SrcSpan, TypeDecl r)
 ---------------------------------------------------------------------------------------
 resolveType (QP AK_ _ ss) (ClassStmt l c _ _ cs) 
   | [(m:vs,e,i)]     <- classAnns
   = do  ts           <- typeMembers (TVar m fTop) cs
-        return        $ (cc, ID (QN AK_ (srcPos l) ss (F.symbol c)) ClassKind (m:vs) (e,i) ts)
+        return        $ (cc, TD ClassKind (QN AK_ (srcPos l) ss (F.symbol c)) (m:vs) (e,i) ts)
   | otherwise 
   = Left              $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where

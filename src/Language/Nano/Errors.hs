@@ -216,3 +216,13 @@ errorConflateTypeMembers l es = mkErr l $ printf "Cannot conflate type members '
 errorCallSuperOnNonClass l x  = mkErr l $ printf "Cannot call 'super' on non class type '%s'." (ppshow x)
 errorAssignsFields l x t      = mkErr l $ printf "Variable '%s' with type '%s' can only be assigned fields or returned." (ppshow x) (ppshow t)
 
+errorUnionMergePrims l t a b  = mkErr l $ printf "In type '%s', cannot merge primitive types '%s' and '%s'." (ppshow t) (ppshow a) (ppshow b)
+errorUnionMergeVars l t a b   = mkErr l $ printf "In type '%s', cannot merge type variables '%s' and '%s'." (ppshow t) (ppshow a) (ppshow b)
+errorUnionMergeAnds l t a b   = mkErr l $ printf "In type '%s', cannot merge intersection types '%s' and '%s'." (ppshow t) (ppshow a) (ppshow b)
+errorUnionMergeObjs l t a b   = mkErr l $ printf "In type '%s', cannot merge object types '%s' and '%s', as they correspond to structurally equivalent types." (ppshow t) (ppshow a) (ppshow b)
+errorUnionMergeAlls l t       = mkErr l $ printf "In type '%s', cannot have type abstraction as part of a union." (ppshow t)
+errorUnionMergeTys l t a b    = mkErr l $ printf "In type '%s', cannot merge named types '%s' and '%s'." (ppshow t) (ppshow a) (ppshow b)
+errorUnionMergeMods l t a b   = mkErr l $ printf "In type '%s', cannot merge module types '%s' and '%s'." (ppshow t) (ppshow a) (ppshow b)
+errorUnionMergeFuns l t       = mkErr l $ printf "In type '%s', cannot merge multiple function types." (ppshow t)
+bugUnionMergeExps l t         = mkErr l $ printf "[BUG] In type '%s', exp type cannot appear at this point." (ppshow t)
+

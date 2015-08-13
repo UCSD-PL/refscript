@@ -138,17 +138,21 @@ instance Free (Fact r) where
   free (UserCast t)         = free t
   free (FuncAnn c)          = free c
   free (TCast _ c)          = free c
-  free (TypeAnn t)          = free t --  foldr S.delete (free $ e ++ i) vs
+  free (ClassAnn t)         = free t --  foldr S.delete (free $ e ++ i) vs
+  free (InterfaceAnn t)     = free t --  foldr S.delete (free $ e ++ i) vs
   free _                    = S.empty
 
+instance Free (TypeSig r) where
+  free (TS _ n h)           = S.unions [free n, free h]
+
 instance Free (TypeDecl r) where
-  free (TD _ n h ms)        = S.unions [free n, free h, free ms]
+  free (TD s m)             = S.unions [free s, free m]
 
 instance Free (BTGen r) where
   free (BGen n ts)          = S.unions [free n, free ts]
 
 instance Free (BTVar r) where
-  free (BTV _ t _)          = free t
+  free (BTV _ _ t)          = free t
 
 instance Free a => Free (RelName, a) where
   free (_, a)               = free a
@@ -202,7 +206,8 @@ instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   apply θ (UserCast t)      = UserCast        $ apply θ t
   apply θ (FuncAnn t)       = FuncAnn         $ apply θ t
   apply θ (TCast ξ t)       = TCast ξ         $ apply θ t
-  apply θ (TypeAnn t)       = TypeAnn         $ apply θ t
+  apply θ (ClassAnn t)      = ClassAnn        $ apply θ t
+  apply θ (InterfaceAnn t)  = InterfaceAnn    $ apply θ t
   apply _ a                 = a
 
 instance F.Reftable r => SubstitutableQ q r (MethodInfoQ q r) where
@@ -242,8 +247,11 @@ instance SubstitutableQ q r (QN l) where
 instance SubstitutableQ q r (QP l) where
   apply _ s                 = s 
 
+instance F.Reftable r => SubstitutableQ q r (TypeSigQ q r) where
+  apply θ (TS k n h)        = TS k n (apply θ h)
+
 instance F.Reftable r => SubstitutableQ q r (TypeDeclQ q r) where
-  apply θ (TD k n h m)      = TD k n (apply θ h) (apply θ m)
+  apply θ (TD s m)          = TD (apply θ s) (apply θ m)
 
 instance (F.Reftable r, SubstitutableQ q r a) => SubstitutableQ q r (Statement a) where
   apply θ s                 = fmap (apply θ) s

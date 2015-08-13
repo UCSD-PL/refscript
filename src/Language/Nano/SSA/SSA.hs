@@ -505,8 +505,9 @@ ssaClassElt (Constructor l xs bd)
               return     $ Constructor l xs bd'
   where
     symToVar    = freshenIdSSA . mkId . F.symbolString
-    allFlds     = L.sort <$> (maybe [] <$> (fieldSymbols InstanceMember <$> getProgram)
-                                       <*> getCurrentClass)
+    
+    allFlds     = L.sort <$> (maybe [] <$> (nonStaticFields <$> getProgram) <*> getCurrentClass)
+
     bdM fs      = visitStmtsT (ctorVisitor fs) () bd
     exitM  fs   = single <$> ctorExit l fs
 

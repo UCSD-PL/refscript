@@ -20,9 +20,6 @@ module Language.Nano.Annots (
   , AnnQ, AnnR, AnnRel, AnnBare, UAnnBare, AnnSSA , UAnnSSA
   , AnnType, UAnnType, AnnInfo, UAnnInfo
 
-  -- * Gather fact types
-  , factRTypes
-
   -- Options
   , RscOption (..)
                                   
@@ -132,7 +129,8 @@ data FactQ q r
   | TCast       !IContext  !(CastQ q r)
 
   -- Named type annotation
-  | TypeAnn     !(TypeDeclQ q r)
+  | ClassAnn     !(TypeSigQ q r)
+  | InterfaceAnn !(TypeDeclQ q r)
 
   | ExportedElt
   | ReadOnlyVar
@@ -207,7 +205,8 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (FuncAnn t)                = text "Func Ann"        <+> pp t
   pp (FieldAnn (FI _ _ t))      = text "Field Ann"       <+> pp t
   pp (MethAnn (MI _ _ t))       = text "Method Ann"      <+> pp t
-  pp (TypeAnn _)                = text "UNIMPLEMENTED:pp:TypeAnn"
+  pp (InterfaceAnn _)           = text "UNIMPLEMENTED:pp:InterfaceAnn"
+  pp (ClassAnn _)               = text "UNIMPLEMENTED:pp:ClassAnn"
   pp (ModuleAnn s)              = text "module"          <+> pp s
   pp (EnumAnn s)                = text "enum"            <+> pp s
   pp (BypassUnique)             = text "BypassUnique"
@@ -221,33 +220,6 @@ instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann _ x ys) = text "Annot: " <+> pp x <+> pp ys
 
 phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
-
-factRTypes :: Fact r -> [RType r]
-factRTypes = go
-  where
-    go (TypInst _ _ ts)           = ts
-    go (EltOverload _ (MI _ _ t)) = [t]
-    go (Overload _ t)             = [t]
-    go (VarAnn (_,Just t))        = [t]
-    go (VarAnn (_,_))             = [ ]
-    go (AmbVarAnn t)              = [t]
-    go (UserCast t)               = [t]
-    go (FuncAnn t)                = [t]
-    go (FieldAnn fi)              = [fromFI fi]
-    go (MethAnn mi)               = [fromMI mi]
-    go (ConsAnn t)                = [t]
-    go (TypeAnn (TD _ _ _ ts))    = fromTM ts
-    go f                          = error "UNIMPLEMENTED: factRTypes"
-    fromTM (TM fs ms sfs sms cl ct s n) = map (fromFI . snd) (F.toListSEnv fs) ++ 
-                                          map (fromMI . snd) (F.toListSEnv ms) ++ 
-                                          map (fromFI . snd) (F.toListSEnv sfs) ++ 
-                                          map (fromMI . snd) (F.toListSEnv sms) ++ 
-                                          maybeToList cl ++ 
-                                          maybeToList ct ++ 
-                                          maybeToList s ++ 
-                                          maybeToList n
-    fromFI (FI _ _ t)             = t
-    fromMI (MI _ _ t)             = t
 
 
 -----------------------------------------------------------------------------

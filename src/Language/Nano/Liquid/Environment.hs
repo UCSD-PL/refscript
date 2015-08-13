@@ -62,13 +62,14 @@ data CGEnvR r = CGE {
   --
   , cge_path    :: AbsPath
   -- 
-  -- ^ Parent namespace environment
-  --
-  , cge_parent  :: Maybe (CGEnvR r)
-  -- 
   -- ^ Constants
   --
   , cge_consts  :: Env (RType r)
+
+--   -- 
+--   -- ^ Parent namespace environment
+--   --
+--   , cge_parent  :: Maybe (CGEnvR r)
   
   } deriving (Functor)
 
@@ -82,7 +83,7 @@ instance EnvLike r CGEnvR where
   cha       = cge_cha
   absPath   = cge_path
   context   = cge_ctx
-  parent    = cge_parent
+--   parent    = cge_parent
  
  
 instance (PP r, F.Reftable r) => PP (CGEnvR r) where

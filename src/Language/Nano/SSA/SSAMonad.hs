@@ -200,19 +200,17 @@ withinModule m act
         modify   $ \st -> st { ssa_path = pOld }
         return   $ ret
 
-
 -------------------------------------------------------------------------------------
 getAssignability :: Var r -> SSAM r Assignability 
 -------------------------------------------------------------------------------------
 getAssignability x = fromMaybe WriteLocal . envFindTy x . assign <$> get
-
 
 -------------------------------------------------------------------------------------
 initSsaEnv   :: AnnSSA r -> Var r -> SSAM r (Var r)
 -------------------------------------------------------------------------------------
 initSsaEnv ll x       = getAssignability x >>= go
   where 
-    go ReadOnly       = return x
+    go Ambient        = return x
     go _              = updSsaEnv ll x
 
 -------------------------------------------------------------------------------------
@@ -222,10 +220,9 @@ updSsaEnv ll x        = getAssignability x >>= go
   where 
     go   WriteLocal   = updSsaEnvLocal ll x
     go   WriteGlobal  = updSsaEnvGlobal ll x
+    go m@Ambient      = ssaError $ errorWriteImmutable l m x 
     go m@ForeignLocal = ssaError $ errorWriteImmutable l m x 
-    go m@ReadOnly     = ssaError $ errorWriteImmutable l m x 
     go m@ReturnVar    = ssaError $ errorWriteImmutable l m x 
-    go m@ImportDecl   = ssaError $ errorWriteImmutable l m x 
     l                 = srcPos ll
 
 updSsaEnv' l x = (,) <$> getAssignability x <*> updSsaEnv l x
@@ -245,7 +242,6 @@ updSsaEnvGlobal :: AnnSSA r -> Var r -> SSAM r (Var r)
 updSsaEnvGlobal _ x 
   = do modify $ \st -> st {glob_names = envAdds [(x, SI x)] (glob_names st)}
        return x
-
 
 -------------------------------------------------------------------------------------
 freshenAnn :: IsLocated l => l -> SSAM r (AnnSSA r)

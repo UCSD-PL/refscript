@@ -63,7 +63,7 @@ module Language.Nano.Typecheck.Types (
   , requiredMember, optionalMember
   
   -- * Type Definitions
-  , tmFromFields, tmFromFieldList
+  , tmFromFields, tmFromFieldList, typesOfTM
 
   -- * Operator Types
   , infixOpId, prefixOpId, builtinOpId, arrayLitTy, objLitTy, setPropTy, localTy, finalizeTy
@@ -83,7 +83,7 @@ import           Data.Default
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
 import qualified Data.List                      as L
-import           Data.Maybe                     (fromMaybe, isJust, fromJust)
+import           Data.Maybe                     (fromMaybe, isJust, fromJust, maybeToList)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.Map.Strict                as M
 import           Data.Typeable                  ()
@@ -192,7 +192,10 @@ instance F.Reftable r => ExprReftable BV.Bv r where
   exprReft  = F.ofReft . F.exprReft
   uexprReft = F.ofReft . F.uexprReft
 
-
+----------------------------------------------------------------------------------------
+toOverloads :: (IsLocated l, F.Subable (RType r), PP f, PPR r, F.Symbolic b) 
+            => l -> f -> [b] -> RType r -> Either Error [IOverloadSig r]
+----------------------------------------------------------------------------------------
 toOverloads l f xs ft 
   | Just ts <- bkFuns ft
   = case partitionEithers [funTy l xs t | t <- ts] of 
@@ -200,7 +203,6 @@ toOverloads l f xs ft
      (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
   | otherwise
   = Left $ errorNonFunction (srcPos l) f ft 
-
 
 funTy l xs (αs, yts, t) =
   case padUndefineds xs yts of
@@ -469,7 +471,10 @@ instance PP Assignability where
   pp ReturnVar    = text "ReturnVar"
 
 instance (PP r, F.Reftable r) => PP (TypeDeclQ q r) where
-  pp (TD k n h ts) = pp k <+> pp n <+> ppHeritage h <+> lbrace $+$ nest 2 (pp ts) $+$ rbrace
+  pp (TD s m) = pp s <+> lbrace $+$ nest 2 (pp m) $+$ rbrace
+
+instance (PP r, F.Reftable r) => PP (TypeSigQ q r) where
+  pp (TS k n h) = pp k <+> pp n <+> ppHeritage h
 
 instance PP TypeDeclKind where
   pp InterfaceKind  = text "interface"
@@ -523,7 +528,7 @@ instance (PP r, F.Reftable r) => PP (ModuleDef r) where
 -- | Primitive / Base Types Constructors
 -----------------------------------------------------------------------
 
-btvToTV  (BTV s _ l) = TV s l
+btvToTV  (BTV s l _ ) = TV s l
 
 tVar :: (F.Reftable r) => TVar -> RType r
 tVar = (`TVar` fTop) 
@@ -567,7 +572,7 @@ arrayLitBinds n (B x t) = [B (x_ i) t | i <- [1..n]]
 freshBTV l s b n  = (bv,t)
   where 
     i             = F.intSymbol s n
-    bv            = BTV i b (srcPos l)
+    bv            = BTV i (srcPos l) b
     v             = TV i (srcPos l)
     t             = TVar v ()
 
@@ -637,8 +642,8 @@ setPropTy l f ty = mkAll [bvt, bvm] t
     b2           = B (F.symbol "x") $ t
     m            = toTTV bvm :: F.Reftable r => RType r
     t            = toTTV bvt
-    bvt          = BTV (F.symbol "A") Nothing     def
-    bvm          = BTV (F.symbol "M") (Just tMut) def :: F.Reftable r => BTVar r 
+    bvt          = BTV (F.symbol "A") def Nothing
+    bvm          = BTV (F.symbol "M") def (Just tMut) :: F.Reftable r => BTVar r 
     toTTV        :: F.Reftable r => BTVar r -> RType r
     toTTV        = (`TVar` fTop) . btvToTV
 
@@ -653,6 +658,16 @@ tmFromFieldList :: F.Symbolic s => [(s, FieldInfo r)] -> TypeMembers r
 --------------------------------------------------------------------------------------------
 tmFromFieldList f = TM (F.fromListSEnv $ mapFst F.symbol <$> f) 
                      mempty mempty mempty Nothing Nothing Nothing Nothing
+
+--------------------------------------------------------------------------------------------
+typesOfTM :: TypeMembers r -> [RType r]
+--------------------------------------------------------------------------------------------
+typesOfTM (TM p m sp sm c k s n) = 
+  concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv p) ++
+  concatMap (\(MI _ t t') -> [t,t']) (map snd $ F.toListSEnv m) ++ 
+  concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv sp) ++ 
+  concatMap (\(MI _ t t') -> [t,t']) (map snd $ F.toListSEnv sm) ++ 
+  concatMap maybeToList [c, k, s, n]
 
 ---------------------------------------------------------------------------------
 returnTy :: (PP r, F.Reftable r) => RType r -> Bool -> RType r
@@ -670,9 +685,9 @@ finalizeTy t  | TRef (Gen x (m:ts)) _ <- t, isUM m
   where 
     sx        = F.symbol "x_"
     tOut      = tVar $ btvToTV mOut
-    mOut      = BTV (F.symbol "N") Nothing def
+    mOut      = BTV (F.symbol "N") def Nothing
     tV        = tVar $ btvToTV mV
-    mV        = BTV (F.symbol "V") Nothing def
+    mV        = BTV (F.symbol "V") def Nothing
 
 localTy t = mkFun ([], [B sx t], t `strengthen` uexprReft sx)
   where 

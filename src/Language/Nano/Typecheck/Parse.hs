@@ -747,10 +747,6 @@ mkCode' ss = Nano {
       , pOptions      =             [ t | Option t <- anns ]
       , invts         = [Loc (srcPos l) (ntrans f g t) | Invt l t <- anns ]
       , max_id        = ending_id
-      , fullNames     = names
-      , fullPaths     = paths
-      , pModules      = qenvEmpty -- is populated at mkCode
-      , pCHA          = def
     }
   where
     toBare            :: Int -> (SrcSpan, [Spec]) -> AnnRel Reft
@@ -760,7 +756,6 @@ mkCode' ss = Nano {
     starting_id        = 0
     (ending_id, ss')   = mapAccumL (mapAccumL (\n -> (n+1,) . toBare n)) starting_id ss
     anns               = concatMap (FO.foldMap snd) ss
-    (names, paths)     = extractQualifiedNames ss'
 
 ---------------------------------------------------------------------------------
 extractFact :: PSpec t r -> Maybe (FactQ RK r)

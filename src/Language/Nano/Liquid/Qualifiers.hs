@@ -8,7 +8,7 @@ import Language.Nano.Liquid.Types
 import Language.Nano.Env
 import Language.Nano.Errors
 import Language.Nano.Locations
-import Language.Nano.Syntax
+import Language.Nano.AST
 import Data.List                (delete, nub)
 import Data.Maybe               (fromMaybe)
 

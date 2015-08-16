@@ -41,7 +41,7 @@ module Language.Nano.Liquid.Types (
   , isTrivialRefType
 
   -- * Useful Operations
-  , foldReft -- , efoldRType, emapReft, mapReftM
+  , foldReft, efoldRType -- , emapReft, mapReftM
 
   -- * Annotations
   , AnnTypeR
@@ -74,14 +74,13 @@ import           Text.Printf
 import           Control.Applicative
 import           Control.Monad          (zipWithM, liftM)
 
-import           Language.Nano.Syntax
-import           Language.Nano.Syntax.PrettyPrint
-
+import           Language.Nano.AST
 import           Language.Nano.Annots
 import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Misc
 import           Language.Nano.Names
+import           Language.Nano.Pretty
 import           Language.Nano.Types
 import           Language.Nano.Program
 import           Language.Nano.Liquid.Environment
@@ -323,7 +322,7 @@ noKVars (F.Reft (x, F.Refa p)) = F.Reft (x, F.Refa $ dropKs p)
 -- | Substitutions
 ------------------------------------------------------------------------------------------
 
-instance (PPR r, F.Subable r) => F.Subable (RType r) where
+instance (PPR r, F.Subable r) => F.Subable (RTypeQ q r) where
   syms        = foldReft (\r acc -> F.syms r ++ acc) []
   substa      = fmap . F.substa
   substf f    = emapReft (F.substf . F.substfExcept f) []
@@ -405,13 +404,13 @@ mapReftMI f (MI m n t2) = MI m n <$> mapReftM f t2
 ------------------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------------------
-foldReft  :: PPR r => (r -> a -> a) -> a -> RType r -> a
+foldReft  :: PPR r => (r -> a -> a) -> a -> RTypeQ q r -> a
 ------------------------------------------------------------------------------------------
 foldReft  f = efoldReft (\_ -> ()) (\_ -> f) F.emptySEnv
 
 ------------------------------------------------------------------------------------------
-efoldReft :: PPR r => (RType r -> b) -> (F.SEnv b -> r -> a -> a)
-                   -> F.SEnv b -> a -> RType r -> a
+efoldReft :: PPR r => (RTypeQ q r -> b) -> (F.SEnv b -> r -> a -> a)
+                   -> F.SEnv b -> a -> RTypeQ q r -> a
 ------------------------------------------------------------------------------------------
 efoldReft g f = go
   where
@@ -422,7 +421,7 @@ efoldReft g f = go
     go γ z (TFun xts t r) = f γ r $ go γ' (gos γ' z $ map b_type xts) t
                             where γ' = foldr (efoldExt g) γ xts
     go γ z (TAnd ts)      = gos γ z ts
-    go γ z (TObj xts r)   = f γ r $ gos γ z $ typesOfTM xts     -- TODO: add immutable field bindings
+    go γ z (TObj xts r)   = f γ r $ efoldTypeMembers g f xts γ z
     go γ z (TType _ n)    = gos γ z $ g_args n
     go _ z (TMod _)       = z
     go _ _ t              = error $ "UNIMPLEMENTED[efoldReft]: " ++ ppshow t
@@ -431,7 +430,22 @@ efoldReft g f = go
 
 efoldExt g xt γ           = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
 
--- XXX: Restore if needed.
+-- TODO: add immutable field bindings ??? 
+efoldTypeMembers g f (TM p m sp sm c k s n) γ z = 
+    L.foldl' (efoldReft g f γ) z $ pl ++ ml ++ spl ++ sml ++ cl ++ kl ++ sl ++ nl
+  where
+    pl  = L.foldr (\(_, FI _ t t') -> ([t,t'] ++) ) [] $ F.toListSEnv p
+    ml  = L.foldr (\(_, MI _ _ t ) -> ([t]    ++) ) [] $ F.toListSEnv m
+    spl = L.foldr (\(_, FI _ t t') -> ([t,t'] ++) ) [] $ F.toListSEnv sp
+    sml = L.foldr (\(_, MI _ _ t ) -> ([t]    ++) ) [] $ F.toListSEnv sm
+    cl  = maybeToList c
+    kl  = maybeToList k
+    sl  = maybeToList s
+    nl  = maybeToList n
+
+
+-- XXX: TODO Restore 
+efoldRType = undefined
 -- ------------------------------------------------------------------------------------------
 -- efoldRType :: PPR r
 --            => (RTypeQ q r -> b) -> (F.SEnv b -> RTypeQ q r -> a -> a)

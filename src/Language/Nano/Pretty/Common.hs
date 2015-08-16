@@ -1,8 +1,9 @@
 {-# LANGUAGE FlexibleInstances        #-}
 {-# LANGUAGE OverlappingInstances     #-}
+{-# LANGUAGE ConstraintKinds          #-}
 
 -- | Pretty-printing JavaScript.
-module Language.Nano.Pretty.Common ( ppArgs, ppshow, pprint, PP (..) ) where
+module Language.Nano.Pretty.Common ( ppArgs, ppshow, pprint, PP (..), PPR ) where
 
 import           Control.Applicative            ((<$>))
 import qualified Data.IntMap                    as I
@@ -20,6 +21,7 @@ import           Language.Nano.Env
 class PP a where 
   pp :: a -> Doc
 
+type PPR r = (PP r, F.Reftable r)
 
 instance PP F.Symbol where 
   pp = pprint

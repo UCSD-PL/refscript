@@ -70,6 +70,19 @@ ssaNano p@(Nano { code = Src fs })
       allGlobs          = I.fromList $ getAnnotation <$> fmap ann_id <$> writeGlobalVars fs
       patch ms (Ann i l fs) = Ann i l (fs ++ IM.findWithDefault [] i ms)
 
+-- | `writeGlobalVars p` returns symbols that have `WriteMany` status, i.e. may be 
+--    re-assigned multiply in non-local scope, and hence
+--    * cannot be SSA-ed
+--    * cannot appear in refinements
+--    * can only use a single monolithic type (declared or inferred)
+-------------------------------------------------------------------------------
+writeGlobalVars           :: Data r => [Statement (AnnType r)] -> [Id (AnnType r)]
+-------------------------------------------------------------------------------
+writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
+  where 
+    fromVD (VarDecl l x _) = [ x | VarAnn _ <- ann_fact l ] ++ [ x | AmbVarAnn _ <- ann_fact l ]
+
+
 
 -- | Find all language level bindings in the scope of @s@.
 --   This includes: 

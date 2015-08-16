@@ -86,7 +86,7 @@ instance IsLocated SourcePos where
 instance IsLocated (F.Located a) where
   srcPos = srcPos . F.loc
 
-instance (HasAnnotation thing, IsLocated a) => IsLocated (thing a) where 
+instance (Annotated thing, IsLocated a) => IsLocated (thing a) where 
   srcPos  = srcPos . getAnnotation  
 
 instance IsLocated F.Symbol where 

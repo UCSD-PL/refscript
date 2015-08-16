@@ -35,8 +35,6 @@ module Language.Nano.Typecheck.Types (
 
   , btvToTV
 
-  , renameBinds
-
   -- * Mutability primitives
   , tMut, tUqMut, tImm, tIM, tRO, trMut, trImm, trIM, trRO
   , isRO, isMut, isImm, isUM, mutRelated
@@ -44,7 +42,7 @@ module Language.Nano.Typecheck.Types (
   -- * Primitive Types
 
   --   # Constructors
-  , tNum, tBV32, tBool, tString, tTop, tVoid, tErr, tVar, tUndef, tNull, tObject
+  , tNum, tBV32, tBool, tString, tTop, tVoid, tErr, tVar, tUndef, tNull
 
   --   # Tests
   , isTPrim, isTTop, isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
@@ -57,7 +55,7 @@ module Language.Nano.Typecheck.Types (
   , fTop
   
   -- * Type Definitions
-  , tmFromFields, tmFromFieldList, typesOfTM
+  , tmFromFields, tmFromFieldList -- , typesOfTM
 
   -- * Operator Types
   , infixOpId, prefixOpId, builtinOpId, arrayLitTy, objLitTy, setPropTy, localTy, finalizeTy
@@ -100,18 +98,6 @@ import           Control.Applicative            hiding (empty)
 import           Control.Exception              (throw)
 
 -- import           Debug.Trace (trace)
-
-
--- type PPR  r = (ExprReftable F.Symbol r, ExprReftable Int r, PP r, F.Reftable r, Data r)
-
----------------------------------------------------------------------
--- | Primitive Types
----------------------------------------------------------------------
-
-mkPrimTy s m = TRef (Gen (mkAbsName [] s) [m]) fTop
-
-tObject = mkPrimTy "Object" tImm
-
 
 ---------------------------------------------------------------------
 -- | Mutability
@@ -185,12 +171,6 @@ padUndefineds xs yts
     nyts        = length yts
     nxs         = length xs
     xundefs     = [B (F.symbol x') tUndef | x' <- snd $ splitAt nyts xs ]
-
-renameBinds yts xs    = (su, [F.subst su ty | B _ ty <- yts])
-  where 
-    su                = F.mkSubst suL 
-    suL               = safeZipWith "renameBinds" fSub yts xs 
-    fSub yt x         = (b_sym yt, F.eVar x)
 
 bkFuns :: RTypeQ q r -> Maybe [([BTVarQ q r], [BindQ q r], RTypeQ q r)]
 bkFuns = sequence . fmap bkFun . bkAnd
@@ -478,16 +458,16 @@ tmFromFieldList :: F.Symbolic s => [(s, FieldInfo r)] -> TypeMembers r
 tmFromFieldList f = TM (F.fromListSEnv $ mapFst F.symbol <$> f) 
                      mempty mempty mempty Nothing Nothing Nothing Nothing
 
---------------------------------------------------------------------------------------------
-typesOfTM :: TypeMembers r -> [RType r]
---------------------------------------------------------------------------------------------
-typesOfTM (TM p m sp sm c k s n) = 
-  concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv p) ++
-  concatMap (\(MI _ _ t') -> [t']) (map snd $ F.toListSEnv m) ++ 
-  concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv sp) ++ 
-  concatMap (\(MI _ _ t') -> [t']) (map snd $ F.toListSEnv sm) ++ 
-  concatMap maybeToList [c, k, s, n]
-
+-- --------------------------------------------------------------------------------------------
+-- typesOfTM :: TypeMembers r -> [RType r]
+-- --------------------------------------------------------------------------------------------
+-- typesOfTM (TM p m sp sm c k s n) = 
+--   concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv p) ++
+--   concatMap (\(MI _ _ t') -> [t']) (map snd $ F.toListSEnv m) ++ 
+--   concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv sp) ++ 
+--   concatMap (\(MI _ _ t') -> [t']) (map snd $ F.toListSEnv sm) ++ 
+--   concatMap maybeToList [c, k, s, n]
+-- 
 ---------------------------------------------------------------------------------
 returnTy :: F.Reftable r => RType r -> Bool -> RType r
 ---------------------------------------------------------------------------------

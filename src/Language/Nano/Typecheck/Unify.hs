@@ -14,8 +14,11 @@ module Language.Nano.Typecheck.Unify (
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Errors 
 import qualified Language.Fixpoint.Types      as F
+
+import           Language.Nano.Annots
 import           Language.Nano.Errors 
 import           Language.Nano.Locations
+import           Language.Nano.Pretty
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
@@ -40,8 +43,10 @@ import           Data.Function                   (on)
 -- | Unification
 -----------------------------------------------------------------------------
 
+type Unif r = (PP r, F.Reftable r, ExprReftable F.Symbol r, ExprReftable Int r, Free (Fact r))
+
 -----------------------------------------------------------------------------
-unify :: (Data r, PPR r) 
+unify :: (Unif r) 
       => SrcSpan 
       -> TCEnv r
       -> RSubst r 
@@ -91,7 +96,7 @@ unify l γ θ t1 t2
 unify _ _ θ _  _ = return θ
 
 -----------------------------------------------------------------------------
-unifyUnions :: PPR r
+unifyUnions :: Unif r
             => SrcSpan
             -> TCEnv r
             -> RSubst r
@@ -136,7 +141,7 @@ unifyUnions l γ θ t1 t2
     match _                     _                     = False
 
 -----------------------------------------------------------------------------
-unifyMembers :: PPR r 
+unifyMembers :: Unif r 
              => SrcSpan 
              -> TCEnv r 
              -> RSubst r 
@@ -153,13 +158,13 @@ unifyMembers l γ θ (TM p1 m1 _ _ c1 k1 s1 n1) (TM p2 m2 _ _ c2 k2 s2 n2) =
     (m1s , m2s) = unzip $ concatMap fromMI $ F.toListSEnv $ F.intersectWithSEnv (,) m1 m2
 
     fromFI (_, (FI _ t1 t2, FI _ t1' t2')) = [(t1, t1'), (t2, t2')]
-    fromMI (_, (MI _ t1 t2, MI _ t1' t2')) = [(t1, t1'), (t2, t2')]
+    fromMI (_, (MI _ _  t2, MI _ _   t2')) = [(t2, t2')]
     fromBoth (Just a1, Just a2)  = [(a1,a2)]
     fromBoth _                   = []
     (r1s, r2s)  = unzip $ concatMap fromBoth [(c1,c2),(k1,k2),(n1,n2)]
    
 -----------------------------------------------------------------------------
-unifys :: PPR r
+unifys :: Unif r
        => SrcSpan 
        -> TCEnv r 
        -> RSubst r 
@@ -176,7 +181,7 @@ unifys l γ θ ts ts'
     foo θ (t, t') = unify l γ θ (apply θ t) (apply θ t')
 
 -----------------------------------------------------------------------------
-varEql :: PPR r => SrcSpan -> RSubst r -> TVar -> TVar -> Either Error (RSubst r)
+varEql :: Unif r => SrcSpan -> RSubst r -> TVar -> TVar -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 varEql l θ α β =  
   case varAsn l θ α $ tVar β of
@@ -187,7 +192,7 @@ varEql l θ α β =
         Left  s2  -> Left $ catMessage s1 (errMsg s2) 
 
 -----------------------------------------------------------------------------
-varAsn ::  PPR r => SrcSpan -> RSubst r -> TVar -> RType r -> Either Error (RSubst r)
+varAsn ::  Unif r => SrcSpan -> RSubst r -> TVar -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 varAsn l θ α t 
   | on eqV toType t (apply θ (tVar α))     = Right $ θ 

@@ -15,6 +15,8 @@ module Language.Nano.Annots (
 
   , SyntaxKind(..), MemberKind(..)
 
+  , scrapeVarDecl
+
   -- * Casts
   , CastQ(..), Cast, SubTRes(..), castType
 
@@ -162,7 +164,7 @@ instance Eq (SsaInfo r) where
 type Var r = Id (AnnSSA r)
 
 
-instance HasAnnotation (Annot b) where 
+instance Annotated (Annot b) where 
   getAnnotation = ann 
 
 instance Default a => Default (Annot b a) where
@@ -178,11 +180,14 @@ instance Eq (Annot a SrcSpan) where
 phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
 
 
-data SyntaxKind = FuncDefKind | FuncAmbientKind | FuncOverloadKind | MethDefKind
-                | MethDeclKind | FieldDefKind | CtorDefKind | VarDeclKind 
-                | AmbVarDeclKind | ClassDefKind | ModuleDefKind | EnumDefKind deriving ( Eq )
-
-data MemberKind = MemDef | MemDecl deriving ( Eq )
+-- | scrapeVarDecl: Scrape a variable declaration for annotations
+----------------------------------------------------------------------------------
+scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, Assignability, Maybe (RType r))]
+----------------------------------------------------------------------------------
+scrapeVarDecl (VarDecl l _ _) 
+  = [ (VarDeclKind, a, t) | VarAnn a t <- ann_fact l ] 
+ ++ [ (AmbVarDeclKind, Ambient, Just t) | AmbVarAnn t <- ann_fact l ] 
+ ++ [ (FieldDefKind, Ambient, Just t) | FieldAnn _ t <- ann_fact l ] -- Assignability value is dummy
 
 
 -----------------------------------------------------------------------------

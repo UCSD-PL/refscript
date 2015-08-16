@@ -80,10 +80,13 @@ data AK = AK_ deriving (Eq, Data, Typeable, Show)
 data RK = RK_ deriving (Eq, Data, Typeable, Show)
 
 -- Qualified Name
-data QN l = QN (QP l) F.Symbol deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
+data QN l = QN (QP l) F.Symbol 
+            deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
 
 -- Qualified Path
-data QP l = QP l SrcSpan NameSpacePath deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
+data QP l = QP l SrcSpan NameSpacePath 
+            deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
+
 
 instance Eq l => Eq (QN l) where
   QN p1 s1 == QN p2 s2 = (p1,s1) == (p2,s2)

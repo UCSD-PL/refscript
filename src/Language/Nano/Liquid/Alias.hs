@@ -112,8 +112,8 @@ getTApps    :: RTypeQ RK F.Reft -> [F.Symbol]
 getTApps    = everything (++) ([] `mkQ` fromT)
   where
     fromT   :: RTypeQ RK F.Reft -> [F.Symbol]
-    fromT (TRef (QN RK_ _ [] c) _ _) = [c]
-    fromT _                          = [ ]
+    fromT (TRef (Gen (QN (QP RK_ _ []) c) _) _) = [c]
+    fromT _ = [ ]
 
 expandTAlias  :: TAliasEnv (RTypeQ RK F.Reft) ->  TAlias (RTypeQ RK F.Reft) -> TAlias (RTypeQ RK F.Reft)
 expandTAlias te a = a {al_body = expandRefType te $ al_body a}
@@ -124,8 +124,8 @@ expandTAlias te a = a {al_body = expandRefType te $ al_body a}
 expandRefType :: Data a => TAliasEnv (RTypeQ RK F.Reft) -> a -> a
 expandRefType te = everywhere $ mkT tx
   where
-    tx t@(TRef (QN RK_ l [] c) ts r) = maybe t (applyTAlias l t c ts r) $ envFindTy c te
-    tx t                             = t
+    tx t@(TRef (Gen (QN (QP RK_ l []) c) ts) r) = maybe t (applyTAlias l t c ts r) $ envFindTy c te
+    tx t = t
 
 applyTAlias l t _ ts_ r a
   | (nt, ne) == (nα, nx) = {- tracePP "applyTAlias" $ -} (F.subst su $ S.apply θ $ al_body a) `strengthen` r

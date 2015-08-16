@@ -65,9 +65,8 @@ import           Language.Nano.Typecheck.Resolve
 
 import           Language.Nano.Parser.Common
 
-import           Language.Nano.Syntax
-import           Language.Nano.Syntax.PrettyPrint
-import           Language.Nano.Syntax.Annotations
+import           Language.Nano.AST
+import           Language.Nano.Pretty
 
 import           Text.Parsec                      hiding (parse, State)
 import           Text.Parsec.Pos                         (newPos, SourcePos)
@@ -197,5 +196,4 @@ instance IsLocated RawSpec where
   srcPos (RawCast     (s,_)) = s
   srcPos (RawExported (s,_)) = s
   srcPos (RawReadOnly (s,_)) = s
-
 

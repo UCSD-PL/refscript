@@ -22,6 +22,7 @@ module Language.Nano.Pretty.Types (
 import           Control.Applicative            ((<$>))
 
 import           Language.Nano.AST
+import           Language.Nano.ClassHierarchy
 import           Language.Nano.Pretty.Common
 import           Language.Nano.Pretty.Syntax
 import           Language.Nano.Program

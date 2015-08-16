@@ -53,6 +53,7 @@ import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
 import           Control.Monad.Except               (catchError)
+import           Data.Either                        (partitionEithers)
 import           Data.Function                      (on)
 import qualified Data.HashMap.Strict                as M
 import qualified Data.Map.Strict                    as MM
@@ -65,12 +66,17 @@ import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
 import qualified Language.Fixpoint.Types            as F
 
+import           Language.Nano.AST
 import           Language.Nano.Annots
+import           Language.Nano.Pretty
 import           Language.Nano.CmdLine
+import           Language.Nano.ClassHierarchy
 import           Language.Nano.Env
+import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Misc
 import           Language.Nano.Program
+import           Language.Nano.Pretty
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Environment
@@ -78,17 +84,13 @@ import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Typecheck.Resolve
-import           Language.Nano.Errors
 
-import           Language.Nano.Syntax
-import           Language.Nano.Syntax.PrettyPrint
-import           Language.Nano.Syntax.Annotations
 
 -- import           Debug.Trace                      (trace)
 --
 import qualified System.Console.CmdArgs.Verbosity   as V
 
-type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r)) 
+type Unif r = (PP r, F.Reftable r, Substitutable r (Fact r), ExprReftable F.Symbol r, ExprReftable Int r, Free (Fact r)) 
 
 
 -------------------------------------------------------------------------------
@@ -176,7 +178,7 @@ setSubst   :: RSubst r -> TCM r ()
 setSubst θ = modify $ \st -> st { tc_subst = θ }
 
 -------------------------------------------------------------------------------
-addSubst :: (PPR r, IsLocated a) => a -> RSubst r -> TCM r ()
+addSubst :: (Unif r, IsLocated a) => a -> RSubst r -> TCM r ()
 -------------------------------------------------------------------------------
 addSubst l θ = do 
     θ0 <- appSu θ <$> getSubst 
@@ -222,12 +224,12 @@ logError   :: Error -> a -> TCM r a
 logError err x = (modify $ \st -> st { tc_errors = err : tc_errors st}) >> return x
 
 -------------------------------------------------------------------------------
-freshTyArgs :: PPR r => AnnSSA r -> Int -> IContext -> [TVar] -> RType r -> TCM r (RType r)
+freshTyArgs :: Unif r => AnnSSA r -> Int -> IContext -> [TVar] -> RType r -> TCM r (RType r)
 -------------------------------------------------------------------------------
 freshTyArgs a n ξ αs t = (`apply` t) <$> freshSubst a n ξ αs
 
 -------------------------------------------------------------------------------
-freshSubst :: PPR r => AnnSSA r -> Int -> IContext -> [TVar] -> TCM r (RSubst r)
+freshSubst :: Unif r => AnnSSA r -> Int -> IContext -> [TVar] -> TCM r (RSubst r)
 -------------------------------------------------------------------------------
 freshSubst (Ann i l _) n ξ αs
   = do when (not $ unique αs) $ logError (errorUniqueTypeParams l) ()
@@ -237,7 +239,7 @@ freshSubst (Ann i l _) n ξ αs
        return     $ fromList $ zip αs (tVar <$> βs)
 
 -------------------------------------------------------------------------------
-setTyArgs :: (IsLocated l, PPR r) => l -> NodeId -> Int -> IContext -> [TVar] -> TCM r ()
+setTyArgs :: (IsLocated l, Unif r) => l -> NodeId -> Int -> IContext -> [TVar] -> TCM r ()
 -------------------------------------------------------------------------------
 setTyArgs _  i n ξ βs
   = case map tVar βs of 
@@ -259,12 +261,12 @@ getAnns = do θ     <- tc_subst <$> get
              return m' 
 
 -------------------------------------------------------------------------------
-addAnn :: PPR r => NodeId -> Fact r -> TCM r () 
+addAnn :: Unif r => NodeId -> Fact r -> TCM r () 
 -------------------------------------------------------------------------------
 addAnn i f = modify $ \st -> st { tc_anns = I.insertWith (++) i [f] $ tc_anns st } 
  
 -------------------------------------------------------------------------------
-execute ::  PPR r => Config -> V.Verbosity -> NanoSSAR r -> TCM r a -> Either (F.FixResult Error) a
+execute ::  Unif r => Config -> V.Verbosity -> NanoSSAR r -> TCM r a -> Either (F.FixResult Error) a
 -------------------------------------------------------------------------------
 execute cfg verb pgm act 
   = case runState (runExceptT act) $ initState cfg verb pgm of 
@@ -272,7 +274,7 @@ execute cfg verb pgm act
       (Right x, st) -> applyNonNull (Right x) (Left . F.Unsafe) (reverse $ tc_errors st)
 
 -------------------------------------------------------------------------------
-initState :: PPR r => Config -> V.Verbosity -> NanoSSAR r -> TCState r
+initState :: Unif r => Config -> V.Verbosity -> NanoSSAR r -> TCState r
 -------------------------------------------------------------------------------
 initState cfg verb pgm = TCS tc_errors tc_subst tc_cnt tc_anns tc_verb tc_opts tc_ast_cnt
   where
@@ -315,11 +317,11 @@ isCastId (Id _ s) = castPrefix `isPrefixOf` s
 -- | Unification and Subtyping
 --------------------------------------------------------------------------------
 
-----------------------------------------------------------------------------------
-unifyFunArgsM :: PPR r 
+--------------------------------------------------------------------------------
+unifyFunArgsM :: Unif r 
               => SrcSpan -> TCEnv r -> FunArgs (RType r) 
               -> FunArgs (RType r) -> TCM r (RSubst r)
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 unifyFunArgsM l γ t1s t2s
   | t1s `sameLength` t2s
   = do  θ <- getSubst
@@ -332,9 +334,9 @@ unifyFunArgsM l γ t1s t2s
     FA to ts `sameLength` FA to' ts' = isJust to == isJust to' && length ts == length ts'
     toList (FA to ts)                = maybeToList to ++ ts
 
-----------------------------------------------------------------------------------
-unifyTypeM :: PPR r => SrcSpan -> TCEnv r -> RType r -> RType r -> TCM r (RSubst r)
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+unifyTypeM :: Unif r => SrcSpan -> TCEnv r -> RType r -> RType r -> TCM r (RSubst r)
+--------------------------------------------------------------------------------
 unifyTypeM l γ t t' = unifyFunArgsM l γ (FA Nothing [t]) (FA Nothing [t'])
 
 
@@ -344,7 +346,7 @@ unifyTypeM l γ t t' = unifyFunArgsM l γ (FA Nothing [t]) (FA Nothing [t'])
 
 -- | @deadcastM@ wraps an expression @e@ with a dead-cast around @e@. 
 --------------------------------------------------------------------------------
-deadcastM :: (PPR r) => IContext -> Error -> Expression (AnnSSA r) -> TCM r (Expression (AnnSSA r))
+deadcastM :: (Unif r) => IContext -> Error -> Expression (AnnSSA r) -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 deadcastM ξ err e
   = addCast ξ e $ CDead [err] tNull 
@@ -352,7 +354,7 @@ deadcastM ξ err e
 -- | For the expression @e@, check the subtyping relation between the type @t1@
 --   (the actual type for @e@) and @t2@ (the target type) and insert the cast.
 --------------------------------------------------------------------------------
-castM :: PPR r => TCEnv r -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
+castM :: Unif r => TCEnv r -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 castM γ e t1 t2 
   = case convert (srcPos e) γ t1 t2 of
@@ -362,12 +364,12 @@ castM γ e t1 t2
 -- | Run the monad `a` in the current state. This action will not alter the
 -- state.
 --------------------------------------------------------------------------------
-runFailM :: PPR r => TCM r a -> TCM r (Either Error a)
+runFailM :: Unif r => TCM r a -> TCM r (Either Error a)
 --------------------------------------------------------------------------------
 runFailM a = fst . runState (runExceptT a) <$> get
 
 --------------------------------------------------------------------------------
-runMaybeM :: PPR r => TCM r a -> TCM r (Maybe a)
+runMaybeM :: Unif r => TCM r a -> TCM r (Maybe a)
 --------------------------------------------------------------------------------
 runMaybeM a = runFailM a >>= \case 
                 Right rr -> return $ Just rr
@@ -375,7 +377,7 @@ runMaybeM a = runFailM a >>= \case
 
 -- | subTypeM will throw error if subtyping fails
 --------------------------------------------------------------------------------
-subtypeM :: PPR r => SrcSpan -> TCEnv r -> RType r -> RType r -> TCM r ()
+subtypeM :: Unif r => SrcSpan -> TCEnv r -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 subtypeM l γ t1 t2 
   = case convert l γ t1 t2 of
@@ -401,7 +403,7 @@ freshenAnn (Ann _ l a)
 
 -- | tcFunTys: "context-sensitive" function signature
 --------------------------------------------------------------------------------
-tcFunTys :: (PPRSF r, F.Subable (RType r), F.Symbolic s, PP a) 
+tcFunTys :: (Unif r, F.Subable (RType r), F.Symbolic s, PP a) 
          => AnnSSA r -> a -> [s] -> RType r -> TCM r [IOverloadSig r]
 --------------------------------------------------------------------------------
 tcFunTys l f xs ft = either tcError return $ go l f xs ft 
@@ -414,13 +416,21 @@ tcFunTys l f xs ft = either tcError return $ go l f xs ft
                  = Left $ errorNonFunction (srcPos l) f ft 
 
     funTy l xs (αs, yts, t) | Just yts' <- padUndefineds xs yts 
-                            = Right $ (αs, ts', F.subst su t) where (su, ts') = renameBinds yts' xs 
+                            = let (su, ts') = renameBinds yts' xs in
+                              Right $ (αs, ts', F.subst su t) 
                             | otherwise 
                             = Left  $ errorArgMismatch (srcPos l)
 
+    renameBinds yts xs    = (su, [F.subst su ty | B _ ty <- yts])
+      where 
+        su                = F.mkSubst suL 
+        suL               = safeZipWith "renameBinds" fSub yts xs 
+        fSub yt x         = (b_sym yt, F.eVar x)
+
+
 
 --------------------------------------------------------------------------------
-checkTypes :: PPR r => TCEnv r -> TCM r ()
+checkTypes :: Unif r => TCEnv r -> TCM r ()
 --------------------------------------------------------------------------------
 checkTypes γ  = mapM_ (\(a,ts) -> mapM_ (safeExtends $ setAP a γ) ts) types
   where 
@@ -428,16 +438,16 @@ checkTypes γ  = mapM_ (\(a,ts) -> mapM_ (safeExtends $ setAP a γ) ts) types
     setAP a γ = γ { tce_path = a } 
     
 
--- | Checks:
---   
---   * Overwriten types safely extend the previous ones
---
---   * [TODO] No conflicts between inherited types
---
+-- TODO | Checks:
+-- TODO   
+-- TODO   * Overwriten types safely extend the previous ones
+-- TODO
+-- TODO   * [TODO] No conflicts between inherited types
+-- TODO
 --------------------------------------------------------------------------------
-safeExtends :: (IsLocated l, PPR r) => TCEnv r -> (l, TypeDecl r) -> TCM r ()
+safeExtends :: (IsLocated l, Unif r) => TCEnv r -> (l, TypeDecl r) -> TCM r ()
 --------------------------------------------------------------------------------
-safeExtends γ (l, t@(TD k (BGen c bvs) (Just p,_) _))
+safeExtends γ (l, t@(TD (TS k (BGen c bvs) (Just p,_)) _))
   = safeExtends1 γ l c (expand' γ t) p
 
 safeExtends1 γ l c ms (Gen n ts)

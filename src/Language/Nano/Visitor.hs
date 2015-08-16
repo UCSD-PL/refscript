@@ -32,12 +32,9 @@ module Language.Nano.Visitor (
   -- * Traversals / folds / maps
   , hoistBindings
   , visibleVars
-  , scrapeModules
-  , writeGlobalVars
-  , scrapeVarDecl
 
   -- , mkTypeMembers
-  , mkVarEnv
+  -- , mkVarEnv
 
   ) where
 
@@ -58,17 +55,17 @@ import           Control.Exception              (throw)
 import           Control.Monad.Trans.State      (modify, runState, StateT, runStateT)
 import           Control.Monad.Trans.Class      (lift)
 import           Control.Monad
+
+import           Language.Nano.AST
 import           Language.Nano.Misc             (mapSndM, (<##>), (<###>))
 import           Language.Nano.Errors
-import           Language.Nano.Syntax
-import           Language.Nano.Syntax.Annotations
-import           Language.Nano.Syntax.PrettyPrint
 import           Language.Nano.Env
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Names
 import           Language.Nano.Locations
 import           Language.Nano.Annots           hiding (err)
+import           Language.Nano.Pretty
 import           Language.Nano.Program
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Liquid.Types     ()
@@ -353,14 +350,41 @@ instance Transformable CastQ where
   trans = transCast
 
 instance Transformable TypeDeclQ where
-  trans = transIFD
-
-transIFD f αs xs (TD k bs h es) 
-  = TD k (trans f αs bs) (transIFDBase f αs' xs h) (trans f αs' xs es)
+  trans f αs xs (TD s@(TS _ b _) es) = TD (trans f αs xs s) (trans f αs' xs es)
     where
-      αs' = btvToTV <$> bs ++ αs
+      αs' = map btvToTV (b_args b) ++ αs
 
-transIFDBase f αs xs (es,is) = (transClassAnn1 f αs xs <$> es, transClassAnn1 f αs xs <$> is)
+instance Transformable TypeSigQ where
+  trans f αs xs (TS k b h) = TS k (trans f αs xs b) (transIFDBase f αs' xs h)
+      where
+        αs' = map btvToTV (b_args b) ++ αs
+
+instance Transformable TypeMembersQ where
+  trans f αs xs (TM p m sp sm c k s n) = TM (fmap (trans f αs xs) p)
+                                            (fmap (trans f αs xs) m)
+                                            (fmap (trans f αs xs) sp)
+                                            (fmap (trans f αs xs) sm)
+                                            (fmap (trans f αs xs) c)
+                                            (fmap (trans f αs xs) k)
+                                            (fmap (trans f αs xs) s)
+                                            (fmap (trans f αs xs) n)
+
+instance Transformable BTGenQ where
+  trans f αs xs (BGen n ts) = BGen n $ trans f αs xs <$> ts
+
+instance Transformable TGenQ where
+  trans f αs xs (Gen n ts) = Gen n $ trans f αs xs <$> ts
+
+instance Transformable BTVarQ where
+  trans f αs xs (BTV x l c) = BTV x l $ trans f αs xs <$> c
+
+instance Transformable FieldInfoQ where
+  trans f αs xs (FI o t t') = FI o (trans f αs xs t) (trans f αs xs t')
+
+instance Transformable MethodInfoQ where
+  trans f αs xs (MI o m t) = MI o m (trans f αs xs t)
+
+transIFDBase f αs xs (es,is) = (trans f αs xs <$> es, trans f αs xs <$> is)
 
 --------------------------------------------------------------------------------------------
 transFact :: F.Reftable r 
@@ -376,15 +400,15 @@ transFact f = go
     go αs xs (EltOverload x m) = EltOverload x $ trans f αs xs m
     go αs xs (Overload x t)    = Overload x    $ trans f αs xs t 
 
-    go αs xs (VarAnn (a,t))    = VarAnn        $ (a, trans f αs xs <$> t)
+    go αs xs (VarAnn a t)      = VarAnn a      $ trans f αs xs <$> t
     go αs xs (AmbVarAnn t)     = AmbVarAnn     $ trans f αs xs t  
 
-    go αs xs (FieldAnn m)      = FieldAnn      $ trans f αs xs m
-    go αs xs (MethAnn  m)      = MethAnn       $ trans f αs xs m
-    go αs xs (ConsAnn  m)      = ConsAnn       $ trans f αs xs m
+    go αs xs (FieldAnn m t)    = FieldAnn m    $ trans f αs xs t
+    go αs xs (MethAnn m t)     = MethAnn m     $ trans f αs xs t
+    go αs xs (ConsAnn t)       = ConsAnn       $ trans f αs xs t
 
     go αs xs (UserCast t)      = UserCast      $ trans f αs xs t
-    go αs xs (FuncAnn  t)      = FuncAnn       $ trans f αs xs t
+    go αs xs (FuncAnn t)       = FuncAnn       $ trans f αs xs t
     go αs xs (TCast x c)       = TCast x       $ trans f αs xs c 
     
     go αs xs (ClassAnn ts)     = ClassAnn      $ trans f αs xs ts
@@ -420,8 +444,8 @@ transRType f               = go
     go αs xs (TObj ms r)   = f αs xs $ TObj ms' r    where ms' = trans f αs xs ms
     go αs xs (TType k n)   = f αs xs $ TType k n'    where n'  = trans f αs xs n
     go αs xs (TMod m)      = f αs xs $ TMod m 
-    go αs xs (TAll a t)    = f αs xs $ TAll a t'     where t'  = go (a:αs) xs t 
-    go αs xs (TFun bs t r) = f αs xs $ TFun bs' t' r where bs' = trans f αs xs' bs
+    go αs xs (TAll a t)    = f αs xs $ TAll a t'     where t'  = go (btvToTV a:αs) xs t 
+    go αs xs (TFun bs t r) = f αs xs $ TFun bs' t' r where bs' = trans f αs xs' <$> bs
                                                            t'  = go αs xs' t
                                                            xs' = bs ++ xs
     go _  _  (TExp e)      = TExp e
@@ -438,7 +462,6 @@ transFmap ::  (F.Reftable r, Functor thing)
           -> thing (AnnQ q r)  
           -> thing (AnnQ q r)
 transFmap f αs = fmap (transAnnR f αs) 
-
 
  
 --------------------------------------------------------------------------------------------
@@ -461,17 +484,41 @@ instance NameTransformable CastQ where
   ntrans = ntransCast
 
 instance NameTransformable TypeDeclQ where
-  ntrans = ntransTD
+  ntrans f g (TD s m) = TD (ntrans f g s) (ntrans f g m)
+
+instance NameTransformable TypeSigQ where
+  ntrans f g (TS k b (e,i)) = TS k (ntrans f g b) (ntrans f g <$> e, ntrans f g <$> i)
+
+instance NameTransformable TypeMembersQ where
+  ntrans f g (TM p m sp sm c k s n) = TM (fmap (ntrans f g) p)
+                                         (fmap (ntrans f g) m)
+                                         (fmap (ntrans f g) sp)
+                                         (fmap (ntrans f g) sm)
+                                         (fmap (ntrans f g) c)
+                                         (fmap (ntrans f g) k)
+                                         (fmap (ntrans f g) s)
+                                         (fmap (ntrans f g) n)
+
+instance NameTransformable BTGenQ where
+  ntrans f g (BGen n ts) = BGen (f n) (ntrans f g <$> ts)
+
+instance NameTransformable TGenQ where
+  ntrans f g (Gen n ts) = Gen (f n) (ntrans f g <$> ts)
+
+instance NameTransformable BTVarQ where
+  ntrans f g (BTV x l c) = BTV x l $ ntrans f g <$> c
+
+instance NameTransformable FieldInfoQ where
+  ntrans f g (FI o t t') = FI o (ntrans f g t) (ntrans f g t')
+
+instance NameTransformable MethodInfoQ where
+  ntrans f g (MI o m t) = MI o m (ntrans f g t)
 
 ---------------------------------------------------------------------------
 ntransFmap ::  (F.Reftable r, Functor t) => (QN p -> QN q) -> (QP p -> QP q) -> t (AnnQ p r) -> t (AnnQ q r)
 ---------------------------------------------------------------------------
 ntransFmap f g = fmap (ntransAnnR f g) 
 
----------------------------------------------------------------------------
-ntransTD :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> TypeDeclQ p r -> TypeDeclQ q r
----------------------------------------------------------------------------
-ntransTD f g (TD k b h m) = TD k (ntrans f g b) (ntrans f g h) (ntrans f g m)
 
 ntransFact f g = go
   where
@@ -482,11 +529,11 @@ ntransFact f g = go
     go (TypInst x y ts)  = TypInst x y   $ ntrans f g <$> ts
     go (EltOverload x m) = EltOverload x $ ntrans f g m
     go (Overload x t)    = Overload x    $ ntrans f g t 
-    go (VarAnn (a, t))   = VarAnn        $ (a, ntrans f g <$> t)
+    go (VarAnn a t)      = VarAnn a      $ ntrans f g <$> t
     go (AmbVarAnn t)     = AmbVarAnn     $ ntrans f g t  
-    go (FieldAnn m)      = FieldAnn      $ ntrans f g m
-    go (MethAnn  m)      = MethAnn       $ ntrans f g m
-    go (ConsAnn  m)      = ConsAnn       $ ntrans f g m
+    go (FieldAnn m t)    = FieldAnn m    $ ntrans f g t
+    go (MethAnn m t)     = MethAnn m     $ ntrans f g t
+    go (ConsAnn t)       = ConsAnn       $ ntrans f g t
     go (UserCast t)      = UserCast      $ ntrans f g t
     go (FuncAnn  t)      = FuncAnn       $ ntrans f g t
     go (TCast x c)       = TCast x       $ ntrans f g c 
@@ -520,10 +567,11 @@ ntransRType f g         = go
     go (TOr ts)      = TOr ts'        where ts' = go <$> ts
     go (TAnd ts)     = TAnd ts'       where ts' = go <$> ts
     go (TRef n r)    = TRef n' r      where n'  = ntrans f g n
-    go (TObj ms r)   = TObj ms' r     where ms' = ntrans f g <$> ms
+    go (TObj ms r)   = TObj ms' r     where ms' = ntrans f g ms
     go (TType k n)   = TType k n'     where n'  = ntrans f g n
     go (TMod p)      = TMod p'        where p'  = g p
-    go (TAll a t)    = TAll a t'      where t'  = go t 
+    go (TAll a t)    = TAll a' t'     where a'  = ntrans f g a 
+                                            t'  = go t 
     go (TFun bs t r) = TFun bs' t' r  where bs' = ntrans f g <$> bs
                                             t'  = go t
     go (TExp e)      = TExp e
@@ -552,11 +600,13 @@ everythingButWithContext s0 f q x
 -- | AST Folds
 ---------------------------------------------------------------------------
 
+type PPRD r = (PPR r, Data r, Typeable r)
+
 -- Only descend down modules 
 -------------------------------------------------------------------------------
-collectModules :: (IsLocated a, Data a) => [Statement a] -> [(AbsPath, [Statement a])]
+accumModules :: (IsLocated a, Data a, Typeable a) => [Statement a] -> [(AbsPath, [Statement a])]
 -------------------------------------------------------------------------------
-collectModules ss = topLevel : rest ss
+accumModules ss = topLevel : rest ss
   where
     rest                      = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
     f e@(ModuleStmt _ x ms) s = let p = s ++ [F.symbol x] in
@@ -567,117 +617,76 @@ collectModules ss = topLevel : rest ss
 
 type DeclInfo r = (SyntaxKind, VarInfo r)
 
--- Not including class, module, enum names
 ---------------------------------------------------------------------------------------
-visibleVars :: Data r => [Statement (AnnSSA r)] -> [(Id SrcSpan, VarInfo r)]
+accumNamesAndPaths :: PPRD r => [Statement (AnnRel r)] -> (H.HashSet AbsName, H.HashSet AbsPath)
 ---------------------------------------------------------------------------------------
-visibleVars s = [ (ann <$> n, (a,i,t))  | (n,l,k,a,i) <- hoistBindings s 
-                                        , f           <- ann_fact l
-                                        , t           <- annToType a f ]
+accumNamesAndPaths stmts = (namesSet, modulesSet)
   where
-    annToType Ambient (VarAnn (_,t)) = maybeToList t -- Hoist ReadOnly vars (i.e. function defs)
-    annToType Ambient (VarAnn (_,t)) = maybeToList t -- Hoist ImportDecl (i.e. function decls)
-    annToType Ambient (AmbVarAnn t)  = [t] -- Hoist ReadOnly vars (i.e. function defs)
-    annToType Ambient (AmbVarAnn t)  = [t] -- Hoist ImportDecl (i.e. function decls)
-    annToType _       _              = [ ]
-
----------------------------------------------------------------------------------------
-extractQualifiedNames :: PPR r => [Statement (AnnRel r)] 
-                               -> (H.HashSet AbsName, H.HashSet AbsPath)
----------------------------------------------------------------------------------------
-extractQualifiedNames stmts = (namesSet, modulesSet)
-  where
-    allModStmts             = collectModules stmts
+    allModStmts             = accumModules stmts
     modulesSet              = H.fromList $ fst <$> allModStmts
     namesSet                = H.fromList [ nm | (ap,ss) <- allModStmts
-                                              , nm <- typeNames ap ss ] 
+                                              , nm <- accumAbsNames ap ss ] 
 
-typeNames :: IsLocated a => AbsPath -> [ Statement a ] -> [ AbsName ] 
-typeNames (QP AK_ _ ss) = concatMap go 
+accumAbsNames :: IsLocated a => AbsPath -> [ Statement a ] -> [ AbsName ] 
+accumAbsNames (QP AK_ _ ss) = concatMap go 
   where
-    go (ClassStmt l x _ _ _) = [ QN AK_ (srcPos l) ss $ F.symbol x ]
-    go (EnumStmt l x _ )     = [ QN AK_ (srcPos l) ss $ F.symbol x ]
-    go (IfaceStmt l x )      = [ QN AK_ (srcPos l) ss $ F.symbol x ]
+    go (ClassStmt l x _ _ _) = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
+    go (EnumStmt l x _ )     = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
+    go (IfaceStmt l x )      = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
     go _                     = []
 
- 
----------------------------------------------------------------------------------------
-mkVarEnv :: PPR r => F.Symbolic s => [(s, VarInfo r)] -> Env (VarInfo r)
----------------------------------------------------------------------------------------
-mkVarEnv                     = envFromListWithKey mergeVarInfo
-                             . concatMap f . M.toList 
-                             . foldl merge M.empty
-  where
-    merge ms (x,(s,v,a,t,i)) = M.insertWith (++) (F.symbol x) [(s,v,a,t,i)] ms
-    f (s, vs)   = [ (s,(k,v,w, g t [ t' | (FuncOverloadKind, _, _, t', _) <- vs ], i))
-                                    | (k@FuncDefKind    , v, w, t, i) <- vs ] ++
-              amb [ (s,(k,v,w,t,i)) | (k@FuncAmbientKind, v, w, t, i) <- vs ] ++ 
-                  [ (s,(k,v,w,t,i)) | (k@VarDeclKind    , v, w, t, i) <- vs ] ++ 
-                  [ (s,(k,v,w,t,i)) | (k@ClassDefKind   , v, w, t, i) <- vs ] ++
-                  [ (s,(k,v,w,t,i)) | (k@ModuleDefKind  , v, w, t, i) <- vs ] ++
-                  [ (s,(k,v,w,t,i)) | (k@EnumDefKind    , v, w, t, i) <- vs ]
-    g t []                   = t
-    g _ ts                   = mkAnd ts
-    amb [ ]                  = [ ] 
-    amb [a]                  = [a]
-    amb ((s,(k,v,w,t,i)):xs) = [(s,(k,v,w, mkAnd (t : map tyOf xs),i))]    
-    tyOf (_,(_,_,_,t,_))     = t
-
-mergeVarInfo _ (ModuleDefKind, v1, a1, t1, i1) (ModuleDefKind, v2, a2, t2, i2) 
-  | (v1, a1, t1, i1) == (v2, a2, t2, i2) = (ModuleDefKind, v1, a1, t1, i1) 
-mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
 
 ---------------------------------------------------------------------------------------
 typeMembers :: PPR r => Mutability r -> [ClassElt (AnnR r)] -> Either (F.FixResult Error) (TypeMembers r)
 ---------------------------------------------------------------------------------------
-typeMembers mut cs = TM ps ms sps sms call ctor sidx nidx
-  where
-    ps         = F.fromListSEnv props   
-    ms         = undefined -- F.fromListSEnv 
-    sps        = F.fromListSEnv sprops
-    sms        = undefined
-    call       = Nothing
-    sidx       = Nothing    -- XXX: This could be added 
-    nidx       = Nothing
+typeMembers = undefined
 
-    props      = [ (x, FI m (mut ^^ m) t) | MemberVarDecl l False x _ <- cs
-                                          , FieldAnn (m,t) <- ann_fact l ]
-    sprops     = [ (x, FI m (mut ^^ m) t) | MemberVarDecl l True x _ <- cs
-                                          , FieldAnn (m,t) <- ann_fact l ]
-
-    _          = foldl (M.insertWith (++)) M.empty $ methDefs ++ methDecls
-
-    methDefs   = [ (x, [(MemDef, MI (opt m) (mut m) t )]) | MemberMethDef l False x _ _ <- cs
-                                                          , MethAnn m t <- ann_fact l ]
-
-    methDecls  = [ (x, [(MemDecl, MI (opt m) (mut m) t)]) | MemberMethDecl l False x _ _ <- cs
-                                                          , MethAnn m t <- ann_fact l ]
-
-    smethDefs  = [ (x, [(MemDef, MI (opt m) (mut m) t)])  | MemberMethDef l True x _ _ <- cs
-                                                          , MethAnn (MI h m t) <- ann_fact l ]
-
-    smethDecls = [ (x, [(MemDecl, MI (opt m) (mut m) t)]) | MemberMethDecl l True x _ _ <- cs
-                                                          , MethAnn (MI h m t) <- ann_fact l ]
-
-    ctor       = listToMaybe [ f | Constructor l _ _ <- cs, ConsAnn f <- ann_fact l ]
-      
-    mut ^^ ms  | Mutable `elem` ms   = tMut
-               | Immutable `elem` ms = tImm
-               | ReadOnly `elem` ms  = tRO
-               | otherwise           = mut
-
-    mmut ms    | MM Mutable `elem` ms   = tMut
-               | MM Immutable `elem` ms = tImm
-               | MM ReadOnly `elem` ms  = tRO
-               | otherwise              = Mutable
-
-    opt ms     | Optional `elem` ms  = Opt
-               | otherwise           = Req
- 
-
--- mergeMeths  
-
-
+-- typeMembers mut cs = TM ps ms sps sms call ctor sidx nidx
+--   where
+--     ps         = F.fromListSEnv props   
+--     ms         = undefined -- F.fromListSEnv 
+--     sps        = F.fromListSEnv sprops
+--     sms        = undefined
+--     call       = Nothing
+--     sidx       = Nothing    -- XXX: This could be added 
+--     nidx       = Nothing
+-- 
+--     props      = [ (x, FI m (mut ^^ m) t) | MemberVarDecl l False x _ <- cs
+--                                           , FieldAnn (m,t) <- ann_fact l ]
+--     sprops     = [ (x, FI m (mut ^^ m) t) | MemberVarDecl l True x _ <- cs
+--                                           , FieldAnn (m,t) <- ann_fact l ]
+-- 
+--     _          = foldl (M.insertWith (++)) M.empty $ methDefs ++ methDecls
+-- 
+--     methDefs   = [ (x, [(MemDef, MI (opt m) (mut m) t )]) | MemberMethDef l False x _ _ <- cs
+--                                                           , MethAnn m t <- ann_fact l ]
+-- 
+--     methDecls  = [ (x, [(MemDecl, MI (opt m) (mut m) t)]) | MemberMethDecl l False x _ _ <- cs
+--                                                           , MethAnn m t <- ann_fact l ]
+-- 
+--     smethDefs  = [ (x, [(MemDef, MI (opt m) (mut m) t)])  | MemberMethDef l True x _ _ <- cs
+--                                                           , MethAnn (MI h m t) <- ann_fact l ]
+-- 
+--     smethDecls = [ (x, [(MemDecl, MI (opt m) (mut m) t)]) | MemberMethDecl l True x _ _ <- cs
+--                                                           , MethAnn (MI h m t) <- ann_fact l ]
+-- 
+--     ctor       = listToMaybe [ f | Constructor l _ _ <- cs, ConsAnn f <- ann_fact l ]
+--       
+--     mut ^^ ms  | Mutable `elem` ms   = tMut
+--                | Immutable `elem` ms = tImm
+--                | ReadOnly `elem` ms  = tRO
+--                | otherwise           = mut
+-- 
+--     mmut ms    | MM Mutable `elem` ms   = tMut
+--                | MM Immutable `elem` ms = tImm
+--                | MM ReadOnly `elem` ms  = tRO
+--                | otherwise              = Mutable
+-- 
+--     opt ms     | Optional `elem` ms  = Opt
+--                | otherwise           = Req
+--  
+-- 
+-- OLD 
 --       
 --     go (MemberVarDecl l  s x _)    = [(l,ss x ,sk s,MemDefinition ,f) | FieldAnn f <- ann_fact l]
 --     go (MemberMethDef l  s x _ _ ) = [(l,ss x ,sk s,MemDefinition ,f) | MethAnn  f <- ann_fact l]
@@ -737,25 +746,58 @@ typeMembers mut cs = TM ps ms sps sms call ctor sidx nidx
 -- joinTys t1 t2 = mkAnd $ bkAnd t1 ++ bkAnd t2 
 -- 
 
--- | `writeGlobalVars p` returns symbols that have `WriteMany` status, i.e. may be 
---    re-assigned multiply in non-local scope, and hence
---    * cannot be SSA-ed
---    * cannot appear in refinements
---    * can only use a single monolithic type (declared or inferred)
--------------------------------------------------------------------------------
-writeGlobalVars           :: Data r => [Statement (AnnType r)] -> [Id (AnnType r)]
--------------------------------------------------------------------------------
-writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
-  where 
-    fromVD (VarDecl l x _) = [ x | VarAnn _ <- ann_fact l ] ++ [ x | AmbVarAnn _ <- ann_fact l ]
 
+-- Not including class, module, enum names
+---------------------------------------------------------------------------------------
+visibleVars :: Data r => [Statement (AnnSSA r)] -> [(Id SrcSpan, VarInfo r)]
+---------------------------------------------------------------------------------------
+visibleVars s = undefined
+-- visibleVars s = [ (ann <$> n, (a,i,t))  | (n,l,k,a,i) <- hoistBindings s 
+--                                         , f           <- ann_fact l
+--                                         , t           <- annToType a f ]
+--   where
+--     annToType Ambient (VarAnn (_,t)) = maybeToList t -- Hoist ReadOnly vars (i.e. function defs)
+--     annToType Ambient (VarAnn (_,t)) = maybeToList t -- Hoist ImportDecl (i.e. function decls)
+--     annToType Ambient (AmbVarAnn t)  = [t] -- Hoist ReadOnly vars (i.e. function defs)
+--     annToType Ambient (AmbVarAnn t)  = [t] -- Hoist ImportDecl (i.e. function decls)
+--     annToType _       _              = [ ]
+-- 
 
--- | scrapeVarDecl: Scrape a variable declaration for annotations
-----------------------------------------------------------------------------------
-scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, Assignability, Maybe (RType r))]
-----------------------------------------------------------------------------------
-scrapeVarDecl (VarDecl l _ _) 
-  = [ (VarDeclKind   , a       , t) | VarAnn (a, t) <- ann_fact l ] 
- ++ [ (AmbVarDeclKind, ReadOnly, Just t) | AmbVarAnn t <- ann_fact l ] 
- ++ [ (FieldDefKind  , ReadOnly, Just t) | FieldAnn _ t <- ann_fact l ] -- Assignability value is dummy
+type BindInfo a = (Id a, a, SyntaxKind, Assignability, Initialization)
+
+-- | Find all language level bindings in the scope of @s@.
+--   This includes: 
+--
+--    * function definitions/declarations, 
+--    * classes,
+--    * modules,
+--    * variables
+--
+--   E.g. declarations in the If-branch of a conditional expression. Note how 
+--   declarations do not escape module or function blocks.
+--
+-------------------------------------------------------------------------------
+hoistBindings :: Data r => [Statement (AnnSSA r)] -> [BindInfo (AnnSSA r)]
+-------------------------------------------------------------------------------
+hoistBindings = snd . visitStmts vs ()
+  where
+    vs = scopeVisitor { accStmt = acs, accVDec = acv }
+
+    acs _ (FunctionStmt a x _ _) = [(x, a, FuncDefKind, Ambient, Initialized)]
+    acs _ (FuncAmbDecl a x _)    = [(x, a, FuncAmbientKind, Ambient, Initialized)]
+    acs _ (FuncOverload a x _  ) = [(x, a, FuncOverloadKind, Ambient, Initialized)]
+    acs _ (ClassStmt a x _ _ _ ) = [(x, a, ClassDefKind, Ambient, Initialized)]
+    acs _ (ModuleStmt a x _)     = [(x, a { ann_fact = modAnn x a }, ModuleDefKind, Ambient, Initialized)]
+    acs _ (EnumStmt a x _)       = [(x, a { ann_fact = enumAnn x a }, EnumDefKind, Ambient, Initialized)]
+    acs _ _                      = []
+
+    acv _ (VarDecl l n init)     = [(n, l, VarDeclKind, varAsgn l, inited init)] ++
+                                   [(n, l, VarDeclKind, WriteGlobal, inited init) | AmbVarAnn _  <- ann_fact l]
+
+    inited (Just _) = Initialized
+    inited _        = Uninitialized
+    varAsgn l       = fromMaybe WriteLocal $ listToMaybe [ a | VarAnn a _ <- ann_fact l ] 
+
+    modAnn  n l = ModuleAnn (F.symbol n) : ann_fact l
+    enumAnn n l = EnumAnn   (F.symbol n) : ann_fact l
 

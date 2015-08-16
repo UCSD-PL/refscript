@@ -11,11 +11,11 @@ module Language.Nano.Liquid.Environment where
 
 import           Text.PrettyPrint.HughesPJ
 
-import           Language.Nano.Syntax.PrettyPrint
-
 import           Language.Nano.Annots()
+import           Language.Nano.ClassHierarchy
 import           Language.Nano.Env
 import           Language.Nano.Names
+import           Language.Nano.Pretty
 import           Language.Nano.Types
 import           Language.Nano.Environment
 import           Language.Nano.Program

@@ -19,24 +19,23 @@ module Language.Nano.Program (
   -- * SSA Ids
   , mkNextId, isNextId, mkSSAId , mkKeysId, mkKeysIdxId, mkCtorStr, mkCtorId
 
-  -- * CHA
-  , ClassHierarchy (..)
-
   ) where
 
-import           Control.Applicative     hiding (empty)
-import           Control.Exception              (throw)
-import           Data.Monoid             hiding ((<>))
+import           Control.Applicative              hiding (empty)
+import           Control.Exception                (throw)
+import           Data.Monoid                      hiding ((<>))
 import           Data.Default
-import           Data.List                      (stripPrefix)
+import           Data.Maybe                       (maybeToList)
+import           Data.List                        (stripPrefix)
 import qualified Data.HashMap.Strict              as HM
 import           Data.Graph.Inductive.Graph
 import           Data.Graph.Inductive.PatriciaTree
-import qualified Data.HashSet                   as H
+import qualified Data.HashSet                     as H
 import           Data.Generics
-import qualified Data.IntMap                    as I
+import qualified Data.IntMap                      as I
 import           Text.PrettyPrint.HughesPJ
 
+import           Language.Nano.AST
 import           Language.Nano.Annots
 import           Language.Nano.Env
 import           Language.Nano.Errors
@@ -44,10 +43,8 @@ import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Types
 
-import           Language.Nano.AST
-
-import           Language.Fixpoint.Misc hiding (mkGraph)
-import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Misc           hiding (mkGraph)
+import qualified Language.Fixpoint.Types          as F
 
 -- import           Debug.Trace                        hiding (traceShow)
 
@@ -112,18 +109,6 @@ type StmtSSAR r     = Statement  (AnnSSA r)
 type UNanoBare      = NanoBareR ()
 type UNanoSSA       = NanoSSAR  ()
 type UNanoType      = NanoTypeR ()
-
-
-data ClassHierarchy r = ClassHierarchy {
-    c_graph       :: Gr (TypeSig r) ()
-  , c_nodesToKeys :: HM.HashMap AbsName Int
-  }
-
-instance Default (ClassHierarchy r) where
-  def = ClassHierarchy (mkGraph [] []) HM.empty
-
-instance Functor ClassHierarchy where
-  fmap f (ClassHierarchy g n) = ClassHierarchy (nmap (fmap f) g) n
 
 
 ---------------------------------------------------------------------------

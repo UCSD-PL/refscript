@@ -88,7 +88,7 @@ data RTypeQ q r =
   -- 
   -- Namespace
   --
-  | TMod AbsPath
+  | TMod (QP q)
   --
   -- Forall [A <: T] . S
   -- 
@@ -111,7 +111,9 @@ data TGenQ q r        = Gen { g_name :: QN q
                             }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data BTGenQ q r       = BGen (QN q) [BTVarQ q r] 
+data BTGenQ q r       = BGen { b_name :: QN q
+                             , b_args :: [BTVarQ q r] 
+                             }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data BindQ q r        = B { b_sym  :: F.Symbol

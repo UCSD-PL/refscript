@@ -41,11 +41,11 @@ assignUniqueIds first tree =
                  put (i+1)
                  return (a, i)
 
-class HasAnnotation a where
+class Annotated a where
   -- | Returns the annotation of the root of the tree
   getAnnotation :: a b -> b
 
-instance HasAnnotation Expression where
+instance Annotated Expression where
   getAnnotation e = case e of
    StringLit a s              -> a
    RegexpLit a s g ci         -> a
@@ -73,7 +73,7 @@ instance HasAnnotation Expression where
    Cast_ a e                  -> a
    SuperRef a         	      -> a
 
-instance HasAnnotation Statement where
+instance Annotated Statement where
   getAnnotation = getAnnotationStmt
 
 getAnnotationStmt = go
@@ -106,33 +106,33 @@ getAnnotationStmt = go
     go s                           = error "AST.Annotations.getAnnotationStmt"
 
    
-instance HasAnnotation LValue where
+instance Annotated LValue where
   getAnnotation lv = case lv of
     LVar a _ -> a
     LDot a _ _ -> a
     LBracket a _ _ -> a
   
-instance HasAnnotation VarDecl where
+instance Annotated VarDecl where
   getAnnotation (VarDecl a _ _) = a
 
-instance HasAnnotation Prop  where
+instance Annotated Prop  where
   getAnnotation p = case p of
     PropId a _ -> a
     PropString a _ -> a
     PropNum a _ -> a
   
-instance HasAnnotation CaseClause where
+instance Annotated CaseClause where
   getAnnotation c = case c of
     CaseClause a _ _ -> a
     CaseDefault a _ -> a
     
-instance HasAnnotation CatchClause where
+instance Annotated CatchClause where
   getAnnotation (CatchClause a _ _) = a
 
-instance HasAnnotation Id where
+instance Annotated Id where
   getAnnotation (Id a _) = a 
 
-instance HasAnnotation ClassElt where
+instance Annotated ClassElt where
   getAnnotation e = case e of
     Constructor a _ _       -> a
     MemberVarDecl a _ _ _   -> a

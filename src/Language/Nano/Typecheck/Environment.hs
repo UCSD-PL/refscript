@@ -7,13 +7,14 @@
 
 module Language.Nano.Typecheck.Environment where
 
+import           Language.Nano.ClassHierarchy
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types()
 import           Language.Nano.Env
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Program
-import           Language.Nano.Syntax.PrettyPrint
+import           Language.Nano.Pretty
 import qualified Language.Fixpoint.Types        as F
 import           Text.PrettyPrint.HughesPJ 
 

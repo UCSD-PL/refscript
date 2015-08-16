@@ -42,19 +42,24 @@ import           Data.Graph.Inductive.Query.BFS
 import           Data.Function                       (on)
 import qualified Data.Map.Strict                  as M
 import qualified Language.Fixpoint.Types          as F
+
+import           Language.Nano.AST
+import           Language.Nano.ClassHierarchy
 import           Language.Nano.Env
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Locations             (val)
 import           Language.Nano.Types
 import           Language.Nano.Program
+import           Language.Nano.Pretty
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 
-import           Language.Nano.Syntax
-
 
 -- import           Debug.Trace
+
+
+type PPRD r = (ExprReftable F.Symbol r, ExprReftable Int r, PPR r)
  
 --------------------------------------------------------------------------------
 resolveModuleInEnv  :: EnvLike r t => t r -> AbsPath -> Maybe (ModuleDef r)
@@ -82,7 +87,7 @@ functionInterface    = mkAbsName [] $ F.symbol "Function"
 emptyObjectInterface = mkAbsName [] $ F.symbol "EmptyObject"
 
 ---------------------------------------------------------------------------
-expand :: (EnvLike r g, PPR r) => g r -> TypeDecl r -> TypeMembers r
+expand :: (EnvLike r g, PPRD r) => g r -> TypeDecl r -> TypeMembers r
 ---------------------------------------------------------------------------
 expand γ (TD (TS _ _ (h,_)) es) = es `mappend` heritage h
   where
@@ -92,7 +97,7 @@ expand γ (TD (TS _ _ (h,_)) es) = es `mappend` heritage h
     heritage _                  = mempty
 
 ---------------------------------------------------------------------------
-expand' :: (EnvLike r g, PPR r) => g r -> TypeDecl r -> [RType r] -> TypeMembers r
+expand' :: (EnvLike r g, PPRD r) => g r -> TypeDecl r -> [RType r] -> TypeMembers r
 ---------------------------------------------------------------------------
 expand' γ t@(TD (TS _ (BGen _ bvs) _) _) ts = apply θ $ expand γ t
   where 
@@ -109,7 +114,7 @@ data CoercionKind = Coercive | NonCoercive
 --    object counterparts, i.e. String, Number, Boolean. 
 --
 ---------------------------------------------------------------------------
-expandType :: (PPR r, EnvLike r g, Data r) => CoercionKind -> g r -> RType r -> Maybe (RType r)
+expandType :: (PPRD r, EnvLike r g) => CoercionKind -> g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
 expandType _ _ t@(TObj _ _) = Just t 
 
@@ -160,7 +165,7 @@ expandType _ _ t  = Just t
 --    * If A </: B then return @Nothing@.
 --
 ---------------------------------------------------------------------------
-weaken :: (PPR r, EnvLike r g) => g r -> TGen r -> AbsName -> Maybe (TGen r)
+weaken :: (PPRD r, EnvLike r g) => g r -> TGen r -> AbsName -> Maybe (TGen r)
 ---------------------------------------------------------------------------
 weaken γ tr@(Gen s _) t
   | s == t                    = Just tr
@@ -178,7 +183,7 @@ weaken γ tr@(Gen s _) t
     toNodes ((n1,_),(n2,_))   = (n1,n2)
 
 ---------------------------------------------------------------------------
-doEdge :: PPR r => ClassHierarchy r -> TGen r -> Edge -> Maybe (TGen r)
+doEdge :: PPRD r => ClassHierarchy r -> TGen r -> Edge -> Maybe (TGen r)
 ---------------------------------------------------------------------------
 doEdge (ClassHierarchy g _) (Gen _ t1) (n1, n2)
   = do  TS _ (BGen c1 v1) (e1,i1) <- lab g n1
@@ -237,12 +242,12 @@ interfaceAncestors  = ancestors InterfaceKind
 allAncestors γ s    = classAncestors γ s ++ interfaceAncestors γ s 
 
 ---------------------------------------------------------------------------
-isAncestor :: (PPR r, EnvLike r g) => g r -> AbsName -> AbsName -> Bool
+isAncestor :: (PPRD r, EnvLike r g) => g r -> AbsName -> AbsName -> Bool
 ---------------------------------------------------------------------------
 isAncestor γ c p = p `elem` allAncestors γ c
 
 ---------------------------------------------------------------------------
-boundKeys :: (PPR r, EnvLike r g) => g r -> RType r -> [F.Symbol]
+boundKeys :: (PPRD r, EnvLike r g) => g r -> RType r -> [F.Symbol]
 ---------------------------------------------------------------------------
 boundKeys γ t@(TRef _ _) | Just t <- expandType Coercive γ t = boundKeys γ t
                          | otherwise                         = []
@@ -250,7 +255,7 @@ boundKeys _ (TObj es _)  = fst <$> F.toListSEnv (tm_prop es)
 boundKeys _ _            = []
 
 ---------------------------------------------------------------------------
-immFields :: (PPR r, EnvLike r g) => g r -> RType r -> [(F.Symbol, RType r)]
+immFields :: (PPRD r, EnvLike r g) => g r -> RType r -> [(F.Symbol, RType r)]
 ---------------------------------------------------------------------------
 immFields γ t 
   | Just (TObj es _) <- expandType Coercive γ t 

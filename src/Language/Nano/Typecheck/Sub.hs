@@ -29,13 +29,13 @@ import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
 import           Language.Fixpoint.Types            (toListSEnv, differenceSEnv, intersectWithSEnv)
 
-import           Language.Nano.Syntax.PrettyPrint
 
 import           Language.Nano.Annots
 import           Language.Nano.Types
 import           Language.Nano.Names
 import           Language.Nano.Locations
 import           Language.Nano.Environment
+import           Language.Nano.Pretty
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Errors

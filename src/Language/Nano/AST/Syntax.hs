@@ -30,6 +30,8 @@ module Language.Nano.AST.Syntax (
   , EnumElt(..)
   , SourcePos
   , BuiltinOp(..)
+  , SyntaxKind (..)
+  , MemberKind (..)
   ) where
 
 import Text.Parsec.Pos(SourcePos) -- used by data JavaScript
@@ -316,5 +318,14 @@ data BuiltinOp = BIUndefined
                | BICtorExit
                | BICtor
                | BIThis
-                 deriving (Eq, Ord, Show)
+               deriving (Eq, Ord, Show)
+
+
+
+data SyntaxKind = FuncDefKind | FuncAmbientKind | FuncOverloadKind | MethDefKind
+                | MethDeclKind | FieldDefKind | CtorDefKind | VarDeclKind 
+                | AmbVarDeclKind | ClassDefKind | ModuleDefKind | EnumDefKind deriving ( Eq )
+
+data MemberKind = MemDef | MemDecl deriving ( Eq )
+
 

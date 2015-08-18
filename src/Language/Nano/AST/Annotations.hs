@@ -1,13 +1,12 @@
-
 module Language.Nano.AST.Annotations where
 
-import Language.Nano.AST.Syntax
+import           Language.Nano.AST.Syntax
 
-import Data.Traversable
-import Control.Applicative
-import Control.Arrow
-import Control.Monad.State hiding (mapM)
-import Prelude hiding (mapM)
+import           Control.Applicative
+import           Control.Arrow
+import           Control.Monad.State      hiding (mapM)
+import           Data.Traversable
+import           Prelude                  hiding (mapM)
 
 -- | Removes annotations from a tree
 removeAnnotations :: Traversable t => t a -> t ()
@@ -33,7 +32,7 @@ removeExtraAnnotationField t = traverse (pure . fst) t ()
 -- assigned.
 assignUniqueIds :: Traversable t => Int -- ^ starting id
                                  -> t a -- ^ tree root
-                                 -> (t (a, Int), Int) 
+                                 -> (t (a, Int), Int)
 assignUniqueIds first tree =
   (returnA *** \i -> i-1) $ runState (mapM f tree) first
   where f :: a -> State Int (a, Int)
@@ -103,15 +102,14 @@ getAnnotationStmt = go
     go (ModuleStmt a _ _         ) = a
     go (IfaceStmt a _            ) = a
     go (EnumStmt a _ _           ) = a
-    go s                           = error "AST.Annotations.getAnnotationStmt"
 
-   
+
 instance Annotated LValue where
   getAnnotation lv = case lv of
     LVar a _ -> a
     LDot a _ _ -> a
     LBracket a _ _ -> a
-  
+
 instance Annotated VarDecl where
   getAnnotation (VarDecl a _ _) = a
 
@@ -120,17 +118,17 @@ instance Annotated Prop  where
     PropId a _ -> a
     PropString a _ -> a
     PropNum a _ -> a
-  
+
 instance Annotated CaseClause where
   getAnnotation c = case c of
     CaseClause a _ _ -> a
     CaseDefault a _ -> a
-    
+
 instance Annotated CatchClause where
   getAnnotation (CatchClause a _ _) = a
 
 instance Annotated Id where
-  getAnnotation (Id a _) = a 
+  getAnnotation (Id a _) = a
 
 instance Annotated ClassElt where
   getAnnotation e = case e of

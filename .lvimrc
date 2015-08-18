@@ -4,7 +4,7 @@
 "   Thanks to: http://lpaste.net/94999
 "
 
-let g:hdevtools_options = '-g-i../language-ecmascript/src -g-i../liquid-fixpoint/src -g-isrc -g-package-conf='.glob(finddir('.cabal-sandbox', './;').'/*-packages.conf.d').' \
+let g:syntastic_haskell_hdevtools_args = '-g-i../language-ecmascript/src -g-i../liquid-fixpoint/src -g-isrc -g-package-conf='.glob(finddir('.cabal-sandbox', './;').'/*-packages.conf.d').' \
   \-g-XTypeSynonymInstances  
   \-g-XFlexibleInstances 
   \-g-XFlexibleContexts 
@@ -16,6 +16,8 @@ let g:hdevtools_options = '-g-i../language-ecmascript/src -g-i../liquid-fixpoint
   \-g-XDatatypeContexts 
   \-g-XTupleSections 
   \-g-Wall ' 
+
+let g:syntastic_haskell_check = ['hdevtools', 'hlint']
 
 "let g:ctrlp_custom_ignore = {
 "  \ 'file': '\v(\.hs)@<!$'

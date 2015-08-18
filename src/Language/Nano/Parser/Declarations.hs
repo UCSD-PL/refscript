@@ -1,88 +1,71 @@
-{-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE FlexibleInstances         #-}
-{-# LANGUAGE DeriveDataTypeable        #-}
-{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE UndecidableInstances      #-}
 {-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE TypeSynonymInstances      #-}
-{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE UndecidableInstances      #-}
 
 
-module Language.Nano.Typecheck.Parse ( 
+module Language.Nano.Parser.Declarations (
     RawSpec(..)
   ) where
 
-import           Prelude                          hiding ( mapM)
-
-import           Data.Either                             (partitionEithers)
-import           Data.Default
-import           Data.Traversable                        (mapAccumL)
-import           Data.Monoid                             (mempty, mconcat)
-import           Data.Maybe                              (listToMaybe, catMaybes, maybeToList, fromMaybe)
-import           Data.Generics                    hiding (Generic)
-import           Data.Aeson                              (eitherDecode)
-import           Data.Aeson.Types                 hiding (Parser, Error, parse)
-import qualified Data.Aeson.Types                 as     AI
-import qualified Data.ByteString.Lazy.Char8       as     B
-import           Data.Char                               (isLower)
-import qualified Data.List                        as     L
-import qualified Data.IntMap.Strict               as I
-import qualified Data.HashMap.Strict              as HM
-import           Data.Tuple
-import qualified Data.HashSet                     as HS
-
-import           Text.PrettyPrint.HughesPJ               (text)
-import qualified Data.Foldable                    as     FO
-import           Data.Vector                             ((!))
-import           Data.Graph.Inductive.Graph
-
+import           Control.Applicative              ((*>), (<$>), (<*), (<*>))
 import           Control.Monad
-import           Control.Monad.Trans                     (MonadIO,liftIO)
-import           Control.Applicative                     ((<$>), (<*>) , (<*) , (*>))
-
-import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
-import           Language.Fixpoint.Parse
+import           Control.Monad.Trans              (MonadIO, liftIO)
+import           Data.Aeson                       (eitherDecode)
+import           Data.Aeson.Types                 hiding (Error, Parser, parse)
+import qualified Data.Aeson.Types                 as AI
+import qualified Data.ByteString.Lazy.Char8       as B
+import           Data.Char                        (isLower)
+import           Data.Default
+import           Data.Either                      (partitionEithers)
+import qualified Data.Foldable                    as FO
+import           Data.Generics                    hiding (Generic)
+import           Data.Graph.Inductive.Graph
+import qualified Data.HashMap.Strict              as HM
+import qualified Data.HashSet                     as HS
+import qualified Data.IntMap.Strict               as I
+import qualified Data.List                        as L
+import           Data.Maybe                       (catMaybes, fromMaybe, listToMaybe, maybeToList)
+import           Data.Monoid                      (mconcat, mempty)
+import qualified Data.Text                        as DT
+import           Data.Traversable                 (mapAccumL)
+import           Data.Tuple
+import           Data.Vector                      ((!))
+import           GHC.Generics
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc                  (mapEither, mapSnd, fst3, mapFst)
-
+import           Language.Fixpoint.Misc           (fst3, mapEither, mapFst, mapSnd)
+import           Language.Fixpoint.Parse
+import           Language.Fixpoint.Types          hiding (Expression, Loc, quals)
 import           Language.Nano.Annots
-import           Language.Nano.Errors
+import           Language.Nano.AST
 import           Language.Nano.Env
-import           Language.Nano.Locations hiding (val)
+import           Language.Nano.Errors
+import           Language.Nano.Liquid.Alias
+import           Language.Nano.Liquid.Types
+import           Language.Nano.Locations          hiding (val)
+import           Language.Nano.Misc               (fst4)
 import           Language.Nano.Names
-import           Language.Nano.Misc                      (fst4)
+import           Language.Nano.Parser.Annotations
+import           Language.Nano.Parser.Common
 import           Language.Nano.Program
+import           Language.Nano.Typecheck.Resolve
+import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types              hiding (Exported)
 import           Language.Nano.Visitor
-import           Language.Nano.Typecheck.Types
-import           Language.Nano.Liquid.Types
-import           Language.Nano.Liquid.Alias
-import           Language.Nano.Liquid.Qualifiers
-import           Language.Nano.Typecheck.Resolve
-
-import           Language.Nano.Parser.Common
-
-import           Language.Nano.Syntax
-import           Language.Nano.Syntax.PrettyPrint
-import           Language.Nano.Syntax.Annotations
-
-import           Text.Parsec                      hiding (parse, State)
-import           Text.Parsec.Pos                         (newPos, SourcePos)
-import           Text.Parsec.Error                       (errorMessages, showErrorMessages)
-import qualified Text.Parsec.Token                as     T
-import qualified Data.Text                        as     DT
-import           Text.Parsec.Token                       (identStart, identLetter)
--- import           Text.Parsec.Prim                        (stateUser)
-import           Text.Parsec.Language                    (emptyDef)
-
-import           GHC.Generics
-
+import           Prelude                          hiding (mapM)
+import           Text.Parsec                      hiding (State, parse)
+import           Text.Parsec.Error                (errorMessages, showErrorMessages)
+import           Text.Parsec.Language             (emptyDef)
+import           Text.Parsec.Pos                  (SourcePos, newPos)
+import           Text.Parsec.Token                (identLetter, identStart)
+import qualified Text.Parsec.Token                as T
+import           Text.PrettyPrint.HughesPJ        (text)
 -- import           Debug.Trace                             ( trace, traceShow)
-
-
 
 instance FromJSON SourcePos where
   parseJSON (Array v) = do

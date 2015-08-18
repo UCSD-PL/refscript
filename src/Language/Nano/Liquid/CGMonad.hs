@@ -1,12 +1,12 @@
-{-# LANGUAGE TypeSynonymInstances      #-}
-{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE TupleSections             #-}
-{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE DoAndIfThenElse           #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
 
 -- | Operations pertaining to Constraint Generation
 
@@ -59,41 +59,38 @@ module Language.Nano.Liquid.CGMonad (
   ) where
 
 import           Control.Applicative
-import           Control.Exception (throw)
+import           Control.Exception                (throw)
 import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
-
-import           Data.Maybe                     (catMaybes, maybeToList)
-import           Data.Monoid                    (mappend, mempty)
-import qualified Data.HashMap.Strict            as HM
-import qualified Data.Map.Strict                as M
-import qualified Data.List                      as L
-import           Data.Function                  (on)
-import           Text.PrettyPrint.HughesPJ
-import           Language.Nano.Types
-import           Language.Nano.Errors
+import           Data.Function                    (on)
+import qualified Data.HashMap.Strict              as HM
+import qualified Data.List                        as L
+import qualified Data.Map.Strict                  as M
+import           Data.Maybe                       (catMaybes, maybeToList)
+import           Data.Monoid                      (mappend, mempty)
+import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Misc
+import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Annots
-import qualified Language.Nano.Env              as E
-import           Language.Nano.Locations
-import           Language.Nano.Environment
-import           Language.Nano.Names
+import           Language.Nano.AST
 import           Language.Nano.CmdLine
-import           Language.Nano.Program
-import           Language.Nano.Typecheck.Resolve
-import qualified Language.Nano.SystemUtils      as S
-import           Language.Nano.Typecheck.Types
-import           Language.Nano.Typecheck.Subst
-import           Language.Nano.Typecheck.Sub
+import qualified Language.Nano.Env                as E
+import           Language.Nano.Environment
+import           Language.Nano.Errors
 import           Language.Nano.Liquid.Environment
 import           Language.Nano.Liquid.Types
-
-import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Errors
-
-import           Language.Nano.Syntax
-import           Language.Nano.Syntax.PrettyPrint
+import           Language.Nano.Locations
+import           Language.Nano.Names
+import           Language.Nano.Pretty
+import           Language.Nano.Program
+import qualified Language.Nano.SystemUtils        as S
+import           Language.Nano.Typecheck.Resolve
+import           Language.Nano.Typecheck.Sub
+import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Types
+import           Language.Nano.Types
+import           Text.PrettyPrint.HughesPJ
 
 -- import           Debug.Trace                        (trace)
 
@@ -170,35 +167,35 @@ data CGState = CGS {
   --
   -- ^ global list of fixpoint binders
   --
-    binds       :: F.BindEnv
+    binds      :: F.BindEnv
   --
   -- ^ subtyping constraints
   --
-  , cs          :: ![SubC]
+  , cs         :: ![SubC]
   --
   -- ^ well-formedness constraints
   --
-  , ws          :: ![WfC]
+  , ws         :: ![WfC]
   --
   -- ^ freshness counter
   --
-  , cg_cnt      :: !Integer
+  , cg_cnt     :: !Integer
   --
   -- ^ recorded annotations
   --
-  , cg_ann      :: S.UAnnInfo RefType
+  , cg_ann     :: S.UAnnInfo RefType
   --
   -- ^ type constructor invariants
   --
-  , invs        :: TConInv
+  , invs       :: TConInv
   --
   -- ^ configuration options
   --
-  , cg_opts     :: Config
+  , cg_opts    :: Config
   --
   -- ^ AST Counter
   --
-  , cg_ast_cnt  :: NodeId
+  , cg_ast_cnt :: NodeId
 
   }
 

@@ -1,86 +1,35 @@
-{-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE FlexibleInstances         #-}
-{-# LANGUAGE DeriveDataTypeable        #-}
-{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE UndecidableInstances      #-}
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE TypeSynonymInstances      #-}
-{-# LANGUAGE TupleSections             #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE UndecidableInstances      #-}
 
 
-module Language.Nano.Typecheck.Parse ( 
-    RawSpec(..)
+module Language.Nano.Parser.Annotations (
+    RawSpec(..), Spec, PSpec(..), parseAnnot
   ) where
 
-import           Prelude                          hiding ( mapM)
-
-import           Data.Either                             (partitionEithers)
-import           Data.Default
-import           Data.Traversable                        (mapAccumL)
-import           Data.Monoid                             (mempty, mconcat)
-import           Data.Maybe                              (listToMaybe, catMaybes, maybeToList, fromMaybe)
-import           Data.Generics                    hiding (Generic)
-import           Data.Aeson                              (eitherDecode)
-import           Data.Aeson.Types                 hiding (Parser, Error, parse)
-import qualified Data.Aeson.Types                 as     AI
-import qualified Data.ByteString.Lazy.Char8       as     B
-import           Data.Char                               (isLower)
-import qualified Data.List                        as     L
-import qualified Data.IntMap.Strict               as I
-import qualified Data.HashMap.Strict              as HM
-import           Data.Tuple
-import qualified Data.HashSet                     as HS
-
-import           Text.PrettyPrint.HughesPJ               (text)
-import qualified Data.Foldable                    as     FO
-import           Data.Vector                             ((!))
-import           Data.Graph.Inductive.Graph
-
+import           Control.Applicative        ((<$>))
 import           Control.Monad
-import           Control.Monad.Trans                     (MonadIO,liftIO)
-import           Control.Applicative                     ((<$>), (<*>) , (<*) , (*>))
-
-import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
-import           Language.Fixpoint.Parse
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc                  (mapEither, mapSnd, fst3, mapFst)
-
-import           Language.Nano.Annots
-import           Language.Nano.Errors
-import           Language.Nano.Env
-import           Language.Nano.Locations hiding (val)
-import           Language.Nano.Names
-import           Language.Nano.Misc                      (fst4)
-import           Language.Nano.Program
-import           Language.Nano.Types              hiding (Exported)
-import           Language.Nano.Visitor
-import           Language.Nano.Typecheck.Types
-import           Language.Nano.Liquid.Types
-import           Language.Nano.Liquid.Alias
-import           Language.Nano.Liquid.Qualifiers
-import           Language.Nano.Typecheck.Resolve
-
-import           Language.Nano.Parser.Common
-
-import           Language.Nano.AST
-import           Language.Nano.Pretty
-
-import           Text.Parsec                      hiding (parse, State)
-import           Text.Parsec.Pos                         (newPos, SourcePos)
-import           Text.Parsec.Error                       (errorMessages, showErrorMessages)
-import qualified Text.Parsec.Token                as     T
-import qualified Data.Text                        as     DT
-import           Text.Parsec.Token                       (identStart, identLetter)
--- import           Text.Parsec.Prim                        (stateUser)
-import           Text.Parsec.Language                    (emptyDef)
-
+import           Data.Generics              hiding (Generic)
 import           GHC.Generics
-
--- import           Debug.Trace                             ( trace, traceShow)
-
+import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Parse
+import           Language.Fixpoint.Types    hiding (Expression, Loc, quals)
+import           Language.Nano.Annots
+import           Language.Nano.AST
+import           Language.Nano.Locations    hiding (val)
+import           Language.Nano.Names
+import           Language.Nano.Parser.Sorts
+import           Language.Nano.Parser.Types
+import           Language.Nano.Types
+import           Prelude                    hiding (mapM)
 
 ---------------------------------------------------------------------------------
 -- | Specifications
@@ -107,28 +56,28 @@ data RawSpec
   deriving (Show,Eq,Ord,Data,Typeable,Generic)
 
 data PSpec l r
-  = Meas    (Id l, RTypeQ RK r)
-  | Bind    (Id l, Assignability, Maybe (RTypeQ RK r))
-  | AmbBind (Id l, RTypeQ RK r)
-  | AnFunc  (RTypeQ RK r)
-  | Field   (TypeMemberQ RK r)
-  | Constr  (TypeMemberQ RK r)
-  | Method  (TypeMemberQ RK r)
-  | Static  (TypeMemberQ RK r)
-  | Iface   (Id l, IfaceDefQ RK r)
-  | Class   (Id l, ClassSigQ RK r)
-  | TAlias  (Id l, TAlias (RTypeQ RK r))
-  | PAlias  (Id l, PAlias)
-  | Qual    Qualifier
-  | Option  RscOption
-  | Invt    l (RTypeQ RK r)
-  | CastSp  l (RTypeQ RK r)
+  = Meas     (Id l, RTypeQ RK r)
+  | Bind     (Id l, Assignability, Maybe (RTypeQ RK r))
+  | AmbBind  (Id l, RTypeQ RK r)
+  | AnFunc   (RTypeQ RK r)
+  | Field    EltKind                    -- XXX: Changed
+  | Constr   EltKind                    -- XXX: Changed
+  | Method   EltKind                    -- XXX: Changed
+  -- | Static   (TypeMemberQ RK r)      -- XXX: Restore?
+  | Iface    (TypeDeclQ RK r)
+  | Class    (TypeSigQ RK r)
+  | TAlias   (Id l, TAlias (RTypeQ RK r))
+  | PAlias   (Id l, PAlias)
+  | Qual     Qualifier
+  | Option   RscOption
+  | Invt     l (RTypeQ RK r)
+  | CastSp   l (RTypeQ RK r)
   | Exported l
-  | RdOnly l
+  | RdOnly   l
 
   -- Used only for parsing specs
   | ErrorSpec
-  deriving (Eq, Show, Data, Typeable)
+  deriving (Data, Typeable)
 
 type Spec = PSpec SrcSpan Reft
 
@@ -139,14 +88,14 @@ parseAnnot = go
     go (RawBind     (ss, _)) = Bind    <$> patch3 ss <$> idBindP'
     go (RawAmbBind  (ss, _)) = AmbBind <$> patch2 ss <$> idBindP
     go (RawFunc     (_ , _)) = AnFunc  <$>               anonFuncP
-    go (RawField    (_ , _)) = Field   <$>               fieldEltP
-    go (RawMethod   (_ , _)) = Method  <$>               methEltP
-    go (RawConstr   (_ , _)) = Constr  <$>               consEltP
-    go (RawIface    (ss, _)) = Iface   <$> patch2 ss <$> iFaceP
-    go (RawClass    (ss, _)) = Class   <$> patch2 ss <$> classDeclP
+    go (RawField    (_ , _)) = Field   <$>               propP
+    go (RawMethod   (_ , _)) = Method  <$>               methP
+    go (RawConstr   (_ , _)) = Constr  <$>               ctorP
+    go (RawIface    (ss, _)) = Iface   <$>               interfaceP
+    go (RawClass    (ss, _)) = Class   <$>               classDeclP
     go (RawTAlias   (ss, _)) = TAlias  <$> patch2 ss <$> tAliasP
     go (RawPAlias   (ss, _)) = PAlias  <$> patch2 ss <$> pAliasP
-    go (RawQual     (_ , _)) = Qual    <$>               (qualifierP sortP)
+    go (RawQual     (_ , _)) = Qual    <$>               qualifierP sortP
     go (RawOption   (_ , _)) = Option  <$>               optionP
     go (RawInvt     (ss, _)) = Invt               ss <$> bareTypeP
     go (RawCast     (ss, _)) = CastSp             ss <$> bareTypeP

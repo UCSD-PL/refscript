@@ -1,16 +1,16 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE UndecidableInstances  #-}
 
-module Language.Nano.Typecheck.Subst ( 
-  
+module Language.Nano.Typecheck.Subst (
+
   -- * Substitutions
     RSubst
   , RSubstQ (..)
-  , Subst 
+  , Subst
   , toList
   , fromList
   , toSubst
@@ -22,26 +22,24 @@ module Language.Nano.Typecheck.Subst (
   , Substitutable
   , SubstitutableQ (..)
 
-  ) where 
+  ) where
 
-import           Data.Maybe (maybeToList)
-import           Text.PrettyPrint.HughesPJ
-import           Language.Nano.AST
-import           Language.Nano.Pretty
-import qualified Language.Fixpoint.Types as F
+import           Control.Applicative           ((<$>))
+import qualified Data.HashMap.Strict           as HM
+import qualified Data.HashSet                  as S
+import qualified Data.Map.Strict               as M
+import           Data.Maybe                    (maybeToList)
+import           Data.Monoid                   hiding ((<>))
+import           Language.Fixpoint.Misc        (intersperse)
+import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.Annots
+import           Language.Nano.AST
 import           Language.Nano.Env
-import           Language.Nano.Environment
 import           Language.Nano.Names
-import           Language.Nano.Types
+import           Language.Nano.Pretty
 import           Language.Nano.Typecheck.Types
-import           Language.Fixpoint.Misc (intersperse)
-
-import           Control.Applicative ((<$>))
-import qualified Data.HashSet as S
-import qualified Data.Map.Strict as M 
-import qualified Data.HashMap.Strict as HM 
-import           Data.Monoid hiding ((<>))
+import           Language.Nano.Types
+import           Text.PrettyPrint.HughesPJ
 
 -- import           Debug.Trace
 
@@ -63,60 +61,60 @@ toSubstQ :: RSubstQ q r -> RSubstQ q ()
 toSubstQ (Su m) = Su $ HM.map toType m
 
 toList        :: RSubst r -> [(TVar, RType r)]
-toList (Su m) =  HM.toList m 
+toList (Su m) =  HM.toList m
 
 fromList      :: [(TVar, RTypeQ q r)] -> RSubstQ q r
-fromList      = Su . HM.fromList 
+fromList      = Su . HM.fromList
 
 
 -- | Substitutions form a monoid; not commutative
 
-instance (F.Reftable r, SubstitutableQ q r (RType r)) => Monoid (RSubstQ q r) where 
+instance (F.Reftable r, SubstitutableQ q r (RType r)) => Monoid (RSubstQ q r) where
   mempty                    = Su HM.empty
   mappend (Su m) θ'@(Su m') = Su $ (apply θ' <$> m) `HM.union` m'
 
-instance (F.Reftable r, PP r) => PP (RSubst r) where 
-  pp (Su m) = if HM.null m then text "empty" 
-              else if HM.size m < 10 then intersperse comma $ (ppBind <$>) $ HM.toList m 
-              else vcat $ (ppBind <$>) $ HM.toList m 
+instance (F.Reftable r, PP r) => PP (RSubst r) where
+  pp (Su m) = if HM.null m then text "empty"
+              else if HM.size m < 10 then intersperse comma $ (ppBind <$>) $ HM.toList m
+              else vcat $ (ppBind <$>) $ HM.toList m
 
 ppBind (x, t) = pp x <+> text ":=" <+> pp t
 
 
-class Free a where 
+class Free a where
   free  :: a -> S.HashSet TVar
 
 instance Free (RType r) where
   free (TPrim _ r)          = S.empty
-  free (TVar α _)           = S.singleton α 
-  free (TOr ts)             = free ts 
-  free (TAnd ts)            = free ts 
+  free (TVar α _)           = S.singleton α
+  free (TOr ts)             = free ts
+  free (TAnd ts)            = free ts
   free (TRef n _)           = free n
   free (TObj es _)          = free $ es
   free (TType _ t)          = free t
   free (TMod _)             = S.empty
-  free (TAll α t)           = S.delete (btvToTV α) $ free t 
+  free (TAll α t)           = S.delete (btvToTV α) $ free t
   free (TFun xts t _)       = free $ [t] ++ (b_type <$> xts)
   free (TExp _)             = error "free should not be applied to TExp"
 
-instance Free (TGen r) where 
+instance Free (TGen r) where
   free (Gen n ts)           = free ts
 
-instance Free (TypeMembers r) where 
-  free (TM fs ms sfs sms cl ct s n) 
-                            = S.unions [free fs, free ms, free sfs, free sms, 
+instance Free (TypeMembers r) where
+  free (TM fs ms sfs sms cl ct s n)
+                            = S.unions [free fs, free ms, free sfs, free sms,
                                         free cl, free ct, free s, free n]
 
-instance Free t => Free (F.SEnv t) where 
+instance Free t => Free (F.SEnv t) where
   free                      = free . map snd . F.toListSEnv
 
-instance Free (FieldInfo r) where 
+instance Free (FieldInfo r) where
   free (FI _ _ t)           = free t
 
-instance Free (MethodInfo r) where 
+instance Free (MethodInfo r) where
   free (MI _ _ t)           = free t
 
-instance Free a => Free [a] where 
+instance Free a => Free [a] where
   free                      = S.unions . map free
 
 instance Free (Cast r) where
@@ -169,22 +167,22 @@ instance Free (QN l) where
 
 type Substitutable = SubstitutableQ AK
 
-class SubstitutableQ q r a where 
-  apply                     :: (RSubstQ q r) -> a -> a 
+class SubstitutableQ q r a where
+  apply                     :: (RSubstQ q r) -> a -> a
 
-instance SubstitutableQ q r a => SubstitutableQ q r [a] where 
-  apply                     = map . apply 
+instance SubstitutableQ q r a => SubstitutableQ q r [a] where
+  apply                     = map . apply
 
-instance (SubstitutableQ q r a, SubstitutableQ q r b) => SubstitutableQ q r (a,b) where 
+instance (SubstitutableQ q r a, SubstitutableQ q r b) => SubstitutableQ q r (a,b) where
   apply f (x,y)             = (apply f x, apply f y)
 
-instance F.Reftable r => SubstitutableQ q r (RTypeQ q r) where 
+instance F.Reftable r => SubstitutableQ q r (RTypeQ q r) where
   apply θ t                 = appTy θ t
 
-instance F.Reftable r => SubstitutableQ q r (BindQ q r) where 
+instance F.Reftable r => SubstitutableQ q r (BindQ q r) where
   apply θ (B z t)           = B z $ appTy θ t
 
-instance (SubstitutableQ q r t) => SubstitutableQ q r (Env t) where 
+instance (SubstitutableQ q r t) => SubstitutableQ q r (Env t) where
   apply                     = envMap . apply
 
 instance F.Reftable r => SubstitutableQ q r (CastQ q r) where
@@ -211,10 +209,10 @@ instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   apply _ a                 = a
 
 instance F.Reftable r => SubstitutableQ q r (MethodInfoQ q r) where
-  apply θ (MI ms m t)       = MI ms m (apply θ t) 
+  apply θ (MI ms m t)       = MI ms m (apply θ t)
 
 instance F.Reftable r => SubstitutableQ q r (FieldInfoQ q r) where
-  apply θ (FI ms m t)       = FI ms (apply θ m) (apply θ t) 
+  apply θ (FI ms m t)       = FI ms (apply θ m) (apply θ t)
 
 instance SubstitutableQ q r a => SubstitutableQ q r (Maybe a) where
   apply θ (Just a)          = Just $ apply θ a
@@ -224,9 +222,9 @@ instance F.Reftable r => SubstitutableQ q r (TGenQ q r) where
   apply θ (Gen n ts)        = Gen n $ apply θ ts
 
 instance F.Reftable r => SubstitutableQ q r (TypeMembersQ q r) where
-  apply θ (TM fs ms sfs sms cl ct s n) 
-                            = TM (apply θ fs) (apply θ ms) 
-                                 (apply θ sfs) (apply θ sms) 
+  apply θ (TM fs ms sfs sms cl ct s n)
+                            = TM (apply θ fs) (apply θ ms)
+                                 (apply θ sfs) (apply θ sms)
                                  (apply θ cl) (apply θ ct) (apply θ s) (apply θ n)
 
 instance SubstitutableQ q r a => SubstitutableQ q r (F.SEnv a) where
@@ -239,13 +237,13 @@ instance F.Reftable r => SubstitutableQ q r (Annot (FactQ q r) z) where
   apply θ (Ann i z fs)      = Ann i z $ apply θ fs
 
 instance SubstitutableQ q r F.Symbol  where
-  apply _ s                 = s 
+  apply _ s                 = s
 
 instance SubstitutableQ q r (QN l) where
-  apply _ s                 = s 
+  apply _ s                 = s
 
 instance SubstitutableQ q r (QP l) where
-  apply _ s                 = s 
+  apply _ s                 = s
 
 instance F.Reftable r => SubstitutableQ q r (TypeSigQ q r) where
   apply θ (TS k n h)        = TS k n (apply θ h)
@@ -265,7 +263,7 @@ instance SubstitutableQ q r Initialization where
 instance (SubstitutableQ q r a, SubstitutableQ q r b, SubstitutableQ q r c) => SubstitutableQ q r (a,b,c) where
   apply θ (a,b,c)           = (apply θ a, apply θ b, apply θ c)
 
- 
+
 ---------------------------------------------------------------------------------
 appTy :: F.Reftable r => RSubstQ q r -> RTypeQ q r -> RTypeQ q r
 ---------------------------------------------------------------------------------
@@ -283,14 +281,14 @@ appTy _        (TExp _)      = error "appTy should not be applied to TExp"
 
 
 ---------------------------------------------------------------------------------
--- | Type equality (module α-renaming) 
+-- | Type equality (module α-renaming)
 ---------------------------------------------------------------------------------
 
 instance (F.Reftable r) => Eq (TGen r) where
-  Gen n ts    == Gen n' ts'    = n == n' && ts == ts' 
+  Gen n ts    == Gen n' ts'    = n == n' && ts == ts'
 
 instance (F.Reftable r) => Eq (TypeMembers r) where
-  TM p m sp sm c k s n == TM p' m' sp' sm' c' k' s' n' =  
+  TM p m sp sm c k s n == TM p' m' sp' sm' c' k' s' n' =
     p == p' && m == m' && sp == sp' && sm == sm' && c == c' && k == k' && s == s' && n == n'
 
 instance (F.Reftable r) => Eq (FieldInfo r) where
@@ -311,9 +309,9 @@ instance (F.Reftable r) => Eq (RType r) where
   TObj m _  == TObj m' _   = m == m'
   TType k g == TType k' g' = k == k' && g == g'
   TMod n    == TMod n'     = n == n'
-  TAll v@(BTV s b _) t == TAll v'@(BTV s' b' _) t' 
+  TAll v@(BTV s b _) t == TAll v'@(BTV s' b' _) t'
                            = b == b' && t == appTy θ t'
-    where 
+    where
       θ = fromList [(btvToTV v', tVar $ btvToTV v')]
   TFun bs o _ == TFun bs' o' _ = bs == bs' && o == o'
   _           == _             = False

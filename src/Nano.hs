@@ -1,38 +1,37 @@
-{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
 
-import qualified Language.Nano.Typecheck.Typecheck  as TC
-import qualified Language.Nano.Liquid.Liquid        as LQ
-import qualified Language.Nano.Liquid.Types         as L
+import qualified Language.Nano.Liquid.Typecheck    as LQ
+import qualified Language.Nano.Liquid.Types        as L
+import qualified Language.Nano.Typecheck.Typecheck as TC
 
-import           System.Console.CmdArgs     hiding  (Loud)
-
-import           Data.Aeson                         (eitherDecode)
-import           Data.Aeson.Types            hiding (Parser, Error, parse)
+import           Control.Applicative               ((<$>), (<*>))
+import           Control.Exception                 (catch)
+import           Control.Monad
+import           Data.Aeson                        (eitherDecode)
+import           Data.Aeson.Types                  hiding (Error, Parser, parse)
+import qualified Data.ByteString.Lazy.Char8        as B
+import           Data.List                         (nub, sort)
+import           Data.Monoid
+import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Files
+import           Language.Fixpoint.Interface       (resultExit)
+import           Language.Fixpoint.Misc
+import qualified Language.Fixpoint.Types           as F
 import           Language.Nano.CmdLine
 import           Language.Nano.Errors
 import           Language.Nano.Files
+import           Language.Nano.Misc                (mapi)
+import           Language.Nano.Pretty
 import           Language.Nano.SystemUtils
-import           Language.Nano.Misc                 (mapi)
-import           Control.Applicative                ((<$>), (<*>))
-import           Control.Exception                  (catch)
-import           Control.Monad
-import           Data.Monoid
-import           Data.List                          (sort, nub)
+import           System.Console.CmdArgs            hiding (Loud)
+import           System.Directory                  (createDirectoryIfMissing, doesFileExist)
 import           System.Exit
-import           System.Directory                   (createDirectoryIfMissing, doesFileExist)
-import           System.Process
 import           System.FilePath.Posix
-import           Language.Fixpoint.Interface        (resultExit)
-import qualified Language.Fixpoint.Types      as    F
-import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Files
+import           System.Process
 import           Text.PrettyPrint.HughesPJ
-import           Language.Nano.Syntax.PrettyPrint
-import qualified Data.ByteString.Lazy.Char8   as    B
 
 
 main = do cfg  <- cmdArgs config

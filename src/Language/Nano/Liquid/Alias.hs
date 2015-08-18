@@ -148,9 +148,9 @@ splitTsEs l t na nx ts_
     n            = length ts_
     (ts, tes)    = splitAt na ts_
 
-rTypeExp _ _ (TExp e)     = e
-rTypeExp _ _(TRef r [] _) = F.expr $ F.symbol r
-rTypeExp l t a            = die $ errorTAliasMismatch l t a
+rTypeExp _ _ (TExp e) = e
+rTypeExp _ _(TRef (Gen r []) _) = F.expr $ F.symbol r
+rTypeExp l t a = die $ errorTAliasMismatch l t a
 
 -----------------------------------------------------------------------------
 -- | A Generic Solver for Expanding Definitions -----------------------------

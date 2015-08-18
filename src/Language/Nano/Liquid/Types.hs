@@ -256,7 +256,7 @@ pSingleton t p  = t `strengthen` (F.propReft p)
 -- | Converting RType to Fixpoint
 ------------------------------------------------------------------------------
 
-rTypeSortedReft   ::  PPR r => RTypeQ q r -> F.SortedReft
+rTypeSortedReft   ::  F.Reftable r => RTypeQ q r -> F.SortedReft
 rTypeSortedReft t = F.RR (rTypeSort t) (rTypeReft t)
 
 rTypeReft         :: (F.Reftable r) => RTypeQ q r -> F.Reft
@@ -266,7 +266,7 @@ rTypeValueVar     :: (F.Reftable r) => RTypeQ q r -> F.Symbol
 rTypeValueVar t   = vv where F.Reft (vv,_) = rTypeReft t
 
 ------------------------------------------------------------------------------------------
-rTypeSort :: (PPR r) => RTypeQ q r -> F.Sort
+rTypeSort :: F.Reftable r => RTypeQ q r -> F.Sort
 ------------------------------------------------------------------------------------------
 rTypeSort (TVar α _)          = F.FObj $ F.symbol α
 rTypeSort (TAll v t)          = rTypeSortForAll $ TAll v t
@@ -276,7 +276,7 @@ rTypeSort (TRef (Gen n ts) _) = F.FApp (rawStringFTycon $ F.symbol n) (rTypeSort
 rTypeSort (TObj _ _ )         = F.FApp (rawStringFTycon $ F.symbol "Object") []
 rTypeSort (TType k _)         = F.FApp (rawStringFTycon $ F.symbol k ) []
 rTypeSort (TMod _)            = F.FApp (rawStringFTycon $ F.symbol "module") []
-rTypeSort t                   = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
+rTypeSort t                   = error $ render $ text "BUG: Unsupported in rTypeSort"
 
 rTypeSortPrim TBV32      = BV.mkSort BV.S32
 rTypeSortPrim TNumber    = F.intSort
@@ -445,12 +445,12 @@ efoldTypeMembers g f (TM p m sp sm c k s n) γ z =
 
 
 -- XXX: TODO Restore 
+------------------------------------------------------------------------------------------
+efoldRType :: PPR r
+           => (RTypeQ q r -> b) -> (F.SEnv b -> RTypeQ q r -> a -> a)
+           -> F.SEnv b -> a -> RTypeQ q r -> a
+------------------------------------------------------------------------------------------
 efoldRType = undefined
--- ------------------------------------------------------------------------------------------
--- efoldRType :: PPR r
---            => (RTypeQ q r -> b) -> (F.SEnv b -> RTypeQ q r -> a -> a)
---            -> F.SEnv b -> a -> RTypeQ q r -> a
--- ------------------------------------------------------------------------------------------
 -- efoldRType g f                 = go
 --   where
 --     go γ z t@(TVar _ _ )       = f γ t z

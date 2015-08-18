@@ -1,13 +1,12 @@
-
-{-# LANGUAGE DeriveFoldable       #-}
 {-# LANGUAGE DeriveDataTypeable   #-}
+{-# LANGUAGE DeriveFoldable       #-}
 {-# LANGUAGE DeriveFunctor        #-}
 {-# LANGUAGE DeriveTraversable    #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Nano.Names (
- 
+
     QN(..)
   , QP(..)
   , AK(..)
@@ -21,7 +20,7 @@ module Language.Nano.Names (
   , idLoc
   , symbolId
   , returnId
-  , returnSymbol 
+  , returnSymbol
   , extendAbsPath
   , nameInPath
   , pathInPath
@@ -34,10 +33,10 @@ module Language.Nano.Names (
   , absolutePath
 
   , toAbsoluteName
-  , toLocSym 
+  , toLocSym
   , extClassSym
   , extInterfaceSym
-  , offsetLocSym 
+  , offsetLocSym
   , offsetSym
   , ttagSym
   , hasPropertySym
@@ -46,21 +45,21 @@ module Language.Nano.Names (
   , thisId
   , undefinedId
 
-  ) where 
+  ) where
 
-import qualified Data.HashSet                   as H
-import           Data.List                      (find)
-import           Data.Default
-import           Control.Applicative            ((<$>))
-import           Data.Hashable          
+import           Control.Applicative           ((<$>))
 import           Data.Data
+import           Data.Default
+import           Data.Foldable                 (Foldable ())
+import           Data.Hashable
+import qualified Data.HashSet                  as H
+import           Data.List                     (find)
 import           Data.Traversable
-import           Data.Foldable                      (Foldable()) 
-import           Language.Nano.AST
-import           Language.Nano.Locations
-import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
+import qualified Language.Fixpoint.Types       as F
+import           Language.Nano.AST
+import           Language.Nano.Locations
 import           Text.PrettyPrint.HughesPJ
 
 --------------------------------------------------------------------------
@@ -80,11 +79,11 @@ data AK = AK_ deriving (Eq, Data, Typeable, Show)
 data RK = RK_ deriving (Eq, Data, Typeable, Show)
 
 -- Qualified Name
-data QN l = QN (QP l) F.Symbol 
+data QN l = QN (QP l) F.Symbol
             deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
 
 -- Qualified Path
-data QP l = QP l SrcSpan NameSpacePath 
+data QP l = QP l SrcSpan NameSpacePath
             deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
 
 
@@ -96,13 +95,13 @@ instance Eq l => Eq (QP l) where
 
 instance F.Symbolic (QN l) where
   symbol (QN _ s) = s
- 
+
 instance Hashable (QN l) where
   hashWithSalt i (QN p s) = hashWithSalt i (p,s)
- 
+
 instance Hashable (QP l) where
   hashWithSalt i (QP _ _ n) = hashWithSalt i n
- 
+
 instance IsLocated (QN l) where
   srcPos (QN p _) = srcPos p
 
@@ -119,17 +118,17 @@ instance Default AK where
   def = AK_
 
 instance F.Symbolic (Id a) where
-  symbol (Id _ x)   = F.symbol x 
- 
-instance Hashable a => Hashable (Id a) where 
+  symbol (Id _ x)   = F.symbol x
+
+instance Hashable a => Hashable (Id a) where
   hashWithSalt i x = hashWithSalt i (idLoc x, idName x)
- 
+
 idName (Id _ x) = x
 idLoc  (Id l _) = l
- 
+
 instance F.Fixpoint String where
-  toFix = text 
- 
+  toFix = text
+
 
 extendAbsPath :: F.Symbolic s => AbsPath -> s -> AbsPath
 extendAbsPath (QP _ l ps) s = QP AK_ l $ ps ++ [F.symbol s]
@@ -147,7 +146,7 @@ symbolId :: (IsLocated l, F.Symbolic x) => l -> x -> Id l
 symbolId l x = Id l $ F.symbolString $ F.symbol x
 
 returnId   :: a -> Id a
-returnId x = Id x returnName 
+returnId x = Id x returnName
 
 returnSymbol :: F.Symbol
 returnSymbol = F.symbol returnName
@@ -165,11 +164,11 @@ mkAbsPath = QP AK_ $ srcPos dummySpan
 --------------------------------------------------------------------------
 
 -- | `absoluteName env p r` returns `Just a` where `a` is the absolute path of
---   the relative name `r` when referenced in the context of the absolute path 
+--   the relative name `r` when referenced in the context of the absolute path
 --   `p`; `Nothing` otherwise.
 --
 --   If p = A.B.C and r = C.D.E then the paths that will be checked in this
---   order are: 
+--   order are:
 --
 --    A.B.C.C.D.E
 --    A.B.C.D.E
@@ -179,17 +178,17 @@ mkAbsPath = QP AK_ $ srcPos dummySpan
 ---------------------------------------------------------------------------------
 absoluteName :: H.HashSet AbsName -> AbsPath -> RelName -> Maybe AbsName
 ---------------------------------------------------------------------------------
-absoluteName ns (QP AK_ _ p) (QN (QP RK_ _ ss) s) = 
+absoluteName ns (QP AK_ _ p) (QN (QP RK_ _ ss) s) =
     find (`H.member` ns) $ (`mkAbsName` s) . (++ ss) <$> prefixes p
   where
     prefixes        = map reverse . suffixes . reverse
     suffixes []     = [[]]
     suffixes (x:xs) = (x:xs) : suffixes xs
-    
+
 ---------------------------------------------------------------------------------
 absolutePath :: H.HashSet AbsPath -> AbsPath -> RelPath -> Maybe AbsPath
 ---------------------------------------------------------------------------------
-absolutePath ps (QP AK_ _ p) (QP RK_ _ ss) = 
+absolutePath ps (QP AK_ _ p) (QP RK_ _ ss) =
     find (`H.member` ps) $ mkAbsPath . (++ ss) <$> prefixes p
   where
     prefixes        = map reverse . suffixes . reverse
@@ -198,12 +197,12 @@ absolutePath ps (QP AK_ _ p) (QP RK_ _ ss) =
 
 toAbsoluteName (QN (QP RK_ l ss) s) = QN (QP AK_ l ss) s
 
-toLocSym        = F.dummyLoc . F.symbol 
+toLocSym        = F.dummyLoc . F.symbol
 extClassSym     = toLocSym "extends_class"
 extInterfaceSym = toLocSym "extends_interface"
 offsetLocSym    = toLocSym "offset"
 offsetSym       = F.symbol "offset"
-ttagSym         = toLocSym "ttag" 
+ttagSym         = toLocSym "ttag"
 hasPropertySym  = toLocSym "hasProperty"
 
 undefinedId     = Id (srcPos dummySpan) "undefined"

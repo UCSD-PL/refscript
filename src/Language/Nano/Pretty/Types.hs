@@ -1,53 +1,49 @@
-
-{-# LANGUAGE DeriveGeneric             #-}
-{-# LANGUAGE DeriveFunctor             #-}
-{-# LANGUAGE DeriveTraversable         #-}
-{-# LANGUAGE DeriveFoldable            #-}
-{-# LANGUAGE MultiParamTypeClasses     #-}
-{-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
-{-# LANGUAGE TypeSynonymInstances      #-}
-{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE DeriveFoldable            #-}
+{-# LANGUAGE DeriveFunctor             #-}
+{-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE DeriveTraversable         #-}
 {-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE IncoherentInstances       #-}
-{-# LANGUAGE UndecidableInstances      #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE UndecidableInstances      #-}
 
 module Language.Nano.Pretty.Types (
 
 ) where
 
-import           Control.Applicative            ((<$>))
-
+import           Control.Applicative               ((<$>))
+import           Data.Graph.Inductive.Graph
+import           Data.Graph.Inductive.PatriciaTree
+import qualified Data.Map.Strict                   as M
+import           Language.Fixpoint.Misc            (intersperse)
+import qualified Language.Fixpoint.Types           as F
 import           Language.Nano.AST
-import           Language.Nano.ClassHierarchy
 import           Language.Nano.Pretty.Common
 import           Language.Nano.Pretty.Syntax
 import           Language.Nano.Program
-import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
-
-import           Language.Fixpoint.Misc         (intersperse)
-import qualified Language.Fixpoint.Types        as F
-import           Text.PrettyPrint.HughesPJ 
-import qualified Data.Map.Strict                as M
-import           Data.Graph.Inductive.Graph
-import           Data.Graph.Inductive.PatriciaTree
+import           Language.Nano.Types
+import           Text.PrettyPrint.HughesPJ
 
 angles p = char '<' <> p <> char '>'
-ppHMap p = map (p . snd) . M.toList 
+ppHMap p = map (p . snd) . M.toList
 
 instance PP Bool where
   pp True   = text "True"
   pp False  = text "False"
 
-instance PP () where 
+instance PP () where
   pp _ = text ""
 
-instance PP a => PP (Maybe a) where 
-  pp = maybe (text "Nothing") pp 
+instance PP a => PP (Maybe a) where
+  pp = maybe (text "Nothing") pp
 
 instance PP Char where
   pp = char
@@ -62,16 +58,16 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp (TType k t)     = pp k <+> pp t
   pp (TMod t)        = text "module" <+> pp t
   pp t@(TAll _ _)    = ppArgs angles comma αs <> text "." <+> pp t' where (αs, t') = bkAll t
-  pp (TFun xts t _)  = ppArgs parens comma xts <+> text "=>" <+> pp t  
-  pp (TExp e)        = pprint e 
+  pp (TFun xts t _)  = ppArgs parens comma xts <+> text "=>" <+> pp t
+  pp (TExp e)        = pprint e
 
 instance PP NamedTypeKind where
   pp ClassK          = text "class"
   pp EnumK           = text "enum"
 
 instance (F.Reftable r, PP r) => PP (TypeMembersQ q r) where
-  pp (TM fs ms sfs sms cs cts sidx nidx) = ppProp fs  <+> ppMeth ms  <+> 
-                                           ppProp sfs <+> ppMeth sms <+> 
+  pp (TM fs ms sfs sms cs cts sidx nidx) = ppProp fs  <+> ppMeth ms  <+>
+                                           ppProp sfs <+> ppMeth sms <+>
                                            ppCall cs  <+> ppCtor cts <+>
                                            ppIdx sidx <+> ppIdx nidx
 
@@ -87,26 +83,26 @@ instance (F.Reftable r, PP r) => PP (TGenQ q r) where
 instance (F.Reftable r, PP r) => PP (BTGenQ q r) where
   pp (BGen x ts) = pp x <> ppArgs angles comma ts
 
-instance PP TVar where 
+instance PP TVar where
   pp = pprint . F.symbol
 
-instance (F.Reftable r, PP r) => PP (BTVarQ q r) where 
+instance (F.Reftable r, PP r) => PP (BTVarQ q r) where
   pp (BTV v t _) = pprint v <+> text "<:" <+> pp t
 
 instance PP TPrim where
   pp TString     = text "string"
-  pp (TStrLit s) = text "\"" <> text s <> text "\"" 
-  pp TNumber     = text "number" 
-  pp TBoolean    = text "boolean" 
-  pp TBV32       = text "bitvector32" 
-  pp TVoid       = text "void" 
+  pp (TStrLit s) = text "\"" <> text s <> text "\""
+  pp TNumber     = text "number"
+  pp TBoolean    = text "boolean"
+  pp TBV32       = text "bitvector32"
+  pp TVoid       = text "void"
   pp TUndefined  = text "undefined"
   pp TNull       = text "null"
   pp TBot        = text "_|_"
   pp TTop        = text " T "
 
-instance (PP r, F.Reftable r) => PP (BindQ q r) where 
-  pp (B x t) = pp x <> colon <> pp t 
+instance (PP r, F.Reftable r) => PP (BindQ q r) where
+  pp (B x t) = pp x <> colon <> pp t
 
 instance (PP s, PP t) => PP (M.Map s t) where
   pp m = vcat $ pp <$> M.toList m
@@ -130,8 +126,8 @@ instance PP TypeDeclKind where
 
 ppHeritage (es,is) = ppExtends es <+> ppImplements is
 
-ppExtends Nothing  = text ""
-ppExtends (Just n) = text "extends" <+> pp n
+ppExtends []    = text ""
+ppExtends (n:_) = text "extends" <+> pp n
 
 ppImplements [] = text ""
 ppImplements ts = text "implements" <+> intersperse comma (pp <$> ts)
@@ -151,23 +147,23 @@ ppMut t        | Just s <- mutSym t = pp s
 instance PP EnumDef where
   pp (EnumDef n m) = pp n <+> braces (pp m)
 
-instance (F.Reftable r, PP r) => PP (VarInfo r) where 
+instance (F.Reftable r, PP r) => PP (VarInfo r) where
   pp (VI _ _ t) = pp t
- 
+
 instance (PP r, F.Reftable r) => PP (ModuleDef r) where
-  pp (ModuleDef vars tys enums path) =  
+  pp (ModuleDef vars tys enums path) =
           text "==================="
-      $+$ text "module" <+> pp path 
+      $+$ text "module" <+> pp path
       $+$ text "==================="
-      $+$ text "Variables" 
+      $+$ text "Variables"
       $+$ text "----------"
       $+$ braces (pp vars)
       $+$ text "-----"
-      $+$ text "Types" 
+      $+$ text "Types"
       $+$ text "-----"
       $+$ pp tys
       $+$ text "-----"
-      $+$ text "Enums" 
+      $+$ text "Enums"
       $+$ text "-----"
       $+$ pp enums
 
@@ -180,16 +176,6 @@ instance PP Initialization where
 
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body
-
-instance (F.Reftable r, PP r) => PP (ClassHierarchy r) where
-  pp (ClassHierarchy g _)   =  text "***********************************************"
-                           $+$ text "Class Hierarchy"
-                           $+$ text "***********************************************"
-                           $+$ vcat (ppEdge <$> edges g)
-    where
-      ppEdge (a,b)          =  ppNode a <+> text "->" <+> ppNode b
-      ppNode                =  pp . lab' . context g
-
 
 instance (PP r, F.Reftable r) => PP (Nano a r) where
   pp pgm@(Nano {code = (Src s) })

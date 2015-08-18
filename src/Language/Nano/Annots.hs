@@ -1,13 +1,11 @@
-
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE DeriveDataTypeable     #-}
-{-# LANGUAGE DeriveFunctor          #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE OverlappingInstances   #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverlappingInstances #-}
 
 module Language.Nano.Annots (
 
-  -- * SSA 
+  -- * SSA
     SsaInfo(..), Var
 
   -- * Annotations
@@ -20,39 +18,36 @@ module Language.Nano.Annots (
   -- * Casts
   , CastQ(..), Cast, SubTRes(..), castType
 
-  -- * Aliases for annotated Source 
+  -- * Aliases for annotated Source
   , AnnQ, AnnR, AnnRel, AnnBare, UAnnBare, AnnSSA , UAnnSSA
   , AnnType, UAnnType, AnnInfo, UAnnInfo
 
   -- Options
   , RscOption (..)
-                                  
+
 ) where
 
-import           Control.Applicative            hiding (empty)
+import           Control.Applicative           hiding (empty)
 import           Data.Default
-import           Data.Maybe                     (maybeToList)
+import           Data.Generics
+import qualified Data.IntMap.Strict            as I
+import qualified Data.Map.Strict               as M
+import           Data.Maybe                    (maybeToList)
 import           Data.Monoid
-import qualified Data.Map.Strict                as M
-import qualified Data.IntMap.Strict             as I
-import           Data.Generics                   
-import           Text.PrettyPrint.HughesPJ 
-
+import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Misc
+import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.AST
 import           Language.Nano.Env
 import           Language.Nano.Locations
 import           Language.Nano.Names
-import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
-
-
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types        as F
+import           Language.Nano.Types
+import           Text.PrettyPrint.HughesPJ
 
 
 -----------------------------------------------------------------------------
--- | Casts 
+-- | Casts
 -----------------------------------------------------------------------------
 
 data CastQ q r = CNo                                            -- .
@@ -113,7 +108,7 @@ data FactQ q r
   | FieldAnn      [MemberMod] (RTypeQ q r)
   | MethAnn       [MemberMod] (RTypeQ q r)
   | ConsAnn       (RTypeQ q r)
-    
+
   | UserCast      (RTypeQ q r)
   | FuncAnn       (RTypeQ q r)
   | TCast         IContext (CastQ q r)
@@ -143,14 +138,14 @@ data Annot b a = Ann { ann_id   :: NodeId
                      , ann_fact :: [b] } deriving (Show, Data, Typeable)
 
 type AnnQ q  r = Annot (FactQ q r) SrcSpan
-type AnnR    r = AnnQ AK r                      -- absolute paths,  
+type AnnR    r = AnnQ AK r                      -- absolute paths,
 type AnnRel  r = AnnQ RK r                      -- relative paths, NO facts, parsed versioin
 type AnnBare r = AnnR r                         -- absolute paths, NO facts
 type AnnSSA  r = AnnR r                         -- absolute paths, Phi facts
 type AnnType r = AnnR r                         -- absolute paths, Phi + t. annot. + Cast facts
-type AnnInfo r = I.IntMap [Fact r] 
+type AnnInfo r = I.IntMap [Fact r]
 
-type UAnnBare  = AnnBare () 
+type UAnnBare  = AnnBare ()
 type UAnnSSA   = AnnSSA  ()
 type UAnnType  = AnnType ()
 type UAnnInfo  = AnnInfo ()
@@ -159,21 +154,21 @@ type UAnnInfo  = AnnInfo ()
 newtype SsaInfo r = SI (Var r) deriving (Ord, Typeable, Data)
 
 instance Eq (SsaInfo r) where
-  SI i1 == SI i2 =  i1 == i2 
+  SI i1 == SI i2 =  i1 == i2
 
 type Var r = Id (AnnSSA r)
 
 
-instance Annotated (Annot b) where 
-  getAnnotation = ann 
+instance Annotated (Annot b) where
+  getAnnotation = ann
 
 instance Default a => Default (Annot b a) where
   def = Ann def def []
 
-instance Ord (AnnSSA  r) where 
+instance Ord (AnnSSA  r) where
   compare (Ann i1 s1 _) (Ann i2 s2 _) = compare (i1,s1) (i2,s2)
 
-instance Eq (Annot a SrcSpan) where 
+instance Eq (Annot a SrcSpan) where
   (Ann i1 s1 _) == (Ann i2 s2 _) = (i1,s1) == (i2,s2)
 
 
@@ -184,9 +179,9 @@ phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
 ----------------------------------------------------------------------------------
 scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, Assignability, Maybe (RType r))]
 ----------------------------------------------------------------------------------
-scrapeVarDecl (VarDecl l _ _) 
-  = [ (VarDeclKind, a, t) | VarAnn a t <- ann_fact l ] 
- ++ [ (AmbVarDeclKind, Ambient, Just t) | AmbVarAnn t <- ann_fact l ] 
+scrapeVarDecl (VarDecl l _ _)
+  = [ (VarDeclKind, a, t) | VarAnn a t <- ann_fact l ]
+ ++ [ (AmbVarDeclKind, Ambient, Just t) | AmbVarAnn t <- ann_fact l ]
  ++ [ (FieldDefKind, Ambient, Just t) | FieldAnn _ t <- ann_fact l ] -- Assignability value is dummy
 
 

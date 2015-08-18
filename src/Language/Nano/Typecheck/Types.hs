@@ -1,36 +1,36 @@
 -- | Global type definitions for Refinement Type Checker
 
-{-# LANGUAGE DeriveGeneric             #-}
-{-# LANGUAGE DeriveFunctor             #-}
-{-# LANGUAGE DeriveTraversable         #-}
-{-# LANGUAGE DeriveFoldable            #-}
-{-# LANGUAGE MultiParamTypeClasses     #-}
-{-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
-{-# LANGUAGE TypeSynonymInstances      #-}
-{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE DeriveFoldable            #-}
+{-# LANGUAGE DeriveFunctor             #-}
+{-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE DeriveTraversable         #-}
 {-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE IncoherentInstances       #-}
-{-# LANGUAGE UndecidableInstances      #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE UndecidableInstances      #-}
 
 module Language.Nano.Typecheck.Types (
 
   -- * Type operations
-    toType, ofType, rTop, strengthen 
+    toType, ofType, rTop, strengthen
 
-  , ExprReftable(..) 
+  , ExprReftable(..)
 
   -- * Constructing Types
-  , mkUnion, mkFun, mkAll, mkAnd, mkInitFldTy, mkTCons 
-  
+  , mkUnion, mkFun, mkAll, mkAnd, mkInitFldTy, mkTCons
+
   -- * Deconstructing Types
   , bkFun, bkFuns, bkAll, bkAnd, bkUnion
-  
+
   , orUndef, padUndefineds
-  
+
   , rTypeR
 
   , btvToTV
@@ -47,13 +47,13 @@ module Language.Nano.Typecheck.Types (
   --   # Tests
   , isTPrim, isTTop, isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
   , isExpandable, isTNull, isTVoid, isTFun, isArr
-  
+
   --   # Operations
   , orNull
-  
+
   -- * Refinements
   , fTop
-  
+
   -- * Type Definitions
   , tmFromFields, tmFromFieldList -- , typesOfTM
 
@@ -68,34 +68,32 @@ module Language.Nano.Typecheck.Types (
 
   , eqV
 
-  ) where 
+  ) where
 
+import           Control.Applicative           hiding (empty)
+import           Control.Exception             (throw)
 import           Data.Data
 import           Data.Default
+import           Data.Either                   (partitionEithers)
 import           Data.Hashable
-import           Data.Either                    (partitionEithers)
-import qualified Data.List                      as L
-import           Data.Maybe                     (fromMaybe, isJust, fromJust, maybeToList)
-import           Data.Monoid                    hiding ((<>))            
-import qualified Data.Map.Strict                as M
-import           Data.Typeable                  ()
-import           Language.Nano.AST
-import qualified Language.Nano.Env              as E
-import           Language.Nano.Misc
-import           Language.Nano.Types
-import           Language.Nano.Locations
-import           Language.Nano.Names
-
-import qualified Language.Fixpoint.Types        as F
-import qualified Language.Fixpoint.Bitvector    as BV
-import           Language.Fixpoint.Misc
+import qualified Data.List                     as L
+import qualified Data.Map.Strict               as M
+import           Data.Maybe                    (fromJust, fromMaybe, isJust, maybeToList)
+import           Data.Monoid                   hiding ((<>))
+import           Data.Typeable                 ()
+import qualified Language.Fixpoint.Bitvector   as BV
 import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
-import           Text.PrettyPrint.HughesPJ 
-import           Text.Parsec.Pos                    (initialPos)
-
-import           Control.Applicative            hiding (empty)
-import           Control.Exception              (throw)
+import qualified Language.Fixpoint.Types       as F
+import           Language.Nano.AST
+import qualified Language.Nano.Env             as E
+import           Language.Nano.Locations
+import           Language.Nano.Misc
+import           Language.Nano.Names
+import           Language.Nano.Types
+import           Text.Parsec.Pos               (initialPos)
+import           Text.PrettyPrint.HughesPJ
 
 -- import           Debug.Trace (trace)
 
@@ -126,7 +124,7 @@ isMut = isNamed "Mutable"
 isImm = isNamed "Immutable"
 isUM  = isNamed "UniqueMutable"
 
-mutRelated t = isMut t || isImm t || isUM t || isRO t 
+mutRelated t = isMut t || isImm t || isUM t || isRO t
 
 
 ---------------------------------------------------------------------
@@ -137,10 +135,10 @@ mutRelated t = isMut t || isImm t || isUM t || isRO t
 fTop :: (F.Reftable r) => r
 fTop = mempty
 
--- | Stripping out Refinements 
+-- | Stripping out Refinements
 toType :: RTypeQ q a -> RTypeQ q ()
 toType = fmap (const ())
-  
+
 -- | Adding in Refinements
 ofType :: (F.Reftable r) => RTypeQ q () -> RTypeQ q r
 ofType = fmap (const fTop)
@@ -149,7 +147,7 @@ ofType = fmap (const fTop)
 rTop = ofType . toType
 
 class ExprReftable a r where
-  exprReft  :: a -> r 
+  exprReft  :: a -> r
   uexprReft :: a -> r
 
 instance ExprReftable a () where
@@ -176,15 +174,15 @@ bkFuns :: RTypeQ q r -> Maybe [([BTVarQ q r], [BindQ q r], RTypeQ q r)]
 bkFuns = sequence . fmap bkFun . bkAnd
 
 bkFun :: RTypeQ q r -> Maybe ([BTVarQ q r], [BindQ q r], RTypeQ q r)
-bkFun t = 
+bkFun t =
   do  (xts, t'')     <- bkArr t'
       return          $ (αs, xts, t'')
   where
     (αs, t')          = bkAll t
- 
+
 mkFun :: F.Reftable r  => ([BTVarQ q r], [BindQ q r], RTypeQ q r) -> RTypeQ q r
 mkFun (αs, bs, rt)    = mkAll αs (TFun bs rt fTop)
-         
+
 bkArr (TFun xts t _)  = Just (xts, t)
 bkArr _               = Nothing
 
@@ -195,7 +193,7 @@ mkAll αs t            = mkAnd $ go (reverse αs) <$> bkAnd t
 
 bkAll :: RTypeQ q r -> ([BTVarQ q r], RTypeQ q r)
 bkAll t               = go [] t
-  where 
+  where
     go αs (TAll α t)  = go (α : αs) t
     go αs t           = (reverse αs, t)
 
@@ -232,9 +230,9 @@ flattenUnions t         = t
 ----------------------------------------------------------------------------------------
 orUndef :: F.Reftable r => RType r -> RType r
 ----------------------------------------------------------------------------------------
-orUndef t   | any isTUndef ts = t 
+orUndef t   | any isTUndef ts = t
             | otherwise = mkUnion $ tUndef:ts
-  where ts  = bkUnion t 
+  where ts  = bkUnion t
 
 
 -- | Strengthen the top-level refinement
@@ -242,20 +240,20 @@ orUndef t   | any isTUndef ts = t
 strengthen :: F.Reftable r  => RTypeQ q r -> r -> RTypeQ q r
 ----------------------------------------------------------------------------------------
 strengthen (TPrim c r)   r' = TPrim c   $ r' `F.meet` r
-strengthen (TVar α r)    r' = TVar α    $ r' `F.meet` r 
+strengthen (TVar α r)    r' = TVar α    $ r' `F.meet` r
 strengthen (TOr ts)      r' = TOr       $ (`strengthen` r') <$> ts
-strengthen (TRef n r)    r' = TRef n    $ r' `F.meet` r 
-strengthen (TObj m r)    r' = TObj m    $ r' `F.meet` r 
+strengthen (TRef n r)    r' = TRef n    $ r' `F.meet` r
+strengthen (TObj m r)    r' = TObj m    $ r' `F.meet` r
 strengthen (TFun xs t r) r' = TFun xs t $ r' `F.meet` r
 strengthen t _              = t    -- TAnd, TType, TAll, TExp fall through
 
--- NOTE: r' is the OLD refinement. 
---       We want to preserve its VV binder as it "escapes", 
+-- NOTE: r' is the OLD refinement.
+--       We want to preserve its VV binder as it "escapes",
 --       e.g. function types. Sigh. Should have used a separate function binder.
 
 
 ----------------------------------------------------------------------------------------
--- | Predicates on Types 
+-- | Predicates on Types
 ----------------------------------------------------------------------------------------
 
 isPrim c t | TPrim c _ <- t = True | otherwise = False
@@ -307,19 +305,19 @@ rTypeR' (TRef _ r)   = Just r
 rTypeR' (TObj _ r)   = Just r
 rTypeR' (TType _ _)  = Just fTop
 rTypeR' (TMod _)     = Just fTop
-rTypeR' (TAnd _ )    = Nothing 
-rTypeR' (TAll _ _)   = Nothing 
-rTypeR' (TExp _)     = Nothing 
+rTypeR' (TAnd _ )    = Nothing
+rTypeR' (TAll _ _)   = Nothing
+rTypeR' (TExp _)     = Nothing
 
 ----------------------------------------------------------------------------------
 rTypeR :: F.Reftable r => RType r -> r
 ----------------------------------------------------------------------------------
 rTypeR t | Just r <- rTypeR' t = r
          | otherwise           = errorstar $ "Unimplemented: rTypeR"
- 
+
 isBvEnum              = all hex . map snd . E.envToList . e_mapping
   where
-    hex (HexLit _ _ ) = True 
+    hex (HexLit _ _ ) = True
     hex _             = False
 
 
@@ -330,15 +328,15 @@ isBvEnum              = all hex . map snd . E.envToList . e_mapping
 btvToTV  (BTV s l _ ) = TV s l
 
 tVar :: (F.Reftable r) => TVar -> RType r
-tVar = (`TVar` fTop) 
+tVar = (`TVar` fTop)
 
 tNum, tBV32, tBool, tString, tTop, tVoid, tBot, tUndef, tNull, tErr :: F.Reftable r => RTypeQ q r
 tPrim   = (`TPrim` fTop)
 tNum    = tPrim TNumber
-tBV32   = tPrim TBV32 
+tBV32   = tPrim TBV32
 tBool   = tPrim TBoolean
 tString = tPrim TString
-tTop    = tPrim TTop  
+tTop    = tPrim TTop
 tVoid   = tPrim TVoid
 tBot    = tPrim TBot
 tUndef  = tPrim TUndefined
@@ -357,10 +355,10 @@ arrayLitTy l n (TAll μ (TAll α (TFun [xt] t r))) = mkAll [μ,α] $ TFun αs rt
   where αs       = arrayLitBinds n xt
         rt       = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
 arrayLitTy l n _ = error "Bad Type for ArrayLit Constructor"
-      
-arrayLitBinds n (B x t) = [B (x_ i) t | i <- [1..n]] 
+
+arrayLitBinds n (B x t) = [B (x_ i) t | i <- [1..n]]
   where xs       = F.symbolString x
-        x_       = F.symbol . (xs ++) . show 
+        x_       = F.symbol . (xs ++) . show
 
 
 ---------------------------------------------------------------------------------
@@ -369,7 +367,7 @@ arrayLitBinds n (B x t) = [B (x_ i) t | i <- [1..n]]
 
 -- FIXME: Avoid capture
 freshBTV l s b n  = (bv,t)
-  where 
+  where
     i             = F.intSymbol s n
     bv            = BTV i (srcPos l) b
     v             = TV i (srcPos l)
@@ -390,7 +388,7 @@ objLitTy l ps     = mkFun (vs, bs, undefined) -- rt)
     mSym          = F.symbol "M"
     aSym          = F.symbol "A"
 
-lenId l           = Id l "length" 
+lenId l           = Id l "length"
 argId l           = Id l "arguments"
 
 instance F.Symbolic (LValue a) where
@@ -398,14 +396,14 @@ instance F.Symbolic (LValue a) where
   symbol lv         = F.symbol "DummyLValue"
 
 
-instance F.Symbolic (Prop a) where 
+instance F.Symbolic (Prop a) where
   symbol (PropId _ (Id _ x)) = F.symbol x -- TODO $ "propId_"     ++ x
   symbol (PropString _ s)    = F.symbol $ "propString_" ++ s
   symbol (PropNum _ n)       = F.symbol $ "propNum_"    ++ show n
 
 
 -- | @argBind@ returns a dummy type binding `arguments :: T `
---   where T is an object literal containing the non-undefined `ts`. 
+--   where T is an object literal containing the non-undefined `ts`.
 --
 --------------------------------------------------------------------------------------------
 mkArgTy :: (F.Reftable r, IsLocated l) => l -> [RType r] -> RType r
@@ -418,11 +416,11 @@ mkArgTy l ts   = immObjectLitTy l [pLen] [tLen]
     tLen       = tNum `strengthen` rLen
     rLen       = F.ofReft $ F.uexprReft k
     k          = fromMaybe (length ts) $ L.findIndex isTUndef ts
-   
+
 --------------------------------------------------------------------------------------------
 immObjectLitTy :: (F.Reftable r, IsLocated l) => l -> [Prop l] -> [RType r] -> RType r
 --------------------------------------------------------------------------------------------
-immObjectLitTy l ps ts  | length ps == length ts 
+immObjectLitTy l ps ts  | length ps == length ts
                         = TObj elts fTop
                         | otherwise
                         = error "Mismatched args for immObjectLit"
@@ -442,7 +440,7 @@ setPropTy l f ty = mkAll [bvt, bvm] t
     m            = toTTV bvm :: F.Reftable r => RType r
     t            = toTTV bvt
     bvt          = BTV (F.symbol "A") def Nothing
-    bvm          = BTV (F.symbol "M") def (Just tMut) :: F.Reftable r => BTVar r 
+    bvm          = BTV (F.symbol "M") def (Just tMut) :: F.Reftable r => BTVar r
     toTTV        :: F.Reftable r => BTVar r -> RType r
     toTTV        = (`TVar` fTop) . btvToTV
 
@@ -455,19 +453,19 @@ tmFromFields f = TM f mempty mempty mempty Nothing Nothing Nothing Nothing
 --------------------------------------------------------------------------------------------
 tmFromFieldList :: F.Symbolic s => [(s, FieldInfo r)] -> TypeMembers r
 --------------------------------------------------------------------------------------------
-tmFromFieldList f = TM (F.fromListSEnv $ mapFst F.symbol <$> f) 
+tmFromFieldList f = TM (F.fromListSEnv $ mapFst F.symbol <$> f)
                      mempty mempty mempty Nothing Nothing Nothing Nothing
 
 -- --------------------------------------------------------------------------------------------
 -- typesOfTM :: TypeMembers r -> [RType r]
 -- --------------------------------------------------------------------------------------------
--- typesOfTM (TM p m sp sm c k s n) = 
+-- typesOfTM (TM p m sp sm c k s n) =
 --   concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv p) ++
---   concatMap (\(MI _ _ t') -> [t']) (map snd $ F.toListSEnv m) ++ 
---   concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv sp) ++ 
---   concatMap (\(MI _ _ t') -> [t']) (map snd $ F.toListSEnv sm) ++ 
+--   concatMap (\(MI _ _ t') -> [t']) (map snd $ F.toListSEnv m) ++
+--   concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv sp) ++
+--   concatMap (\(MI _ _ t') -> [t']) (map snd $ F.toListSEnv sm) ++
 --   concatMap maybeToList [c, k, s, n]
--- 
+--
 ---------------------------------------------------------------------------------
 returnTy :: F.Reftable r => RType r -> Bool -> RType r
 ---------------------------------------------------------------------------------
@@ -477,11 +475,11 @@ returnTy _ False = mkFun ([], [], tVoid)
 ---------------------------------------------------------------------------------
 finalizeTy :: (F.Reftable r, ExprReftable F.Symbol r) => RType r -> RType r
 ---------------------------------------------------------------------------------
-finalizeTy t  | TRef (Gen x (m:ts)) _ <- t, isUM m 
+finalizeTy t  | TRef (Gen x (m:ts)) _ <- t, isUM m
               = mkFun ([mOut], [B sx t], TRef (Gen x (tOut:ts)) (uexprReft sx))
               | otherwise
               = mkFun ([mV], [B (F.symbol "x") tV], tV)
-  where 
+  where
     sx        = F.symbol "x_"
     tOut      = tVar $ btvToTV mOut
     mOut      = BTV (F.symbol "N") def Nothing
@@ -489,12 +487,12 @@ finalizeTy t  | TRef (Gen x (m:ts)) _ <- t, isUM m
     mV        = BTV (F.symbol "V") def Nothing
 
 localTy t = mkFun ([], [B sx t], t `strengthen` uexprReft sx)
-  where 
+  where
     sx    = F.symbol "x_"
 
 mkInitFldTy t = mkFun ([], [B (F.symbol "f") t], tVoid)
 
- 
+
 builtinOpId BIUndefined     = builtinId "BIUndefined"
 builtinOpId BIBracketRef    = builtinId "BIBracketRef"
 builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
@@ -543,7 +541,7 @@ prefixOpId PrefixTypeof     = builtinId "PrefixTypeof"
 prefixOpId PrefixBNot       = builtinId "PrefixBNot"
 prefixOpId o                = errorstar $ "prefixOpId: Cannot handle: " ++ show o
 
-mkId      = Id (initialPos "") 
+mkId      = Id (initialPos "")
 builtinId = mkId . ("builtin_" ++)
 
 
@@ -552,6 +550,6 @@ builtinId = mkId . ("builtin_" ++)
 bitVectorValue ('0':x) = Just $ exprReft $ BV.Bv BV.S32  $ "#" ++ x
 bitVectorValue _       = Nothing
 
-TVar (TV s1 _) _ `eqV` TVar (TV s2 _) _ = s1 == s2 
+TVar (TV s1 _) _ `eqV` TVar (TV s2 _) _ = s1 == s2
 _                `eqV` _                = False
-  
+

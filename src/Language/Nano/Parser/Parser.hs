@@ -1,87 +1,77 @@
-{-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE FlexibleInstances         #-}
-{-# LANGUAGE DeriveDataTypeable        #-}
-{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE UndecidableInstances      #-}
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE TypeSynonymInstances      #-}
-{-# LANGUAGE TupleSections             #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE UndecidableInstances      #-}
 
 
-module Language.Nano.Typecheck.Parse
+module Language.Nano.Parser.Parser
        ( parseNanoFromFiles
        , parseScriptFromJSON
        , parseIdFromJSON
        , RawSpec(..))
        where
 
-import           Prelude                          hiding ( mapM)
-
-import           Data.Either                             (partitionEithers)
-import           Data.Default
-import           Data.Traversable                        (mapAccumL)
-import           Data.Monoid                             (mempty, mconcat)
-import           Data.Maybe                              (listToMaybe, catMaybes, maybeToList, fromMaybe)
-import           Data.Generics                    hiding (Generic)
-import           Data.Aeson                              (eitherDecode)
-import           Data.Aeson.Types                 hiding (Parser, Error, parse)
-import qualified Data.Aeson.Types                 as     AI
-import qualified Data.ByteString.Lazy.Char8       as     B
-import           Data.Char                               (isLower)
-import qualified Data.List                        as     L
-import qualified Data.IntMap.Strict               as I
-import qualified Data.HashMap.Strict              as HM
-import           Data.Tuple
-import qualified Data.HashSet                     as HS
-
-import           Text.PrettyPrint.HughesPJ               (text)
-import qualified Data.Foldable                    as     FO
-import           Data.Vector                             ((!))
-import           Data.Graph.Inductive.Graph
-
+import           Control.Applicative              ((*>), (<$>), (<*), (<*>))
 import           Control.Monad
-import           Control.Monad.Trans                     (MonadIO,liftIO)
-import           Control.Applicative                     ((<$>), (<*>) , (<*) , (*>))
-
-import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
-import           Language.Fixpoint.Parse
+import           Control.Monad.Trans              (MonadIO, liftIO)
+import           Data.Aeson                       (eitherDecode)
+import           Data.Aeson.Types                 hiding (Error, Parser, parse)
+import qualified Data.Aeson.Types                 as AI
+import qualified Data.ByteString.Lazy.Char8       as B
+import           Data.Char                        (isLower)
+import           Data.Default
+import           Data.Either                      (partitionEithers)
+import qualified Data.Foldable                    as FO
+import           Data.Generics                    hiding (Generic)
+import           Data.Graph.Inductive.Graph
+import qualified Data.HashMap.Strict              as HM
+import qualified Data.HashSet                     as HS
+import qualified Data.IntMap.Strict               as I
+import qualified Data.List                        as L
+import           Data.Maybe                       (catMaybes, fromMaybe, listToMaybe, maybeToList)
+import           Data.Monoid                      (mconcat, mempty)
+import qualified Data.Text                        as DT
+import           Data.Traversable                 (mapAccumL)
+import           Data.Tuple
+import           Data.Vector                      ((!))
+import           GHC.Generics
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc                  (mapEither, mapSnd, fst3, mapFst)
-
+import           Language.Fixpoint.Misc           (fst3, mapEither, mapFst, mapSnd)
+import           Language.Fixpoint.Parse
+import           Language.Fixpoint.Types          hiding (Expression, Loc, quals)
 import           Language.Nano.Annots
-import           Language.Nano.Errors
+import           Language.Nano.AST
 import           Language.Nano.Env
-import           Language.Nano.Locations hiding (val)
-import           Language.Nano.Names
-import           Language.Nano.Misc                      (fst4)
-import           Language.Nano.Program
-import           Language.Nano.Types              hiding (Exported)
-import           Language.Nano.Visitor
-import           Language.Nano.Typecheck.Types
-import           Language.Nano.Liquid.Types
+import           Language.Nano.Errors
 import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.Qualifiers
-import           Language.Nano.Typecheck.Resolve
-
+import           Language.Nano.Liquid.Types
+import           Language.Nano.Locations          hiding (val)
+import           Language.Nano.Misc               (fst4)
+import           Language.Nano.Names
+import           Language.Nano.Parser.Annotations
 import           Language.Nano.Parser.Common
-
-import           Language.Nano.Syntax
-import           Language.Nano.Syntax.PrettyPrint
-import           Language.Nano.Syntax.Annotations
-
-import           Text.Parsec                      hiding (parse, State)
-import           Text.Parsec.Pos                         (newPos, SourcePos)
-import           Text.Parsec.Error                       (errorMessages, showErrorMessages)
-import qualified Text.Parsec.Token                as     T
-import qualified Data.Text                        as     DT
-import           Text.Parsec.Token                       (identStart, identLetter)
--- import           Text.Parsec.Prim                        (stateUser)
-import           Text.Parsec.Language                    (emptyDef)
-
-import           GHC.Generics
+import           Language.Nano.Pretty
+import           Language.Nano.Program
+import           Language.Nano.Typecheck.Resolve
+import           Language.Nano.Typecheck.Types
+import           Language.Nano.Types              hiding (Exported)
+import           Language.Nano.Visitor
+import           Prelude                          hiding (mapM)
+import           Text.Parsec                      hiding (State, parse)
+import           Text.Parsec.Error                (errorMessages, showErrorMessages)
+import           Text.Parsec.Language             (emptyDef)
+import           Text.Parsec.Pos                  (SourcePos, newPos)
+import           Text.Parsec.Token                (identLetter, identStart)
+import qualified Text.Parsec.Token                as T
+import           Text.PrettyPrint.HughesPJ        (text)
 
 -- import           Debug.Trace                             ( trace, traceShow)
 
@@ -132,7 +122,7 @@ parseIdFromJSON filename = decodeOrDie <$> getJSON filename
 mkCode :: [Statement (SrcSpan, [Spec])] -> Either (FixResult Error) (NanoBareR Reft)
 ---------------------------------------------------------------------------------
 mkCode ss = return   (mkCode' ss)
-        >>= return . visitNano convertTvarVisitor []
+        >>= return . convertTVars
         >>= return . expandAliases
         >>= return . replaceAbsolute
         >>= return . replaceDotRef
@@ -174,9 +164,9 @@ extractFact = go
     go (Constr  c      ) = Just $ ConsAnn   c
     go (Field   f      ) = Just $ FieldAnn  f
     go (Method  m      ) = Just $ MethAnn   m
-    go (Static  m      ) = Just $ StatAnn   m
+    -- go (Static  m      ) = Just $ StatAnn   m
     go (Class   (_,t)  ) = Just $ ClassAnn  t
-    go (Iface   (_,t)  ) = Just $ IfaceAnn  t
+    go (Iface   (_,t)  ) = Just $ InterfaceAnn  t
     go (CastSp  _ t    ) = Just $ UserCast  t
     go (Exported  _    ) = Just $ ExportedElt
     go (RdOnly  _      ) = Just $ ReadOnlyVar
@@ -205,14 +195,15 @@ stmtTypeBindings _                = go
                                             , VarAnn  (_, Just t) <- ann_fact l ]
     go _                          = []
 
-celtTypeBindings _                = (mapSnd eltType <$>) . go
-  where
-    go (Constructor l _ _)        = [(x, e) | ConsAnn  e <- ann_fact l
-                                            , let x       = Id l "ctor" ]
-    go (MemberVarDecl l _ x _)    = [(x, e) | FieldAnn e <- ann_fact l  ] ++
-                                    [(x, e) | StatAnn  e <- ann_fact l  ]
-    go (MemberMethDef l _ x _ _)  = [(x, e) | MethAnn  e <- ann_fact l  ]
-    go _                          = []
+celtTypeBindings _                = undefined -- TODO
+-- celtTypeBindings _                = (mapSnd eltType <$>) . go
+--   where
+--     go (Constructor l _ _)        = [(x, e) | ConsAnn  e <- ann_fact l
+--                                             , let x       = Id l "ctor" ]
+--     go (MemberVarDecl l _ x _)    = [(x, e) | FieldAnn e <- ann_fact l  ]
+--                                  ++ [(x, e) | StatAnn  e <- ann_fact l  ]
+--     go (MemberMethDef l _ x _ _)  = [(x, e) | MethAnn  e <- ann_fact l  ]
+--     go _                          = []
 
 -- debugTyBinds p@(Nano {code = Src ss}) = trace msg p
 --   where
@@ -220,36 +211,7 @@ celtTypeBindings _                = (mapSnd eltType <$>) . go
 --     msg = unlines $ "debugTyBinds:" : (ppshow <$> xts)
 
 
--- | Class Hierachy
----------------------------------------------------------------------------
-buildCHA           :: PPR r => NanoBareR r -> NanoBareR r
----------------------------------------------------------------------------
-buildCHA pgm        = pgm { pCHA = ClassHierarchy graph namesToKeys }
-  where
-    graph           = mkGraph nodes edges
-    nodes           = zip ([0..] :: [Int]) $ fst3 <$> data_
-    keysToTypes     = I.fromList $ zip [0..] (fst3 <$> data_)
-    namesToKeys     = HM.fromList $ mapFst t_name . swap <$> I.toList keysToTypes
-    edges           = concatMap toEdge data_
-    toEdge (_,s,ts) = [ (σ,τ,()) | t <- ts
-                                 , σ <- maybeToList $ HM.lookup s namesToKeys
-                                 , τ <- maybeToList $ HM.lookup t namesToKeys ]
-    data_           = concatMap foo $ snd <$> qenvToList (pModules pgm)
-    foo m           = bar . snd <$>  envToList (m_types m)
-    bar d           = (d, t_name d, parentNames pgm (t_name d))
-
-parentNames :: NanoBareR r -> AbsName -> [AbsName]
-parentNames p = concat . maybeToList . pparentNames p
-  where
-    pparentNames p a = do t <- resolveTypeInPgm p a
-                          let (es,is) = t_base t
-                          return $ (fst <$> es) ++ (fst <$> is)
-
 type PState = Integer
-
-instance PP Integer where
-  pp = pp . show
-
 
 --------------------------------------------------------------------------------------
 parseAnnots :: [Statement (SrcSpan, [RawSpec])]
@@ -294,106 +256,6 @@ instance PP (RawSpec) where
   pp = text . getSpecString
 
 
-
--------------------------------------------------------------------------------------
-
--- | @convertTvar@ converts @RCon@s corresponding to _bound_ type-variables to @TVar@
-convertTvar    :: (PP r, Reftable r, Transformable t, Show q) => [TVar] -> t q r -> t q r
-convertTvar as = trans tx as []
-  where
-    tx αs _ (TRef c [] r) | Just α <- mkTvar αs c = TVar α r
-    tx _  _ t             = t
-
-mkTvar αs r = listToMaybe [ α { tv_loc = srcPos r }  | α <- αs, symbol α == symbol r]
-
-convertTvarVisitor :: (PP r, Reftable r) => Visitor () [TVar] (AnnRel r)
-convertTvarVisitor = defaultVisitor {
-    ctxStmt = ctxStmtTvar
-  , ctxCElt = ctxCEltTvar
-  , txStmt  = transFmap (const . convertTvar)
-  , txExpr  = transFmap (const . convertTvar)
-  , txCElt  = transFmap (const . convertTvar)
-  }
-
-ctxStmtTvar as s = go s ++ as
-  where
-    go :: Statement (AnnRel r)  -> [TVar]
-    go s@(FunctionStmt {}) = grab s
-    go s@(FuncAmbDecl {})  = grab s
-    go s@(FuncOverload {}) = grab s
-    go s@(IfaceStmt {})    = grab s
-    go s@(ClassStmt {})    = grab s
-    go s@(ModuleStmt {})   = grab s
-    go _                   = []
-
-    grab :: Statement (AnnQ q r) -> [TVar]
-    grab = concatMap factTvars . ann_fact . getAnnotation
-
-ctxCEltTvar as s = go s ++ as
-  where
-    go :: ClassElt (AnnRel r)  -> [TVar]
-    go s@Constructor{}     = grab s
-    go s@MemberMethDef{}   = grab s
-    go _                   = []
-
-    grab :: ClassElt (AnnQ q r) -> [TVar]
-    grab = concatMap factTvars . ann_fact . getAnnotation
-
-
-factTvars :: FactQ q r -> [TVar]
-factTvars = go
-  where
-    tvars t                 | Just ts <- bkFuns t
-                            = HS.toList $ foldUnions $ HS.fromList . fst4 <$> ts
-                            | otherwise
-                            = []
-
-    foldUnions (α:αs)       = foldl HS.intersection α αs
-    foldUnions _            = HS.empty
-
-    go (VarAnn (_, Just t)) = tvars t
-    go (FuncAnn t)          = tvars t
-    go (FieldAnn m)         = tvars $ f_type m
-    go (MethAnn m)          = tvars $ f_type m
-    go (StatAnn m)          = tvars $ f_type m
-    go (ConsAnn m)          = tvars $ f_type m
-    go (ClassAnn (as,_,_))  = as
-    go (IfaceAnn i)         = t_args i
-    go _                    = []
-
-
-sortP
-  =   try (parens $ sortP)
-  <|> try (string "@"    >> varSortP)
-  -- <|> try (string "func" >> funcSortP)
- --  <|> try (fApp (Left listFTyCon) . single <$> brackets sortP)
-  <|> try bvSortP
-  -- <|> try baseSortP
-  <|> try (fApp' <$> locLowerIdP)
-  <|> try (fApp  <$> (Left <$> fTyConP) <*> sepBy sortP blanks)
-  <|> (FObj . symbol <$> lowerIdP)
-
-varSortP  = FVar  <$> parens intP
-
-intP :: Parser Int
-intP = fromInteger <$> integer
-
-fTyConP :: Parser FTycon
-fTyConP = symbolFTycon <$> locUpperIdP
-
-fApp' :: LocSymbol -> Sort
-fApp' ls
-  | s == "int"     = intSort
-  | s == "Integer" = intSort
-  | s == "Int"     = intSort
-  | s == "int"     = intSort
-  | s == "real"    = realSort
-  | s == "bool"    = boolSort
-  | otherwise      = fTyconSort . symbolFTycon $ ls
-  where
-    s              = symbolString $ val ls
-
-
 -- | Replace `TRef x _ _` where `x` is a name for an enumeration with `number`
 ---------------------------------------------------------------------------------------
 fixEnums :: PPR r => QEnv (ModuleDef r) -> NanoBareR r -> (QEnv (ModuleDef r), NanoBareR r)
@@ -403,12 +265,12 @@ fixEnums m p@(Nano { code = Src ss }) = (m',p')
     p'    = p { code = Src $ (tr <$>) <$> ss }
     m'    = fixEnumsInModule m `qenvMap` m
     tr    = transAnnR f []
-    f _ _ = fixEnumInType m 
+    f _ _ = fixEnumInType m
 
 ---------------------------------------------------------------------------------------
 fixEnumInType :: QEnv (ModuleDef r) -> RType r -> RType r
 ---------------------------------------------------------------------------------------
-fixEnumInType ms (TRef (Gen (QN p x) []) r) 
+fixEnumInType ms (TRef (Gen (QN p x) []) r)
   | Just m <- qenvFindTy p ms
   , Just e <- envFindTy x $ m_enums m
   = if isBvEnum e then tBV32 `strengthen` r
@@ -418,7 +280,7 @@ fixEnumInType _ t = t
 ---------------------------------------------------------------------------------------
 fixEnumsInModule :: QEnv (ModuleDef r) -> ModuleDef r -> ModuleDef r
 ---------------------------------------------------------------------------------------
-fixEnumsInModule m (ModuleDef v t e p) = ModuleDef v' t' e p 
+fixEnumsInModule m (ModuleDef v t e p) = ModuleDef v' t' e p
   where
    v'          = envMap f v
    f (v,a,t,i) = (v,a,fixEnumInType m t,i)
@@ -443,18 +305,18 @@ replaceAbsolute pgm@(Nano { code = Src ss }) = pgm { code = Src $ (tr <$>) <$> s
                         Just a' -> a'
                         Nothing -> throw $ errorUnboundPath (srcPos l) a
 
-    isAlias (QN RK_ _ [] s) = envMem s $ tAlias pgm 
+    isAlias (QN RK_ _ [] s) = envMem s $ tAlias pgm
     isAlias (QN _   _ _  _) = False
 
     absAct f l a    = I.lookup (ann_id l) mm >>= (`f` a)
     mm              = snd $ visitStmts vs (QP AK_ def []) ss
-    vs              = defaultVisitor { ctxStmt = cStmt } 
+    vs              = defaultVisitor { ctxStmt = cStmt }
                                      { accStmt = acc   }
                                      { accExpr = acc   }
                                      { accCElt = acc   }
                                      { accVDec = acc   }
-    cStmt (QP AK_ l p) (ModuleStmt _ x _) 
-                    = QP AK_ l $ p ++ [F.symbol x] 
+    cStmt (QP AK_ l p) (ModuleStmt _ x _)
+                    = QP AK_ l $ p ++ [F.symbol x]
     cStmt q _       = q
     acc c s         = I.singleton (ann_id a) c where a = getAnnotation s
 
@@ -463,13 +325,13 @@ replaceAbsolute pgm@(Nano { code = Src ss }) = pgm { code = Src $ (tr <$>) <$> s
 ---------------------------------------------------------------------------------------
 replaceDotRef :: NanoBareR F.Reft -> NanoBareR F.Reft
 ---------------------------------------------------------------------------------------
-replaceDotRef p@(Nano{ code = Src fs, tAlias = ta, pAlias = pa, invts = is }) 
+replaceDotRef p@(Nano{ code = Src fs, tAlias = ta, pAlias = pa, invts = is })
     = p { code         = Src $      tf       <##>  fs
-        , tAlias       = transRType tt [] [] <###> ta 
+        , tAlias       = transRType tt [] [] <###> ta
         , pAlias       =            tt [] [] <##>  pa
         , invts        = transRType tt [] [] <##>  is
-        } 
-  where 
+        }
+  where
     tf (Ann l a facts) = Ann l a $ transFact tt [] [] <$> facts
     tt _ _             = fmap $ V.trans vs () ()
     vs                 = V.defaultVisitor { V.txExpr = tx }
@@ -487,17 +349,17 @@ fixFunBinders :: QEnv (ModuleDef r) -> NanoBareR r -> (QEnv (ModuleDef r), NanoB
 ---------------------------------------------------------------------------------------
 fixFunBinders m p@(Nano { code = Src ss }) = (m', p')
   where
-    p'    = p { code = Src $ (tr <$>) <$> ss } 
+    p'    = p { code = Src $ (tr <$>) <$> ss }
     m'    = qenvMap fixFunBindersInModule m
     tr    = transAnnR f []
     f _ _ = fixFunBindersInType
 
 fixFunBindersInType t | Just is <- bkFuns t = mkAnd $ map (mkFun . f) is
-                      | otherwise           = t 
-  where 
+                      | otherwise           = t
+  where
     f (vs,s,yts,t)    = (vs,ssm s,ssb yts,ss t)
       where
-        ks            = [ y | B y _ <- yts ] 
+        ks            = [ y | B y _ <- yts ]
         ks'           = (F.eVar . (`mappend` F.symbol [symSepName])) <$> ks
         su            = F.mkSubst $ zip ks ks'
         ss            = F.subst su
@@ -524,13 +386,13 @@ fixFunBindersInModule m@(ModuleDef { m_variables = mv, m_types = mt })
 ---------------------------------------------------------------------------------------
 scrapeModules :: PPR r => NanoBareR r -> Either (F.FixResult Error) (QEnv (ModuleDef r))
 ---------------------------------------------------------------------------------------
-scrapeModules pgm@(Nano { code = Src stmts }) 
+scrapeModules pgm@(Nano { code = Src stmts })
   = do  mods  <- return $ collectModules stmts
-        mods' <- mapM mkMod mods        
+        mods' <- mapM mkMod mods
         return $ qenvFromList mods'
   where
 
-    mkMod :: PPR r => (AbsPath, [Statement (AnnR r)]) -> Either (F.FixResult Error) (AbsPath, ModuleDefQ AK r) 
+    mkMod :: PPR r => (AbsPath, [Statement (AnnR r)]) -> Either (F.FixResult Error) (AbsPath, ModuleDefQ AK r)
     mkMod (p,ss)      = do  ve <- return $ varEnv p ss
                             te <- typeEnv p ss
                             ee <- return $ enumEnv ss
@@ -581,37 +443,37 @@ scrapeModules pgm@(Nano { code = Src stmts })
 
     eStmt (EnumStmt _ n es)  = [(fmap srcPos n, EnumDef (F.symbol n) (envFromList $ sEnumElt <$> es))]
     eStmt _                  = []
-    sEnumElt (EnumElt _ s e) = (F.symbol s, fmap (const ()) e) 
+    sEnumElt (EnumElt _ s e) = (F.symbol s, fmap (const ()) e)
     ss                       = fmap ann
- 
+
 ---------------------------------------------------------------------------------------
-resolveType :: PPR r => AbsPath 
-                     -> Statement (AnnR r) 
+resolveType :: PPR r => AbsPath
+                     -> Statement (AnnR r)
                      -> Either (F.FixResult Error) (Id SrcSpan, TypeDecl r)
 ---------------------------------------------------------------------------------------
-resolveType (QP AK_ _ ss) (ClassStmt l c _ _ cs) 
+resolveType (QP AK_ _ ss) (ClassStmt l c _ _ cs)
   | [(m:vs,e,i)]     <- classAnns
   = do  ts           <- typeMembers (TVar m fTop) cs
         return        $ (cc, TD ClassKind (QN AK_ (srcPos l) ss (F.symbol c)) (m:vs) (e,i) ts)
-  | otherwise 
+  | otherwise
   = Left              $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where
-    classAnns         = [ t | ClassAnn t <- ann_fact l ] 
+    classAnns         = [ t | ClassAnn t <- ann_fact l ]
     cc                = fmap ann c
-    errMsg            = "Invalid class annotation: " 
+    errMsg            = "Invalid class annotation: "
                      ++ show (intersperse comma (map pp classAnns))
 
-resolveType _ (IfaceStmt l c) 
+resolveType _ (IfaceStmt l c)
   | [t] <- ifaceAnns  = Right (fmap ann c,t)
   | otherwise         = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where
-    ifaceAnns         = [ t | InterfaceAnn t <- ann_fact l ] 
-    errMsg            = "Invalid interface annotation: " 
+    ifaceAnns         = [ t | InterfaceAnn t <- ann_fact l ]
+    errMsg            = "Invalid interface annotation: "
                      ++ show (intersperse comma (map pp ifaceAnns))
 
-resolveType _ s       = Left $ F.Unsafe $ single 
-                      $ err (sourceSpanSrcSpan $ getAnnotation s) 
-                      $ "Statement\n" ++ ppshow s ++ "\ncannot have a type annotation." 
+resolveType _ s       = Left $ F.Unsafe $ single
+                      $ err (sourceSpanSrcSpan $ getAnnotation s)
+                      $ "Statement\n" ++ ppshow s ++ "\ncannot have a type annotation."
 
 
 ---------------------------------------------------------------------------------------

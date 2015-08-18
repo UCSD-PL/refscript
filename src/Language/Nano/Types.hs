@@ -1,33 +1,30 @@
-
-{-# LANGUAGE DeriveDataTypeable     #-}
-{-# LANGUAGE DeriveTraversable      #-}
-{-# LANGUAGE StandaloneDeriving     #-}
-{-# LANGUAGE TypeSynonymInstances   #-}
-{-# LANGUAGE DeriveFoldable         #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE DeriveFunctor          #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
+{-# LANGUAGE DeriveFoldable       #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE DeriveTraversable    #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Nano.Types where
 
-import           Control.Applicative                ((<$>))
-import           Data.Hashable
+import           Control.Applicative       ((<$>))
 import           Data.Default
+import           Data.Foldable             (Foldable ())
+import           Data.Function             (on)
+import           Data.Generics             (Data)
+import           Data.Hashable
+import           Data.List                 ((\\))
+import qualified Data.Map.Strict           as M
 import           Data.Monoid
-import           Data.Function                      (on)
-import qualified Data.Map.Strict                 as M
-import           Data.Typeable                      (Typeable)
-import           Data.Generics                      (Data)
-import           Data.List                          ((\\))
-import           Data.Traversable            hiding (sequence, mapM)
-import           Data.Foldable                      (Foldable())
-
-import qualified Language.Fixpoint.Types         as F
-
+import           Data.Traversable          hiding (mapM, sequence)
+import           Data.Typeable             (Typeable)
 import           Language.Fixpoint.Misc
-import           Language.Nano.Env
+import qualified Language.Fixpoint.Types   as F
 import           Language.Nano.AST
-import           Language.Nano.Names
+import           Language.Nano.Env
 import           Language.Nano.Locations
+import           Language.Nano.Names
 import           Text.PrettyPrint.HughesPJ
 
 
@@ -37,31 +34,31 @@ import           Text.PrettyPrint.HughesPJ
 
 
 -- | Type parameter
-data TVar         = TV { tv_sym    :: F.Symbol                -- Parameter symbol
-                       , tv_loc    :: SrcSpan 
-                       } 
+data TVar         = TV { tv_sym :: F.Symbol                -- Parameter symbol
+                       , tv_loc :: SrcSpan
+                       }
                     deriving (Data, Typeable)
 
 data BTVarQ q r   = BTV { btv_sym    :: F.Symbol              -- Parameter symbol
-                        , btv_loc    :: SrcSpan 
+                        , btv_loc    :: SrcSpan
                         , btv_constr :: Maybe (RTypeQ q r)    -- Constraint
-                        } 
+                        }
                     deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 
-data TPrim        = TString | TStrLit String | TNumber | TBoolean | TBV32 | TVoid | TUndefined | TNull 
+data TPrim        = TString | TStrLit String | TNumber | TBoolean | TBV32 | TVoid | TUndefined | TNull
                   {- Internal -}
-                  | TTop | TBot 
+                  | TTop | TBot | TFPBool
                   deriving (Eq, Show, Data, Typeable)
 
 
 -- | Refined Types
-data RTypeQ q r = 
-  -- 
+data RTypeQ q r =
+  --
   -- Primitive
   --
     TPrim TPrim r
-  -- 
+  --
   -- Type parameter
   --
   | TVar TVar r
@@ -69,35 +66,35 @@ data RTypeQ q r =
   -- Union
   --
   | TOr [RTypeQ q r]
-  -- 
+  --
   -- Intersection
   --
-  | TAnd [RTypeQ q r]                      
-  -- 
+  | TAnd [RTypeQ q r]
+  --
   -- Type Reference
   --
-  | TRef (TGenQ q r) r 
-  -- 
+  | TRef (TGenQ q r) r
+  --
   -- Object
   --
   | TObj (TypeMembersQ q r) r
-  -- 
+  --
   -- Class / Enum
   --
   | TType NamedTypeKind (TGenQ q r)
-  -- 
+  --
   -- Namespace
   --
   | TMod (QP q)
   --
   -- Forall [A <: T] . S
-  -- 
-  | TAll  (BTVarQ q r) (RTypeQ q r)         
-  -- 
+  --
+  | TAll  (BTVarQ q r) (RTypeQ q r)
+  --
   -- Function
   --
   | TFun  [BindQ q r] (RTypeQ q r) r
-  -- 
+  --
   -- /// Internal ///
   --
   | TExp  F.Expr
@@ -107,18 +104,18 @@ data NamedTypeKind    = EnumK | ClassK
                         deriving (Eq, Data, Typeable)
 
 data TGenQ q r        = Gen { g_name :: QN q
-                            , g_args :: [RTypeQ q r] 
+                            , g_args :: [RTypeQ q r]
                             }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data BTGenQ q r       = BGen { b_name :: QN q
-                             , b_args :: [BTVarQ q r] 
+                             , b_args :: [BTVarQ q r]
                              }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data BindQ q r        = B { b_sym  :: F.Symbol
-                          , b_type :: RTypeQ  q r 
-                          } 
+                          , b_type :: RTypeQ  q r
+                          }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data FunArgs t        = FA (Maybe t) [t]
@@ -127,7 +124,7 @@ data FunArgs t        = FA (Maybe t) [t]
 data TypeMembersQ q r = TM { tm_prop  :: F.SEnv (FieldInfoQ q r)    -- Properties
                            , tm_meth  :: F.SEnv (MethodInfoQ q r)   -- Method signatures
                            , tm_sprop :: F.SEnv (FieldInfoQ q r)    -- Static Properties
-                           , tm_smeth :: F.SEnv (MethodInfoQ q r)   -- Static Method signatures 
+                           , tm_smeth :: F.SEnv (MethodInfoQ q r)   -- Static Method signatures
                            , tm_call  :: Maybe (RTypeQ q r)         -- Call signatures
                            , tm_ctor  :: Maybe (RTypeQ q r)         -- Contructor signatures
                            , tm_sidx  :: Maybe (RTypeQ q r)         -- String indexer
@@ -136,12 +133,12 @@ data TypeMembersQ q r = TM { tm_prop  :: F.SEnv (FieldInfoQ q r)    -- Propertie
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data FieldInfoQ q r   = FI Optionality                          -- Optional
-                           (RTypeQ q r)                         -- Mutability                           
+                           (RTypeQ q r)                         -- Mutability
                            (RTypeQ q r)                         -- Type
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data MethodInfoQ q r  = MI Optionality                          -- Optional
-                           MutabilityMod                        -- Mutability                           
+                           MutabilityMod                        -- Mutability
                            (RTypeQ q r)                         -- Type
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
@@ -159,7 +156,7 @@ data TypeSigQ q r     = TS TypeDeclKind (BTGenQ q r) (HeritageQ q r)
 data TypeDeclQ q r    = TD (TypeSigQ q r) (TypeMembersQ q r)
                         deriving (Data, Typeable, Foldable, Traversable, Functor)
 
-type HeritageQ q r    = (Maybe (TGenQ q r), [TGenQ q r])
+type HeritageQ q r    = ([TGenQ q r], [TGenQ q r])
 
 data TypeDeclKind     = InterfaceKind | ClassKind
                         deriving (Eq, Data, Typeable)
@@ -174,9 +171,9 @@ data Optionality      = Opt | Req deriving (Eq, Ord, Show, Data, Typeable)
 ---------------------------------------------------------------------------------
 
 data EnumDef = EnumDef {
-      e_name       :: F.Symbol
+      e_name    :: F.Symbol
     -- ^ Contents: Symbols -> Expr (expected IntLit or HexLit)
-    , e_mapping    :: Env (Expression ())
+    , e_mapping :: Env (Expression ())
 
 } deriving (Data, Typeable)
 
@@ -194,7 +191,7 @@ type TypeDecl r       = TypeDeclQ AK r
 type TypeSig r        = TypeSigQ AK r
 type FieldInfo r      = FieldInfoQ AK r
 type MethodInfo r     = MethodInfoQ AK r
-type VarInfo r        = VarInfoQ AK r 
+type VarInfo r        = VarInfoQ AK r
 
 type Type             = RType ()
 
@@ -219,26 +216,26 @@ type IOverloadSig r   = (Int, OverloadSig r)
 --
 data ModuleDefQ q r = ModuleDef {
   --
-  -- Contents of a module 
+  -- Contents of a module
   --
   -- 1. XXX: local/exported info not included atm
   --
-  -- 2. Interfaces are _not_ included here (because thery don't 
+  -- 2. Interfaces are _not_ included here (because thery don't
   --    appear as bindings in the language)
   --
-    m_variables   :: Env (VarInfoQ q r) 
+    m_variables :: Env (VarInfoQ q r)
   --
   -- Types definitions
   --
-  , m_types       :: Env (TypeDeclQ q r)
+  , m_types     :: Env (TypeDeclQ q r)
   --
   -- Enumerations definitions
   --
-  , m_enums       :: Env EnumDef
+  , m_enums     :: Env EnumDef
   --
   -- Absolute path of module
   --
-  , m_path        :: AbsPath
+  , m_path      :: AbsPath
   }
   deriving (Data, Typeable, Functor)
 
@@ -284,12 +281,12 @@ data Assignability =
 -- | Initialization
 ---------------------------------------------------------------------------------
 
-data Initialization = 
-  -- 
+data Initialization =
+  --
   -- Variable initialized
   --
-    Initialized 
-  -- 
+    Initialized
+  --
   -- Variable uninitialized (undefined)
   --
   | Uninitialized
@@ -302,7 +299,7 @@ data Initialization =
 
 data VarInfoQ q r = VI { v_asgn :: Assignability
                        , v_init :: Initialization
-                       , v_type :: RTypeQ q r 
+                       , v_type :: RTypeQ q r
                        }
                        deriving (Data, Typeable, Functor)
 
@@ -348,13 +345,13 @@ instance F.Symbolic NamedTypeKind where
 
 -- | Monoid
 
-instance Monoid (TypeMembers r) where  
+instance Monoid (TypeMembers r) where
   mempty = TM mempty mempty mempty mempty Nothing Nothing Nothing Nothing
-  TM f1 m1 sf1 sm1 c1 ct1 s1 n1 `mappend` TM f2 m2 sf2 sm2 c2 ct2 s2 n2 
-    = TM (f1  `mappend` f2)  (m1  `mappend` m2) 
-         (sf1 `mappend` sf2) (sm1 `mappend` sm2) 
-         (c1 `orElse` c2) (ct1 `orElse` ct2) 
-         (s1 `orElse` s2) (n1 `orElse` n2) 
+  TM f1 m1 sf1 sm1 c1 ct1 s1 n1 `mappend` TM f2 m2 sf2 sm2 c2 ct2 s2 n2
+    = TM (f1  `mappend` f2)  (m1  `mappend` m2)
+         (sf1 `mappend` sf2) (sm1 `mappend` sm2)
+         (c1 `orElse` c2) (ct1 `orElse` ct2)
+         (s1 `orElse` s2) (n1 `orElse` n2)
     where
       Just x  `orElse` _ = Just x
       Nothing `orElse` y = y

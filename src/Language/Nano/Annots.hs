@@ -9,7 +9,7 @@ module Language.Nano.Annots (
     SsaInfo(..), Var
 
   -- * Annotations
-  , NodeId, Annot (..), UFact, FactQ (..), Fact, phiVarsAnnot, MemberMod (..)
+  , NodeId, Annot (..), UFact, FactQ (..), Fact, phiVarsAnnot
 
   , SyntaxKind(..), MemberKind(..)
 
@@ -98,8 +98,8 @@ data FactQ q r
   | AmbVarAnn     (RTypeQ q r)
 
   -- Class member annotations
-  | FieldAnn      [MemberMod] (RTypeQ q r)
-  | MethAnn       [MemberMod] (RTypeQ q r)
+  | FieldAnn      StaticKind (FieldInfoQ q r)  -- [MemberMod] (RTypeQ q r)
+  | MethAnn       StaticKind (MethodInfoQ q r) -- [MemberMod] (RTypeQ q r)
   | ConsAnn       (RTypeQ q r)
 
   | UserCast      (RTypeQ q r)
@@ -119,8 +119,6 @@ data FactQ q r
   | BypassUnique
     deriving (Data, Typeable)
 
-data MemberMod = Optional | Private | MM MutabilityMod
-                 deriving ( Eq, Data, Typeable )
 type Fact      = FactQ AK
 type UFact     = Fact ()
 
@@ -131,6 +129,7 @@ data Annot b a = Ann { ann_id   :: NodeId
                      , ann_fact :: [b] } deriving (Show, Data, Typeable)
 
 type AnnQ q  r = Annot (FactQ q r) SrcSpan
+
 type AnnR    r = AnnQ AK r                      -- absolute paths,
 type AnnRel  r = AnnQ RK r                      -- relative paths, NO facts, parsed versioin
 type AnnBare r = AnnR r                         -- absolute paths, NO facts
@@ -175,7 +174,7 @@ scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, Assignability, Maybe (RType
 scrapeVarDecl (VarDecl l _ _)
   = [ (VarDeclKind, a, t) | VarAnn a t <- ann_fact l ]
  ++ [ (AmbVarDeclKind, Ambient, Just t) | AmbVarAnn t <- ann_fact l ]
- ++ [ (FieldDefKind, Ambient, Just t) | FieldAnn _ t <- ann_fact l ] -- Assignability value is dummy
+ ++ [ (FieldDefKind, Ambient, Just t) | FieldAnn _ (FI _ _ t) <- ann_fact l ] -- Assignability value is dummy
 
 
 -----------------------------------------------------------------------------

@@ -134,13 +134,13 @@ factTVars = go
     foldUnions (α:αs) = foldl HS.intersection α αs
     foldUnions _      = HS.empty
 
-    go (VarAnn _ (Just t))    = tvars t
-    go (FuncAnn t)            = tvars t
-    go (FieldAnn _ t)         = tvars t
-    go (MethAnn _ t)          = tvars t
-    go (ConsAnn t)            = tvars t
-    go (ClassAnn (TS _ bs _)) = btvToTV <$> b_args bs
+    go (VarAnn _ (Just t))     = tvars t
+    go (FuncAnn t)             = tvars t
+    go (FieldAnn _ (FI _ _ t)) = tvars t
+    go (MethAnn _ (MI _ _ t))  = tvars t
+    go (ConsAnn t)             = tvars t
+    go (ClassAnn (TS _ bs _))  = btvToTV <$> b_args bs
     go (InterfaceAnn (TD (TS _ bs _) _))
-                              = btvToTV <$> b_args bs
-    go _                      = []
+                               = btvToTV <$> b_args bs
+    go _                       = []
 

@@ -125,9 +125,9 @@ data TypeMembersQ q r = TM { tm_prop  :: F.SEnv (FieldInfoQ q r)    -- Propertie
                            }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data FieldInfoQ q r   = FI Optionality                          -- Optional
-                           (RTypeQ q r)                         -- Mutability
-                           (RTypeQ q r)                         -- Type
+data FieldInfoQ q r   = FI Optionality                  -- Optional
+                           (RTypeQ q r)                 -- Mutability
+                           (RTypeQ q r)                 -- Type
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data MethodInfoQ q r  = MI Optionality                          -- Optional

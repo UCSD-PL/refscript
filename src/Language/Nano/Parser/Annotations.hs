@@ -11,9 +11,12 @@
 {-# LANGUAGE UndecidableInstances      #-}
 
 
-module Language.Nano.Parser.Annotations (
-    RawSpec(..), Spec, PSpec(..), parseAnnot
-  ) where
+module Language.Nano.Parser.Annotations
+    (
+      RawSpec(..), Spec, PSpec(..)
+    , parseAnnot
+    , getSpecString
+    ) where
 
 import           Control.Applicative        ((<$>))
 import           Control.Monad
@@ -21,7 +24,7 @@ import           Data.Generics              hiding (Generic)
 import           GHC.Generics
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Parse
-import           Language.Fixpoint.Types    hiding (Expression, Loc, quals)
+import           Language.Fixpoint.Types    hiding (Expression, FI, Loc, quals)
 import           Language.Nano.Annots
 import           Language.Nano.AST
 import           Language.Nano.Locations    hiding (val)
@@ -60,10 +63,9 @@ data PSpec l r
   | Bind     (Id l, Assignability, Maybe (RTypeQ RK r))
   | AmbBind  (Id l, RTypeQ RK r)
   | AnFunc   (RTypeQ RK r)
-  | Field    EltKind                    -- XXX: Changed
-  | Constr   EltKind                    -- XXX: Changed
-  | Method   EltKind                    -- XXX: Changed
-  -- | Static   (TypeMemberQ RK r)      -- XXX: Restore?
+  | Field    (StaticKind, FieldInfoQ RK r)
+  | Method   (StaticKind, MethodInfoQ RK r)
+  | Constr   (RTypeQ RK r)
   | Iface    (TypeDeclQ RK r)
   | Class    (TypeSigQ RK r)
   | TAlias   (Id l, TAlias (RTypeQ RK r))
@@ -88,8 +90,8 @@ parseAnnot = go
     go (RawBind     (ss, _)) = Bind    <$> patch3 ss <$> idBindP'
     go (RawAmbBind  (ss, _)) = AmbBind <$> patch2 ss <$> idBindP
     go (RawFunc     (_ , _)) = AnFunc  <$>               anonFuncP
-    go (RawField    (_ , _)) = Field   <$>               propP
-    go (RawMethod   (_ , _)) = Method  <$>               methP
+    go (RawField    (_ , _)) = Field   <$>  (propP >>= \(x,s,o,m,t) -> return (s, FI o m t))
+    go (RawMethod   (_ , _)) = Method  <$>  (methP >>= \(x,s,o,m,t) -> return (s, MI o m t))
     go (RawConstr   (_ , _)) = Constr  <$>               ctorP
     go (RawIface    (ss, _)) = Iface   <$>               interfaceP
     go (RawClass    (ss, _)) = Class   <$>               classDeclP

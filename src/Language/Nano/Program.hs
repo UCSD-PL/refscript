@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable   #-}
 {-# LANGUAGE DeriveFunctor        #-}
 {-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Nano.Program (
@@ -20,28 +19,17 @@ module Language.Nano.Program (
 
   ) where
 
-import           Control.Applicative               hiding (empty)
-import           Control.Exception                 (throw)
-import           Data.Default
+import           Control.Applicative     hiding (empty)
 import           Data.Generics
-import           Data.Graph.Inductive.Graph
-import           Data.Graph.Inductive.PatriciaTree
-import qualified Data.HashMap.Strict               as HM
-import qualified Data.HashSet                      as H
-import qualified Data.IntMap                       as I
-import           Data.List                         (stripPrefix)
-import           Data.Maybe                        (maybeToList)
-import           Data.Monoid                       hiding ((<>))
-import           Language.Fixpoint.Misc            hiding (mkGraph)
-import qualified Language.Fixpoint.Types           as F
+import           Data.List               (stripPrefix)
+import           Data.Monoid             hiding ((<>))
+import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Annots
 import           Language.Nano.AST
 import           Language.Nano.Core.Env
-import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Types
-import           Text.PrettyPrint.HughesPJ
 
 -- import           Debug.Trace                        hiding (traceShow)
 
@@ -55,35 +43,35 @@ import           Text.PrettyPrint.HughesPJ
 
 data Nano a r = Nano {
   --
-  -- Source AST
+  -- | Source AST
   --
     code     :: !(Source a)
   --
-  -- Measure Signatures
+  -- | Measure Signatures
   --
   , consts   :: !(Env (RType r))
   --
-  -- Type aliases
+  -- | Type aliases
   --
   , tAlias   :: !(TAliasEnv (RTypeQ RK r))
   --
-  -- Predicate aliases
+  -- | Predicate aliases
   --
   , pAlias   :: !(PAliasEnv)
   --
-  -- Qualifiers
+  -- | Qualifiers
   --
   , pQuals   :: ![F.Qualifier]
   --
-  -- Type Invariants
+  -- | Type Invariants
   --
   , invts    :: ![Located (RType r)]
   --
-  -- Maximum id
+  -- | Maximum id
   --
-  , max_id   :: NodeId
+  , maxId    :: NodeId
   --
-  -- Options
+  -- | Options
   --
   , pOptions :: [RscOption]
 

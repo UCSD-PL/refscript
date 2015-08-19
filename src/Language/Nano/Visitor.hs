@@ -17,6 +17,8 @@
 module Language.Nano.Visitor (
     Transformable (..)
   , transFmap
+  , transAnnR
+  , transRType
 
   , NameTransformable (..)
   , ntransFmap
@@ -33,6 +35,9 @@ module Language.Nano.Visitor (
   , hoistBindings
   , visibleVars
 
+  , accumModules
+
+  , typeMembers
   -- , mkTypeMembers
   -- , mkVarEnv
 

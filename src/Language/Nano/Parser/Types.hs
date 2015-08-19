@@ -308,10 +308,10 @@ bareAllP p
 propBindP   = sepEndBy memberP semi
   where
     memberP =  try idxP
-           <|> try propP
-           <|> try methP
+           <|> try (propP >>= \(x,s,o,m,t) -> return $ Prop x s o m t)
+           <|> try (methP >>= \(x,s,o,m,t) -> return $ Meth x s o m t)
            <|> try callP
-           <|> ctorP
+           <|>     (Ctor <$> ctorP)
 
 data EltKind = Prop Symbol StaticKind Optionality RMutability RRType
              | Meth Symbol StaticKind Optionality MutabilityMod RRType
@@ -342,7 +342,7 @@ propP = do  s     <- (reserved "static" >> return StaticMember) <|> (return Inst
             o     <- option Req (withinSpacesP (char '?') *> return Opt)
             _     <- colon
             t     <- bareTypeP
-            return $ Prop x s o m t
+            return $ (x, s, o, m, t)
 
 -- | [STATIC] [MUTABILITY] m[<A..>](x:t,..): t
 methP = do  s     <- (reserved "static" >> return StaticMember) <|> (return InstanceMember)
@@ -351,13 +351,13 @@ methP = do  s     <- (reserved "static" >> return StaticMember) <|> (return Inst
             o     <- maybe Req (\_ -> Opt) <$> optionMaybe (withinSpacesP $ char '?')
             _     <- colon
             t     <- methSigP
-            return $ Meth x s o m t
+            return $ (x, s, o, m, t)
 
 -- | [<A..>](t..) => t
 callP = Call <$> withinSpacesP funcSigP
 
 -- | new [<A..>](t..) => t
-ctorP = reserved "new" >> Ctor <$> withinSpacesP funcSigP
+ctorP = reserved "new" >> withinSpacesP funcSigP
 
 mutabilityP     =  try (reserved "Mutable" >> return trMut)
                <|> try (reserved "Immutable" >> return trImm)

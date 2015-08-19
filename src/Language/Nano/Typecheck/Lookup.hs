@@ -13,18 +13,18 @@ module Language.Nano.Typecheck.Lookup (
   , AccessKind(..)
   ) where
 
-import           Control.Applicative             ((<$>))
+import           Control.Applicative           ((<$>))
 import           Data.Generics
-import qualified Data.Map.Strict                 as M
-import qualified Language.Fixpoint.Bitvector     as BV
-import qualified Language.Fixpoint.Types         as F
+import qualified Data.Map.Strict               as M
+import qualified Language.Fixpoint.Bitvector   as BV
+import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.AST
-import           Language.Nano.Env
+import           Language.Nano.ClassHierarchy
+import           Language.Nano.Core.Env
 import           Language.Nano.Environment
 import           Language.Nano.Errors
 import           Language.Nano.Names
 import           Language.Nano.Pretty
-import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types

@@ -20,6 +20,7 @@ import           Data.Monoid                   (mempty)
 import qualified Data.Text                     as DT
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc        (mapEither)
+import           Language.Fixpoint.Names
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Types       hiding (Expression, Loc, quals)
 import           Language.Nano.Annots
@@ -175,7 +176,7 @@ condIdP' chars f
   = do c  <- try letter <|> oneOf ['_']
        cs <- many (satisfy (`elem` chars))
        blanks
-       if f (c:cs) then return (symbol $ DT.pack $ c:cs) else parserZero
+       if f (c:cs) then return (undefined $ DT.pack $ c:cs) else parserZero
 
 
 -- | <A, B, C ...>

@@ -1,29 +1,29 @@
-{-# LANGUAGE OverlappingInstances       #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TupleSections              #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE RankNTypes                 #-}
-{-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE DeriveDataTypeable         #-}
-{-# LANGUAGE DeriveTraversable          #-}
-{-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE TypeSynonymInstances       #-}
-{-# LANGUAGE DeriveFoldable             #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE DeriveFunctor              #-}
-{-# LANGUAGE ImpredicativeTypes         #-}
-{-# LANGUAGE NoMonomorphismRestriction  #-}
+{-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE DeriveDataTypeable        #-}
+{-# LANGUAGE DeriveFoldable            #-}
+{-# LANGUAGE DeriveFunctor             #-}
+{-# LANGUAGE DeriveTraversable         #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE ImpredicativeTypes        #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE StandaloneDeriving        #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
 
 
 module Language.Nano.Locations (
 
   -- * Located Values
-    Located (..) 
+    Located (..)
   , IsLocated (..)
   , SrcSpan (..)
   , sourcePos
- 
+
   -- * Manipulating SrcSpan
   -- , SrcSpan (..)
   , dummySpan
@@ -32,24 +32,22 @@ module Language.Nano.Locations (
   , srcSpanEndLine
   , srcSpanStartCol
   , srcSpanEndCol
-  
+
   , sourceSpanSrcSpan
 
 ) where
 
-import           Data.Typeable                      (Typeable)
-import           Data.Generics                      (Data)   
-import           Language.Nano.AST
-
-import qualified Language.Fixpoint.Types as F
-
+import           Data.Generics                 (Data)
+import           Data.Typeable                 (Typeable)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
+import qualified Language.Fixpoint.Types       as F
+import           Text.Parsec.Pos               (SourcePos)
 
 
 ---------------------------------------------------------------------
--- | Tracking Source Code Locations --------------------------------- 
+-- | Tracking Source Code Locations ---------------------------------
 ---------------------------------------------------------------------
 
 data Located a
@@ -57,8 +55,8 @@ data Located a
         , val :: a
         }
     deriving (Data, Typeable)
- 
-instance Functor Located where 
+
+instance Functor Located where
   fmap f (Loc l x) = Loc l (f x)
 
 --------------------------------------------------------------------------------
@@ -66,46 +64,43 @@ instance Functor Located where
 --------------------------------------------------------------------------------
 
 sourcePos :: IsLocated a => a -> SourcePos
-sourcePos = sp_start . srcPos 
+sourcePos = sp_start . srcPos
 
-class IsLocated a where 
+class IsLocated a where
   srcPos :: a -> SrcSpan
 
 instance IsLocated Error where
-  srcPos = srcPos . errLoc 
+  srcPos = srcPos . errLoc
 
-instance IsLocated SrcSpan where 
-  srcPos x = x 
+instance IsLocated SrcSpan where
+  srcPos x = x
 
-instance IsLocated (Located a) where 
+instance IsLocated (Located a) where
   srcPos = loc
 
 instance IsLocated SourcePos where
-  srcPos x = SS x x 
+  srcPos x = SS x x
 
 instance IsLocated (F.Located a) where
   srcPos = srcPos . F.loc
 
-instance (Annotated thing, IsLocated a) => IsLocated (thing a) where 
-  srcPos  = srcPos . getAnnotation  
-
-instance IsLocated F.Symbol where 
+instance IsLocated F.Symbol where
   srcPos _ = srcPos dummySpan
 
-instance IsLocated (SrcSpan, r) where 
+instance IsLocated (SrcSpan, r) where
   srcPos = srcPos . fst
 
-instance Eq a => Eq (Located a) where 
+instance Eq a => Eq (Located a) where
   x == y = val x == val y
 
-instance Ord a => Ord (Located a) where 
+instance Ord a => Ord (Located a) where
   x `compare` y = val x `compare` val y
 
 sourceSpanSrcSpan sp = SS (sp_start sp') (sp_stop sp') where sp' = srcPos sp
 
-srcSpanStartLine = snd3 . sourcePosElts . sp_start . sourceSpanSrcSpan   
+srcSpanStartLine = snd3 . sourcePosElts . sp_start . sourceSpanSrcSpan
 srcSpanEndLine   = snd3 . sourcePosElts . sp_stop  . sourceSpanSrcSpan
-srcSpanStartCol  = thd3 . sourcePosElts . sp_start . sourceSpanSrcSpan 
-srcSpanEndCol    = thd3 . sourcePosElts . sp_stop  . sourceSpanSrcSpan 
+srcSpanStartCol  = thd3 . sourcePosElts . sp_start . sourceSpanSrcSpan
+srcSpanEndCol    = thd3 . sourcePosElts . sp_stop  . sourceSpanSrcSpan
 srcSpanFile      = fst3 . sourcePosElts . sp_start . sourceSpanSrcSpan
 

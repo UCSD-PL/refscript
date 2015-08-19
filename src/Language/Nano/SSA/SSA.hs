@@ -6,30 +6,33 @@
 
 module Language.Nano.SSA.SSA (ssaTransform) where
 
-import           Control.Applicative             ((<$>), (<*>))
-import           Control.Arrow                   ((***))
+import           Control.Applicative           ((<$>), (<*>))
+import           Control.Arrow                 ((***))
 import           Control.Monad
 import           Data.Data
 import           Data.Default
-import qualified Data.HashSet                    as S
-import qualified Data.IntMap.Strict              as IM
-import qualified Data.IntSet                     as I
-import qualified Data.List                       as L
-import           Data.Maybe                      (catMaybes)
-import           Data.Typeable                   ()
-import qualified Language.Fixpoint.Errors        as E
+import           Data.Generics.Aliases
+import           Data.Generics.Schemes
+import qualified Data.HashSet                  as S
+import qualified Data.IntMap.Strict            as IM
+import qualified Data.IntSet                   as I
+import qualified Data.List                     as L
+import           Data.Maybe                    (catMaybes, fromMaybe, listToMaybe)
+import           Data.Typeable                 ()
+import qualified Language.Fixpoint.Errors      as E
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types         as F
+import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.Annots
 import           Language.Nano.AST
-import           Language.Nano.Env
+import           Language.Nano.ClassHierarchy
+import           Language.Nano.Core.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Misc
 import           Language.Nano.Names
+import           Language.Nano.Pretty
 import           Language.Nano.Program
 import           Language.Nano.SSA.SSAMonad
-import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
 import           Language.Nano.Visitor
@@ -59,8 +62,8 @@ ssaNano p@(Nano { code = Src fs })
           do  (_,fs')  <- ssaStmts fs
               ssaAnns  <- getAnns
               ast_cnt  <- getAstCount
-              return    $ p { code   = Src $ (patch ssaAnns <$>) <$> fs'
-                            , max_id = ast_cnt }
+              return    $ p { code  = Src $ (patch ssaAnns <$>) <$> fs'
+                            , maxId = ast_cnt }
     where
       allGlobs          = I.fromList $ getAnnotation <$> fmap ann_id <$> writeGlobalVars fs
       patch ms (Ann i l fs) = Ann i l (fs ++ IM.findWithDefault [] i ms)

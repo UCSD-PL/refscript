@@ -74,8 +74,9 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Annots
 import           Language.Nano.AST
+import           Language.Nano.ClassHierarchy
 import           Language.Nano.CmdLine
-import qualified Language.Nano.Env                as E
+import qualified Language.Nano.Core.Env           as E
 import           Language.Nano.Environment
 import           Language.Nano.Errors
 import           Language.Nano.Liquid.Environment
@@ -85,7 +86,6 @@ import           Language.Nano.Names
 import           Language.Nano.Pretty
 import           Language.Nano.Program
 import qualified Language.Nano.SystemUtils        as S
-import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
@@ -1041,6 +1041,9 @@ bsplitW g t i
 envTyAdds msg l xts g
   = envAdds (msg ++ " - envTyAdds " ++ ppshow (srcPos l))
       [(symbolId l x, EE WriteLocal Initialized t) | B x t <- xts] g
+    where
+      symbolId l x = Id l $ F.symbolString $ F.symbol x
+
 
 
 ------------------------------------------------------------------------------

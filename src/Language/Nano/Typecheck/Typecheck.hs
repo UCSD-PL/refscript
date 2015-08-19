@@ -28,8 +28,9 @@ import           Language.Fixpoint.Misc              as FM
 import qualified Language.Fixpoint.Types             as F
 import           Language.Nano.Annots
 import           Language.Nano.AST
+import           Language.Nano.ClassHierarchy
 import           Language.Nano.CmdLine               (Config, noFailCasts)
-import           Language.Nano.Env
+import           Language.Nano.Core.Env
 import           Language.Nano.Environment
 import           Language.Nano.Errors
 import           Language.Nano.Locations
@@ -42,7 +43,6 @@ import           Language.Nano.SSA.SSA
 import           Language.Nano.SystemUtils
 import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Lookup
-import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Types

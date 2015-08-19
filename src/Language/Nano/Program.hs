@@ -11,9 +11,6 @@ module Language.Nano.Program (
   , NanoTypeR, UNanoType, ExprSSAR, StmtSSAR
   , Source (..)
 
-  -- * Nano Transformations
-  , flattenStmt
-
   -- * SSA Ids
   , mkNextId, isNextId, mkSSAId , mkKeysId, mkKeysIdxId, mkCtorStr, mkCtorId
 
@@ -106,10 +103,6 @@ instance Monoid (Source a) where
 
 instance Functor Source where
   fmap f (Src zs) = Src (map (fmap f) zs)
-
-
-flattenStmt (BlockStmt _ ss) = concatMap flattenStmt ss
-flattenStmt s                = [s]
 
 
 --------------------------------------------------------------------------------

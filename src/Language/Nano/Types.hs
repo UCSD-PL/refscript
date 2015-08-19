@@ -3,19 +3,20 @@
 {-# LANGUAGE DeriveFunctor        #-}
 {-# LANGUAGE DeriveTraversable    #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Nano.Types where
 
 import           Data.Default
-import           Data.Foldable           (Foldable ())
-import           Data.Generics           (Data)
+import           Data.Foldable            (Foldable ())
+import           Data.Generics            (Data)
 import           Data.Hashable
 import           Data.Monoid
-import           Data.Traversable        hiding (mapM, sequence)
-import           Data.Typeable           (Typeable)
-import qualified Language.Fixpoint.Types as F
-import           Language.Nano.AST
+import           Data.Traversable         hiding (mapM, sequence)
+import           Data.Typeable            (Typeable)
+import qualified Language.Fixpoint.Types  as F
+import           Language.Nano.AST.Syntax
 import           Language.Nano.Core.Env
 import           Language.Nano.Locations
 import           Language.Nano.Names
@@ -74,7 +75,7 @@ data RTypeQ q r =
   --
   -- Class / Enum
   --
-  | TType NamedTypeKind (TGenQ q r)
+  | TType NamedTypeKind (BTGenQ q r)
   --
   -- Namespace
   --

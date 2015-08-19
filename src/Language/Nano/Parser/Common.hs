@@ -76,13 +76,14 @@ postP p post = const <$> p <*> post
 convertTVars = visitNano convertTvarVisitor []
 
 ----------------------------------------------------------------------------------
-convertTVar    :: (F.Reftable r, Transformable t, Show q) => [TVar] -> t q r -> t q r
+-- convertTVar    :: (F.Reftable r, Transformable t, IsLocated q) => [TVar] -> t q r -> t q r
 ----------------------------------------------------------------------------------
 convertTVar as = trans tx as []
   where
     tx αs _ (TRef (Gen c []) r) | Just α <- mkTvar αs c = TVar α r
     tx _  _ t = t
 
+mkTvar :: (IsLocated a, F.Symbolic a) => [TVar] -> a -> Maybe TVar
 mkTvar αs r = listToMaybe [ α { tv_loc = srcPos r }  | α <- αs, F.symbol α == F.symbol r]
 
 ----------------------------------------------------------------------------------

@@ -21,8 +21,8 @@ import           Language.Fixpoint.Interface       (resultExit)
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types           as F
 import           Language.Nano.CmdLine
+import           Language.Nano.Core.Files
 import           Language.Nano.Errors
-import           Language.Nano.Files
 import           Language.Nano.Misc                (mapi)
 import           Language.Nano.Pretty
 import           Language.Nano.SystemUtils

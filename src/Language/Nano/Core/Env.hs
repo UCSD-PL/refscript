@@ -45,13 +45,13 @@ module Language.Nano.Core.Env (
 
 import           Control.Applicative
 import           Data.Data
-import qualified Data.HashMap.Strict     as M
-import qualified Data.List               as L
-import           Data.Maybe              (isJust)
-import           Data.Monoid             (Monoid (..))
+import qualified Data.HashMap.Strict      as M
+import qualified Data.List                as L
+import           Data.Maybe               (isJust)
+import           Data.Monoid              (Monoid (..))
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types as F
-import           Language.Nano.AST
+import qualified Language.Fixpoint.Types  as F
+import           Language.Nano.AST.Syntax
 import           Language.Nano.Locations
 import           Language.Nano.Names
 

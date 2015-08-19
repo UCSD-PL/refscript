@@ -20,11 +20,11 @@ import qualified Data.Aeson.Types                 as AI
 import           Data.Vector                      ((!))
 import           Language.Fixpoint.Errors
 import           Language.Nano.AST
+import           Language.Nano.Names
 import           Language.Nano.Parser.Annotations
 import           Prelude                          hiding (mapM)
 import           Text.Parsec                      hiding (State, parse)
 import           Text.Parsec.Pos                  (newPos)
--- import           Debug.Trace                             ( trace, traceShow)
 
 instance FromJSON SourcePos where
   parseJSON (Array v) = do

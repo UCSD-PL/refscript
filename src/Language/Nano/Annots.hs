@@ -33,7 +33,8 @@ import qualified Data.IntMap.Strict            as I
 import           Data.Monoid
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types       as F
-import           Language.Nano.AST
+import           Language.Nano.AST.Annotations
+import           Language.Nano.AST.Syntax
 import           Language.Nano.Names
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types

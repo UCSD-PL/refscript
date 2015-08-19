@@ -4,7 +4,7 @@
 -- names for files, paths, extensions.
 
 
-module Language.Nano.Files (
+module Language.Nano.Core.Files (
   -- * Hardwired paths
     getPreludeJSONPath
   , getPreludeTSPath
@@ -18,11 +18,11 @@ import           System.FilePath
 
 import           Paths_RefScript
 
+
+-------------------------------------------------------------------------------
+getPreludeTSPath, getDomTSPath, getPreludeJSONPath, getDomJSONPath :: IO FilePath
+-------------------------------------------------------------------------------
 getPreludeTSPath   = getDataFileName "include/prelude.ts"
 getDomTSPath       = getDataFileName "include/ambient/dom.ts"
-
 getPreludeJSONPath = (`replaceExtension` ".json") <$> getPreludeTSPath
 getDomJSONPath     = (`replaceExtension` ".json") <$> getDomTSPath
-
--- getPreludeJSONPath = getDataFileName "include/prelude.json"
--- getDomJSONPath     = getDataFileName "include/dom.json"

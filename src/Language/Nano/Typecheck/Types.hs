@@ -33,6 +33,7 @@ module Language.Nano.Typecheck.Types (
 
   , rTypeR
 
+  -- Bounded type variables
   , btvToTV
 
   -- * Mutability primitives
@@ -79,7 +80,7 @@ import           Data.Typeable               ()
 import qualified Language.Fixpoint.Bitvector as BV
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types     as F
-import           Language.Nano.AST
+import           Language.Nano.AST.Syntax
 import qualified Language.Nano.Core.Env      as E
 import           Language.Nano.Locations
 import           Language.Nano.Names

@@ -61,17 +61,15 @@ import           Data.Maybe                         (catMaybes, isJust, maybeToL
 import           Data.List                          (isPrefixOf) 
 import           Data.Monoid                  
 import qualified Data.IntMap.Strict                 as I
-
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
 import qualified Language.Fixpoint.Types            as F
-
 import           Language.Nano.AST
 import           Language.Nano.Annots
 import           Language.Nano.Pretty
 import           Language.Nano.CmdLine
 import           Language.Nano.ClassHierarchy
-import           Language.Nano.Env
+import           Language.Nano.Core.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Misc
@@ -83,11 +81,6 @@ import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Unify
-import           Language.Nano.Typecheck.Resolve
-
-
--- import           Debug.Trace                      (trace)
---
 import qualified System.Console.CmdArgs.Verbosity   as V
 
 type Unif r = (PP r, F.Reftable r, Substitutable r (Fact r), ExprReftable F.Symbol r, ExprReftable Int r, Free (Fact r)) 

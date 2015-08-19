@@ -216,6 +216,12 @@ instance SubstitutableQ q r a => SubstitutableQ q r (Maybe a) where
 instance F.Reftable r => SubstitutableQ q r (TGenQ q r) where
   apply θ (Gen n ts)        = Gen n $ apply θ ts
 
+instance F.Reftable r => SubstitutableQ q r (BTGenQ q r) where
+  apply θ (BGen n ts)       = BGen n $ apply θ ts
+
+instance F.Reftable r => SubstitutableQ q r (BTVarQ q r) where
+  apply θ (BTV s l c)       = BTV s l $ apply θ c
+
 instance F.Reftable r => SubstitutableQ q r (TypeMembersQ q r) where
   apply θ (TM fs ms sfs sms cl ct s n)
                             = TM (apply θ fs) (apply θ ms)
@@ -294,6 +300,12 @@ instance (F.Reftable r) => Eq (MethodInfo r) where
 
 instance (F.Reftable r) => Eq (Bind r) where
   B x t == B x' t' = x == x' && t == t'
+
+instance F.Reftable r => Eq (BTGen r) where
+  BGen n1 b1s == BGen n2 b2s = n1 == n2 && b1s == b2s
+
+instance F.Reftable r => Eq (BTVar r) where
+  BTV _ _ c1 == BTV _ _ c2 = c1 == c2
 
 instance (F.Reftable r) => Eq (RType r) where
   TPrim p _ == TPrim p' _  = p == p'

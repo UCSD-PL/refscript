@@ -19,6 +19,7 @@ import           Control.Applicative           ((<$>))
 import           Data.Default
 import           Data.Maybe                    (fromMaybe)
 import           Data.Monoid
+import           Data.Tuple                    (swap)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Types       (differenceSEnv, intersectWithSEnv, toListSEnv)
@@ -264,15 +265,18 @@ compareFuns l γ t1@(TAnd t1s) t2
 compareFuns l _ t1 t2 = SubErr [unsupportedConvFun l t1 t2]
 
 --------------------------------------------------------------------------------
-convertTClass :: FE g => SrcSpan -> g () -> TGen () -> TGen () -> SubTRes
+convertTClass :: FE g => SrcSpan -> g () -> BTGen () -> BTGen () -> SubTRes
 --------------------------------------------------------------------------------
-convertTClass l γ t1@(Gen c1 ts1) t2@(Gen c2 ts2)
+convertTClass l γ t1@(BGen c1 ts1) t2@(BGen c2 ts2)
   | c1 == c2
-  , and $ zipWith (isSubtype γ) ts1 ts2
-  , and $ zipWith (isSubtype γ) ts2 ts1
+  , and $ uncurry (isSubtype γ)        <$> ts
+  , and $ uncurry (isSubtype γ) . swap <$> ts
   = EqT
   | otherwise
   = SubErr [errorTClassSubtype l t1 t2]
+
+  where
+    ts = [ (t1, t2) | (Just t1, Just t2) <- zip (btv_constr <$> ts1) (btv_constr <$> ts2) ]
 
 --------------------------------------------------------------------------------
 convertTModule :: SrcSpan -> AbsPath -> AbsPath -> SubTRes

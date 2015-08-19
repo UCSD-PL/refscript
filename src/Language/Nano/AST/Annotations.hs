@@ -1,11 +1,14 @@
-module Language.Nano.AST.Annotations where
+{-# LANGUAGE FlexibleInstances #-}
 
-import           Language.Nano.AST.Syntax
+module Language.Nano.AST.Annotations where
 
 import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad.State      hiding (mapM)
 import           Data.Traversable
+import           Language.Nano.AST.Syntax
+import           Language.Nano.Locations
+import           Language.Nano.Names
 import           Prelude                  hiding (mapM)
 
 -- | Removes annotations from a tree
@@ -136,4 +139,7 @@ instance Annotated ClassElt where
     MemberVarDecl a _ _ _   -> a
     MemberMethDecl a _ _ _  -> a
     MemberMethDef a _ _ _ _ -> a
+
+instance (Annotated thing, IsLocated a) => IsLocated (thing a) where
+  srcPos  = srcPos . getAnnotation
 

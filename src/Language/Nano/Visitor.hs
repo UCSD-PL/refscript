@@ -25,6 +25,7 @@ module Language.Nano.Visitor (
 
   , Visitor, VisitorM (..)
   , defaultVisitor
+  , scopeVisitor
 
   , visitNano
   , visitStmts
@@ -59,6 +60,7 @@ import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.Annots          hiding (err)
 import           Language.Nano.AST
+import           Language.Nano.Core.Env
 import           Language.Nano.Errors
 import           Language.Nano.Liquid.Types    ()
 import           Language.Nano.Locations
@@ -376,6 +378,12 @@ instance Transformable FieldInfoQ where
 instance Transformable MethodInfoQ where
   trans f αs xs (MI o m t) = MI o m (trans f αs xs t)
 
+instance Transformable ModuleDefQ where
+  trans f αs xs (ModuleDef v t e p) = ModuleDef (envMap (trans f αs xs) v) (envMap (trans f αs xs) t) e p
+
+instance Transformable VarInfoQ where
+  trans f αs xs (VI a i t) = VI a i $ trans f αs xs t
+
 transIFDBase f αs xs (es,is) = (trans f αs xs <$> es, trans f αs xs <$> is)
 
 --------------------------------------------------------------------------------------------
@@ -621,7 +629,7 @@ accumAbsNames (QP AK_ _ ss) = concatMap go
 
 
 ---------------------------------------------------------------------------------------
-typeMembers :: PPR r => Mutability r -> [ClassElt (AnnR r)] -> Either (F.FixResult Error) (TypeMembers r)
+typeMembers :: PPR r => [ClassElt (AnnR r)] -> Either (F.FixResult Error) (TypeMembers r)
 ---------------------------------------------------------------------------------------
 -- TODO
 typeMembers = undefined

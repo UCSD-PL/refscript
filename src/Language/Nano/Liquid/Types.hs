@@ -342,7 +342,7 @@ emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts)
                                    (emapReft f γ' t) (f γ r)
                               where γ' = (b_sym <$> xts) ++ γ
 emapReft f γ (TObj xts r)   = TObj (emapReftTM f γ xts) (f γ r)
-emapReft f γ (TType k n)    = TType k (emapReftGen f γ n)
+emapReft f γ (TType k n)    = TType k (emapReftBGen f γ n)
 emapReft _ _ (TMod m)       = TMod m
 emapReft f γ (TOr ts)       = TOr (emapReft f γ <$> ts)
 emapReft f γ (TAnd ts)      = TAnd (emapReft f γ <$> ts)
@@ -350,6 +350,7 @@ emapReft _ _ _              = error "Not supported in emapReft"
 
 emapReftBTV f γ (BTV s l c) = BTV s l $ emapReft f γ <$> c
 emapReftGen f γ (Gen n ts)  = Gen n $ emapReft f γ <$> ts
+emapReftBGen f γ (BGen n ts) = BGen n $ emapReftBTV f γ <$> ts
 emapReftBind f γ (B x t)    = B x $ emapReft f γ t
 emapReftTM f γ (TM p m sp sm c k s n)
   = TM (fmap (emapReftFI f γ) p)
@@ -368,21 +369,22 @@ emapReftMI f γ (MI m n  t2) = MI m n (emapReft f γ t2)
 mapReftM :: (F.Reftable r, PP r, Applicative f, Monad f)
          => (r -> f r') -> RTypeQ q r -> f (RTypeQ q r')
 ------------------------------------------------------------------------------------------
-mapReftM f (TVar α r)     = TVar α <$> f r
-mapReftM f (TPrim c r)    = TPrim c <$> f r
-mapReftM f (TRef n r)     = TRef <$> mapReftGenM f n <*> f r
-mapReftM f (TFun xts t r) = TFun <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> f r
-mapReftM f (TAll α t)     = TAll <$> mapReftBTV f α <*> mapReftM f t
-mapReftM f (TAnd ts)      = TAnd <$> mapM (mapReftM f) ts
-mapReftM f (TOr ts)       = TOr <$> mapM (mapReftM f) ts
-mapReftM f (TObj xts r)   = TObj <$> mapReftTM f xts <*> f r
-mapReftM f (TType k n)    = TType k <$> mapReftGenM f n
-mapReftM _ (TMod a)       = return $ TMod a
-mapReftM _ t              = error $ render $ text "Not supported in mapReftM: " <+> pp t
+mapReftM f (TVar α r)      = TVar α <$> f r
+mapReftM f (TPrim c r)     = TPrim c <$> f r
+mapReftM f (TRef n r)      = TRef <$> mapReftGenM f n <*> f r
+mapReftM f (TFun xts t r)  = TFun <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> f r
+mapReftM f (TAll α t)      = TAll <$> mapReftBTV f α <*> mapReftM f t
+mapReftM f (TAnd ts)       = TAnd <$> mapM (mapReftM f) ts
+mapReftM f (TOr ts)        = TOr <$> mapM (mapReftM f) ts
+mapReftM f (TObj xts r)    = TObj <$> mapReftTM f xts <*> f r
+mapReftM f (TType k n)     = TType k <$> mapReftBGenM f n
+mapReftM _ (TMod a)        = return $ TMod a
+mapReftM _ t               = error $ render $ text "Not supported in mapReftM: " <+> pp t
 
-mapReftBTV f (BTV s l c)  = BTV s l <$> T.mapM (mapReftM f) c
-mapReftGenM f (Gen n ts)  = Gen n <$> mapM (mapReftM f) ts
-mapReftBindM f (B x t)    = B x <$> mapReftM f t
+mapReftBTV f (BTV s l c)   = BTV s l <$> T.mapM (mapReftM f) c
+mapReftGenM f (Gen n ts)   = Gen n <$> mapM (mapReftM f) ts
+mapReftBGenM f (BGen n ts) = BGen n <$> mapM (mapReftBTV f) ts
+mapReftBindM f (B x t)     = B x <$> mapReftM f t
 mapReftTM f (TM p m sp sm c k s n)
   = TM <$> T.mapM (mapReftFI f) p
        <*> T.mapM (mapReftMI f) m
@@ -420,7 +422,7 @@ efoldReft g f = go
                             where γ' = foldr (efoldExt g) γ xts
     go γ z (TAnd ts)      = gos γ z ts
     go γ z (TObj xts r)   = f γ r $ efoldTypeMembers g f xts γ z
-    go γ z (TType _ n)    = gos γ z $ g_args n
+    go γ z (TType _ n)    = gos γ z $ catMaybes $ btv_constr <$> b_args n
     go _ z (TMod _)       = z
     go _ _ t              = error $ "UNIMPLEMENTED[efoldReft]: " ++ ppshow t
 

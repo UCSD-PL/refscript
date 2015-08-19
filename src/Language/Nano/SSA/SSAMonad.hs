@@ -63,10 +63,11 @@ import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types    as F
 import           Language.Nano.Annots
 import           Language.Nano.AST
-import           Language.Nano.Env
+import           Language.Nano.Core.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Names
+import           Language.Nano.Pretty
 import           Language.Nano.Program
 import           Language.Nano.Types
 
@@ -306,7 +307,7 @@ initState p = SsaST p
                     IM.empty
                     I.empty
                     S.empty
-                    (max_id p)
+                    (maxId p)
                     Nothing
                     (mkAbsPath [])
 

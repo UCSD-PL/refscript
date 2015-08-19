@@ -1,8 +1,10 @@
 {-# LANGUAGE DeriveDataTypeable   #-}
 {-# LANGUAGE DeriveFoldable       #-}
 {-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE DeriveGeneric        #-}
 {-# LANGUAGE DeriveTraversable    #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Nano.Names (
@@ -15,9 +17,11 @@ module Language.Nano.Names (
   , RelPath, AbsPath
   , NameSpacePath
 
-  -- * Deconstructing Id
+  -- * Id
+  , Id(..)
   , idName
   , idLoc
+  , unId
   , symbolId
   , returnId
   , returnSymbol
@@ -55,10 +59,10 @@ import           Data.Hashable
 import qualified Data.HashSet                  as H
 import           Data.List                     (find)
 import           Data.Traversable
+import           GHC.Generics
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
 import qualified Language.Fixpoint.Types       as F
-import           Language.Nano.AST
 import           Language.Nano.Locations
 import           Text.PrettyPrint.HughesPJ
 
@@ -86,7 +90,6 @@ data QN l = QN (QP l) F.Symbol
 data QP l = QP l SrcSpan NameSpacePath
             deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
 
-
 instance Eq l => Eq (QN l) where
   QN p1 s1 == QN p2 s2 = (p1,s1) == (p2,s2)
 
@@ -102,11 +105,11 @@ instance Hashable (QN l) where
 instance Hashable (QP l) where
   hashWithSalt i (QP _ _ n) = hashWithSalt i n
 
-instance IsLocated (QN l) where
-  srcPos (QN p _) = srcPos p
-
 instance IsLocated (QP l) where
   srcPos (QP _ a _) = a
+
+instance IsLocated (QN l) where
+  srcPos (QN a _) = srcPos a
 
 instance Default l => Default (QP l) where
   def = QP def (srcPos dummySpan) []
@@ -117,14 +120,6 @@ instance Default SrcSpan where
 instance Default AK where
   def = AK_
 
-instance F.Symbolic (Id a) where
-  symbol (Id _ x)   = F.symbol x
-
-instance Hashable a => Hashable (Id a) where
-  hashWithSalt i x = hashWithSalt i (idLoc x, idName x)
-
-idName (Id _ x) = x
-idLoc  (Id l _) = l
 
 instance F.Fixpoint String where
   toFix = text
@@ -142,11 +137,30 @@ pathInPath l (QP _ _ ps) s = QP AK_ (srcPos l) $ ps ++ [F.symbol s]
 returnName :: String
 returnName = "$result"
 
+data Id a = Id a String
+          deriving (Show,Eq,Ord,Data,Typeable,Functor,Foldable,Traversable,Generic)
+
+unId :: Id a -> String
+unId (Id _ s) = s
+
+idName (Id _ x) = x
+idLoc  (Id l _) = l
+
+instance IsLocated a => IsLocated (Id a) where
+  srcPos (Id l _) = srcPos l
+
 symbolId :: (IsLocated l, F.Symbolic x) => l -> x -> Id l
 symbolId l x = Id l $ F.symbolString $ F.symbol x
 
 returnId   :: a -> Id a
 returnId x = Id x returnName
+
+instance F.Symbolic (Id a) where
+  symbol (Id _ x)   = F.symbol x
+
+instance Hashable a => Hashable (Id a) where
+  hashWithSalt i x = hashWithSalt i (idLoc x, idName x)
+
 
 returnSymbol :: F.Symbol
 returnSymbol = F.symbol returnName

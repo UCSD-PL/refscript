@@ -28,8 +28,9 @@ import qualified Language.Fixpoint.Types           as F
 import qualified Language.Fixpoint.Visitor         as V
 import           Language.Nano.Annots
 import           Language.Nano.AST
+import           Language.Nano.ClassHierarchy
 import           Language.Nano.CmdLine             (Config)
-import qualified Language.Nano.Env                 as E
+import qualified Language.Nano.Core.Env            as E
 import           Language.Nano.Environment
 import           Language.Nano.Errors
 import           Language.Nano.Liquid.CGMonad
@@ -42,7 +43,6 @@ import           Language.Nano.Program
 import           Language.Nano.SSA.SSA
 import qualified Language.Nano.SystemUtils         as A
 import           Language.Nano.Typecheck.Lookup
-import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Typecheck (typeCheck)
 import           Language.Nano.Typecheck.Types

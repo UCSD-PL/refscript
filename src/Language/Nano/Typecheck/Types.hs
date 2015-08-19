@@ -42,7 +42,7 @@ module Language.Nano.Typecheck.Types (
   -- * Primitive Types
 
   --   # Constructors
-  , tNum, tBV32, tBool, tString, tTop, tVoid, tErr, tVar, tUndef, tNull
+  , tNum, tBV32, tBool, tString, tTop, tVoid, tErr, tVar, tUndef, tNull, tBot
 
   --   # Tests
   , isTPrim, isTTop, isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
@@ -70,30 +70,21 @@ module Language.Nano.Typecheck.Types (
 
   ) where
 
-import           Control.Applicative           hiding (empty)
-import           Control.Exception             (throw)
-import           Data.Data
+import           Control.Applicative         hiding (empty)
 import           Data.Default
-import           Data.Either                   (partitionEithers)
-import           Data.Hashable
-import qualified Data.List                     as L
-import qualified Data.Map.Strict               as M
-import           Data.Maybe                    (fromJust, fromMaybe, isJust, maybeToList)
-import           Data.Monoid                   hiding ((<>))
-import           Data.Typeable                 ()
-import qualified Language.Fixpoint.Bitvector   as BV
-import           Language.Fixpoint.Errors
+import qualified Data.List                   as L
+import           Data.Maybe                  (fromMaybe)
+import           Data.Monoid                 hiding ((<>))
+import           Data.Typeable               ()
+import qualified Language.Fixpoint.Bitvector as BV
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.PrettyPrint
-import qualified Language.Fixpoint.Types       as F
+import qualified Language.Fixpoint.Types     as F
 import           Language.Nano.AST
-import qualified Language.Nano.Env             as E
+import qualified Language.Nano.Core.Env      as E
 import           Language.Nano.Locations
-import           Language.Nano.Misc
 import           Language.Nano.Names
 import           Language.Nano.Types
-import           Text.Parsec.Pos               (initialPos)
-import           Text.PrettyPrint.HughesPJ
+import           Text.Parsec.Pos             (initialPos)
 
 -- import           Debug.Trace (trace)
 
@@ -104,12 +95,14 @@ import           Text.PrettyPrint.HughesPJ
 mkMut s    = TRef (Gen (mkAbsName [] s) []) fTop
 mkRelMut s = TRef (Gen (mkRelName [] s) []) fTop
 
+tMut, tUqMut, tImm, tRO, tIM :: F.Reftable r => RType r
 tMut    = mkMut "Mutable"
 tUqMut  = mkMut "UniqueMutable"
 tImm    = mkMut "Immutable"
 tRO     = mkMut "ReadOnly"
 tIM     = mkMut "InheritedMut"
 
+trMut, trImm, trRO, trIM :: F.Reftable r => RTypeQ RK r
 trMut   = mkRelMut "Mutable"
 trImm   = mkRelMut "Immutable"
 trRO    = mkRelMut "ReadOnly"
@@ -183,16 +176,17 @@ bkFun t =
 mkFun :: F.Reftable r  => ([BTVarQ q r], [BindQ q r], RTypeQ q r) -> RTypeQ q r
 mkFun (αs, bs, rt)    = mkAll αs (TFun bs rt fTop)
 
+bkArr :: RTypeQ q r -> Maybe ([BindQ q r], RTypeQ q r)
 bkArr (TFun xts t _)  = Just (xts, t)
 bkArr _               = Nothing
 
 mkAll αs t            = mkAnd $ go (reverse αs) <$> bkAnd t
   where
-    go (α:αs) t       = go αs (TAll α t)
-    go []     t       = t
+    go (x:xs)         = go xs . TAll x
+    go []             = id
 
 bkAll :: RTypeQ q r -> ([BTVarQ q r], RTypeQ q r)
-bkAll t               = go [] t
+bkAll                 = go []
   where
     go αs (TAll α t)  = go (α : αs) t
     go αs t           = (reverse αs, t)
@@ -203,8 +197,6 @@ bkAnd t         = [t]
 
 mkAnd [t]       = t
 mkAnd ts        = TAnd ts
-
-mapAnd f t      = mkAnd $ f <$> bkAnd t
 
 mkTCons         = (`TObj` fTop)
 
@@ -294,6 +286,12 @@ orNull t@(TOr ts) | any isTNull ts = t
 orNull t          | isTNull t      = t
                   | otherwise      = TOr [tNull,t]
 
+---------------------------------------------------------------------------------
+eqV :: RType r -> RType r -> Bool
+---------------------------------------------------------------------------------
+TVar (TV s1 _) _ `eqV` TVar (TV s2 _) _ = s1 == s2
+_                `eqV` _                = False
+
 ----------------------------------------------------------------------------------
 rTypeR' :: F.Reftable r => RType r -> Maybe r
 ----------------------------------------------------------------------------------
@@ -313,9 +311,9 @@ rTypeR' (TExp _)     = Nothing
 rTypeR :: F.Reftable r => RType r -> r
 ----------------------------------------------------------------------------------
 rTypeR t | Just r <- rTypeR' t = r
-         | otherwise           = errorstar $ "Unimplemented: rTypeR"
+         | otherwise = errorstar "Unimplemented: rTypeR"
 
-isBvEnum              = all hex . map snd . E.envToList . e_mapping
+isBvEnum = all hex . map snd . E.envToList . e_mapping
   where
     hex (HexLit _ _ ) = True
     hex _             = False
@@ -325,6 +323,9 @@ isBvEnum              = all hex . map snd . E.envToList . e_mapping
 -- | Primitive / Base Types Constructors
 -----------------------------------------------------------------------
 
+-----------------------------------------------------------------------
+btvToTV :: BTVarQ q r -> TVar
+-----------------------------------------------------------------------
 btvToTV  (BTV s l _ ) = TV s l
 
 tVar :: (F.Reftable r) => TVar -> RType r
@@ -349,16 +350,15 @@ tErr    = tVoid
 ---------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------
-arrayLitTy :: (F.Subable (RType r), IsLocated a) => a -> Int -> RType r -> RType r
+arrayLitTy :: F.Subable (RType r) => Int -> RType r -> RType r
 ---------------------------------------------------------------------------------
-arrayLitTy l n (TAll μ (TAll α (TFun [xt] t r))) = mkAll [μ,α] $ TFun αs rt r
-  where αs       = arrayLitBinds n xt
+arrayLitTy n (TAll μ (TAll α (TFun [B x t_] t r))) = mkAll [μ,α] $ TFun αs rt r
+  where αs       = [B (x_ i) t_ | i <- [1..n]]
         rt       = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
-arrayLitTy l n _ = error "Bad Type for ArrayLit Constructor"
-
-arrayLitBinds n (B x t) = [B (x_ i) t | i <- [1..n]]
-  where xs       = F.symbolString x
+        xs       = F.symbolString x
         x_       = F.symbol . (xs ++) . show
+arrayLitTy _ _ = error "Bad Type for ArrayLit Constructor"
+
 
 
 ---------------------------------------------------------------------------------
@@ -373,6 +373,7 @@ freshBTV l s b n  = (bv,t)
     v             = TV i (srcPos l)
     t             = TVar v ()
 
+-- TODO
 --------------------------------------------------------------------------------------------
 objLitTy         :: (F.Reftable r, IsLocated a) => a -> [Prop a] -> RType r
 --------------------------------------------------------------------------------------------
@@ -430,20 +431,19 @@ immObjectLitTy l ps ts  | length ps == length ts
 -- | setProp<A, M extends Mutable>(o: { f[M]: A }, x: A) => A
 --
 --------------------------------------------------------------------------------------------
-setPropTy :: (F.Reftable r, IsLocated l) => l -> F.Symbol -> RType r -> RType r
+setPropTy :: F.Reftable r => F.Symbol -> RType r
 --------------------------------------------------------------------------------------------
-setPropTy l f ty = mkAll [bvt, bvm] t
+setPropTy f = mkAll [bvt, bvm] t
   where
-    ft           = TFun [b1, b2] t fTop
-    b1           = B (F.symbol "o") $ TObj (tmFromFieldList [(f, FI Opt m t)]) fTop
-    b2           = B (F.symbol "x") $ t
-    m            = toTTV bvm :: F.Reftable r => RType r
-    t            = toTTV bvt
-    bvt          = BTV (F.symbol "A") def Nothing
-    bvm          = BTV (F.symbol "M") def (Just tMut) :: F.Reftable r => BTVar r
-    toTTV        :: F.Reftable r => BTVar r -> RType r
-    toTTV        = (`TVar` fTop) . btvToTV
-
+    ft      = TFun [b1, b2] t fTop
+    b1      = B (F.symbol "o") $ TObj (tmFromFieldList [(f, FI Opt m t)]) fTop
+    b2      = B (F.symbol "x") $ t
+    m       = toTTV bvm :: F.Reftable r => RType r
+    t       = toTTV bvt
+    bvt     = BTV (F.symbol "A") def Nothing
+    bvm     = BTV (F.symbol "M") def (Just tMut) :: F.Reftable r => BTVar r
+    toTTV   :: F.Reftable r => BTVar r -> RType r
+    toTTV   = (`TVar` fTop) . btvToTV
 
 --------------------------------------------------------------------------------------------
 tmFromFields :: F.SEnv (FieldInfoQ q r) -> TypeMembersQ q r
@@ -549,7 +549,4 @@ builtinId = mkId . ("builtin_" ++)
 
 bitVectorValue ('0':x) = Just $ exprReft $ BV.Bv BV.S32  $ "#" ++ x
 bitVectorValue _       = Nothing
-
-TVar (TV s1 _) _ `eqV` TVar (TV s2 _) _ = s1 == s2
-_                `eqV` _                = False
 

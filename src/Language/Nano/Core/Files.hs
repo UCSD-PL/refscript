@@ -13,10 +13,10 @@ module Language.Nano.Files (
   )
   where
 
-import Control.Applicative
-import System.FilePath
+import           Control.Applicative
+import           System.FilePath
 
-import Paths_RefScript
+import           Paths_RefScript
 
 getPreludeTSPath   = getDataFileName "include/prelude.ts"
 getDomTSPath       = getDataFileName "include/ambient/dom.ts"

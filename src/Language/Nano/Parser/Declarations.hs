@@ -43,7 +43,7 @@ import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Types          hiding (Expression, Loc, quals)
 import           Language.Nano.Annots
 import           Language.Nano.AST
-import           Language.Nano.Env
+import           Language.Nano.Core.Env
 import           Language.Nano.Errors
 import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.Types
@@ -53,7 +53,6 @@ import           Language.Nano.Names
 import           Language.Nano.Parser.Annotations
 import           Language.Nano.Parser.Common
 import           Language.Nano.Program
-import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types              hiding (Exported)
 import           Language.Nano.Visitor

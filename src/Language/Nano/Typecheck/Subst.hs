@@ -27,14 +27,12 @@ module Language.Nano.Typecheck.Subst (
 import           Control.Applicative           ((<$>))
 import qualified Data.HashMap.Strict           as HM
 import qualified Data.HashSet                  as S
-import qualified Data.Map.Strict               as M
-import           Data.Maybe                    (maybeToList)
 import           Data.Monoid                   hiding ((<>))
 import           Language.Fixpoint.Misc        (intersperse)
 import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.Annots
 import           Language.Nano.AST
-import           Language.Nano.Env
+import           Language.Nano.Core.Env
 import           Language.Nano.Names
 import           Language.Nano.Pretty
 import           Language.Nano.Typecheck.Types
@@ -57,9 +55,6 @@ type Subst    = RSubst ()
 toSubst :: RSubst r -> Subst
 toSubst (Su m) = Su $ HM.map toType m
 
-toSubstQ :: RSubstQ q r -> RSubstQ q ()
-toSubstQ (Su m) = Su $ HM.map toType m
-
 toList        :: RSubst r -> [(TVar, RType r)]
 toList (Su m) =  HM.toList m
 
@@ -74,9 +69,9 @@ instance (F.Reftable r, SubstitutableQ q r (RType r)) => Monoid (RSubstQ q r) wh
   mappend (Su m) θ'@(Su m') = Su $ (apply θ' <$> m) `HM.union` m'
 
 instance (F.Reftable r, PP r) => PP (RSubst r) where
-  pp (Su m) = if HM.null m then text "empty"
-              else if HM.size m < 10 then intersperse comma $ (ppBind <$>) $ HM.toList m
-              else vcat $ (ppBind <$>) $ HM.toList m
+  pp (Su m) | HM.null m      = text "empty"
+            | HM.size m < 10 = intersperse comma $ (ppBind <$>) $ HM.toList m
+            | otherwise      = vcat $ (ppBind <$>) $ HM.toList m
 
 ppBind (x, t) = pp x <+> text ":=" <+> pp t
 
@@ -85,12 +80,12 @@ class Free a where
   free  :: a -> S.HashSet TVar
 
 instance Free (RType r) where
-  free (TPrim _ r)          = S.empty
+  free (TPrim _ _)          = S.empty
   free (TVar α _)           = S.singleton α
   free (TOr ts)             = free ts
   free (TAnd ts)            = free ts
   free (TRef n _)           = free n
-  free (TObj es _)          = free $ es
+  free (TObj es _)          = free es
   free (TType _ t)          = free t
   free (TMod _)             = S.empty
   free (TAll α t)           = S.delete (btvToTV α) $ free t
@@ -98,7 +93,7 @@ instance Free (RType r) where
   free (TExp _)             = error "free should not be applied to TExp"
 
 instance Free (TGen r) where
-  free (Gen n ts)           = free ts
+  free (Gen _ ts)           = free ts
 
 instance Free (TypeMembers r) where
   free (TM fs ms sfs sms cl ct s n)
@@ -267,7 +262,7 @@ instance (SubstitutableQ q r a, SubstitutableQ q r b, SubstitutableQ q r c) => S
 ---------------------------------------------------------------------------------
 appTy :: F.Reftable r => RSubstQ q r -> RTypeQ q r -> RTypeQ q r
 ---------------------------------------------------------------------------------
-appTy θ        (TPrim p r)   = TPrim p r
+appTy _        (TPrim p r)   = TPrim p r
 appTy (Su m) t@(TVar α r)    = (HM.lookupDefault t α m) `strengthen` r
 appTy θ        (TOr ts)      = TOr (apply θ ts)
 appTy θ        (TAnd ts)     = TAnd (apply θ ts)
@@ -309,10 +304,10 @@ instance (F.Reftable r) => Eq (RType r) where
   TObj m _  == TObj m' _   = m == m'
   TType k g == TType k' g' = k == k' && g == g'
   TMod n    == TMod n'     = n == n'
-  TAll v@(BTV s b _) t == TAll v'@(BTV s' b' _) t'
+  TAll v@(BTV _ b _) t == TAll v'@(BTV _ b' _) t'
                            = b == b' && t == appTy θ t'
     where
-      θ = fromList [(btvToTV v', tVar $ btvToTV v')]
+      θ = fromList [(btvToTV v', tVar $ btvToTV v)]
   TFun bs o _ == TFun bs' o' _ = bs == bs' && o == o'
   _           == _             = False
 

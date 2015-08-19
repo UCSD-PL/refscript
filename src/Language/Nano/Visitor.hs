@@ -40,34 +40,24 @@ module Language.Nano.Visitor (
 
 import           Control.Applicative           ((<$>), (<*>))
 import           Control.Exception             (throw)
-import           Control.Monad
 import           Control.Monad.Trans.Class     (lift)
 import           Control.Monad.Trans.State     (StateT, modify, runState, runStateT)
 import           Data.Data
-import           Data.Default
 import           Data.Functor.Identity         (Identity)
 import           Data.Generics
 import qualified Data.HashSet                  as H
-import qualified Data.IntMap                   as I
-import           Data.List                     (partition)
-import qualified Data.Map.Strict               as M
-import           Data.Maybe                    (fromMaybe, listToMaybe, maybeToList)
+import           Data.Maybe                    (fromMaybe, listToMaybe)
 import           Data.Monoid
-import           Data.Text                     (pack, splitOn)
 import qualified Data.Traversable              as T
 
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc        hiding ((<$$>))
-import           Language.Fixpoint.Names       (symSepName)
 import qualified Language.Fixpoint.Types       as F
-import qualified Language.Fixpoint.Visitor     as V
 import           Language.Nano.Annots          hiding (err)
 import           Language.Nano.AST
-import           Language.Nano.Env
 import           Language.Nano.Errors
 import           Language.Nano.Liquid.Types    ()
 import           Language.Nano.Locations
-import           Language.Nano.Misc            (mapSndM, (<###>), (<##>))
+import           Language.Nano.Misc            (mapSndM)
 import           Language.Nano.Names
 import           Language.Nano.Pretty
 import           Language.Nano.Program
@@ -76,8 +66,6 @@ import           Language.Nano.Types
 
 -- import           Debug.Trace                        (trace)
 
-import           Text.PrettyPrint.HughesPJ
-import           Text.Printf
 
 --------------------------------------------------------------------------------
 -- | Top-down visitors
@@ -316,9 +304,9 @@ visitLValue :: (Monad m, Functor m, Monoid a, IsLocated b)
             => VisitorM m a ctx b -> ctx -> LValue b -> VisitT m a (LValue b)
 visitLValue v c lv = step c (txLVal v c lv)
   where
-    step c (LDot l e s)       = LDot     l <$> (visitExpr v c e) <*> return s
-    step c (LBracket l e1 e2) = LBracket l <$> (visitExpr v c e1) <*> (visitExpr v c e2)
-    step _ lv@(LVar {})       = return lv
+    step c_ (LDot l e s)       = LDot     l <$> (visitExpr v c_ e) <*> return s
+    step c_ (LBracket l e1 e2) = LBracket l <$> (visitExpr v c_ e1) <*> (visitExpr v c_ e2)
+    step _ lv_@(LVar {})       = return lv_
 
 
 visitCaseClause :: (Monad m, Functor m, Monoid a, IsLocated b)
@@ -422,11 +410,6 @@ transCast f = go
     go αs xs (CUp t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
     go αs xs (CDn t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
 
-transClassAnn f αs xs (αs',es,is) = (αs', transClassAnn1 f (αs' ++ αs) xs <$> es
-                                        , transClassAnn1 f (αs' ++ αs) xs <$> is)
-
-transClassAnn1 f αs xs (n,ts) =  (n, trans f αs xs <$> ts)
-
 
 --------------------------------------------------------------------------------------------
 transRType :: F.Reftable r
@@ -453,7 +436,7 @@ transRType f               = go
 
 transAnnR :: F.Reftable r => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
           -> [TVar] -> AnnQ q r  -> AnnQ q r
-transAnnR f αs ann = ann { ann_fact = trans f αs [] <$> ann_fact ann}
+transAnnR f αs a = a { ann_fact = trans f αs [] <$> ann_fact a }
 
 transFmap ::  (F.Reftable r, Functor thing)
           => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
@@ -553,9 +536,6 @@ ntransCast f g = go
     go (CUp t1 t2) = CUp (ntrans f g t1) (ntrans f g t2)
     go (CDn t1 t2) = CUp (ntrans f g t1) (ntrans f g t2)
 
-ntransClassAnn f g (as,es,is) = (as, ntransClassAnn1 f g <$> es, ntransClassAnn1 f g <$> is)
-ntransClassAnn1 f g (n,ts) =  (f n, ntrans f g <$> ts)
-
 ---------------------------------------------------------------------------
 ntransRType :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> RTypeQ p r -> RTypeQ q r
 ---------------------------------------------------------------------------
@@ -576,7 +556,7 @@ ntransRType f g         = go
     go (TExp e)      = TExp e
 
 ntransAnnR :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> AnnQ p r -> AnnQ q r
-ntransAnnR f g ann = ann { ann_fact = ntrans f g <$> ann_fact ann}
+ntransAnnR f g a = a { ann_fact = ntrans f g <$> ann_fact a }
 
 
 ---------------------------------------------------------------------------
@@ -638,6 +618,7 @@ accumAbsNames (QP AK_ _ ss) = concatMap go
 ---------------------------------------------------------------------------------------
 typeMembers :: PPR r => Mutability r -> [ClassElt (AnnR r)] -> Either (F.FixResult Error) (TypeMembers r)
 ---------------------------------------------------------------------------------------
+-- TODO
 typeMembers = undefined
 
 -- typeMembers mut cs = TM ps ms sps sms call ctor sidx nidx
@@ -790,8 +771,8 @@ hoistBindings = snd . visitStmts vs ()
     acs _ (EnumStmt a x _)       = [(x, a { ann_fact = enumAnn x a }, EnumDefKind, Ambient, Initialized)]
     acs _ _                      = []
 
-    acv _ (VarDecl l n init)     = [(n, l, VarDeclKind, varAsgn l, inited init)] ++
-                                   [(n, l, VarDeclKind, WriteGlobal, inited init) | AmbVarAnn _  <- ann_fact l]
+    acv _ (VarDecl l n ii)       = [(n, l, VarDeclKind, varAsgn l, inited ii)] ++
+                                   [(n, l, VarDeclKind, WriteGlobal, inited ii) | AmbVarAnn _  <- ann_fact l]
 
     inited (Just _) = Initialized
     inited _        = Uninitialized

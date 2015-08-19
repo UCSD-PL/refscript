@@ -3,29 +3,22 @@
 {-# LANGUAGE DeriveFunctor        #-}
 {-# LANGUAGE DeriveTraversable    #-}
 {-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE StandaloneDeriving   #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Nano.Types where
 
-import           Control.Applicative       ((<$>))
 import           Data.Default
-import           Data.Foldable             (Foldable ())
-import           Data.Function             (on)
-import           Data.Generics             (Data)
+import           Data.Foldable           (Foldable ())
+import           Data.Generics           (Data)
 import           Data.Hashable
-import           Data.List                 ((\\))
-import qualified Data.Map.Strict           as M
 import           Data.Monoid
-import           Data.Traversable          hiding (mapM, sequence)
-import           Data.Typeable             (Typeable)
-import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types   as F
+import           Data.Traversable        hiding (mapM, sequence)
+import           Data.Typeable           (Typeable)
+import qualified Language.Fixpoint.Types as F
 import           Language.Nano.AST
-import           Language.Nano.Env
+import           Language.Nano.Core.Env
 import           Language.Nano.Locations
 import           Language.Nano.Names
-import           Text.PrettyPrint.HughesPJ
 
 
 ---------------------------------------------------------------------------------
@@ -385,7 +378,7 @@ emptyContext :: IContext
 emptyContext = IC []
 
 pushContext :: (CallSite a) => a -> IContext -> IContext
-pushContext s (IC c) = IC ((siteIndex s) : c)
+pushContext s (IC c) = IC (siteIndex s : c)
 
 
 -----------------------------------------------------------------------

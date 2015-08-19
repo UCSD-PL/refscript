@@ -1,9 +1,8 @@
-
-{-# LANGUAGE DeriveDataTypeable     #-}
-{-# LANGUAGE DeriveFunctor          #-}
-{-# LANGUAGE TypeSynonymInstances   #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE OverlappingInstances   #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Nano.Program (
 
@@ -21,30 +20,28 @@ module Language.Nano.Program (
 
   ) where
 
-import           Control.Applicative              hiding (empty)
-import           Control.Exception                (throw)
-import           Data.Monoid                      hiding ((<>))
+import           Control.Applicative               hiding (empty)
+import           Control.Exception                 (throw)
 import           Data.Default
-import           Data.Maybe                       (maybeToList)
-import           Data.List                        (stripPrefix)
-import qualified Data.HashMap.Strict              as HM
+import           Data.Generics
 import           Data.Graph.Inductive.Graph
 import           Data.Graph.Inductive.PatriciaTree
-import qualified Data.HashSet                     as H
-import           Data.Generics
-import qualified Data.IntMap                      as I
-import           Text.PrettyPrint.HughesPJ
-
-import           Language.Nano.AST
+import qualified Data.HashMap.Strict               as HM
+import qualified Data.HashSet                      as H
+import qualified Data.IntMap                       as I
+import           Data.List                         (stripPrefix)
+import           Data.Maybe                        (maybeToList)
+import           Data.Monoid                       hiding ((<>))
+import           Language.Fixpoint.Misc            hiding (mkGraph)
+import qualified Language.Fixpoint.Types           as F
 import           Language.Nano.Annots
-import           Language.Nano.Env
+import           Language.Nano.AST
+import           Language.Nano.Core.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Types
-
-import           Language.Fixpoint.Misc           hiding (mkGraph)
-import qualified Language.Fixpoint.Types          as F
+import           Text.PrettyPrint.HughesPJ
 
 -- import           Debug.Trace                        hiding (traceShow)
 
@@ -60,35 +57,35 @@ data Nano a r = Nano {
   --
   -- Source AST
   --
-    code      :: !(Source a)
+    code     :: !(Source a)
   --
   -- Measure Signatures
   --
-  , consts    :: !(Env (RType r))
+  , consts   :: !(Env (RType r))
   --
   -- Type aliases
   --
-  , tAlias    :: !(TAliasEnv (RTypeQ RK r))
+  , tAlias   :: !(TAliasEnv (RTypeQ RK r))
   --
   -- Predicate aliases
   --
-  , pAlias    :: !(PAliasEnv)
+  , pAlias   :: !(PAliasEnv)
   --
   -- Qualifiers
   --
-  , pQuals    :: ![F.Qualifier]
+  , pQuals   :: ![F.Qualifier]
   --
   -- Type Invariants
   --
-  , invts     :: ![Located (RType r)]
+  , invts    :: ![Located (RType r)]
   --
   -- Maximum id
   --
-  , max_id    :: NodeId
+  , max_id   :: NodeId
   --
   -- Options
   --
-  , pOptions  :: [RscOption]
+  , pOptions :: [RscOption]
 
   } deriving (Functor) -- , Data, Typeable)
 

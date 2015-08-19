@@ -2,15 +2,15 @@
 
 module Language.Nano.Liquid.Qualifiers (qualifiers) where
 
-import Language.Fixpoint.Errors
-import Language.Fixpoint.Types hiding (quals)
-import Language.Nano.Liquid.Types
-import Language.Nano.Env
-import Language.Nano.Errors
-import Language.Nano.Locations
-import Language.Nano.AST
-import Data.List                (delete, nub)
-import Data.Maybe               (fromMaybe)
+import           Data.List                  (delete, nub)
+import           Data.Maybe                 (fromMaybe)
+import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types    hiding (quals)
+import           Language.Nano.AST
+import           Language.Nano.Core.Env
+import           Language.Nano.Errors
+import           Language.Nano.Liquid.Types
+import           Language.Nano.Locations
 
 
 -- nanoQualifiers   :: NanoRefType -> [Qualifier]
@@ -42,9 +42,9 @@ mkQual l γ v so p = Q (symbol "Auto") ((v, so) : yts) (subst θ p) l0
     xs            = delete v $ orderedFreeVars γ p
     l0            = dummyPos "RSC.Qualifiers.mkQual"
 
-lookupSort l  x γ = fromMaybe err $ lookupSEnv x γ
+lookupSort l  x γ = fromMaybe errorMsg $ lookupSEnv x γ
   where
-    err           = die $ bug (srcPos l) $ "Unbound variable " ++ show x ++ " in specification for " ++ show (unId l)
+    errorMsg      = die $ bug (srcPos l) $ "Unbound variable " ++ show x ++ " in specification for " ++ show (unId l)
 
 orderedFreeVars γ = nub . filter (`memberSEnv` γ) . syms
 

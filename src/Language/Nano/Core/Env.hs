@@ -1,16 +1,13 @@
 -- | Type Environments and Related Operations
 
-{-# LANGUAGE DeriveGeneric        #-}
-{-# LANGUAGE DeriveFunctor        #-}
-{-# LANGUAGE DeriveFoldable       #-}
-{-# LANGUAGE DeriveTraversable    #-}
 {-# LANGUAGE DeriveDataTypeable   #-}
-{-# LANGUAGE TupleSections        #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE DeriveFunctor        #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE TupleSections        #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
-module Language.Nano.Env (
+module Language.Nano.Core.Env (
   -- * Env definitions
     Env, QEnv
 
@@ -47,21 +44,16 @@ module Language.Nano.Env (
   ) where
 
 import           Control.Applicative
-import           Control.Exception (throw)
-import           Data.Maybe             (isJust)
-import           Data.Monoid            (Monoid (..))
-import qualified Data.HashMap.Strict      as M
 import           Data.Data
-import qualified Data.List                as L
-
+import qualified Data.HashMap.Strict     as M
+import qualified Data.List               as L
+import           Data.Maybe              (isJust)
+import           Data.Monoid             (Monoid (..))
+import           Language.Fixpoint.Misc
+import qualified Language.Fixpoint.Types as F
+import           Language.Nano.AST
 import           Language.Nano.Locations
 import           Language.Nano.Names
-import           Language.Nano.AST
-
-import qualified Language.Fixpoint.Types  as F
-import           Language.Fixpoint.Misc
-import           Language.Fixpoint.PrettyPrint
-import           Text.PrettyPrint.HughesPJ
 
 
 --------------------------------------------------------------------------
@@ -124,8 +116,6 @@ envFromListWithKey merge = L.foldl' step envEmpty
                        Nothing -> envAdd i t γ
                        Just t' -> envAdd i (merge i t t') γ
 
-
-
 envIntersectWith  :: (a -> b -> c) -> Env a -> Env b -> Env c
 envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))
 
@@ -154,7 +144,6 @@ isRight (_)        = False
 isLeft             = not . isRight
 
 
-
 --------------------------------------------------------------------------------
 -- | QEnv API
 --------------------------------------------------------------------------------
@@ -169,9 +158,7 @@ qenvFromList        = L.foldl' step qenvEmpty
                         Nothing -> qenvAdd q t γ
                         Just t' -> qenvAdd q (t `mappend` t') γ
 
-
 qenvEmpty           = QE M.empty
--- qenvFindLoc i γ     = fmap loc $ qenvFind i γ
 qenvFind q (QE γ)   = M.lookup q γ
 
 qenvFindTy  i γ     = fmap val $ qenvFind i γ
@@ -182,14 +169,4 @@ qenvAdd q t (QE γ)  = QE (M.insert q (Loc (srcPos q) t) γ)
 qenvMap f (QE γ)    = QE $ M.map (fmap f) γ
 
 qenvKeys (QE γ)     = M.keys γ
-
-
---------------------------------------------------------------------------------
--- | Monoid Instance
---------------------------------------------------------------------------------
-
-instance Monoid (Env t) where
-  mempty  = envEmpty
-  mappend = envUnion
-
 

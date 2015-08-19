@@ -27,23 +27,16 @@ module Language.Nano.Annots (
 
 ) where
 
-import           Control.Applicative           hiding (empty)
 import           Data.Default
 import           Data.Generics
 import qualified Data.IntMap.Strict            as I
-import qualified Data.Map.Strict               as M
-import           Data.Maybe                    (maybeToList)
 import           Data.Monoid
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.AST
-import           Language.Nano.Env
-import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
-import           Text.PrettyPrint.HughesPJ
 
 
 -----------------------------------------------------------------------------

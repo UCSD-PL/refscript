@@ -2,29 +2,24 @@
 
 module Language.Nano.Liquid.Alias (expandAliases) where
 
-import           Data.Maybe
-import           Data.Generics.Aliases
-import           Data.Generics.Schemes
-import           Data.Generics
-
-import           Control.Applicative ((<$>))
+import           Control.Applicative           ((<$>))
 import           Control.Monad
 import           Control.Monad.State
-
+import           Data.Generics
+import           Data.Maybe
 import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types as F
-import qualified Language.Fixpoint.Visitor as V
-
+import qualified Language.Fixpoint.Types       as F
+import qualified Language.Fixpoint.Visitor     as V
 import           Language.Nano.Annots
-import           Language.Nano.Env
+import           Language.Nano.Core.Env
 import           Language.Nano.Errors
+import           Language.Nano.Liquid.Types    ()
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Program
-import           Language.Nano.Types
-import           Language.Nano.Typecheck.Types
 import qualified Language.Nano.Typecheck.Subst as S
-import           Language.Nano.Liquid.Types ()
+import           Language.Nano.Typecheck.Types
+import           Language.Nano.Types
 
 
 -- pe'

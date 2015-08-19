@@ -1,25 +1,19 @@
-{-# LANGUAGE FlexibleInstances        #-}
-{-# LANGUAGE OverlappingInstances     #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverlappingInstances #-}
 
 module Language.Nano.Pretty.Annots where
 
-import           Control.Applicative            ((<$>))
-import           Text.PrettyPrint.HughesPJ
-import           Prelude                        hiding (maybe)
-import qualified Data.IntMap.Strict             as I
-import qualified Language.Fixpoint.Types        as F
-import           Language.Fixpoint.PrettyPrint
+import           Control.Applicative         ((<$>))
+import qualified Data.IntMap.Strict          as I
 import           Language.Fixpoint.Misc
-
+import qualified Language.Fixpoint.Types     as F
 import           Language.Nano.Annots
-import           Language.Nano.Locations
-import           Language.Nano.Names
-import           Language.Nano.Env
-import           Language.Nano.Program
-import           Language.Nano.Types
 import           Language.Nano.Pretty.Common
-import           Language.Nano.Pretty.Errors
-import           Language.Nano.Pretty.Types
+import           Language.Nano.Pretty.Errors ()
+import           Language.Nano.Pretty.Types  ()
+import           Language.Nano.Types
+import           Prelude                     hiding (maybe)
+import           Text.PrettyPrint.HughesPJ
 
 instance (PP r, F.Reftable r) => PP (Cast r) where
   pp CNo         = text "No cast"
@@ -61,8 +55,8 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (BypassUnique)             = text "BypassUnique"
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
-  pp             = vcat . (ppB <$>) . I.toList 
-    where 
+  pp             = vcat . (ppB <$>) . I.toList
+    where
       ppB (x, t) = pp x <+> dcolon <+> pp t
 
 instance (PP a, PP b) => PP (Annot b a) where

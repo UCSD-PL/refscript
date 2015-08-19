@@ -13,25 +13,22 @@ module Language.Nano.Environment (
   , envLikeFindTy, envLikeFindTy'
   , envFindBound
   , fromListToEnv
+  , resolveModuleInEnv, resolveTypeInEnv, resolveEnumInEnv
 
 ) where
 
-import           Control.Applicative           ((<$>), (<*>))
+import           Control.Applicative           ((<$>))
 import           Control.Exception             (throw)
 import qualified Data.Map.Strict               as M
-import           Data.Maybe                    (isJust)
-
 import           Language.Fixpoint.Names
 import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.AST
 import           Language.Nano.ClassHierarchy
-import           Language.Nano.Env
+import           Language.Nano.Core.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Names
-import           Language.Nano.Program
 import           Language.Nano.Typecheck.Types
-import           Language.Nano.Types
 import           Language.Nano.Types
 
 -------------------------------------------------------------------------------
@@ -42,31 +39,25 @@ type EnvEntry r = VarInfo r
 
 class EnvLike r t where
   --
-  -- ^ Bindings in scope
-  --   Includes : variables, functions, classes, interfaces
+  -- | Bindings in scope
   --
   names           :: t r -> Env (EnvEntry r)
   --
-  -- ^ Bounds for type variables
+  -- | Bounds for type variables
   --
   bounds          :: t r -> Env (RType r)
   --
-  -- ^ Calling context
+  -- | Calling context
   --
   context         :: t r -> IContext
   --
-  -- ^ Namespace absolute path
+  -- | Namespace absolute path
   --
   absPath         :: t r -> AbsPath
   --
-  -- ^ Modules in scope (exported API)
-  --
-  modules         :: t r -> QEnv (ModuleDef r)
-  --
-  -- ^ ClassHierarchy
+  -- | ClassHierarchy
   --
   cha             :: t r -> ClassHierarchy r
-
 
 --   --
 --   -- ^ Parent environment
@@ -88,8 +79,9 @@ envLikeFindTy :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 envLikeFindTy x = fmap v_type . envLikeFindTy' x
 
-envLikeMember x = isJust . envLikeFindTy x
-
+-------------------------------------------------------------------------------
+envFindBound :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (RType r)
+-------------------------------------------------------------------------------
 envFindBound x (bounds -> b) = envFindTy x b
 
 
@@ -101,7 +93,7 @@ fromListToEnv = envFromListWithKey mergeVarInfo . concatMap f . M.toList . foldl
     merge ms (x, (k,v)) = M.insertWith (++) (F.symbol x) [(k,v)] ms
 
     f (s, vs)   = [ (s, (k, g v [ v' | (FuncOverloadKind, v') <- vs ])) | (k@FuncDefKind, v) <- vs ] ++
-                    ( (s,) . (FuncAmbientKind,) <$> amb [ v | (k@FuncAmbientKind, v) <- vs ] ) ++
+                    ( (s,) . (FuncAmbientKind,) <$> amb [ v | (FuncAmbientKind, v) <- vs ] ) ++
                   [ (s, (k, v)) | (k@VarDeclKind, v) <- vs ] ++
                   [ (s, (k, v)) | (k@ClassDefKind, v) <- vs ] ++
                   [ (s, (k, v)) | (k@ModuleDefKind, v) <- vs ] ++
@@ -112,9 +104,9 @@ fromListToEnv = envFromListWithKey mergeVarInfo . concatMap f . M.toList . foldl
 
     amb [ ] = [ ]
     amb [v] = [v]
-    amb vs@((VI a i _) : _) = [ VI a i $ mkAnd $ v_type <$> vs ]
+    amb vs@(VI a i _ : _) = [ VI a i $ mkAnd $ v_type <$> vs ]
 
-mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
+    mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
 
 
 --------------------------------------------------------------------------------
@@ -122,9 +114,9 @@ resolveModuleInEnv  :: EnvLike r t => t r -> AbsPath -> Maybe (ModuleDef r)
 resolveTypeInEnv    :: EnvLike r t => t r -> AbsName -> Maybe (TypeDecl r)
 resolveEnumInEnv    :: EnvLike r t => t r -> AbsName -> Maybe EnumDef
 --------------------------------------------------------------------------------
-resolveModuleInEnv (modules -> m) s = qenvFindTy s m
-resolveTypeInEnv γ (QN p s) = resolveModuleInEnv γ p >>= envFindTy s . m_types
-resolveEnumInEnv γ (QN p s) = resolveModuleInEnv γ p >>= envFindTy s . m_enums
+resolveModuleInEnv (cha -> c) = resolveModule c
+resolveTypeInEnv   (cha -> c) = resolveType c
+resolveEnumInEnv   (cha -> c) = resolveEnum c
 
 
-isClassType :: EnvLike r g => g r -> RType r -> Bool
+-- isClassType :: EnvLike r g => g r -> RType r -> Bool

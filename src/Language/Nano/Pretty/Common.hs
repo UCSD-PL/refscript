@@ -10,12 +10,11 @@ import qualified Data.IntMap                   as I
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
 import qualified Language.Fixpoint.Types       as F
-import           Prelude                       hiding (maybe)
-import           Text.PrettyPrint.HughesPJ
-
-import           Language.Nano.Env
+import           Language.Nano.Core.Env
 import           Language.Nano.Locations
 import           Language.Nano.Names
+import           Prelude                       hiding (maybe)
+import           Text.PrettyPrint.HughesPJ
 
 
 class PP a where

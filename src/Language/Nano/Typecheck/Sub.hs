@@ -16,14 +16,9 @@
 module Language.Nano.Typecheck.Sub (convert, isSubtype) where
 
 import           Control.Applicative           ((<$>))
-import           Control.Monad.State
 import           Data.Default
-import qualified Data.HashSet                  as S
-import           Data.List                     (elem)
-import qualified Data.Map.Strict               as M
 import           Data.Maybe                    (fromMaybe)
 import           Data.Monoid
-import           Data.Tuple                    (swap)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Types       (differenceSEnv, intersectWithSEnv, toListSEnv)
@@ -69,18 +64,18 @@ convert l γ t1 t2
     rType = ofType . toType
     τ1    = toType t1
     τ2    = toType t2
-    γ'    = fmap (\_ -> ()) γ
+    γ'    = fmap (const ()) γ
 
 --------------------------------------------------------------------------------
 compareTypes :: FE g => SrcSpan -> g () -> Type -> Type -> SubTRes
 --------------------------------------------------------------------------------
 compareTypes _ _ _  t2 | isTTop t2                  = SubT
-compareTypes l γ t1 t2 | isTPrim t1  ,  isTPrim t2  = comparePrims t1 t2
+compareTypes _ _ t1 t2 | isTPrim t1  ,  isTPrim t2  = comparePrims t1 t2
 compareTypes l γ t1 t2 | isTVar t1   || isTVar t2   = compareVars l γ t1 t2
-compareTypes l γ t1 t2 | isTUnion t1 || isTUnion t2 = compareUnions γ t1 t2
+compareTypes _ γ t1 t2 | isTUnion t1 || isTUnion t2 = compareUnions γ t1 t2
 compareTypes l γ t1 t2 | maybeTObj t1, maybeTObj t2 = compareObjs l γ t1 t2
 compareTypes l γ t1 t2 | isTFun t1   , isTFun t2    = compareFuns l γ t1 t2
-compareTypes l γ t1 t2                              = SubErr []     -- TODO
+compareTypes _ _ _  _                               = SubErr []     -- TODO
 
 --------------------------------------------------------------------------------
 comparePrims :: Type -> Type -> SubTRes
@@ -92,7 +87,7 @@ comparePrims _            _             = SubErr [{- BUG -}]
 --------------------------------------------------------------------------------
 compareVars :: FE g => SrcSpan -> g () -> Type -> Type -> SubTRes
 --------------------------------------------------------------------------------
-compareVars l γ (TVar v1 _) (TVar v2 _) | v1 == v2  = EqT
+compareVars _ _ (TVar v1 _) (TVar v2 _) | v1 == v2  = EqT
                                         | otherwise = SubErr []     -- TODO
 compareVars l γ (TVar v1 _) t2          = compareTypes l γ bt1 t2
                                           where bt1 = fromMaybe tTop $ envFindBound v1 γ
@@ -121,7 +116,7 @@ compareObjs :: FE g => SrcSpan -> g () -> Type -> Type -> SubTRes
 --   Interfaces are OK.
 --
 compareObjs l γ t1 t2
-  | not (isClassType γ t1) && isClassType γ t2
+  | not (isClassType (cha γ) t1) && isClassType (cha γ) t2
   = SubErr [errorObjectType l t1 t2]
 
 compareObjs l γ t1@(TObj e1s _) t2@(TObj e2s _)
@@ -149,8 +144,8 @@ compareObjs l γ t1@(TRef (Gen x1 (m1:t1s)) _) t2@(TRef (Gen x2 (m2:t2s)) _)
   --
   -- * Compatible mutabilities, differenet names:
   --
-  | isAncestor γ x1 x2 || isAncestor γ x2 x1
-  = case (weaken γ (Gen x1 (m1:t1s)) x2, weaken γ (Gen x2 (m2:t2s)) x1) of
+  | isAncestor (cha γ) x1 x2 || isAncestor (cha γ) x2 x1
+  = case (weaken (cha γ) (Gen x1 (m1:t1s)) x2, weaken (cha γ) (Gen x2 (m2:t2s)) x1) of
       --
       -- * Adjusting `t1` to reach `t2` moving upward in the type
       --   hierarchy -- this is equivalent to Upcast
@@ -166,12 +161,12 @@ compareObjs l γ t1@(TRef (Gen x1 (m1:t1s)) _) t2@(TRef (Gen x2 (m2:t2s)) _)
 
 compareObjs l γ (TType k1 c1) (TType k2 c2) | k1 == k2 = convertTClass l γ c1 c2
 
-compareObjs l γ (TMod m1) (TMod m2) = convertTModule l m1 m2
+compareObjs l _ (TMod m1) (TMod m2) = convertTModule l m1 m2
 --
 -- * Fall back to structural subtyping
 --
 compareObjs l γ t1 t2 =
-  case (expandType NonCoercive γ t1, expandType NonCoercive γ t2) of
+  case (expandType NonCoercive (cha γ) t1, expandType NonCoercive (cha γ) t2) of
     (Just ft1, Just ft2) -> compareObjs l γ ft1 ft2
     (Nothing , Nothing ) -> SubErr [errorUnresolvedTypes l t1 t2]
     (Nothing , _       ) -> SubErr [errorNonObjectType l t1]

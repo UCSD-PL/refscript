@@ -60,8 +60,6 @@ import qualified Data.HashSet                  as H
 import           Data.List                     (find)
 import           Data.Traversable
 import           GHC.Generics
-import           Language.Fixpoint.Misc
-import           Language.Fixpoint.PrettyPrint
 import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.Locations
 import           Text.PrettyPrint.HughesPJ

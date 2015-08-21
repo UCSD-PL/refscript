@@ -22,6 +22,7 @@ module Language.Nano.Visitor (
 
   , NameTransformable (..)
   , ntransFmap
+  , ntransAnnR
 
   , Visitor, VisitorM (..)
   , defaultVisitor
@@ -37,6 +38,7 @@ module Language.Nano.Visitor (
   , visibleVars
 
   , accumModules
+  , accumNamesAndPaths
 
   , typeMembers
   -- , mkTypeMembers
@@ -47,7 +49,8 @@ module Language.Nano.Visitor (
 import           Control.Applicative           ((<$>), (<*>))
 import           Control.Exception             (throw)
 import           Control.Monad.Trans.Class     (lift)
-import           Control.Monad.Trans.State     (StateT, modify, runState, runStateT)
+import           Control.Monad.Trans.State     (StateT, modify, runState,
+                                                runStateT)
 import           Data.Data
 import           Data.Functor.Identity         (Identity)
 import           Data.Generics
@@ -568,7 +571,9 @@ ntransRType f g         = go
                                             t'  = go t
     go (TExp e)      = TExp e
 
+---------------------------------------------------------------------------
 ntransAnnR :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> AnnQ p r -> AnnQ q r
+---------------------------------------------------------------------------
 ntransAnnR f g a = a { ann_fact = ntrans f g <$> ann_fact a }
 
 
@@ -614,12 +619,13 @@ accumNamesAndPaths :: PPRD r => [Statement (AnnRel r)] -> (H.HashSet AbsName, H.
 ---------------------------------------------------------------------------------------
 accumNamesAndPaths stmts = (namesSet, modulesSet)
   where
-    allModStmts             = accumModules stmts
-    modulesSet              = H.fromList $ fst <$> allModStmts
-    namesSet                = H.fromList [ nm | (ap,ss) <- allModStmts
-                                              , nm <- accumAbsNames ap ss ]
+    allModStmts = accumModules stmts
+    modulesSet  = H.fromList $ fst <$> allModStmts
+    namesSet    = H.fromList [ nm | (ap,ss) <- allModStmts, nm <- accumAbsNames ap ss ]
 
+---------------------------------------------------------------------------------------
 accumAbsNames :: IsLocated a => AbsPath -> [ Statement a ] -> [ AbsName ]
+---------------------------------------------------------------------------------------
 accumAbsNames (QP AK_ _ ss) = concatMap go
   where
     go (ClassStmt l x _ _ _) = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]

@@ -73,7 +73,7 @@ instance Monoid SubTRes where
  mappend _           SupT        = SupT
  mappend SubT        _           = SubT
  mappend _           SubT        = SubT
- mappend EqT        EqT          = EqT
+ mappend EqT         EqT         = EqT
 
 
 -----------------------------------------------------------------------------
@@ -184,4 +184,3 @@ scrapeVarDecl (VarDecl l _ _)
 
 data RscOption = RealOption
     deriving (Eq, Show, Data, Typeable)
-

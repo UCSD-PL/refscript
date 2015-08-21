@@ -142,4 +142,3 @@ instance Annotated ClassElt where
 
 instance (Annotated thing, IsLocated a) => IsLocated (thing a) where
   srcPos  = srcPos . getAnnotation
-

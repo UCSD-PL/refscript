@@ -9,13 +9,12 @@
 {-# LANGUAGE UndecidableInstances      #-}
 
 
-module Language.Nano.Parser.Common (
-    xyP, axyP, withSpan, postP
-  , convertTVars, convertTVar
-  , dot, plus, question
-  , withinSpacesP
-
-) where
+module Language.Nano.Parser.Common 
+    (
+      xyP, axyP, withSpan, postP
+    , dot, plus, question
+    , withinSpacesP
+    ) where
 
 import           Control.Applicative           ((<$>), (<*>))
 import qualified Data.HashSet                  as HS
@@ -71,77 +70,4 @@ withSpan f p = do pos   <- getPosition
 
 postP p post = const <$> p <*> post
 
-
--- | @convertTvars@ converts @RCon@s corresponding to _bound_ type-variables to @TVar@
-convertTVars = visitNano convertTvarVisitor []
-
-----------------------------------------------------------------------------------
--- convertTVar    :: (F.Reftable r, Transformable t, IsLocated q) => [TVar] -> t q r -> t q r
-----------------------------------------------------------------------------------
-convertTVar as = trans tx as []
-  where
-    tx αs _ (TRef (Gen c []) r) | Just α <- mkTvar αs c = TVar α r
-    tx _  _ t = t
-
-mkTvar :: (IsLocated a, F.Symbolic a) => [TVar] -> a -> Maybe TVar
-mkTvar αs r = listToMaybe [ α { tv_loc = srcPos r }  | α <- αs, F.symbol α == F.symbol r]
-
-----------------------------------------------------------------------------------
-convertTvarVisitor :: (F.Reftable r) => Visitor () [TVar] (AnnRel r)
-----------------------------------------------------------------------------------
-convertTvarVisitor = defaultVisitor {
-    ctxStmt = ctxStmtTvar
-  , ctxCElt = ctxCEltTvar
-  , txStmt  = transFmap (const . convertTVar)
-  , txExpr  = transFmap (const . convertTVar)
-  , txCElt  = transFmap (const . convertTVar)
-  }
-
-ctxStmtTvar as s = go s ++ as
-  where
-    go :: Statement (AnnRel r)  -> [TVar]
-    go s@(FunctionStmt {}) = grab s
-    go s@(FuncAmbDecl {})  = grab s
-    go s@(FuncOverload {}) = grab s
-    go s@(IfaceStmt {})    = grab s
-    go s@(ClassStmt {})    = grab s
-    go s@(ModuleStmt {})   = grab s
-    go _                   = []
-
-    grab :: Statement (AnnQ q r) -> [TVar]
-    grab = concatMap factTVars . ann_fact . getAnnotation
-
-ctxCEltTvar as s = go s ++ as
-  where
-    go :: ClassElt (AnnRel r)  -> [TVar]
-    go s@Constructor{}     = grab s
-    go s@MemberMethDef{}   = grab s
-    go _                   = []
-
-    grab :: ClassElt (AnnQ q r) -> [TVar]
-    grab = concatMap factTVars . ann_fact . getAnnotation
-
-----------------------------------------------------------------------------------
-factTVars :: FactQ q r -> [TVar]
-----------------------------------------------------------------------------------
-factTVars = go
-  where
-    tvars t | Just ts <- bkFuns t
-            = HS.toList $ foldUnions
-            $ map HS.fromList [ btvToTV <$> t | (t, _, _) <- ts ]
-            | otherwise
-            = []
-
-    foldUnions (α:αs) = foldl HS.intersection α αs
-    foldUnions _      = HS.empty
-
-    go (VarAnn _ (Just t))     = tvars t
-    go (FuncAnn t)             = tvars t
-    go (FieldAnn _ (FI _ _ t)) = tvars t
-    go (MethAnn _ (MI _ _ t))  = tvars t
-    go (ConsAnn t)             = tvars t
-    go (ClassAnn (TS _ bs _))  = btvToTV <$> b_args bs
-    go (InterfaceAnn (TD (TS _ bs _) _))
-                               = btvToTV <$> b_args bs
-    go _                       = []
 

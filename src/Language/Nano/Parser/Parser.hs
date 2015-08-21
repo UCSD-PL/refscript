@@ -83,6 +83,7 @@ import qualified Text.PrettyPrint.HughesPJ         as P
 -- import           Debug.Trace                             ( trace, traceShow)
 
 
+type FError = F.FixResult Error
 
 --------------------------------------------------------------------------------------
 -- | Parse File and Type Signatures
@@ -91,7 +92,7 @@ import qualified Text.PrettyPrint.HughesPJ         as P
 -- Parse the contents of a FilePath list into a program structure with relative
 -- qualified names.
 --------------------------------------------------------------------------------------
-parseNanoFromFiles :: [FilePath] -> IO (Either (F.FixResult Error) (NanoBareR F.Reft))
+parseNanoFromFiles :: [FilePath] -> IO (Either FError (NanoBareR F.Reft))
 --------------------------------------------------------------------------------------
 parseNanoFromFiles fs =
   partitionEithers <$> mapM parseScriptFromJSON fs >>= \case
@@ -126,7 +127,7 @@ parseIdFromJSON filename = decodeOrDie <$> getJSON filename
 
 
 ---------------------------------------------------------------------------------
-mkNano :: [Statement (SrcSpan, [Spec])] -> Either (F.FixResult Error) (NanoBareR F.Reft)
+mkNano :: [Statement (SrcSpan, [Spec])] -> Either FError (NanoBareR F.Reft)
 ---------------------------------------------------------------------------------
 mkNano ss = undefined
 --             return   (mkNano' ss)
@@ -223,8 +224,7 @@ celtTypeBindings _                = undefined -- TODO
 type PState = Integer
 
 --------------------------------------------------------------------------------------
-parseAnnots :: [Statement (SrcSpan, [RawSpec])]
-             -> Either (F.FixResult Error) [Statement (SrcSpan, [Spec])]
+parseAnnots :: [Statement (SrcSpan, [RawSpec])] -> Either FError [Statement (SrcSpan, [Spec])]
 --------------------------------------------------------------------------------------
 parseAnnots ss =
   case mapAccumL (mapAccumL f) (0,[]) ss of
@@ -265,120 +265,6 @@ instance PP (RawSpec) where
   pp = text . getSpecString
 
 
--- | Replace `TRef x _ _` where `x` is a name for an enumeration with `number`
----------------------------------------------------------------------------------------
-fixEnums :: PPR r => QEnv (ModuleDef r) -> NanoBareR r -> (QEnv (ModuleDef r), NanoBareR r)
----------------------------------------------------------------------------------------
-fixEnums m p@(Nano { code = Src ss }) = (m',p')
-  where
-    p'    = p { code = Src $ (tr <$>) <$> ss }
-    m'    = fixEnumsInModule m `qenvMap` m
-    tr    = transAnnR f []
-    f _ _ = fixEnumInType m
-
----------------------------------------------------------------------------------------
-fixEnumInType :: F.Reftable r => QEnv (ModuleDef r) -> RType r -> RType r
----------------------------------------------------------------------------------------
-fixEnumInType ms (TRef (Gen (QN p x) []) r)
-  | Just m <- qenvFindTy p ms
-  , Just e <- envFindTy x $ m_enums m
-  = if isBvEnum e then tBV32 `strengthen` r
-                  else tNum  `strengthen` r
-fixEnumInType _ t = t
-
----------------------------------------------------------------------------------------
-fixEnumsInModule :: F.Reftable r => QEnv (ModuleDef r) -> ModuleDef r -> ModuleDef r
----------------------------------------------------------------------------------------
-fixEnumsInModule m = trans (const $ const $ fixEnumInType m) [] []
-
-
--- | Replace all relative qualified names and paths in a program with full ones.
----------------------------------------------------------------------------------------
-replaceAbsolute :: PPR r => NanoBareRelR r -> NanoBareR r
----------------------------------------------------------------------------------------
-replaceAbsolute = undefined
--- replaceAbsolute pgm@(Nano { code = Src ss }) = pgm { code = Src $ (tr <$>) <$> ss }
---   where
---     (ns, ps)        = extractQualifiedNames ss
---     tr l            = ntransAnnR (safeAbsName l) (safeAbsPath l) l
---     safeAbsName l a = case absAct (absoluteName ns) l a of
---                         Just a' -> a'
---                         -- If it's a type alias, don't throw error
---                         Nothing | isAlias a -> toAbsoluteName a
---                                 | otherwise -> throw $ errorUnboundName (srcPos l) a
---     safeAbsPath l a = case absAct (absolutePath ps) l a of
---                         Just a' -> a'
---                         Nothing -> throw $ errorUnboundPath (srcPos l) a
---
---     isAlias (QN RK_ _ [] s) = envMem s $ tAlias pgm
---     isAlias (QN _   _ _  _) = False
---
---     absAct f l a    = I.lookup (ann_id l) mm >>= (`f` a)
---     mm              = snd $ visitStmts vs (QP AK_ def []) ss
---     vs              = defaultVisitor { ctxStmt = cStmt }
---                                      { accStmt = acc   }
---                                      { accExpr = acc   }
---                                      { accCElt = acc   }
---                                      { accVDec = acc   }
---     cStmt (QP AK_ l p) (ModuleStmt _ x _)
---                     = QP AK_ l $ p ++ [symbol x]
---     cStmt q _       = q
---     acc c s         = I.singleton (ann_id a) c where a = getAnnotation s
---
-
--- | Replace `a.b.c...z` with `offset(offset(...(offset(a),"b"),"c"),...,"z")`
----------------------------------------------------------------------------------------
-replaceDotRef :: NanoBareR F.Reft -> NanoBareR F.Reft
----------------------------------------------------------------------------------------
-replaceDotRef p@(Nano{ code = Src fs, tAlias = ta, pAlias = pa, invts = is })
-    = p { code         = Src $      tf       <##>  fs
-        , tAlias       = transRType tt [] [] <###> ta
-        , pAlias       =            tt [] [] <##>  pa
-        , invts        = transRType tt [] [] <##>  is
-        }
-  where
-    tf (Ann l a facts) = Ann l a $ trans tt [] [] <$> facts
-    tt _ _             = fmap $ FV.trans vs () ()
-
-    vs                 = FV.defaultVisitor { FV.txExpr = tx }
-    -- tx _ (F.EVar s)      | (x:y:zs) <- DT.pack "." `DT.splitOn` DT.pack (symbolString s)
-    --                    = foldl offset (F.eVar x) (y:zs)
-    tx _ e             = e
-    offset k v         = F.EApp offsetLocSym [F.expr k, F.expr v]
-
-
--- | Add a '#' at the end of every function binder (to avoid capture)
---
----------------------------------------------------------------------------------------
-fixFunBinders :: PPR r => QEnv (ModuleDef r) -> NanoBareR r -> (QEnv (ModuleDef r), NanoBareR r)
----------------------------------------------------------------------------------------
-fixFunBinders m p@(Nano { code = Src ss }) = (m', p')
-  where
-    p'    = p { code = Src $ (tr <$>) <$> ss }
-    m'    = qenvMap fixFunBindersInModule m
-    tr    = transAnnR f []
-    f _ _ = fixFunBindersInType
-
-fixFunBindersInType t | Just is <- bkFuns t = mkAnd $ map (mkFun . f) is
-                      | otherwise           = t
-  where
-    f (vs, yts, t)    = (vs, ssb yts, ss t)
-      where
-        ks            = [ y | B y _ <- yts ]
-        ks'           = (F.eVar . (`mappend` symbol [symSepName])) <$> ks
-        su            = F.mkSubst $ zip ks ks'
-        ss            = F.subst su
-        ssb bs        = [ B (ss s) (ss t) | B s t <- bs ]
-
-
-fixFunBindersInModule m@(ModuleDef { m_variables = mv, m_types = mt })
-                = m { m_variables = mv', m_types = mt' }
-  where
-   mv'          = envMap f mv
-   f (VI a i t) = VI a i $ fixFunBindersInType t
-   mt'          = envMap (trans g [] []) mt
-   g _ _        = fixFunBindersInType
-
 
 -- | `scrapeModules ss` creates a module store from the statements in @ss@
 --   For every module we populate:
@@ -388,7 +274,7 @@ fixFunBindersInModule m@(ModuleDef { m_variables = mv, m_types = mt })
 --    * m_types with: classes and interfaces
 --
 ---------------------------------------------------------------------------------------
--- scrapeModules :: PPR r => NanoBareR r -> Either (F.FixResult Error) (QEnv (ModuleDef r))
+-- scrapeModules :: PPR r => NanoBareR r -> Either FError (QEnv (ModuleDef r))
 ---------------------------------------------------------------------------------------
 scrapeModules pgm@(Nano { code = Src stmts })
   = do  mods  <- return $ accumModules stmts
@@ -396,7 +282,7 @@ scrapeModules pgm@(Nano { code = Src stmts })
         return $ qenvFromList mods'
   where
 
-    mkMod :: PPR r => (AbsPath, [Statement (AnnR r)]) -> Either (F.FixResult Error) (AbsPath, ModuleDefQ AK r)
+    mkMod :: PPR r => (AbsPath, [Statement (AnnR r)]) -> Either FError (AbsPath, ModuleDefQ AK r)
     mkMod (p,ss)      = do  ve <- return $ varEnv p ss
                             te <- typeEnv p ss
                             ee <- return $ enumEnv ss
@@ -449,9 +335,7 @@ scrapeModules pgm@(Nano { code = Src stmts })
     ss                       = fmap ann
 
 ---------------------------------------------------------------------------------------
-resolveType :: PPR r => AbsPath
-                     -> Statement (AnnR r)
-                     -> Either (F.FixResult Error) (Id SrcSpan, TypeDecl r)
+resolveType :: PPR r => AbsPath -> Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
 ---------------------------------------------------------------------------------------
 resolveType (QP AK_ _ ss) (ClassStmt l c _ _ cs)
   | [ts] <- cas

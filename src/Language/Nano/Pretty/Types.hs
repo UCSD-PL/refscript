@@ -177,8 +177,8 @@ instance PP Initialization where
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body
 
-instance (PP r, F.Reftable r) => PP (Nano a r) where
-  pp pgm@(Nano {code = (Src s) })
+instance (PP r, F.Reftable r) => PP (Rsc a r) where
+  pp pgm@(Rsc {code = (Src s) })
     =   text "\n******************* Code **********************"
     $+$ pp s
     $+$ text "\n******************* Constants *****************"

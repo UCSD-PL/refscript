@@ -24,19 +24,7 @@ module Language.Nano.Visitor
     , visitNano
     , visitStmts
     , visitStmtsT
-    , foldNano
-
-    -- * Traversals / folds / maps
-    , hoistBindings
-    , visibleVars
-
-    , accumModules
-    , accumNamesAndPaths
-
-    , typeMembers
-    -- , mkTypeMembers
-    -- , mkVarEnv
-
+    , foldRsc
     ) where
 
 import           Control.Applicative           ((<$>), (<*>))
@@ -44,15 +32,9 @@ import           Control.Exception             (throw)
 import           Control.Monad.Trans.Class     (lift)
 import           Control.Monad.Trans.State     (StateT, modify, runState,
                                                 runStateT)
-import           Data.Data
-import           Data.Default
 import           Data.Functor.Identity         (Identity)
-import           Data.Generics
-import qualified Data.HashSet                  as H
-import           Data.Maybe                    (fromMaybe, listToMaybe)
 import           Data.Monoid
 import qualified Data.Traversable              as T
-import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.Annots          hiding (Annot, err)
 import           Language.Nano.AST
@@ -62,7 +44,6 @@ import           Language.Nano.Liquid.Types    ()
 import           Language.Nano.Locations
 import           Language.Nano.Misc            (mapSndM)
 import           Language.Nano.Names
-import           Language.Nano.Pretty
 import           Language.Nano.Program
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
@@ -130,6 +111,7 @@ defaultVisitor = Visitor {
   , mExpr   = return
   }
 
+scopeVisitor :: (Monoid acc, Functor m, Monad m) => VisitorM m acc ctx b
 scopeVisitor = defaultVisitor { endExpr = ee, endStmt = es }
   where
     es FunctionStmt{} = True
@@ -145,10 +127,10 @@ scopeVisitor = defaultVisitor { endExpr = ee, endStmt = es }
 --------------------------------------------------------------------------------
 -- | Visitor API
 --------------------------------------------------------------------------------
-foldNano :: (IsLocated b, Monoid a) => Visitor a ctx b -> ctx -> a -> Nano b r -> a
-foldNano v c a p = snd $ execVisitM v c a p
+foldRsc :: (IsLocated b, Monoid a) => Visitor a ctx b -> ctx -> a -> Rsc b r -> a
+foldRsc v c a p = snd $ execVisitM v c a p
 
-visitNano :: (IsLocated b, Monoid a) =>   Visitor a ctx b -> ctx -> Nano b r -> Nano b r
+visitNano :: (IsLocated b, Monoid a) =>   Visitor a ctx b -> ctx -> Rsc b r -> Rsc b r
 visitNano v c p = fst $ execVisitM v c mempty p
 
 visitStmts :: (IsLocated b, Monoid s) => Visitor s ctx b -> ctx -> [Statement b] -> ([Statement b], s)
@@ -174,7 +156,7 @@ f <$$> x = T.traverse f x
 
 
 visitNanoM :: (Monad m, Functor m, Monoid a, IsLocated b)
-           => VisitorM m a ctx b -> ctx -> Nano b r -> VisitT m a (Nano b r)
+           => VisitorM m a ctx b -> ctx -> Rsc b r -> VisitT m a (Rsc b r)
 visitNanoM v c p = do
   c'    <- visitSource v c (code p)
   return $ p { code = c' }
@@ -548,228 +530,4 @@ ntransRType f g         = go
 
 instance NameTransformable FAnnQ where
   ntrans f g (FA i s ys) = FA i s $ ntrans f g <$> ys
-
-
----------------------------------------------------------------------------
--- | AST Traversals
----------------------------------------------------------------------------
-
--- | Summarise all nodes in top-down, left-to-right order, carrying some state
---   down the tree during the computation, but not left-to-right to siblings,
---   and also stop when a condition is true.
----------------------------------------------------------------------------
-everythingButWithContext :: s -> (r -> r -> r) -> GenericQ (s -> (r, s, Bool)) -> GenericQ r
----------------------------------------------------------------------------
-everythingButWithContext s0 f q x
-  | stop      = r
-  | otherwise = foldl f r (gmapQ (everythingButWithContext s' f q) x)
-    where (r, s', stop) = q x s0
-
-
----------------------------------------------------------------------------
--- | AST Folds
----------------------------------------------------------------------------
-
-type PPRD r = (PPR r, Data r, Typeable r)
-
--- Only descend down modules
--------------------------------------------------------------------------------
-accumModules :: (IsLocated a, Data a, Typeable a) => [Statement a] -> [(AbsPath, [Statement a])]
--------------------------------------------------------------------------------
-accumModules ss = topLevel : rest ss
-  where
-    rest                      = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
-    f e@(ModuleStmt _ x ms) s = let p = s ++ [F.symbol x] in
-                                ([(QP AK_ (srcPos e) p, ms)], p, False)
-    f _                    s  = ([], s, True)
-    topLevel                  = (QP AK_ def [], ss)
-
-
-type DeclInfo r = (SyntaxKind, VarInfo r)
-
----------------------------------------------------------------------------------------
-accumNamesAndPaths :: PPRD r => [Statement (AnnRel r)] -> (H.HashSet AbsName, H.HashSet AbsPath)
----------------------------------------------------------------------------------------
-accumNamesAndPaths stmts = (namesSet, modulesSet)
-  where
-    allModStmts = accumModules stmts
-    modulesSet  = H.fromList $ fst <$> allModStmts
-    namesSet    = H.fromList [ nm | (ap,ss) <- allModStmts, nm <- accumAbsNames ap ss ]
-
----------------------------------------------------------------------------------------
-accumAbsNames :: IsLocated a => AbsPath -> [ Statement a ] -> [ AbsName ]
----------------------------------------------------------------------------------------
-accumAbsNames (QP AK_ _ ss) = concatMap go
-  where
-    go (ClassStmt l x _ _ _) = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
-    go (EnumStmt l x _ )     = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
-    go (IfaceStmt l x )      = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
-    go _                     = []
-
-
----------------------------------------------------------------------------------------
-typeMembers :: PPR r => [ClassElt (AnnR r)] -> Either (F.FixResult Error) (TypeMembers r)
----------------------------------------------------------------------------------------
--- TODO
-typeMembers = undefined
-
--- typeMembers mut cs = TM ps ms sps sms call ctor sidx nidx
---   where
---     ps         = F.fromListSEnv props
---     ms         = undefined -- F.fromListSEnv
---     sps        = F.fromListSEnv sprops
---     sms        = undefined
---     call       = Nothing
---     sidx       = Nothing    -- XXX: This could be added
---     nidx       = Nothing
---
---     props      = [ (x, FI m (mut ^^ m) t) | MemberVarDecl l False x _ <- cs
---                                           , FieldAnn (m,t) <- ann_fact l ]
---     sprops     = [ (x, FI m (mut ^^ m) t) | MemberVarDecl l True x _ <- cs
---                                           , FieldAnn (m,t) <- ann_fact l ]
---
---     _          = foldl (M.insertWith (++)) M.empty $ methDefs ++ methDecls
---
---     methDefs   = [ (x, [(MemDef, MI (opt m) (mut m) t )]) | MemberMethDef l False x _ _ <- cs
---                                                           , MethAnn m t <- ann_fact l ]
---
---     methDecls  = [ (x, [(MemDecl, MI (opt m) (mut m) t)]) | MemberMethDecl l False x _ _ <- cs
---                                                           , MethAnn m t <- ann_fact l ]
---
---     smethDefs  = [ (x, [(MemDef, MI (opt m) (mut m) t)])  | MemberMethDef l True x _ _ <- cs
---                                                           , MethAnn (MI h m t) <- ann_fact l ]
---
---     smethDecls = [ (x, [(MemDecl, MI (opt m) (mut m) t)]) | MemberMethDecl l True x _ _ <- cs
---                                                           , MethAnn (MI h m t) <- ann_fact l ]
---
---     ctor       = listToMaybe [ f | Constructor l _ _ <- cs, ConsAnn f <- ann_fact l ]
---
---     mut ^^ ms  | Mutable `elem` ms   = tMut
---                | Immutable `elem` ms = tImm
---                | ReadOnly `elem` ms  = tRO
---                | otherwise           = mut
---
---     mmut ms    | MM Mutable `elem` ms   = tMut
---                | MM Immutable `elem` ms = tImm
---                | MM ReadOnly `elem` ms  = tRO
---                | otherwise              = Mutable
---
---     opt ms     | Optional `elem` ms  = Opt
---                | otherwise           = Req
---
---
--- OLD
---
---     go (MemberVarDecl l  s x _)    = [(l,ss x ,sk s,MemDefinition ,f) | FieldAnn f <- ann_fact l]
---     go (MemberMethDef l  s x _ _ ) = [(l,ss x ,sk s,MemDefinition ,f) | MethAnn  f <- ann_fact l]
---     go (MemberMethDecl l s x _ )   = [(l,ss x ,sk s,MemDeclaration,f) | MethAnn  f <- ann_fact l]
---     go (Constructor l _ _)         = [(l,cs   ,im  ,MemDefinition ,a) | ConsAnn  a <- ann_fact l]
---
---
---
---     sk True                        = StaticMember
---     sk False                       = InstanceMember
---     im                             = InstanceMember
---     cs                             = undefined -- ctorSymbol
---     ss                             = F.symbol
---
--- ---------------------------------------------------------------------------------------
--- mkTypeMembers :: (Eq q, IsLocated l, PPR r)
---               => RTypeQ q ()  -- Mutability
---               -> [(l,F.Symbol,StaticKind, MemberKind, TypeMemberQ q r)]
---               -> Either (F.FixResult Error) (TypeMembersQ q r)
--- ---------------------------------------------------------------------------------------
--- mkTypeMembers dm l0       = do m  <- foldM addTm M.empty l0
---                                l  <- T.mapM (join . prtn) $ M.toList m
---                                return $ fixMut $ M.fromList l
---   where
---
---     addTm ms (l,s,k,m,t)  | s == F.symbol t = Right $ M.insertWith (++) (s,k) [Loc (srcPos l) (m,t)] ms
---                           | otherwise       = Left  $ F.Unsafe $ single
---                                                     $ err (sourceSpanSrcSpan l)
---                                                     $ printf "Member '%s' does not match with annotation: %s"
---                                                       (ppshow s) (ppshow t)
---
---     prtn (k,v)            = (k,) . mapPair (map $ fmap snd)
---                           $ partition ((== MemDefinition) . fst . val) v
---
---     join (k,([t],[]))     = Right $ (k,val t)                   -- Single definition
---     join (k,(ds ,ts))     | length ts > 0
---                           = Right $ (k,foldl1 joinElts $ val <$> ts)
---                           | otherwise
---                           = Left  $ F.Unsafe
---                           $ map (\(Loc l v) -> err (sourceSpanSrcSpan l) $ msg (fst k) v) $ ds ++ ts
---
---     msg  k v              = printf "The following annotation for member '%s' is invalid:\n%s" (ppshow k)  (ppshow v)
---
---     fixMut                = M.map fixFldMut
---
---     fixFldMut (FieldSig s o m t) | isInheritedMutability m = FieldSig s o dm t
---     fixFldMut f                  = f
---
--- joinElts (CallSig t1)           (CallSig t2)         = CallSig           $ joinTys t1 t2
--- joinElts (ConsSig t1)           (ConsSig t2)         = ConsSig           $ joinTys t1 t2
--- joinElts (IndexSig x1 s1 t1)    (IndexSig _ _ t2)    = IndexSig x1 s1    $ joinTys t1 t2
--- joinElts (FieldSig x1 o1 m1 t1) (FieldSig _ _ m2 t2) | m1 == m2
---                                                      = FieldSig x1 o1 m1 $ joinTys t1 t2
--- joinElts (MethSig x1 t1)        (MethSig _ t2)       = MethSig  x1       $ joinTys t1 t2
--- joinElts t                      _                    = t
---
--- joinTys t1 t2 = mkAnd $ bkAnd t1 ++ bkAnd t2
---
-
-
--- Not including class, module, enum names
----------------------------------------------------------------------------------------
-visibleVars :: Data r => [Statement (AnnSSA r)] -> [(Id SrcSpan, VarInfo r)]
----------------------------------------------------------------------------------------
-visibleVars s = undefined
--- visibleVars s = [ (ann <$> n, (a,i,t))  | (n,l,k,a,i) <- hoistBindings s
---                                         , f           <- ann_fact l
---                                         , t           <- annToType a f ]
---   where
---     annToType Ambient (VarAnn (_,t)) = maybeToList t -- Hoist ReadOnly vars (i.e. function defs)
---     annToType Ambient (VarAnn (_,t)) = maybeToList t -- Hoist ImportDecl (i.e. function decls)
---     annToType Ambient (AmbVarAnn t)  = [t] -- Hoist ReadOnly vars (i.e. function defs)
---     annToType Ambient (AmbVarAnn t)  = [t] -- Hoist ImportDecl (i.e. function decls)
---     annToType _       _              = [ ]
---
-
-type BindInfo a = (Id a, a, SyntaxKind, Assignability, Initialization)
-
--- | Find all language level bindings in the scope of @s@.
---   This includes:
---
---    * function definitions/declarations,
---    * classes,
---    * modules,
---    * variables
---
---   E.g. declarations in the If-branch of a conditional expression. Note how
---   declarations do not escape module or function blocks.
---
--------------------------------------------------------------------------------
-hoistBindings :: Data r => [Statement (AnnSSA r)] -> [BindInfo (AnnSSA r)]
--------------------------------------------------------------------------------
-hoistBindings = snd . visitStmts vs ()
-  where
-    vs = scopeVisitor { accStmt = acs, accVDec = acv }
-
-    acs _ (FunctionStmt a x _ _) = [(x, a, FuncDefKind, Ambient, Initialized)]
-    acs _ (FuncAmbDecl a x _)    = [(x, a, FuncAmbientKind, Ambient, Initialized)]
-    acs _ (FuncOverload a x _  ) = [(x, a, FuncOverloadKind, Ambient, Initialized)]
-    acs _ (ClassStmt a x _ _ _ ) = [(x, a, ClassDefKind, Ambient, Initialized)]
-    acs _ (ModuleStmt a x _)     = [(x, a { fFact = modAnn x a }, ModuleDefKind, Ambient, Initialized)]
-    acs _ (EnumStmt a x _)       = [(x, a { fFact = enumAnn x a }, EnumDefKind, Ambient, Initialized)]
-    acs _ _                      = []
-
-    acv _ (VarDecl l n ii)       = [(n, l, VarDeclKind, varAsgn l, inited ii)] ++
-                                   [(n, l, VarDeclKind, WriteGlobal, inited ii) | AmbVarAnn _  <- fFact l]
-
-    inited (Just _) = Initialized
-    inited _        = Uninitialized
-    varAsgn l       = fromMaybe WriteLocal $ listToMaybe [ a | VarAnn a _ <- fFact l ]
-
-    modAnn  n l = ModuleAnn (F.symbol n) : fFact l
-    enumAnn n l = EnumAnn   (F.symbol n) : fFact l
 

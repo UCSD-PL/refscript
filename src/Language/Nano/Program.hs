@@ -6,12 +6,15 @@
 module Language.Nano.Program (
 
   -- * Programs
-    Nano (..)
+    Rsc (..)
   , BareRelRsc
   , BareRsc
+  , RRsc
   , SsaRsc
-  , RscR
-
+  , TcRsc
+  , RefScript
+  , UBareRsc
+  , USsaRsc
   , ExprSSAR, StmtSSAR
   , Source (..)
 
@@ -36,13 +39,13 @@ import           Language.Nano.Types
 
 
 ---------------------------------------------------------------------------------
--- | Nano Program
+-- | Rsc Program
 ---------------------------------------------------------------------------------
 --
 -- consts, aliases, invariants refer to absolute names
 -- (hence the use of RType r)
 
-data Nano a r = Nano {
+data Rsc a r = Rsc {
   --
   -- | Source AST
   --
@@ -84,17 +87,18 @@ newtype Source a = Src [Statement a]
 
 
 
-newtype BareRelRsc r  = BRRsc   (Nano (AnnRel r) r)        -- After parse (relative names)
-newtype BareRsc r     = BRsc    (Nano (AnnBare r) r)       -- After Parse
-newtype SsaRsc r      = SsaRsc  (Nano (AnnSSA r) r)        -- After SSA
-newtype RscR r        = Rsc     (Nano (AnnType r) r)       -- After TC
-type    Rsc           = RscR    F.Reft                     -- After Liquid
-type    UBareRsc      = BareRsc ()
-type    USsaRsc       = SsaRsc  ()
-type    URsc          = RscR    ()
+type BareRelRsc r = Rsc (AnnRel  r) r         -- After parse (relative names)
+type BareRsc r    = Rsc (AnnBare r) r         -- After parse (absolute names)
+type RRsc r       = Rsc (AnnBare r) r         -- After parse (absolute names)
+type SsaRsc r     = Rsc (AnnSSA  r) r         -- SSA
+type TcRsc r      = Rsc (AnnType r) r         -- Raw checking
+type RefScript    = RRsc F.Reft               -- Liquid
 
-type ExprSSAR r       = Expression (AnnSSA r)
-type StmtSSAR r       = Statement  (AnnSSA r)
+type UBareRsc     = BareRsc ()
+type USsaRsc      = SsaRsc  ()
+
+type ExprSSAR r   = Expression (AnnSSA r)
+type StmtSSAR r   = Statement  (AnnSSA r)
 
 
 

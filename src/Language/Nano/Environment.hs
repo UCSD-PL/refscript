@@ -86,11 +86,15 @@ envFindBound x (bounds -> b) = envFindTy x b
 
 
 ---------------------------------------------------------------------------------------
-fromListToEnv :: F.Symbolic s => [(s, (SyntaxKind, VarInfo r))] -> Env (SyntaxKind, EnvEntry r)
+fromListToEnv :: F.Symbolic s => [(s, SyntaxKind, VarInfo r)] -> Env (EnvEntry r)
 ---------------------------------------------------------------------------------------
-fromListToEnv = envFromListWithKey mergeVarInfo . concatMap f . M.toList . foldl merge M.empty
+fromListToEnv = envMap snd
+              . envFromListWithKey mergeVarInfo
+              . concatMap f
+              . M.toList
+              . foldl merge M.empty
   where
-    merge ms (x, (k,v)) = M.insertWith (++) (F.symbol x) [(k,v)] ms
+    merge ms (x, k, v) = M.insertWith (++) (F.symbol x) [(k,v)] ms
 
     f (s, vs)   = [ (s, (k, g v [ v' | (FuncOverloadKind, v') <- vs ])) | (k@FuncDefKind, v) <- vs ] ++
                     ( (s,) . (FuncAmbientKind,) <$> amb [ v | (FuncAmbientKind, v) <- vs ] ) ++

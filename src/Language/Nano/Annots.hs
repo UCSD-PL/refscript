@@ -8,8 +8,8 @@ module Language.Nano.Annots (
   -- * SSA
     SsaInfo(..), Var
 
-  -- * Annotations
-  , NodeId, Annot (..), UFact, FactQ (..), Fact, phiVarsAnnot
+  , NodeId
+  , UFact, FactQ (..), Fact, phiVarsAnnot
 
   , SyntaxKind(..), MemberKind(..)
 
@@ -18,8 +18,10 @@ module Language.Nano.Annots (
   -- * Casts
   , CastQ(..), Cast, SubTRes(..), castType
 
-  -- * Aliases for annotated Source
-  , AnnQ, AnnR, AnnRel, AnnBare, UAnnBare, AnnSSA , UAnnSSA
+  -- * Annotations & aliases
+  , Annot (..)
+  , FAnnQ (..)
+  , AnnR, AnnRel, AnnBare, UAnnBare, AnnSSA , UAnnSSA
   , AnnType, UAnnType, AnnInfo, UAnnInfo
 
   -- Options
@@ -35,6 +37,7 @@ import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.AST.Annotations
 import           Language.Nano.AST.Syntax
+import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
@@ -127,12 +130,29 @@ type NodeId    = Int
 
 data Annot b a = Ann { ann_id   :: NodeId
                      , ann      ::  a
-                     , ann_fact :: [b] } deriving (Show, Data, Typeable)
+                     , ann_fact :: [b]
+                     } deriving (Show, Data, Typeable)
 
-type AnnQ q  r = Annot (FactQ q r) SrcSpan
+instance Annotated (Annot b) where
+  getAnnotation = ann
 
-type AnnR    r = AnnQ AK r                      -- absolute paths,
-type AnnRel  r = AnnQ RK r                      -- relative paths, NO facts, parsed versioin
+instance Default a => Default (Annot b a) where
+  def = Ann def def []
+
+instance Eq (Annot a SrcSpan) where
+  (Ann i1 s1 _) == (Ann i2 s2 _) = (i1,s1) == (i2,s2)
+
+
+data FAnnQ q r = FA  { fId   :: NodeId
+                     , fSrc  :: SrcSpan
+                     , fFact :: [FactQ q r]
+                     } deriving (Data, Typeable)
+
+instance IsLocated (FAnnQ q r) where
+  srcPos (FA _ s _) = s
+
+type AnnR   r  = FAnnQ AK r                      -- absolute paths,
+type AnnRel r  = FAnnQ RK r                      -- relative paths, NO facts, parsed versioin
 type AnnBare r = AnnR r                         -- absolute paths, NO facts
 type AnnSSA  r = AnnR r                         -- absolute paths, Phi facts
 type AnnType r = AnnR r                         -- absolute paths, Phi + t. annot. + Cast facts
@@ -144,28 +164,15 @@ type UAnnType  = AnnType ()
 type UAnnInfo  = AnnInfo ()
 
 
-newtype SsaInfo r = SI (Var r) deriving (Ord, Typeable, Data)
+newtype SsaInfo r = SI (Var r) deriving (Typeable, Data)
 
 instance Eq (SsaInfo r) where
-  SI i1 == SI i2 =  i1 == i2
+  SI i1 == SI i2 = i1 == i2
 
 type Var r = Id (AnnSSA r)
 
 
-instance Annotated (Annot b) where
-  getAnnotation = ann
-
-instance Default a => Default (Annot b a) where
-  def = Ann def def []
-
-instance Ord (AnnSSA  r) where
-  compare (Ann i1 s1 _) (Ann i2 s2 _) = compare (i1,s1) (i2,s2)
-
-instance Eq (Annot a SrcSpan) where
-  (Ann i1 s1 _) == (Ann i2 s2 _) = (i1,s1) == (i2,s2)
-
-
-phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
+phiVarsAnnot l = concat [xs | PhiVar xs <- fFact l]
 
 
 -- | scrapeVarDecl: Scrape a variable declaration for annotations
@@ -173,9 +180,9 @@ phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
 scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, Assignability, Maybe (RType r))]
 ----------------------------------------------------------------------------------
 scrapeVarDecl (VarDecl l _ _)
-  = [ (VarDeclKind, a, t) | VarAnn a t <- ann_fact l ]
- ++ [ (AmbVarDeclKind, Ambient, Just t) | AmbVarAnn t <- ann_fact l ]
- ++ [ (FieldDefKind, Ambient, Just t) | FieldAnn _ (FI _ _ t) <- ann_fact l ] -- Assignability value is dummy
+  = [ (VarDeclKind, a, t) | VarAnn a t <- fFact l ]
+ ++ [ (AmbVarDeclKind, Ambient, Just t) | AmbVarAnn t <- fFact l ]
+ ++ [ (FieldDefKind, Ambient, Just t) | FieldAnn _ (FI _ _ t) <- fFact l ] -- Assignability value is dummy
 
 
 -----------------------------------------------------------------------------
@@ -184,3 +191,4 @@ scrapeVarDecl (VarDecl l _ _)
 
 data RscOption = RealOption
     deriving (Eq, Show, Data, Typeable)
+

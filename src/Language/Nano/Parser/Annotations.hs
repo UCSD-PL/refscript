@@ -31,8 +31,10 @@ import           Language.Nano.Locations    hiding (val)
 import           Language.Nano.Names
 import           Language.Nano.Parser.Sorts
 import           Language.Nano.Parser.Types
+import           Language.Nano.Pretty
 import           Language.Nano.Types
 import           Prelude                    hiding (mapM)
+import           Text.PrettyPrint.HughesPJ  (text)
 
 ---------------------------------------------------------------------------------
 -- | Specifications
@@ -57,6 +59,9 @@ data RawSpec
   | RawExported (SrcSpan, String)   -- Exported
   | RawReadOnly (SrcSpan, String)   -- ReadOnly
   deriving (Show,Eq,Ord,Data,Typeable,Generic)
+
+instance PP (RawSpec) where
+  pp = text . getSpecString
 
 data PSpec l r
   = Meas     (Id l, RTypeQ RK r)

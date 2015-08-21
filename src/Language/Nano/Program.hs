@@ -7,8 +7,12 @@ module Language.Nano.Program (
 
   -- * Programs
     Nano (..)
-  , UNanoBare, UNanoSSA, NanoBareR, NanoBareRelR, NanoSSAR, NanoRefType
-  , NanoTypeR, UNanoType, ExprSSAR, StmtSSAR
+  , BareRelRsc
+  , BareRsc
+  , SsaRsc
+  , RscR
+
+  , ExprSSAR, StmtSSAR
   , Source (..)
 
   -- * SSA Ids
@@ -64,7 +68,7 @@ data Nano a r = Nano {
   --
   , invts    :: ![Located (RType r)]
   --
-  -- | Maximum id
+  -- | Maximum node id
   --
   , maxId    :: NodeId
   --
@@ -79,18 +83,19 @@ newtype Source a = Src [Statement a]
   deriving (Data, Typeable)
 
 
-type NanoBareRelR r = Nano  (AnnRel  r) r       -- ^ After parse (relative names)
-type NanoBareR r    = Nano  (AnnBare r) r       -- ^ After Parse
-type NanoSSAR r     = Nano  (AnnSSA  r) r       -- ^ After SSA
-type NanoTypeR r    = Nano  (AnnType r) r       -- ^ After TC
-type NanoRefType    = NanoTypeR F.Reft          -- ^ After Liquid
 
-type ExprSSAR r     = Expression (AnnSSA r)
-type StmtSSAR r     = Statement  (AnnSSA r)
+newtype BareRelRsc r  = BRRsc   (Nano (AnnRel r) r)        -- After parse (relative names)
+newtype BareRsc r     = BRsc    (Nano (AnnBare r) r)       -- After Parse
+newtype SsaRsc r      = SsaRsc  (Nano (AnnSSA r) r)        -- After SSA
+newtype RscR r        = Rsc     (Nano (AnnType r) r)       -- After TC
+type    Rsc           = RscR    F.Reft                     -- After Liquid
+type    UBareRsc      = BareRsc ()
+type    USsaRsc       = SsaRsc  ()
+type    URsc          = RscR    ()
 
-type UNanoBare      = NanoBareR ()
-type UNanoSSA       = NanoSSAR  ()
-type UNanoType      = NanoTypeR ()
+type ExprSSAR r       = Expression (AnnSSA r)
+type StmtSSAR r       = Statement  (AnnSSA r)
+
 
 
 ---------------------------------------------------------------------------

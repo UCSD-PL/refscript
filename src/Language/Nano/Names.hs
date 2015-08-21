@@ -51,16 +51,16 @@ module Language.Nano.Names (
 
   ) where
 
-import           Control.Applicative           ((<$>))
+import           Control.Applicative       ((<$>))
 import           Data.Data
 import           Data.Default
-import           Data.Foldable                 (Foldable ())
+import           Data.Foldable             (Foldable ())
 import           Data.Hashable
-import qualified Data.HashSet                  as H
-import           Data.List                     (find)
+import qualified Data.HashSet              as H
+import           Data.List                 (find)
 import           Data.Traversable
 import           GHC.Generics
-import qualified Language.Fixpoint.Types       as F
+import qualified Language.Fixpoint.Types   as F
 import           Language.Nano.Locations
 import           Text.PrettyPrint.HughesPJ
 
@@ -136,7 +136,7 @@ returnName :: String
 returnName = "$result"
 
 data Id a = Id a String
-          deriving (Show,Eq,Ord,Data,Typeable,Functor,Foldable,Traversable,Generic)
+          deriving (Show,Data,Typeable,Functor,Foldable,Traversable,Generic)
 
 unId :: Id a -> String
 unId (Id _ s) = s
@@ -152,6 +152,12 @@ symbolId l x = Id l $ F.symbolString $ F.symbol x
 
 returnId   :: a -> Id a
 returnId x = Id x returnName
+
+instance Eq (Id a) where
+  Id _ x1 == Id _ x2 = x1 == x2
+
+instance Ord (Id a) where
+  Id _ x1 `compare` Id _ x2 = x1 `compare` x2
 
 instance F.Symbolic (Id a) where
   symbol (Id _ x)   = F.symbol x

@@ -1,8 +1,4 @@
 {-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE DeriveDataTypeable        #-}
-{-# LANGUAGE DeriveFoldable            #-}
-{-# LANGUAGE DeriveFunctor             #-}
-{-# LANGUAGE DeriveTraversable         #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE ImpredicativeTypes        #-}
@@ -10,41 +6,38 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE StandaloneDeriving        #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 
-module Language.Nano.Visitor (
-    Transformable (..)
-  , transFmap
-  , transAnnR
-  , transRType
+module Language.Nano.Visitor
+    (
+      Transformable (..)
+    , transRType
 
-  , NameTransformable (..)
-  , ntransFmap
-  , ntransAnnR
+    , NameTransformable (..)
+    , ntransFmap
 
-  , Visitor, VisitorM (..)
-  , defaultVisitor
-  , scopeVisitor
+    , Visitor, VisitorM (..)
+    , defaultVisitor
+    , scopeVisitor
 
-  , visitNano
-  , visitStmts
-  , visitStmtsT
-  , foldNano
+    , visitNano
+    , visitStmts
+    , visitStmtsT
+    , foldNano
 
-  -- * Traversals / folds / maps
-  , hoistBindings
-  , visibleVars
+    -- * Traversals / folds / maps
+    , hoistBindings
+    , visibleVars
 
-  , accumModules
-  , accumNamesAndPaths
+    , accumModules
+    , accumNamesAndPaths
 
-  , typeMembers
-  -- , mkTypeMembers
-  -- , mkVarEnv
+    , typeMembers
+    -- , mkTypeMembers
+    -- , mkVarEnv
 
-  ) where
+    ) where
 
 import           Control.Applicative           ((<$>), (<*>))
 import           Control.Exception             (throw)
@@ -52,16 +45,16 @@ import           Control.Monad.Trans.Class     (lift)
 import           Control.Monad.Trans.State     (StateT, modify, runState,
                                                 runStateT)
 import           Data.Data
+import           Data.Default
 import           Data.Functor.Identity         (Identity)
 import           Data.Generics
 import qualified Data.HashSet                  as H
 import           Data.Maybe                    (fromMaybe, listToMaybe)
 import           Data.Monoid
 import qualified Data.Traversable              as T
-
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types       as F
-import           Language.Nano.Annots          hiding (err)
+import           Language.Nano.Annots          hiding (Annot, err)
 import           Language.Nano.AST
 import           Language.Nano.Core.Env
 import           Language.Nano.Errors
@@ -73,8 +66,6 @@ import           Language.Nano.Pretty
 import           Language.Nano.Program
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
-
--- import           Debug.Trace                        (trace)
 
 
 --------------------------------------------------------------------------------
@@ -230,7 +221,7 @@ visitStmtM v = vS
     step _ s@(IfaceStmt {})         = return s
     step _ s@(EmptyStmt {})         = return s
     step c (EnumStmt l n es)        = EnumStmt     l <$> (vI c n) <*> (vEE c <$$> es)
-    step _ s                        = throw $ unimplemented l "visitStatement" s  where l = srcPos $ getAnnotation s
+    step _ s                        = throw $ unimplemented l "visitStatement" s  where l = srcPos s
 
 
 visitEnumElt v c (EnumElt l i n)    = EnumElt l      <$> visitId v c i <*> return n
@@ -270,7 +261,7 @@ visitExpr v = vE
      step c (FuncExpr l f xs ss)     = FuncExpr l <$> (vI c <$$> f) <*> (vI c <$$> xs) <*> (vS c <$$> ss)
      step c (NewExpr l e es)         = NewExpr  l <$> (vE c e) <*> (vE c <$$> es)
      step c (Cast l e)               = Cast l     <$> (vE c e)
-     step _ e                        = throw $ unimplemented l "visitExpr " e  where l = srcPos $ getAnnotation e
+     step _ e                        = throw $ unimplemented l "visitExpr " e  where l = srcPos e
 
 visitClassElt :: (Monad m, Functor m, Monoid a, IsLocated b)
               => VisitorM m a ctx b -> ctx -> ClassElt b -> VisitT m a (ClassElt b)
@@ -387,13 +378,18 @@ instance Transformable ModuleDefQ where
 instance Transformable VarInfoQ where
   trans f αs xs (VI a i t) = VI a i $ trans f αs xs t
 
+instance Transformable FAnnQ where
+  trans f αs xs (FA i s ys) = FA i s $ trans f αs xs <$> ys
+
+transFmap ::  (F.Reftable r, Functor thing)
+          => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
+          -> [TVar] -> thing (FAnnQ q r) -> thing (FAnnQ q r)
+transFmap f αs = fmap (trans f αs [])
+
 transIFDBase f αs xs (es,is) = (trans f αs xs <$> es, trans f αs xs <$> is)
 
---------------------------------------------------------------------------------------------
-transFact :: F.Reftable r
-          => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
-          -> [TVar] -> [BindQ q r] -> FactQ q r -> FactQ q r
---------------------------------------------------------------------------------------------
+transFact :: F.Reftable r => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
+                          -> [TVar] -> [BindQ q r] -> FactQ q r -> FactQ q r
 transFact f = go
   where
     go αs xs (PhiVarTy (v,t))  = PhiVarTy      $ (v, trans f αs xs t)
@@ -426,12 +422,9 @@ transCast f = go
     go αs xs (CUp t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
     go αs xs (CDn t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
 
-
---------------------------------------------------------------------------------------------
 transRType :: F.Reftable r
            => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
            ->  [TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r
---------------------------------------------------------------------------------------------
 transRType f               = go
   where
     go αs xs (TPrim c r)   = f αs xs $ TPrim c r
@@ -447,19 +440,6 @@ transRType f               = go
                                                            t'  = go αs xs' t
                                                            xs' = bs ++ xs
     go _  _  (TExp e)      = TExp e
-
--- RJ: use newtype for AnnR and NanoBareR so we just make the below instances
-
-transAnnR :: F.Reftable r => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
-          -> [TVar] -> AnnQ q r  -> AnnQ q r
-transAnnR f αs a = a { ann_fact = trans f αs [] <$> ann_fact a }
-
-transFmap ::  (F.Reftable r, Functor thing)
-          => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
-          -> [TVar]
-          -> thing (AnnQ q r)
-          -> thing (AnnQ q r)
-transFmap f αs = fmap (transAnnR f αs)
 
 
 --------------------------------------------------------------------------------------------
@@ -512,11 +492,9 @@ instance NameTransformable FieldInfoQ where
 instance NameTransformable MethodInfoQ where
   ntrans f g (MI o m t) = MI o m (ntrans f g t)
 
----------------------------------------------------------------------------
-ntransFmap ::  (F.Reftable r, Functor t) => (QN p -> QN q) -> (QP p -> QP q) -> t (AnnQ p r) -> t (AnnQ q r)
----------------------------------------------------------------------------
-ntransFmap f g = fmap (ntransAnnR f g)
-
+ntransFmap ::  (F.Reftable r, Functor t)
+           => (QN p -> QN q) -> (QP p -> QP q) -> t (FAnnQ p r) -> t (FAnnQ q r)
+ntransFmap f g = fmap (ntrans f g)
 
 ntransFact f g = go
   where
@@ -541,10 +519,9 @@ ntransFact f g = go
     go (ReadOnlyVar)     = ReadOnlyVar
     go (ModuleAnn m)     = ModuleAnn     $ m
     go (EnumAnn e)       = EnumAnn       $ e
+    go (BypassUnique)    = BypassUnique
 
----------------------------------------------------------------------------
 ntransCast :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> CastQ p r -> CastQ q r
----------------------------------------------------------------------------
 ntransCast f g = go
   where
     go CNo         = CNo
@@ -552,9 +529,7 @@ ntransCast f g = go
     go (CUp t1 t2) = CUp (ntrans f g t1) (ntrans f g t2)
     go (CDn t1 t2) = CUp (ntrans f g t1) (ntrans f g t2)
 
----------------------------------------------------------------------------
 ntransRType :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> RTypeQ p r -> RTypeQ q r
----------------------------------------------------------------------------
 ntransRType f g         = go
   where
     go (TPrim p r)   = TPrim p r
@@ -571,10 +546,8 @@ ntransRType f g         = go
                                             t'  = go t
     go (TExp e)      = TExp e
 
----------------------------------------------------------------------------
-ntransAnnR :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> AnnQ p r -> AnnQ q r
----------------------------------------------------------------------------
-ntransAnnR f g a = a { ann_fact = ntrans f g <$> ann_fact a }
+instance NameTransformable FAnnQ where
+  ntrans f g (FA i s ys) = FA i s $ ntrans f g <$> ys
 
 
 ---------------------------------------------------------------------------
@@ -609,7 +582,7 @@ accumModules ss = topLevel : rest ss
     f e@(ModuleStmt _ x ms) s = let p = s ++ [F.symbol x] in
                                 ([(QP AK_ (srcPos e) p, ms)], p, False)
     f _                    s  = ([], s, True)
-    topLevel                  = (QP AK_ (srcPos dummySpan) [], ss)
+    topLevel                  = (QP AK_ def [], ss)
 
 
 type DeclInfo r = (SyntaxKind, VarInfo r)
@@ -786,17 +759,17 @@ hoistBindings = snd . visitStmts vs ()
     acs _ (FuncAmbDecl a x _)    = [(x, a, FuncAmbientKind, Ambient, Initialized)]
     acs _ (FuncOverload a x _  ) = [(x, a, FuncOverloadKind, Ambient, Initialized)]
     acs _ (ClassStmt a x _ _ _ ) = [(x, a, ClassDefKind, Ambient, Initialized)]
-    acs _ (ModuleStmt a x _)     = [(x, a { ann_fact = modAnn x a }, ModuleDefKind, Ambient, Initialized)]
-    acs _ (EnumStmt a x _)       = [(x, a { ann_fact = enumAnn x a }, EnumDefKind, Ambient, Initialized)]
+    acs _ (ModuleStmt a x _)     = [(x, a { fFact = modAnn x a }, ModuleDefKind, Ambient, Initialized)]
+    acs _ (EnumStmt a x _)       = [(x, a { fFact = enumAnn x a }, EnumDefKind, Ambient, Initialized)]
     acs _ _                      = []
 
     acv _ (VarDecl l n ii)       = [(n, l, VarDeclKind, varAsgn l, inited ii)] ++
-                                   [(n, l, VarDeclKind, WriteGlobal, inited ii) | AmbVarAnn _  <- ann_fact l]
+                                   [(n, l, VarDeclKind, WriteGlobal, inited ii) | AmbVarAnn _  <- fFact l]
 
     inited (Just _) = Initialized
     inited _        = Uninitialized
-    varAsgn l       = fromMaybe WriteLocal $ listToMaybe [ a | VarAnn a _ <- ann_fact l ]
+    varAsgn l       = fromMaybe WriteLocal $ listToMaybe [ a | VarAnn a _ <- fFact l ]
 
-    modAnn  n l = ModuleAnn (F.symbol n) : ann_fact l
-    enumAnn n l = EnumAnn   (F.symbol n) : ann_fact l
+    modAnn  n l = ModuleAnn (F.symbol n) : fFact l
+    enumAnn n l = EnumAnn   (F.symbol n) : fFact l
 

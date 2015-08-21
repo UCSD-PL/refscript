@@ -24,11 +24,11 @@ import           Language.Fixpoint.Names
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Types       hiding (Expression, Loc, quals)
 import           Language.Nano.Annots
-import           Language.Nano.AST
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Names
 import           Language.Nano.Parser.Common
 import           Language.Nano.Parser.Lexer
+import           Language.Nano.Transformations
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
 import           Prelude                       hiding (mapM)

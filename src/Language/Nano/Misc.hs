@@ -1,9 +1,8 @@
-{-# LANGUAGE DeriveDataTypeable               #-}
-{-# LANGUAGE FlexibleInstances                #-}
-{-# LANGUAGE Rank2Types                       #-} 
-{-# LANGUAGE Rank2Types                       #-} 
-{-# LANGUAGE LambdaCase                       #-}
-{-# LANGUAGE NoMonomorphismRestriction        #-}
+{-# LANGUAGE DeriveDataTypeable        #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE Rank2Types                #-}
 {-# OPTIONS_GHC -fno-warn-incomplete-patterns #-}
 
 
@@ -25,49 +24,51 @@ module Language.Nano.Misc (
 
   -- SYB
   , everywhereM'
-  
+
   -- Zip
   , zipWith3M, zipWith3M_
   , unzip4
 
   -- Maybe
   , maybeM, maybeM_, fromJust', maybeToEither, mseq
-                                               
+
   -- Container operations
   , isProperSubsetOf, isEqualSet, isProperSubmapOf
   , equalKeys
 
   , foldM1
-  
+
   , withSingleton, withSingleton'
 
   , dup
 
   , mappendM, justM
 
+  -- Convenience
   , case1, case2, case3
   , (<##>), (<###>)
+  , (&)
 
 ) where
 
-import           Control.Applicative                  ((<$>))
-import           Control.Monad                        (liftM2, foldM)
+import           Control.Applicative       ((<$>))
+import           Control.Monad             (foldM, liftM2)
 import           Data.Data
-import           Data.Maybe                           (isJust)
-import           Data.Monoid                          (Monoid, mappend)
+import           Data.Function             (on)
 import           Data.Generics.Aliases
-import           Data.HashSet
-import           Data.Function                        (on)
 import           Data.Hashable
-import qualified Data.HashMap.Strict                  as M
-import qualified Data.List                            as L
+import qualified Data.HashMap.Strict       as M
+import           Data.HashSet
+import qualified Data.List                 as L
+import           Data.Maybe                (isJust)
+import           Data.Monoid               (Monoid, mappend)
 
-import qualified Language.Fixpoint.Types              as F
 import           Language.Fixpoint.Misc
+import qualified Language.Fixpoint.Types   as F
 import           Text.PrettyPrint.HughesPJ
 
 -------------------------------------------------------------------------------
-mapi :: (Int -> a -> b) -> [a] -> [b] 
+mapi :: (Int -> a -> b) -> [a] -> [b]
 -------------------------------------------------------------------------------
 mapi f          = go 0
   where
@@ -79,12 +80,12 @@ mapi f          = go 0
 -------------------------------------------------------------------------------
 mapFstM :: (Functor m, Monad m) => (a -> m c) -> (a, b) -> m (c, b)
 -------------------------------------------------------------------------------
-mapFstM f = mapPairM f return  
+mapFstM f = mapPairM f return
 
 -------------------------------------------------------------------------------
 mapSndM :: (Functor m, Monad m) => (b -> m c) -> (a, b) -> m (a, c)
 -------------------------------------------------------------------------------
-mapSndM = mapPairM return 
+mapSndM = mapPairM return
 
 -------------------------------------------------------------------------------
 mapPairM :: (Functor m, Monad m) => (a -> m c) -> (b -> m d) -> (a, b) -> m (c, d)
@@ -103,7 +104,7 @@ either2Bool :: Either a b -> Bool
 either2Bool = either (const False) (const True)
 
 -------------------------------------------------------------------------------
-mseq :: (Monad m) => m (Maybe a) -> (a -> m (Maybe b)) -> m (Maybe b) 
+mseq :: (Monad m) => m (Maybe a) -> (a -> m (Maybe b)) -> m (Maybe b)
 -------------------------------------------------------------------------------
 mseq act k = do z <- act
                 case z of
@@ -153,7 +154,7 @@ appFth4 (a,b,c,d) f = (a,b,c,f d)
 
 instance F.Fixpoint Char where
   toFix = char
- 
+
 
 --------------------------------------------------------------------------------
 everywhereM' :: Monad m => GenericM m -> GenericM m
@@ -188,16 +189,16 @@ maybeToEither e Nothing  = Left e
 -- | Sets / maps
 
 isProperSubsetOf :: (Eq a, Hashable a) => HashSet a -> HashSet a -> Bool
-s1 `isProperSubsetOf` s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) > 0  
+s1 `isProperSubsetOf` s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) > 0
 
 isEqualSet :: (Eq a, Hashable a) => HashSet a -> HashSet a -> Bool
-s1 `isEqualSet` s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) == 0  
+s1 `isEqualSet` s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) == 0
 
 (\\) :: (Eq a, Hashable a) => HashSet a -> HashSet a -> HashSet a
 (\\) = difference
 
 isProperSubmapOf :: (Eq a, Hashable a) => M.HashMap a b -> M.HashMap a b -> Bool
-isProperSubmapOf = isProperSubsetOf `on` (fromList . M.keys) 
+isProperSubmapOf = isProperSubsetOf `on` (fromList . M.keys)
 
 equalKeys :: (Eq a, Ord a, Hashable a) => M.HashMap a b -> M.HashMap a b -> Bool
 equalKeys =  (==) `on` (L.sort . M.keys)
@@ -206,11 +207,11 @@ foldM1 :: (Monad m) => (a -> a -> m a) -> [a] -> m a
 foldM1 _ [] = error "foldM1" "empty list"
 foldM1 f (x:xs) = foldM f x xs
 
-withSingleton :: Monad m => (a -> m b) -> m b -> [a] -> m b 
+withSingleton :: Monad m => (a -> m b) -> m b -> [a] -> m b
 withSingleton f _ [x] = f x
 withSingleton _ b _   = b
 
-withSingleton' :: Monad m => m b -> (a -> m b) -> m b -> [a] -> m b 
+withSingleton' :: Monad m => m b -> (a -> m b) -> m b -> [a] -> m b
 withSingleton' b _ _  [ ] = b
 withSingleton' _ f _  [x] = f x
 withSingleton' _ _ e  _   = e
@@ -232,3 +233,5 @@ f <###> x = ((f <$>) <$>) <$> x
 
 justM = (Just <$>)
 
+(&) :: a -> (a -> b) -> b
+x & f = f x

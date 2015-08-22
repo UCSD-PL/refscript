@@ -12,7 +12,7 @@
 module Language.Nano.Visitor
     (
       Transformable (..)
-    , transRType
+    , transFmap
 
     , NameTransformable (..)
     , ntransFmap
@@ -30,8 +30,7 @@ module Language.Nano.Visitor
 import           Control.Applicative           ((<$>), (<*>))
 import           Control.Exception             (throw)
 import           Control.Monad.Trans.Class     (lift)
-import           Control.Monad.Trans.State     (StateT, modify, runState,
-                                                runStateT)
+import           Control.Monad.Trans.State     (StateT, modify, runState, runStateT)
 import           Data.Functor.Identity         (Identity)
 import           Data.Monoid
 import qualified Data.Traversable              as T
@@ -167,7 +166,7 @@ visitSource v c (Src ss) = Src <$> visitStmtsM v c ss
 
 visitStmtsM   :: (Monad m, Functor m, Monoid a, IsLocated b)
               => VisitorM m a ctx b -> ctx -> [Statement b] -> VisitT m a [Statement b]
-visitStmtsM v c ss = mapM (visitStmtM v c) ss
+visitStmtsM v = mapM . visitStmtM v
 
 
 visitStmtM   :: (Monad m, Functor m, Monoid a, IsLocated b)

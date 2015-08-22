@@ -27,7 +27,7 @@ import           Language.Nano.Types
 -- tx :: RefType -> RefType p(using pe' and te')
 -- lift above to Annot r
 
-expandAliases   :: NanoBareRelR F.Reft -> NanoBareRelR F.Reft
+expandAliases   :: RelRefScript -> RelRefScript
 expandAliases p =  expandCodePred pe'
                 $  expandCodeTAlias te'
                 $  expandPred pe'
@@ -38,17 +38,17 @@ expandAliases p =  expandCodePred pe'
     pe'         = expandPAliasEnv $ pAlias p
     te'         = expandTAliasEnv $ tAlias p
 
-expandCodeTAlias :: TAliasEnv (RTypeQ RK F.Reft) -> NanoBareRelR F.Reft -> NanoBareRelR F.Reft
-expandCodeTAlias te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
+expandCodeTAlias :: TAliasEnv (RTypeQ RK F.Reft) -> RelRefScript -> RelRefScript
+expandCodeTAlias te p@(Rsc { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
   where
     patch :: AnnRel F.Reft -> AnnRel F.Reft
-    patch (Ann i ss f) = Ann i ss (expandRefType te <$> f)
+    patch (FA i ss f) = FA i ss $ expandRefType te <$> f
 
 -- expandCodePred :: PAliasEnv -> NanoRefType -> NanoRefType
-expandCodePred te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
+expandCodePred te p@(Rsc { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
   where
     -- patch :: AnnType F.Reft -> AnnType F.Reft
-    patch (Ann i ss f) = Ann i ss (expandPred te <$> f)
+    patch (FA i ss f) = FA i ss (expandPred te <$> f)
 
 
 ------------------------------------------------------------------------------

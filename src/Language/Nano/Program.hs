@@ -13,6 +13,7 @@ module Language.Nano.Program (
   , SsaRsc
   , TcRsc
   , RefScript
+  , RelRefScript
   , UBareRsc
   , USsaRsc
   , ExprSSAR, StmtSSAR
@@ -93,7 +94,7 @@ type RRsc r       = Rsc (AnnBare r) r         -- After parse (absolute names)
 type SsaRsc r     = Rsc (AnnSSA  r) r         -- SSA
 type TcRsc r      = Rsc (AnnType r) r         -- Raw checking
 type RefScript    = RRsc F.Reft               -- Liquid
-
+type RelRefScript = BareRelRsc F.Reft
 type UBareRsc     = BareRsc ()
 type USsaRsc      = SsaRsc  ()
 

@@ -35,6 +35,7 @@ import           Language.Nano.Misc
 import           Language.Nano.Names
 import           Language.Nano.Pretty
 import           Language.Nano.Program
+import           Language.Nano.Traversals
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
 import           Language.Nano.Visitor
@@ -45,7 +46,7 @@ import           Language.Nano.Visitor
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-convertTVars :: F.Reftable r => Nano (AnnRel r) r -> Nano (AnnRel r) r
+convertTVars :: F.Reftable r => BareRelRsc r -> BareRelRsc r
 -------------------------------------------------------------------------------
 convertTVars a = visitNano convertTvarVisitor [] a
 
@@ -82,8 +83,8 @@ ctxStmtTvar as s = go s ++ as
     go s@(ModuleStmt {})   = grab s
     go _                   = []
 
-    grab :: Statement (AnnQ q r) -> [TVar]
-    grab = concatMap factTVars . ann_fact . getAnnotation
+    grab :: Statement (FAnnQ q r) -> [TVar]
+    grab = concatMap factTVars . fFact . getAnnotation
 
 ctxCEltTvar as s = go s ++ as
   where
@@ -92,8 +93,8 @@ ctxCEltTvar as s = go s ++ as
     go s@MemberMethDef{}   = grab s
     go _                   = []
 
-    grab :: ClassElt (AnnQ q r) -> [TVar]
-    grab = concatMap factTVars . ann_fact . getAnnotation
+    grab :: ClassElt (FAnnQ q r) -> [TVar]
+    grab = concatMap factTVars . fFact . getAnnotation
 
 ----------------------------------------------------------------------------------
 factTVars :: FactQ q r -> [TVar]
@@ -125,12 +126,12 @@ factTVars = go
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-replaceAbsolute :: (PPR r, Data r, Typeable r) => NanoBareRelR r -> NanoBareR r
+replaceAbsolute :: (PPR r, Data r, Typeable r) => BareRelRsc r -> BareRsc r
 ---------------------------------------------------------------------------------------
-replaceAbsolute pgm@(Nano { code = Src ss }) = pgm { code = Src $ (tr <$>) <$> ss }
+replaceAbsolute pgm@(Rsc { code = Src ss }) = pgm { code = Src $ (tr <$>) <$> ss }
   where
     (ns, ps)        = accumNamesAndPaths ss
-    tr l            = ntransAnnR (safeAbsName l) (safeAbsPath l) l
+    tr l            = ntrans (safeAbsName l) (safeAbsPath l) l
     safeAbsName l a = case absAct (absoluteName ns) l a of
                         Just a' -> a'
                         -- If it's a type alias, don't throw error
@@ -143,7 +144,7 @@ replaceAbsolute pgm@(Nano { code = Src ss }) = pgm { code = Src $ (tr <$>) <$> s
     isAlias (QN (QP RK_ _ []) s) = envMem s $ tAlias pgm
     isAlias (QN _ _) = False
 
-    absAct f l a    = I.lookup (ann_id l) mm >>= (`f` a)
+    absAct f l a    = I.lookup (fId l) mm >>= (`f` a)
     mm              = snd $ visitStmts vs (QP AK_ def []) ss
     vs              = defaultVisitor { ctxStmt = cStmt }
                                      { accStmt = acc   }
@@ -153,7 +154,7 @@ replaceAbsolute pgm@(Nano { code = Src ss }) = pgm { code = Src $ (tr <$>) <$> s
     cStmt (QP AK_ l p) (ModuleStmt _ x _)
                     = QP AK_ l $ p ++ [F.symbol x]
     cStmt q _       = q
-    acc c s         = I.singleton (ann_id a) c where a = getAnnotation s
+    acc c s         = I.singleton (fId a) c where a = getAnnotation s
 
 
 ---------------------------------------------------------------------------------------
@@ -161,23 +162,23 @@ replaceAbsolute pgm@(Nano { code = Src ss }) = pgm { code = Src $ (tr <$>) <$> s
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-replaceDotRef :: NanoBareR F.Reft -> NanoBareR F.Reft
+replaceDotRef :: RefScript -> RefScript
 ---------------------------------------------------------------------------------------
-replaceDotRef p@(Nano{ code = Src fs, tAlias = ta, pAlias = pa, invts = is })
-    = p { code         = Src $      tf       <##>  fs
-        , tAlias       = transRType tt [] [] <###> ta
-        , pAlias       =            tt [] [] <##>  pa
-        , invts        = transRType tt [] [] <##>  is
+replaceDotRef p@(Rsc { code = Src fs, tAlias = ta, pAlias = pa, invts = is })
+    = p { code         = Src $ tf       <##>  fs
+        , tAlias       = trans tt [] [] <###> ta
+        , pAlias       =       tt [] [] <##>  pa
+        , invts        = trans tt [] [] <##>  is
         }
   where
-    tf (Ann l a facts) = Ann l a $ trans tt [] [] <$> facts
-    tt _ _             = fmap $ FV.trans vs () ()
+    tf (FA l a facts) = FA l a $ trans tt [] [] <$> facts
+    tt _ _            = fmap $ FV.trans vs () ()
 
-    vs                 = FV.defaultVisitor { FV.txExpr = tx }
-    tx _ (F.EVar s)    | (x:y:zs) <- pack "." `splitOn` pack (F.symbolString s)
-                       = foldl offset (F.eVar x) (y:zs)
-    tx _ e             = e
-    offset k v         = F.EApp offsetLocSym [F.expr k, F.expr v]
+    vs                = FV.defaultVisitor { FV.txExpr = tx }
+    tx _ (F.EVar s)   | (x:y:zs) <- pack "." `splitOn` pack (F.symbolString s)
+                      = foldl offset (F.eVar x) (y:zs)
+    tx _ e            = e
+    offset k v        = F.EApp offsetLocSym [F.expr k, F.expr v]
 
 
 ---------------------------------------------------------------------------------------
@@ -185,13 +186,12 @@ replaceDotRef p@(Nano{ code = Src fs, tAlias = ta, pAlias = pa, invts = is })
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-fixEnums :: PPR r => QEnv (ModuleDef r) -> NanoBareR r -> (QEnv (ModuleDef r), NanoBareR r)
+fixEnums :: PPR r => QEnv (ModuleDef r) -> BareRsc r -> (QEnv (ModuleDef r), BareRsc r)
 ---------------------------------------------------------------------------------------
-fixEnums m p@(Nano { code = Src ss }) = (m',p')
+fixEnums m p@(Rsc { code = Src ss }) = (m',p')
   where
-    p'    = p { code = Src $ (tr <$>) <$> ss }
+    p'    = p { code = Src $ (trans f [] [] <$>) <$> ss }
     m'    = fixEnumsInModule m `qenvMap` m
-    tr    = transAnnR f []
     f _ _ = fixEnumInType m
 
 fixEnumInType :: F.Reftable r => QEnv (ModuleDef r) -> RType r -> RType r
@@ -211,13 +211,12 @@ fixEnumsInModule m = trans (const $ const $ fixEnumInType m) [] []
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-fixFunBinders :: PPR r => QEnv (ModuleDef r) -> NanoBareR r -> (QEnv (ModuleDef r), NanoBareR r)
+fixFunBinders :: PPR r => QEnv (ModuleDef r) -> BareRsc r -> (QEnv (ModuleDef r), BareRsc r)
 ---------------------------------------------------------------------------------------
-fixFunBinders m p@(Nano { code = Src ss }) = (m', p')
+fixFunBinders m p@(Rsc { code = Src ss }) = (m', p')
   where
-    p'    = p { code = Src $ (tr <$>) <$> ss }
+    p'    = p { code = Src $ (trans f [] [] <$>) <$> ss }
     m'    = qenvMap fixFunBindersInModule m
-    tr    = transAnnR f []
     f _ _ = fixFunBindersInType
 
 fixFunBindersInType t | Just is <- bkFuns t = mkAnd $ map (mkFun . f) is
@@ -227,7 +226,6 @@ fixFunBindersInType t | Just is <- bkFuns t = mkAnd $ map (mkFun . f) is
       where
         ks            = [ y | B y _ <- yts ]
         ks'           = (F.eVar . (`mappend` F.symbol [symSepName])) <$> ks
-        thesub        = F.mkSubst $ zip ks ks'
         sub :: F.Subable a => a -> a
         sub          = F.subst $ F.mkSubst $ zip ks ks'
         ssb bs        = [ B (sub s) (sub t) | B s t <- bs ]

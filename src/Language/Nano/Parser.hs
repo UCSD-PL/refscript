@@ -29,14 +29,12 @@ import           Data.Default
 import           Data.Either                       (partitionEithers)
 import qualified Data.Foldable                     as FO
 import           Data.Generics                     hiding (Generic)
-import           Data.Graph.Inductive.Graph
 import qualified Data.HashMap.Strict               as HM
 import qualified Data.HashSet                      as HS
 import           Data.Interned.Internal.Text
 import qualified Data.IntMap.Strict                as I
 import qualified Data.List                         as L
-import           Data.Maybe                        (catMaybes, fromMaybe,
-                                                    listToMaybe, maybeToList)
+import           Data.Maybe                        (catMaybes, fromMaybe, listToMaybe, maybeToList)
 import           Data.Monoid                       (mappend, mconcat, mempty)
 import           Data.Text                         (Text)
 import qualified Data.Text                         as DT
@@ -59,7 +57,7 @@ import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.Qualifiers
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Locations           hiding (val)
-import           Language.Nano.Misc                (fst4, (<###>), (<##>))
+import           Language.Nano.Misc                (fst4, (&), (<###>), (<##>))
 import           Language.Nano.Names
 import           Language.Nano.Parser.Annotations
 import           Language.Nano.Parser.Common
@@ -67,13 +65,14 @@ import           Language.Nano.Parser.Declarations
 import           Language.Nano.Parser.Types
 import           Language.Nano.Pretty
 import           Language.Nano.Program
+import           Language.Nano.Transformations
+import           Language.Nano.Traversals
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types               hiding (Exported)
 import           Language.Nano.Visitor
 import           Prelude                           hiding (mapM)
 import           Text.Parsec                       hiding (State, parse)
-import           Text.Parsec.Error                 (errorMessages,
-                                                    showErrorMessages)
+import           Text.Parsec.Error                 (errorMessages, showErrorMessages)
 import           Text.Parsec.Language              (emptyDef)
 import           Text.Parsec.Pos                   (SourcePos, newPos)
 import           Text.Parsec.Token                 (identLetter, identStart)
@@ -90,14 +89,15 @@ type FError = F.FixResult Error
 -- | Parse File and Type Signatures
 --------------------------------------------------------------------------------------
 
--- Parse the contents of a FilePath list into a program structure with relative
+-- | Parse the contents of a FilePath list into a program structure with relative
 -- qualified names.
 --------------------------------------------------------------------------------------
-parseNanoFromFiles :: [FilePath] -> IO (Either FError (NanoBareR F.Reft))
+parseNanoFromFiles :: [FilePath] -> IO (Either FError RefScript)
 --------------------------------------------------------------------------------------
 parseNanoFromFiles fs =
   partitionEithers <$> mapM parseScriptFromJSON fs >>= \case
-    ([],ps) -> return $ either Left mkNano $ parseAnnots $ concat ps
+  -- TODO
+    -- ([],ps) -> return $ either Left mkRsc $ parseAnnots $ concat ps
     (es,_ ) -> return $ Left $ mconcat es
 
 --------------------------------------------------------------------------------------
@@ -128,24 +128,26 @@ parseIdFromJSON filename = decodeOrDie <$> getJSON filename
 
 
 ---------------------------------------------------------------------------------
-mkNano :: [Statement (SrcSpan, [Spec])] -> Either FError (NanoBareR F.Reft)
+mkRsc :: [Statement (SrcSpan, [Spec])] -> Either FError (RefScript, CHA.ClassHierarchy F.Reft)
 ---------------------------------------------------------------------------------
-mkNano ss = undefined
---             return   (mkNano' ss)
---         >>= return . convertTVars
---         >>= return . expandAliases
---         >>= return . replaceAbsolute
---         >>= return . replaceDotRef
---         >>= return . scrapeQuals
---         >>=          scrapeModules
---         >>= return . fixEnums
---         >>= return . fixFunBinders
---         >>= return . buildCHA
---
+mkRsc ss = do
+  let rsc               = ss
+                        & mkRelRsc
+                        & convertTVars
+                        & expandAliases
+                        & replaceAbsolute
+                        & replaceDotRef
+  let quals             = scrapeQuals rsc
+  modules              <- accumModules rsc
+  let (enums, rsc')     = fixEnums modules rsc
+  let (modules', rsc'') = fixFunBinders modules rsc'
+  let cha               = CHA.fromModuleDef modules'
+  return                $ (rsc'', cha)
+
 ---------------------------------------------------------------------------------
-mkNano' :: [Statement (SrcSpan, [Spec])] -> NanoBareRelR F.Reft
+mkRelRsc :: [Statement (SrcSpan, [Spec])] -> RelRefScript
 ---------------------------------------------------------------------------------
-mkNano' ss = Nano {
+mkRelRsc ss = Rsc {
         code          = Src (checkTopStmt <$> ss')
       , consts        = envFromList [ mapSnd (ntrans f g) t | Meas t <- anns ]
       , tAlias        = envFromList [ t | TAlias t <- anns ]
@@ -157,7 +159,7 @@ mkNano' ss = Nano {
     }
   where
     toBare           :: Int -> (SrcSpan, [Spec]) -> AnnRel F.Reft
-    toBare n (l,αs)   = Ann n l $ catMaybes $ extractFact <$> αs
+    toBare n (l,αs)   = FA n l $ catMaybes $ extractFact <$> αs
     f (QN p s)        = QN (g p) s
     g (QP RK_ l ss)   = QP AK_ l ss
     starting_id       = 0

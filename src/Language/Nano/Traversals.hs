@@ -8,10 +8,11 @@
 
 module Language.Nano.Traversals (
     scrapeQuals
+  , accumModules
+  , accumNamesAndPaths
   ) where
 
 import           Control.Applicative              hiding (empty)
-import           Control.Exception                (throw)
 import           Data.Default
 import           Data.Generics
 import           Data.Graph.Inductive.Query.Monad ((><))
@@ -20,17 +21,14 @@ import           Data.List                        (partition)
 import qualified Data.Map.Strict                  as M
 import           Data.Maybe                       (fromMaybe, listToMaybe, maybeToList)
 import qualified Data.Traversable                 as T
-import           Debug.Trace
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Names
-import           Language.Fixpoint.Parse
 import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Annots             hiding (err)
 import           Language.Nano.AST
 import           Language.Nano.Core.Env
 import           Language.Nano.Environment
-import           Language.Nano.Errors
 import           Language.Nano.Liquid.Qualifiers
 import           Language.Nano.Locations
 import           Language.Nano.Names
@@ -73,10 +71,6 @@ celtTypeBindings _               = go
     go (MemberMethDef l _ x _ _) = [(x, t) | MethAnn  _ (MI _ _ t) <- fFact l ]
     go _                         = []
 
---
--- TODO
---
-debugTyBinds = undefined
 -- debugTyBinds p@(Rsc { code = Src ss }) = trace msg p
 --   where
 --     xts = [(x, t) | (x, (t, _)) <- visibleNames ss ]
@@ -97,7 +91,7 @@ accumModules pgm@(Rsc { code = Src stmts }) =
     mapM mkMod (accumModuleStmts stmts) >>= return . qenvFromList . map toQEnvList
   where
     toQEnvList p = (m_path p, p)
-    mkMod (p,ss) = ModuleDef <$> varEnv p ss <*> typeEnv p ss <*> enumEnv ss <*> return p
+    mkMod (p,ss) = ModuleDef <$> varEnv p ss <*> typeEnv ss <*> enumEnv ss <*> return p
 
     -- | Variables
     varEnv p = return . fromListToEnv . vStmts p
@@ -113,25 +107,25 @@ accumModules pgm@(Rsc { code = Src stmts }) =
          [(ss x, FuncAmbientKind, VI Ambient Initialized t) | VarAnn _ (Just t) <- fFact l ]
     vStmt _ (FuncOverload l x _) =
          [(ss x, FuncOverloadKind, VI Ambient Initialized t) | VarAnn _ (Just t) <- fFact l ]
-    vStmt p (ClassStmt l x _ _ _) =
+    vStmt _ (ClassStmt l x _ _ _) =
          [(ss x, ClassDefKind, VI Ambient Initialized $ TType ClassK b) | ClassAnn (TS _ b _) <- fFact l ]
     vStmt p (ModuleStmt l x _) =
          [(ss x, ModuleDefKind, VI Ambient Initialized $ TMod $ pathInPath l p x)]
-    vStmt p (EnumStmt l x _) =
+    vStmt p (EnumStmt _ x _) =
          [(ss x, EnumDefKind, VI Ambient Initialized $ TType EnumK $ BGen (QN p $ symbol x) []) ]
     vStmt _ _ = []
 
     -- | Type Definitions
-    typeEnv p ss      = tStmts p ss >>= return . envFromList
-    tStmts p ss              = concatMapM (tStmt p) ss
+    typeEnv ss = tStmts ss >>= return . envFromList
+    tStmts     = concatMapM tStmt
 
-    tStmt ap c@ClassStmt{}   = single <$> resolveType ap c
-    tStmt ap c@IfaceStmt{}   = single <$> resolveType ap c
-    tStmt _ _                = return $ [ ]
+    tStmt c@ClassStmt{} = single <$> resolveType c
+    tStmt c@IfaceStmt{} = single <$> resolveType c
+    tStmt _             = return $ [ ]
 
     -- | Enumerations
-    enumEnv a                = return $ envFromList $ eStmts a
-    eStmts a                 = concatMap eStmt a
+    enumEnv = return . envFromList . eStmts
+    eStmts  = concatMap eStmt
 
     eStmt (EnumStmt _ n es)  = [(fmap srcPos n, EnumDef (symbol n) (envFromList $ sEnumElt <$> es))]
     eStmt _                  = []
@@ -140,9 +134,9 @@ accumModules pgm@(Rsc { code = Src stmts }) =
     ss                       = fmap fSrc
 
 ---------------------------------------------------------------------------------------
-resolveType :: PPR r => AbsPath -> Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
+resolveType :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
 ---------------------------------------------------------------------------------------
-resolveType (QP AK_ _ ss) (ClassStmt l c _ _ cs)
+resolveType (ClassStmt l c _ _ cs)
   | [ts] <- cas
   = typeMembers cs >>= return . (cc,) . TD ts
   | otherwise
@@ -152,7 +146,7 @@ resolveType (QP AK_ _ ss) (ClassStmt l c _ _ cs)
     cas    = [ ts | ClassAnn ts <- fFact l ]
     errMsg = "Invalid class annotation: " ++ show (intersperse P.comma (map pp cas))
 
-resolveType _ (IfaceStmt l c)
+resolveType (IfaceStmt l c)
   | [t] <- ifaceAnns  = Right (fmap fSrc c,t)
   | otherwise         = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where
@@ -160,7 +154,7 @@ resolveType _ (IfaceStmt l c)
     errMsg            = "Invalid interface annotation: "
                      ++ show (intersperse P.comma (map pp ifaceAnns))
 
-resolveType _ s       = Left $ F.Unsafe $ single
+resolveType s         = Left $ F.Unsafe $ single
                       $ err (sourceSpanSrcSpan $ getAnnotation s)
                       $ "Statement\n" ++ ppshow s ++ "\ncannot have a type annotation."
 
@@ -202,7 +196,7 @@ accumNamesAndPaths :: PPRD r => [Statement (AnnRel r)] -> (H.HashSet AbsName, H.
 accumNamesAndPaths stmts = (namesSet, modulesSet)
   where
     allModStmts = accumModuleStmts stmts
-    modulesSet  = H.fromList [ ap | (ap,ss) <- allModStmts ]
+    modulesSet  = H.fromList [ ap | (ap, _) <- allModStmts ]
     namesSet    = H.fromList [ nm | (ap,ss) <- allModStmts, nm <- accumAbsNames ap ss ]
 
 ---------------------------------------------------------------------------------------
@@ -271,8 +265,7 @@ visibleVars s = [ (fSrc <$> n, VI a i t)  | (n,l,k,a,i) <- hoistBindings s
                                           , f           <- fFact l
                                           , t           <- annToType a f ]
   where
-    annToType Ambient (VarAnn _ t)  = maybeToList t -- Hoist ReadOnly vars (i.e. function defs)
-    annToType Ambient (VarAnn _ t)  = maybeToList t -- Hoist ImportDecl (i.e. function decls)
+    annToType Ambient (VarAnn _ t)  = maybeToList t -- Hoist ReadOnly & ImportDecls
     annToType Ambient (AmbVarAnn t) = [t] -- Hoist ReadOnly vars (i.e. function defs)
     annToType Ambient (AmbVarAnn t) = [t] -- Hoist ImportDecl (i.e. function decls)
     annToType _       _             = [ ]

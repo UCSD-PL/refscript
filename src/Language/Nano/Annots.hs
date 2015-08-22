@@ -102,7 +102,8 @@ data FactQ q r
   | AmbVarAnn     (RTypeQ q r)
 
   -- Class member annotations
-  | FieldAnn      StaticKind (FieldInfoQ q r)  -- [MemberMod] (RTypeQ q r)
+  | FieldAnn      {- Is the staticKind needed ?? -}
+                  StaticKind (FieldInfoQ q r)  -- [MemberMod] (RTypeQ q r)
   | MethAnn       StaticKind (MethodInfoQ q r) -- [MemberMod] (RTypeQ q r)
   | ConsAnn       (RTypeQ q r)
 

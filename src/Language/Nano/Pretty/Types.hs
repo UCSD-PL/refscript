@@ -120,6 +120,9 @@ instance (PP r, F.Reftable r) => PP (TypeDeclQ q r) where
 instance (PP r, F.Reftable r) => PP (TypeSigQ q r) where
   pp (TS k n h) = pp k <+> pp n <+> ppHeritage h
 
+instance (PP r, F.Reftable r) => PP (MethodInfoQ q r) where
+  pp (MI _ _ t) = pp t
+
 instance PP TypeDeclKind where
   pp InterfaceKind  = text "interface"
   pp ClassKind      = text "class"

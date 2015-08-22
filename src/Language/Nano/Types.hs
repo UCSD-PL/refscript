@@ -210,24 +210,20 @@ type IOverloadSig r   = (Int, OverloadSig r)
 --
 data ModuleDefQ q r = ModuleDef {
   --
-  -- Contents of a module
-  --
-  -- 1. XXX: local/exported info not included atm
-  --
-  -- 2. Interfaces are _not_ included here (because thery don't
-  --    appear as bindings in the language)
+  -- | Variables (Interfaces not included -- thery
+  -- don't appear as language bindings)
   --
     m_variables :: Env (VarInfoQ q r)
   --
-  -- Types definitions
+  -- | Types definitions
   --
   , m_types     :: Env (TypeDeclQ q r)
   --
-  -- Enumerations definitions
+  -- | Enumerations definitions
   --
   , m_enums     :: Env EnumDef
   --
-  -- Absolute path of module
+  -- | Absolute path of module
   --
   , m_path      :: AbsPath
   }
@@ -246,29 +242,24 @@ instance Monoid (ModuleDefQ q r) where
 ------------------------------------------------------------------------------------------
 -- | Assignability
 ------------------------------------------------------------------------------------------
+--   ___________________________________________________________
+--  |               |              |                |           |
+--  |     Kind      |    Comment   | In refinements |   SSA-ed  |
+--  |_______________|______________|________________|___________|
+--  |               |              |                |           |
+--  | Ambient       | Imported/RO  |       Yes      |     No    |
+--  |               |              |                |           |
+--  | WriteLocal    | Local scope  |       No       |     Yes   |
+--  |               |              |                |           |
+--  | ForeignLocal  | Outer scope  |       No       |     No    |
+--  |               |              |                |           |
+--  | WriteGlobal   | WR anywhere  |       No       |     No    |
+--  |               |              |                |           |
+--  | ReturnVar     |  return var  |       _        |     No    |
+--  |_______________|______________|________________|___________|
 
-data Assignability =
-  --
-  -- Import, cannot be modified, appears in refinements
-  --
-    Ambient
-  --
-  -- Written in local-scope, SSA-ed, appears in refinements
-  --
-  | WriteLocal
-  --
-  -- Declared in outer scope, CANNOT appear in refinements, NOT SSA-ed
-  --
-  | ForeignLocal
-  --
-  -- Written in non-local-scope, CANNOT appear in refinements, NOT SSA-ed
-  --
-  | WriteGlobal
-  --
-  -- Return variable, CANNOT appear in refinements
-  --
-  | ReturnVar
-  deriving (Show, Eq, Data, Typeable)
+data Assignability = Ambient | WriteLocal | ForeignLocal | WriteGlobal | ReturnVar
+                     deriving (Show, Eq, Data, Typeable)
 
 
 ---------------------------------------------------------------------------------
@@ -296,6 +287,8 @@ data VarInfoQ q r = VI { v_asgn :: Assignability
                        , v_type :: RTypeQ q r
                        }
                        deriving (Data, Typeable, Functor)
+
+-- TODO: add local/exported info
 
 
 ---------------------------------------------------------------------------------

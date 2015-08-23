@@ -12,14 +12,12 @@ module Language.Nano.Environment (
   , EnvEntry
   , envLikeFindTy, envLikeFindTy'
   , envFindBound
-  , fromListToEnv
   , resolveModuleInEnv, resolveTypeInEnv, resolveEnumInEnv
 
 ) where
 
 import           Control.Applicative           ((<$>))
 import           Control.Exception             (throw)
-import qualified Data.Map.Strict               as M
 import           Language.Fixpoint.Names
 import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.AST
@@ -84,33 +82,6 @@ envFindBound :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 envFindBound x (bounds -> b) = envFindTy x b
 
-
----------------------------------------------------------------------------------------
-fromListToEnv :: F.Symbolic s => [(s, SyntaxKind, VarInfo r)] -> Env (EnvEntry r)
----------------------------------------------------------------------------------------
-fromListToEnv = envMap snd
-              . envFromListWithKey mergeVarInfo
-              . concatMap f
-              . M.toList
-              . foldl merge M.empty
-  where
-    merge ms (x, k, v) = M.insertWith (++) (F.symbol x) [(k,v)] ms
-
-    f (s, vs)   = [ (s, (k, g v [ v' | (FuncOverloadKind, v') <- vs ])) | (k@FuncDefKind, v) <- vs ] ++
-                    ( (s,) . (FuncAmbientKind,) <$> amb [ v | (FuncAmbientKind, v) <- vs ] ) ++
-                  [ (s, (k, v)) | (k@VarDeclKind, v) <- vs ] ++
-                  [ (s, (k, v)) | (k@ClassDefKind, v) <- vs ] ++
-                  [ (s, (k, v)) | (k@ModuleDefKind, v) <- vs ] ++
-                  [ (s, (k, v)) | (k@EnumDefKind, v) <- vs ]
-
-    g v []                = v
-    g _ vs@(VI a i _ : _) = VI a i $ mkAnd $ v_type <$> vs
-
-    amb [ ] = [ ]
-    amb [v] = [v]
-    amb vs@(VI a i _ : _) = [ VI a i $ mkAnd $ v_type <$> vs ]
-
-    mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
 
 
 --------------------------------------------------------------------------------

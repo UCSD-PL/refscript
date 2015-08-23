@@ -16,69 +16,38 @@ module Language.Nano.Parser
     , parseIdFromJSON
     ) where
 
-import           Control.Applicative               ((*>), (<$>), (<*), (<*>))
-import           Control.Exception                 (throw)
+import           Control.Applicative               ((<$>))
 import           Control.Monad
 import           Control.Monad.Trans               (MonadIO, liftIO)
 import           Data.Aeson                        (eitherDecode)
-import           Data.Aeson.Types                  hiding (Error, Parser, parse)
-import qualified Data.Aeson.Types                  as AI
 import qualified Data.ByteString.Lazy.Char8        as B
-import           Data.Char                         (isLower)
-import           Data.Default
 import           Data.Either                       (partitionEithers)
 import qualified Data.Foldable                     as FO
-import           Data.Generics                     hiding (Generic)
-import qualified Data.HashMap.Strict               as HM
-import qualified Data.HashSet                      as HS
-import           Data.Interned.Internal.Text
-import qualified Data.IntMap.Strict                as I
 import qualified Data.List                         as L
-import           Data.Maybe                        (catMaybes, fromMaybe, listToMaybe, maybeToList)
-import           Data.Monoid                       (mappend, mconcat, mempty)
-import           Data.Text                         (Text)
-import qualified Data.Text                         as DT
+import           Data.Maybe                        (catMaybes)
+import           Data.Monoid                       (mconcat)
 import           Data.Traversable                  (mapAccumL)
 import           Data.Tuple
-import           Data.Vector                       ((!))
-import           GHC.Generics
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Names
-import           Language.Fixpoint.Parse
 import qualified Language.Fixpoint.Types           as F
-import qualified Language.Fixpoint.Visitor         as FV
 import           Language.Nano.Annots              hiding (err)
 import           Language.Nano.AST
-import qualified Language.Nano.ClassHierarchy      as CHA
 import           Language.Nano.Core.Env
 import           Language.Nano.Errors
 import           Language.Nano.Liquid.Alias
-import           Language.Nano.Liquid.Qualifiers
-import           Language.Nano.Liquid.Types
 import           Language.Nano.Locations           hiding (val)
-import           Language.Nano.Misc                (fst4, (&), (<###>), (<##>))
+import           Language.Nano.Misc                ((&))
 import           Language.Nano.Names
 import           Language.Nano.Parser.Annotations
-import           Language.Nano.Parser.Common
-import           Language.Nano.Parser.Declarations
-import           Language.Nano.Parser.Types
-import           Language.Nano.Pretty
+import           Language.Nano.Parser.Declarations ()
 import           Language.Nano.Program
 import           Language.Nano.Transformations
 import           Language.Nano.Traversals
-import           Language.Nano.Typecheck.Types
-import           Language.Nano.Types               hiding (Exported)
 import           Language.Nano.Visitor
 import           Prelude                           hiding (mapM)
 import           Text.Parsec                       hiding (State, parse)
 import           Text.Parsec.Error                 (errorMessages, showErrorMessages)
-import           Text.Parsec.Language              (emptyDef)
-import           Text.Parsec.Pos                   (SourcePos, newPos)
-import           Text.Parsec.Token                 (identLetter, identStart)
-import qualified Text.Parsec.Token                 as T
-import           Text.PrettyPrint.HughesPJ         (text, ($$), (<+>))
-import qualified Text.PrettyPrint.HughesPJ         as P
 
 -- import           Debug.Trace                             ( trace, traceShow)
 
@@ -96,8 +65,7 @@ parseNanoFromFiles :: [FilePath] -> IO (Either FError RefScript)
 --------------------------------------------------------------------------------------
 parseNanoFromFiles fs =
   partitionEithers <$> mapM parseScriptFromJSON fs >>= \case
-  -- TODO
-    -- ([],ps) -> return $ either Left mkRsc $ parseAnnots $ concat ps
+    ([],ps) -> return $ mkRsc <$> parseAnnots (concat ps)
     (es,_ ) -> return $ Left $ mconcat es
 
 --------------------------------------------------------------------------------------
@@ -126,23 +94,16 @@ parseIdFromJSON filename = decodeOrDie <$> getJSON filename
         Left msg -> Left  $ F.Crash [] $ "JSON decode error:\n" ++ msg
         Right p  -> Right $ p
 
-
 ---------------------------------------------------------------------------------
-mkRsc :: [Statement (SrcSpan, [Spec])] -> Either FError (RefScript, CHA.ClassHierarchy F.Reft)
+mkRsc :: [Statement (SrcSpan, [Spec])] -> RefScript
 ---------------------------------------------------------------------------------
-mkRsc ss = do
-  let rsc               = ss
-                        & mkRelRsc
-                        & convertTVars
-                        & expandAliases
-                        & replaceAbsolute
-                        & replaceDotRef
-  let quals             = scrapeQuals rsc
-  modules              <- accumModules rsc
-  let (enums, rsc')     = fixEnums modules rsc
-  let (modules', rsc'') = fixFunBinders modules rsc'
-  let cha               = CHA.fromModuleDef modules'
-  return                $ (rsc'', cha)
+mkRsc ss = ss
+         & mkRelRsc
+         & convertTVars
+         & expandAliases
+         & replaceAbsolute
+         & replaceDotRef
+         & fixFunBinders
 
 ---------------------------------------------------------------------------------
 mkRelRsc :: [Statement (SrcSpan, [Spec])] -> RelRefScript
@@ -152,7 +113,7 @@ mkRelRsc ss = Rsc {
       , consts        = envFromList [ mapSnd (ntrans f g) t | Meas t <- anns ]
       , tAlias        = envFromList [ t | TAlias t <- anns ]
       , pAlias        = envFromList [ t | PAlias t <- anns ]
-      , pQuals        =             [ t | Qual   t <- anns ]
+      , pQuals        = scrapeQuals [ t | Qual   t <- anns ] ss'
       , pOptions      =             [ t | Option t <- anns ]
       , invts         = [Loc (srcPos l) (ntrans f g t) | Invt l t <- anns ]
       , maxId         = endingId
@@ -161,7 +122,7 @@ mkRelRsc ss = Rsc {
     toBare           :: Int -> (SrcSpan, [Spec]) -> AnnRel F.Reft
     toBare n (l,αs)   = FA n l $ catMaybes $ extractFact <$> αs
     f (QN p s)        = QN (g p) s
-    g (QP RK_ l ss)   = QP AK_ l ss
+    g (QP RK_ l s)    = QP AK_ l s
     starting_id       = 0
     (endingId, ss')   = mapAccumL (mapAccumL (\n -> (n+1,) . toBare n)) starting_id ss
     anns              = concatMap (FO.foldMap snd) ss

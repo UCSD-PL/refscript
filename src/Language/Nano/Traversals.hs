@@ -8,28 +8,27 @@
 
 module Language.Nano.Traversals (
     scrapeQuals
-  , accumModules
   , accumNamesAndPaths
+  , accumModuleStmts
   ) where
 
-import           Control.Applicative              hiding (empty)
+import           Control.Applicative           hiding (empty)
 import           Data.Default
 import           Data.Generics
-import           Data.Graph.Inductive.Query.Monad ((><))
-import qualified Data.HashSet                     as H
-import           Data.List                        (partition)
-import qualified Data.Map.Strict                  as M
-import           Data.Maybe                       (fromMaybe, listToMaybe, maybeToList)
-import qualified Data.Traversable                 as T
+import qualified Data.HashSet                  as H
+import           Data.List                     (partition)
+import qualified Data.Map.Strict               as M
+import           Data.Maybe                    (fromMaybe, listToMaybe, maybeToList)
+import qualified Data.Traversable              as T
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Names
-import qualified Language.Fixpoint.Types          as F
-import           Language.Nano.Annots             hiding (err)
+import qualified Language.Fixpoint.Types       as F
+import           Language.Nano.Annots          hiding (err)
 import           Language.Nano.AST
 import           Language.Nano.Core.Env
-import           Language.Nano.Environment
-import           Language.Nano.Liquid.Qualifiers
+-- import           Language.Nano.Environment
+-- import           Language.Nano.Liquid.Qualifiers
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Pretty
@@ -37,18 +36,16 @@ import           Language.Nano.Program
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
 import           Language.Nano.Visitor
-import qualified Text.PrettyPrint.HughesPJ        as P
-import           Text.Printf
-
-type FError = F.FixResult Error
+import qualified Text.PrettyPrint.HughesPJ     as P
 
 
 -- | Extracts all qualifiers from a RefScript program
 ---------------------------------------------------------------------------------
-scrapeQuals :: RefScript -> [F.Qualifier]
+scrapeQuals :: [F.Qualifier] -> [Statement (AnnRel F.Reft)] -> [F.Qualifier]
 ---------------------------------------------------------------------------------
-scrapeQuals p = qualifiers $ mkUq $ foldRsc tbv [] [] p
+scrapeQuals qs ss = qs ++ qualifiers (mkUq $ foldStmts tbv [] [] ss)
   where
+    qualifiers = undefined
     tbv = defaultVisitor { accStmt = stmtTypeBindings
                          , accCElt = celtTypeBindings }
 
@@ -75,89 +72,6 @@ celtTypeBindings _               = go
 --   where
 --     xts = [(x, t) | (x, (t, _)) <- visibleNames ss ]
 --     msg = unlines $ "debugTyBinds:" : (ppshow <$> xts)
-
-
--- | `accumModules ss` creates a module store from the statements in @ss@
---   For every module we populate:
---
---    * m_variables with: functions, variables, class constructors, modules
---
---    * m_types with: classes and interfaces
---
-------------------------------------------------------------------------------------
-accumModules :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (QEnv (ModuleDef r))
-------------------------------------------------------------------------------------
-accumModules pgm@(Rsc { code = Src stmts }) =
-    mapM mkMod (accumModuleStmts stmts) >>= return . qenvFromList . map toQEnvList
-  where
-    toQEnvList p = (m_path p, p)
-    mkMod (p,ss) = ModuleDef <$> varEnv p ss <*> typeEnv ss <*> enumEnv ss <*> return p
-
-    -- | Variables
-    varEnv p = return . fromListToEnv . vStmts p
-    vStmts   = concatMap . vStmt
-
-    vStmt _ (VarDeclStmt _ vds) =
-         [(ss x, VarDeclKind, VI a Uninitialized t ) | VarDecl l x _ <- vds, VarAnn a (Just t) <- fFact l ]
-      ++ [(ss x, VarDeclKind, VI WriteGlobal Initialized t) | VarDecl l x _ <- vds, AmbVarAnn t <- fFact l ]
-    -- The Assignabilities below are overwitten to default values
-    vStmt _ (FunctionStmt l x _ _) =
-         [(ss x, FuncDefKind, VI Ambient Initialized t) | VarAnn _ (Just t) <- fFact l ]
-    vStmt _ (FuncAmbDecl l x _) =
-         [(ss x, FuncAmbientKind, VI Ambient Initialized t) | VarAnn _ (Just t) <- fFact l ]
-    vStmt _ (FuncOverload l x _) =
-         [(ss x, FuncOverloadKind, VI Ambient Initialized t) | VarAnn _ (Just t) <- fFact l ]
-    vStmt _ (ClassStmt l x _ _ _) =
-         [(ss x, ClassDefKind, VI Ambient Initialized $ TType ClassK b) | ClassAnn (TS _ b _) <- fFact l ]
-    vStmt p (ModuleStmt l x _) =
-         [(ss x, ModuleDefKind, VI Ambient Initialized $ TMod $ pathInPath l p x)]
-    vStmt p (EnumStmt _ x _) =
-         [(ss x, EnumDefKind, VI Ambient Initialized $ TType EnumK $ BGen (QN p $ symbol x) []) ]
-    vStmt _ _ = []
-
-    -- | Type Definitions
-    typeEnv ss = tStmts ss >>= return . envFromList
-    tStmts     = concatMapM tStmt
-
-    tStmt c@ClassStmt{} = single <$> resolveType c
-    tStmt c@IfaceStmt{} = single <$> resolveType c
-    tStmt _             = return $ [ ]
-
-    -- | Enumerations
-    enumEnv = return . envFromList . eStmts
-    eStmts  = concatMap eStmt
-
-    eStmt (EnumStmt _ n es)  = [(fmap srcPos n, EnumDef (symbol n) (envFromList $ sEnumElt <$> es))]
-    eStmt _                  = []
-    sEnumElt (EnumElt _ s e) = (symbol s, fmap (const ()) e)
-
-    ss                       = fmap fSrc
-
----------------------------------------------------------------------------------------
-resolveType :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
----------------------------------------------------------------------------------------
-resolveType (ClassStmt l c _ _ cs)
-  | [ts] <- cas
-  = typeMembers cs >>= return . (cc,) . TD ts
-  | otherwise
-  = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
-  where
-    cc     = fmap fSrc c
-    cas    = [ ts | ClassAnn ts <- fFact l ]
-    errMsg = "Invalid class annotation: " ++ show (intersperse P.comma (map pp cas))
-
-resolveType (IfaceStmt l c)
-  | [t] <- ifaceAnns  = Right (fmap fSrc c,t)
-  | otherwise         = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
-  where
-    ifaceAnns         = [ t | InterfaceAnn t <- fFact l ]
-    errMsg            = "Invalid interface annotation: "
-                     ++ show (intersperse P.comma (map pp ifaceAnns))
-
-resolveType s         = Left $ F.Unsafe $ single
-                      $ err (sourceSpanSrcSpan $ getAnnotation s)
-                      $ "Statement\n" ++ ppshow s ++ "\ncannot have a type annotation."
-
 
 ---------------------------------------------------------------------------
 -- | AST Folds
@@ -208,53 +122,6 @@ accumAbsNames (QP AK_ _ ss)  = concatMap go
     go (EnumStmt l x _ )     = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
     go (IfaceStmt l x )      = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
     go _                     = []
-
-
--- | Given a list of class elements, returns a @TypeMembers@ structure
----------------------------------------------------------------------------------------
-typeMembers :: PPR r => [ClassElt (AnnR r)] -> Either (F.FixResult Error) (TypeMembers r)
----------------------------------------------------------------------------------------
-typeMembers cs = TM <$> ps <*> ms <*> sps <*> sms <*> call <*> ctor <*> sidx <*> nidx
-  where
-    ps         = pure  $ F.fromListSEnv props
-    ms         = meths $ methDefs ++ methDecls
-    sps        = pure  $ F.fromListSEnv sprops
-    sms        = meths $ smethDefs ++ smethDecls
-    call       = pure  $ Nothing
-    sidx       = pure  $ Nothing    -- XXX: This could be added
-    nidx       = pure  $ Nothing
-
-    props      = [ (F.symbol x, f) | MemberVarDecl l False x _ <- cs, FieldAnn _ f <- fFact l ]
-
-    sprops     = [ (F.symbol x, f) | MemberVarDecl l True x _ <- cs, FieldAnn _ f <- fFact l ]
-
-    meths m    = fmap (F.fromListSEnv . map (F.symbol >< val) . M.toList)
-               $ T.sequence
-               $ M.mapWithKey (\k v -> snd <$> join (prtn k v))
-               $ M.fromListWith (++)
-               $ m
-
-    prtn k v   = (k,) . mapPair (map snd) $ partition ((== MemDef) . fst) v
-
-    -- Allowed annotations include a single definition without any declarations,
-    -- or two or more declarations (overloads)
-    join (k,([t],[])) = Right $ (k, t)                   -- Single definition
-    join (k,(ds ,ts)) | length ts > 1
-                      = Right $ (k,foldl1 joinMI ts)
-                      | otherwise
-                      = Left  $ F.Unsafe
-                      $ map (\(Loc l v) -> err (sourceSpanSrcSpan l) $ msg k v) $ ds ++ ts
-
-    msg k v = printf "The following annotation for member '%s' is invalid:\n%s" (ppshow k) (ppshow v)
-
-    joinMI (Loc l (MI o m t)) (Loc _ (MI _ _ t')) = Loc l $ MI o m $ mkAnd [t, t']
-
-    methDefs   = [ (x, [(MemDef , Loc (fSrc l) m)]) | MemberMethDef  l False x _ _ <- cs, MethAnn _ m <- fFact l ]
-    methDecls  = [ (x, [(MemDecl, Loc (fSrc l) m)]) | MemberMethDecl l False x _   <- cs, MethAnn _ m <- fFact l ]
-    smethDefs  = [ (x, [(MemDef , Loc (fSrc l) m)]) | MemberMethDef  l True  x _ _ <- cs, MethAnn _ m <- fFact l ]
-    smethDecls = [ (x, [(MemDecl, Loc (fSrc l) m)]) | MemberMethDecl l True  x _   <- cs, MethAnn _ m <- fFact l ]
-
-    ctor       = pure $ listToMaybe [ t | Constructor l _ _ <- cs, ConsAnn t <- fFact l ]
 
 
 -- Not including class, module, enum names

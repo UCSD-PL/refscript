@@ -124,8 +124,8 @@ instance (PP r, F.Reftable r) => PP (MethodInfoQ q r) where
   pp (MI _ _ t) = pp t
 
 instance PP TypeDeclKind where
-  pp InterfaceKind  = text "interface"
-  pp ClassKind      = text "class"
+  pp InterfaceTDK = text "interface"
+  pp ClassTDK     = text "class"
 
 ppHeritage (es,is) = ppExtends es <+> ppImplements is
 

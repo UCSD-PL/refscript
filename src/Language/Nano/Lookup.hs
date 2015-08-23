@@ -5,7 +5,7 @@
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
-module Language.Nano.Typecheck.Lookup (
+module Language.Nano.Lookup (
     getProp
   , extractCall
   , extractCtor
@@ -36,9 +36,7 @@ import           Language.Nano.Types
 --
 excludedFieldSymbols = F.symbol <$> [ "hasOwnProperty", "prototype", "__proto__" ]
 
-
 type PPRD r = (ExprReftable F.Symbol r, ExprReftable Int r, PP r, F.Reftable r, Data r)
-
 
 data AccessKind = MethodAccess | FieldAccess
 
@@ -47,50 +45,55 @@ instance PP AccessKind where
   pp FieldAccess  = pp "FieldAccess"
 
 
--- | `getProp γ b x s t`:
-
---   Performs the access `x.f`, where γ |- x :: t
---
---   Returns  a triplet containing:
---
---   * The subtype of @t@ for which the access of field @s@ is successful.
---
---   * The corresponding accessed type.
---
---   * The mutability associcated with the accessed element
---
---  FIXME: Fix visibility
+-- | `getProp γ b x s t` performs the access `x.f`, where @t@ is the type
+-- assigned to @x@ and returns a triplet containing:
+--  (a) the subtype of @t@ for which the access of field @f@ is successful,
+--  (b) the accessed type, and 
+--  (c) the mutability associcated with the accessed element
 --
 -------------------------------------------------------------------------------
--- getProp :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
---         => g r -> AccessKind -> x -> f -> RType r -> Maybe (RType r, RType r, Mutability)
+getProp :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
+        => g r -> x -> f -> RType r -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
-getProp γ b x f t@(TApp _ _ _  ) = getPropApp γ b x f t
+getProp γ x f t@(TPrim _ _) = getPropPrim γ x f t
 
 --
 -- Raw object containing fields `es` plus a "__proto__" field linking to 'Object'
 --
-getProp γ b x f t@(TCons m es _)
-  = do  empty      <- resolveTypeInEnv γ emptyObjectInterface
-        (t',m')    <- accessMember γ b InstanceMember x f $ es `M.union` t_elts empty
-        return      $ (t,t',m')
+getProp γ x f t@(TObj es _)
+  | empty   <- resolveTypeInEnv γ emptyObjectInterface
+  , (t',m') <- accessMember γ InstanceMember x f $ es -- `M.union` t_elts empty
+  = Just (t,t',m')
 
-getProp γ b x f t@(TRef n ts@(m0:ts') r)
-  = do  d          <- resolveTypeInEnv γ n
-        es         <- expand InstanceMember γ d ts
-        (t',m')    <- accessMember γ b InstanceMember x f es
-        t''        <- fixMethType t'
-        return      $ (t, t'',m')
   where
-    m               = toType m0
-    fixMethType ft  | isTFun ft
-                    = mkAnd . (replaceSelf <$>) <$> bkFuns ft
-                    | otherwise
-                    = Just $ ft
-    replaceSelf (vs, Just (TSelf m'), bs, ot) = mkFun (vs, Just (TRef n (m':ts') r), bs, ot)
-    replaceSelf a                             = mkFun a
+    emptyObjectInterface = undefined
 
-getProp γ b x f t@(TClass c)
+getProp γ x f t@(TRef (Gen n []) _)
+  | e  <- resolveEnumInEnv γ n
+  , io <- envFindTy f $ e_mapping e
+  = case io of
+      IntLit _ i -> return (t, tNum `strengthen` exprReft i, tImm)
+      -- XXX : is 32-bit going to be enough ???
+      -- XXX: Invalid BV values will be dropped
+      HexLit _ s -> bitVectorValue s >>= return . (t,,tImm) . (tBV32 `strengthen`)
+      _          -> Nothing
+
+-- getProp γ b x f t@(TRef n ts@(m0:ts') r)
+--   = do  d          <- resolveTypeInEnv γ n
+--         es         <- expand InstanceMember γ d ts
+--         (t',m')    <- accessMember γ b InstanceMember x f es
+--         t''        <- fixMethType t'
+--         return      $ (t, t'',m')
+--   where
+--     m               = toType m0
+--     fixMethType ft  | isTFun ft
+--                     = mkAnd . (replaceSelf <$>) <$> bkFuns ft
+--                     | otherwise
+--                     = Just $ ft
+--     replaceSelf (vs, Just (TSelf m'), bs, ot) = mkFun (vs, Just (TRef n (m':ts') r), bs, ot)
+--     replaceSelf a                             = mkFun a
+
+getProp γ b x f t@(TType ClassK (BGen n _))
   = do  d          <- resolveTypeInEnv γ c
         es         <- expand StaticMember γ d []
         (t', m)    <- accessMember γ b StaticMember x f es
@@ -107,40 +110,46 @@ getProp γ _ x f t@(TEnum e     )
   = do e'         <- resolveEnumInEnv γ e
        io         <- envFindTy f (e_mapping e')
        case io of
-         IntLit _ i -> return (t, tInt `strengthen` exprReft i, t_immutable)
+         IntLit _ i -> return (t, tInt `strengthen` exprReft i, tImm)
          --
          -- XXX : is 32-bit going to be enough ???
          --
          -- XXX: Invalid BV values will be dropped
          --
-         HexLit _ s -> bitVectorValue s >>= return . (t,,t_immutable) . (tBV32 `strengthen`)
+         HexLit _ s -> bitVectorValue s >>= return . (t,,tImm) . (tBV32 `strengthen`)
          _          -> Nothing
 
 getProp _ _ _ _ _ = Nothing
 
 
 -------------------------------------------------------------------------------
--- getPropApp :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
+-- getPropPrim :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
 --            => g r
 --            -> AccessKind
 --            -> f
 --            -> RType r
 --            -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
-getPropApp γ b x f t@(TApp c ts _) =
+getPropPrim γ b x f t@(TPrim c _) =
   case c of
-    TBool    -> Nothing
-    TUndef   -> Nothing
-    TNull    -> Nothing
-    TUn      -> getPropUnion γ b x f ts
-    TInt     -> do  (t',m) <- lookupAmbientType γ b x f "Number"
-                    return  $ (t,t',m)
-    TString  -> do  (t',m) <- lookupAmbientType γ b x f "String"
-                    return  $ (t,t',m)
-    TFPBool  -> Nothing
-    TTop     -> Nothing
-    TVoid    -> Nothing
-getPropApp _ _ _ _ _ = error "getPropApp should only be applied to TApp"
+    TBoolean   -> Nothing
+    TUndefined -> Nothing
+    TNull      -> Nothing
+    -- TUn        -> getPropUnion γ b x f ts
+    TNumber    -> do (t',m) <- lookupAmbientType γ b x f "Number"
+                     return  $ (t,t',m)
+    TString    -> do (t',m) <- lookupAmbientType γ b x f "String"
+                     return  $ (t,t',m)
+    TStrLit _  -> do (t',m) <- lookupAmbientType γ b x f "String"
+                     return  $ (t,t',m)
+    TBV32      -> do (t',m) <- lookupAmbientType γ b x f "Number"
+                     return  $ (t,t',m)
+    TTop       -> Nothing
+    TVoid      -> Nothing
+    TTop       -> Nothing
+    TBot       -> Nothing
+    TFPBool    -> Nothing
+getPropPrim _ _ _ _ _ = error "getPropPrim should only be applied to TApp"
 
 
 -------------------------------------------------------------------------------
@@ -222,8 +231,8 @@ accessMember :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
 -- Only consider methods with `MethodAccess`
 --
 accessMember γ b@MethodAccess sk x f es
-  | Just (MethSig _ t)              <- M.lookup (F.symbol f, sk) es
-  = Just (t,t_immutable)
+  | Just (MethSig _ t) <- M.lookup (F.symbol f, sk) es
+  = Just (t,tImm)
   | Just (IndexSig _ StringIndex t) <- M.lookup (stringIndexSymbol, sk) es
   , validFieldName f
   = Just (t, t_mutable)
@@ -276,7 +285,7 @@ lookupAmbientType γ b x f amb
 getPropUnion γ b x f ts =
   case unzip3 [ttm | Just ttm <- getProp γ b x f <$> ts] of
     ([],[] ,[])                           -> Nothing
-    (ts,ts',ms)  | all isImmutable     ms -> Just (mkUnion ts, mkUnion ts', t_immutable)
+    (ts,ts',ms)  | all isImmutable     ms -> Just (mkUnion ts, mkUnion ts', tImm)
                  | all isMutable       ms -> Just (mkUnion ts, mkUnion ts', t_mutable)
                  | otherwise              -> Just (mkUnion ts, mkUnion ts', t_readOnly)
 

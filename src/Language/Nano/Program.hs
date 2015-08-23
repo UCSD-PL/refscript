@@ -7,6 +7,7 @@ module Language.Nano.Program (
 
   -- * Programs
     Rsc (..)
+  , RscQ
   , BareRelRsc
   , BareRsc
   , RRsc
@@ -86,8 +87,7 @@ data Rsc a r = Rsc {
 newtype Source a = Src [Statement a]
   deriving (Data, Typeable)
 
-
-
+type RscQ q r     = Rsc (FAnnQ q r) r
 type BareRelRsc r = Rsc (AnnRel  r) r         -- After parse (relative names)
 type BareRsc r    = Rsc (AnnBare r) r         -- After parse (absolute names)
 type RRsc r       = Rsc (AnnBare r) r         -- After parse (absolute names)

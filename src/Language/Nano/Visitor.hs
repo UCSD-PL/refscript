@@ -25,6 +25,7 @@ module Language.Nano.Visitor
     , visitStmts
     , visitStmtsT
     , foldRsc
+    , foldStmts
     ) where
 
 import           Control.Applicative           ((<$>), (<*>))
@@ -39,7 +40,6 @@ import           Language.Nano.Annots          hiding (Annot, err)
 import           Language.Nano.AST
 import           Language.Nano.Core.Env
 import           Language.Nano.Errors
-import           Language.Nano.Liquid.Types    ()
 import           Language.Nano.Locations
 import           Language.Nano.Misc            (mapSndM)
 import           Language.Nano.Names
@@ -128,6 +128,9 @@ scopeVisitor = defaultVisitor { endExpr = ee, endStmt = es }
 --------------------------------------------------------------------------------
 foldRsc :: (IsLocated b, Monoid a) => Visitor a ctx b -> ctx -> a -> Rsc b r -> a
 foldRsc v c a p = snd $ execVisitM v c a p
+
+foldStmts :: (IsLocated b, Monoid a) => Visitor a ctx b -> ctx -> a -> [Statement b] -> a
+foldStmts v c a p = snd $ runState (visitStmtsM v c p) a
 
 visitNano :: (IsLocated b, Monoid a) =>   Visitor a ctx b -> ctx -> Rsc b r -> Rsc b r
 visitNano v c p = fst $ execVisitM v c mempty p

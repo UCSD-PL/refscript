@@ -152,13 +152,14 @@ data TypeDeclQ q r    = TD (TypeSigQ q r) (TypeMembersQ q r)
 
 type HeritageQ q r    = ([TGenQ q r], [TGenQ q r])
 
-data TypeDeclKind     = InterfaceKind | ClassKind
+data TypeDeclKind     = InterfaceTDK | ClassTDK
                         deriving (Eq, Data, Typeable)
 
-data StaticKind       = StaticMember | InstanceMember
+data StaticKind       = StaticK | InstanceK
                         deriving (Eq, Ord, Show, Data, Typeable)
 
-data Optionality      = Opt | Req deriving (Eq, Ord, Show, Data, Typeable)
+data Optionality      = Opt | Req
+                        deriving (Eq, Ord, Show, Data, Typeable)
 
 ---------------------------------------------------------------------------------
 -- | Enumeration definition

@@ -8,6 +8,8 @@ See https://github.com/UCSD-PL/rs-benchmarks
 Tool/Implementation
 -------------------
 
+  - fixEnums has been disabled -- handle at typechecking
+
   - Disallow (buggy): module K.L.M, which can be replaced by 
 
       module K { module L ... }

@@ -9,7 +9,6 @@ module Language.Nano.Transformations (
   , convertTVars
   , replaceDotRef
   , replaceAbsolute
-  , fixEnums
   , fixFunBinders
 
   ) where
@@ -181,60 +180,63 @@ replaceDotRef p@(Rsc { code = Src fs, tAlias = ta, pAlias = pa, invts = is })
     offset k v        = F.EApp offsetLocSym [F.expr k, F.expr v]
 
 
----------------------------------------------------------------------------------------
--- | Replace `TRef x _ _` where `x` is a name for an enumeration with `number`
----------------------------------------------------------------------------------------
-
----------------------------------------------------------------------------------------
-fixEnums :: PPR r => QEnv (ModuleDef r) -> BareRsc r -> (QEnv (ModuleDef r), BareRsc r)
----------------------------------------------------------------------------------------
-fixEnums m p@(Rsc { code = Src ss }) = (m',p')
-  where
-    p'    = p { code = Src $ (trans f [] [] <$>) <$> ss }
-    m'    = fixEnumsInModule m `qenvMap` m
-    f _ _ = fixEnumInType m
-
-fixEnumInType :: F.Reftable r => QEnv (ModuleDef r) -> RType r -> RType r
-fixEnumInType ms (TRef (Gen (QN p x) []) r)
-  | Just m <- qenvFindTy p ms
-  , Just e <- envFindTy x $ m_enums m
-  = if isBvEnum e then tBV32 `strengthen` r
-                  else tNum  `strengthen` r
-fixEnumInType _ t = t
-
-fixEnumsInModule :: F.Reftable r => QEnv (ModuleDef r) -> ModuleDef r -> ModuleDef r
-fixEnumsInModule m = trans (const $ const $ fixEnumInType m) [] []
-
+--
+-- XXX: Treat this at lookup
+--
+-- ---------------------------------------------------------------------------------------
+-- -- | Replace `TRef x _ _` where `x` is a name for an enumeration with `number`
+-- ---------------------------------------------------------------------------------------
+--
+-- ---------------------------------------------------------------------------------------
+-- fixEnums :: PPR r => QEnv (ModuleDef r) -> BareRsc r -> (QEnv (ModuleDef r), BareRsc r)
+-- ---------------------------------------------------------------------------------------
+-- fixEnums m p@(Rsc { code = Src ss }) = (m',p')
+--   where
+--     p'    = p { code = Src $ (trans f [] [] <$>) <$> ss }
+--     m'    = fixEnumsInModule m `qenvMap` m
+--     f _ _ = fixEnumInType m
+--
+-- fixEnumInType :: F.Reftable r => QEnv (ModuleDef r) -> RType r -> RType r
+-- fixEnumInType ms (TRef (Gen (QN p x) []) r)
+--   | Just m <- qenvFindTy p ms
+--   , Just e <- envFindTy x $ m_enums m
+--   = if isBvEnum e then tBV32 `strengthen` r
+--                   else tNum  `strengthen` r
+-- fixEnumInType _ t = t
+--
+-- fixEnumsInModule :: F.Reftable r => QEnv (ModuleDef r) -> ModuleDef r -> ModuleDef r
+-- fixEnumsInModule m = trans (const $ const $ fixEnumInType m) [] []
+--
 
 ---------------------------------------------------------------------------------------
 -- | Add a '#' at the end of every function binder (to avoid capture)
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-fixFunBinders :: PPR r => QEnv (ModuleDef r) -> BareRsc r -> (QEnv (ModuleDef r), BareRsc r)
+-- fixFunBinders :: PPR r => BareRsc r -> BareRsc r
+-- fixFunBinders :: RefScript -> RefScript
 ---------------------------------------------------------------------------------------
-fixFunBinders m p@(Rsc { code = Src ss }) = (m', p')
+fixFunBinders p@(Rsc { code = Src ss }) = p'
   where
     p'    = p { code = Src $ (trans f [] [] <$>) <$> ss }
-    m'    = qenvMap fixFunBindersInModule m
     f _ _ = fixFunBindersInType
 
 fixFunBindersInType t | Just is <- bkFuns t = mkAnd $ map (mkFun . f) is
                       | otherwise           = t
   where
-    f (vs, yts, t)    = (vs, ssb yts, sub t)
+    f (vs, yts, t) = (vs, ssb yts, sub t)
       where
-        ks            = [ y | B y _ <- yts ]
-        ks'           = (F.eVar . (`mappend` F.symbol [symSepName])) <$> ks
+        ks  = [ y | B y _ <- yts ]
+        ks' = (F.eVar . (`mappend` F.symbol [symSepName])) <$> ks
         sub :: F.Subable a => a -> a
-        sub          = F.subst $ F.mkSubst $ zip ks ks'
-        ssb bs        = [ B (sub s) (sub t) | B s t <- bs ]
+        sub = F.subst $ F.mkSubst $ zip ks ks'
+        ssb bs = [ B (sub s) (sub t) | B s t <- bs ]
 
-fixFunBindersInModule m@(ModuleDef { m_variables = mv, m_types = mt })
-                = m { m_variables = mv', m_types = mt' }
-  where
-   mv'          = envMap f mv
-   f (VI a i t) = VI a i $ fixFunBindersInType t
-   mt'          = envMap (trans g [] []) mt
-   g _ _        = fixFunBindersInType
+-- fixFunBindersInModule m@(ModuleDef { m_variables = mv, m_types = mt })
+--                 = m { m_variables = mv', m_types = mt' }
+--   where
+--    mv'          = envMap f mv
+--    f (VI a i t) = VI a i $ fixFunBindersInType t
+--    mt'          = envMap (trans g [] []) mt
+--    g _ _        = fixFunBindersInType
 

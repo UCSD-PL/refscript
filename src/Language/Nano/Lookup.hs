@@ -12,7 +12,7 @@ module Language.Nano.Lookup (
   , AccessKind(..)
   ) where
 
-import           Control.Applicative           ((<$>))
+import           Control.Applicative           (pure, (<$>))
 import           Data.Generics
 import qualified Data.Map.Strict               as M
 import qualified Language.Fixpoint.Bitvector   as BV
@@ -52,22 +52,22 @@ instance PP AccessKind where
 --
 -------------------------------------------------------------------------------
 getProp :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
-        => g r -> AccessKind -> f -> RType r -> Maybe (RType r, RType r)
+        => g r -> AccessKind -> StaticKind -> f -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getProp γ b f t@(TPrim _ _) = getPropPrim γ b f t
+getProp γ b s f t@(TPrim _ _) = getPropPrim γ b s f t
 
-getProp γ b f (TOr ts) = getPropUnion γ b f ts
+getProp γ b s f (TOr ts) = getPropUnion γ b s f ts
 
---
--- Raw object containing fields `es` plus a "__proto__" field linking to 'Object'
---
-getProp γ b f t@(TObj es _)
-  = (t,) <$> accessMember γ b InstanceK f es -- `M.union` t_elts empty
-  where
-    emptyObjectInterface = undefined
+-- | TODO: Chain up to 'Object'
+getProp γ b s f t@(TObj es _)
+  = (t,) <$> accessMember γ b s f es -- `M.union` t_elts empty
+  -- where
+  --   emptyObjectInterface = undefined
 
 -- | Enumeration
-getProp γ b f t@(TRef (Gen n []) _)
+-- FIXME: Instead of the actual integer value, assign unique symbolic values:
+--        E.g. A_B_C_1 ...
+getProp γ b s f t@(TRef (Gen n []) _)
   | Just e  <- resolveEnumInEnv γ n
   , Just io <- envFindTy f $ e_mapping e
   = case io of
@@ -77,34 +77,18 @@ getProp γ b f t@(TRef (Gen n []) _)
       HexLit _ s -> bitVectorValue s >>= return . (t,) . (tBV32 `strengthen`)
       _          -> Nothing
 
-getProp γ b f t@(TRef _ _)
-  | Just t' <- expandType Coercive (cha γ) t
-  = getProp γ b f t'
+getProp γ b _ f t@(TRef _ _)
+  = expandType Coercive (cha γ) t >>= getProp γ b InstanceK f
 
-getProp γ b f t@(TType ClassK _)
-  = expandType Coercive (cha γ) t >>= getProp γ b f
+getProp γ b s f t@(TClass _)
+  = expandType Coercive (cha γ) t >>= getProp γ b StaticK f
 
-getProp γ _ f t@(TMod m)
+getProp γ _ s f t@(TMod m)
   = do  m'        <- resolveModuleInEnv γ m
         VI _ _ t' <- envFindTy f $ m_variables m'
         return     $ (t,t')
 
--- FIXME: Instead of the actual integer value, assign unique symbolic values:
---        E.g. A_B_C_1 ...
-getProp γ _ f t@(TType EnumK (BGen e _))
-  | Just e' <- resolveEnumInEnv γ e
-  , Just io <- envFindTy f (e_mapping e')
-  = case io of
-      IntLit _ i -> return (t, tNum `strengthen` exprReft i)
-      --
-      -- XXX : is 32-bit going to be enough ???
-      --
-      -- XXX: Invalid BV values will be dropped
-      --
-      HexLit _ s -> bitVectorValue s >>= return . (t,) . (tBV32 `strengthen`)
-      _          -> Nothing
-
-getProp _ _ _ _ = Nothing
+getProp _ _ _ _ _ = Nothing
 
 
 -------------------------------------------------------------------------------
@@ -115,7 +99,7 @@ getProp _ _ _ _ = Nothing
 --            -> RType r
 --            -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
-getPropPrim γ b f t@(TPrim c _) =
+getPropPrim γ b s f t@(TPrim c _) =
   case c of
     TBoolean   -> Nothing
     TUndefined -> Nothing
@@ -129,29 +113,28 @@ getPropPrim γ b f t@(TPrim c _) =
     TTop       -> Nothing
     TBot       -> Nothing
     TFPBool    -> Nothing
-getPropPrim _ _ _ _ = error "getPropPrim should only be applied to TApp"
+getPropPrim _ _ _ _ _ = error "getPropPrim should only be applied to TApp"
 
 
+-- | `extractCtor γ t` extracts a contructor signature from a type @t@
+--
+-- TODO: Is fixRet necessary?
+--
 -------------------------------------------------------------------------------
 extractCtor :: (PPRD r, EnvLike r g) => g r -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-extractCtor γ (TType ClassK (BGen x vs))
-  | Just (TD _ ms) <- resolveTypeInEnv γ x
-  , Just ctor <- tm_ctor ms
-  -- XXX : disabling fixret for now
-  = Just $ mkAll vs ctor -- fixRet x vs t
-extractCtor γ (TRef (Gen x ts) _)
-  | Just (TD (TS _ (BGen _ vs) _) ms) <- resolveTypeInEnv γ x
-  , Just ctor <- tm_ctor ms
-  -- TODO: Is fixRet necessary?
-  , θ <- fromList $ zip (btvToTV <$> vs) ts
-  = Just $ apply θ ctor
-  -- TODO: fixRet???
-  -- = Just (apply θ <$> fixRet x vs ctor)
-  -- _ -> return $ apply (fromList $ zip vs ts) $ defCtor x vs
+extractCtor γ t = go t
   where
-extractCtor _ (TObj ms _) = tm_ctor ms
-extractCtor _ _ = Nothing
+    -- No need to parents of class A, cause A will have a constructor in any case
+    -- e.g. class A extends B { .. }
+    go (TClass (BGen x _)) | Just (TD (TS _ (BGen _ bs) _) ms) <- resolveTypeInEnv γ x
+                           = tm_ctor ms >>= pure . mkAll bs
+    -- interface IA<V extends T> { new(x: T) { ... } }
+    -- var a: IA<S>;  // S <: T
+    -- var x = new a(x);
+    go (TRef _ _)          = expandType Coercive (cha γ) t >>= go
+    go (TObj ms _)         = tm_ctor ms
+    go _                   = Nothing
 
 -- fixRet x vs = fmap (mkAnd . (mkAll vs . mkFun . fixOut vs <$>)) . bkFuns
 --   where fixOut vs (a,b,_) = (a,b,retT x vs)
@@ -162,45 +145,31 @@ extractCtor _ _ = Nothing
 -------------------------------------------------------------------------------
 extractCall :: (EnvLike r g, PPRD r) => g r -> RType r -> [RType r]
 -------------------------------------------------------------------------------
-extractCall γ t                 = uncurry mkAll <$> foo [] t
+extractCall γ t          = uncurry mkAll <$> go [] t
   where
-    foo αs t@(TFun _ _ _)       = [(αs, t)]
-    foo αs   (TAnd ts)          = concatMap (foo αs) ts
-    foo αs   (TAll α t)         = foo (αs ++ [α]) t
-    foo αs   (TRef (Gen s _) _) | Just (TD _ ms) <- resolveTypeInEnv γ s
-                                , Just t <- tm_call ms
-                                = foo αs t
-                                | otherwise = []
-    foo αs   (TObj ms _)        | Just t <- tm_call ms
-                                = foo αs t
-    foo _  _                    = []
+    go αs t@(TFun _ _ _) = [(αs, t)]
+    go αs   (TAnd ts)    = concatMap (go αs) ts
+    go αs   (TAll α t)   = go (αs ++ [α]) t
+    go αs t@(TRef _ _)   | Just t' <- expandType Coercive (cha γ) t
+                         = go αs t'
+    go αs   (TObj ms _)  | Just t <- tm_call ms
+                         = go αs t
+    go _  _              = []
 
 -------------------------------------------------------------------------------
 accessMember :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
-             => g r
-             -> AccessKind
-             -> StaticKind
-             -> f
-             -> TypeMembers r
-             -> Maybe (RType r)
+             => g r -> AccessKind -> StaticKind -> f -> TypeMembers r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 accessMember γ b@MethodAccess StaticK m ms
   | Just (MI _ _ t) <- F.lookupSEnv (F.symbol m) $ tm_smeth ms
   = Just t
-  -- | Just (IndexSig _ StringIndex t) <- M.lookup (stringIndexSymbol, sk) es
-  -- , validFieldName f
-  -- = Just (t, tMut)
   | otherwise
-  = Nothing -- TODO: parents?
-  -- = accessMemberProto γ b sk f es
+  = Nothing
 accessMember γ b@MethodAccess InstanceK m ms
   | Just (MI _ _ t) <- F.lookupSEnv (F.symbol m) $ tm_meth ms
   = Just t
-  -- | Just (IndexSig _ StringIndex t) <- M.lookup (stringIndexSymbol, sk) es
-  -- , validFieldName f
-  -- = Just (t, tMut)
   | otherwise
-  = Nothing -- TODO: parents?
+  = Nothing
 
 accessMember γ b@FieldAccess StaticK f ms
   | Just f@(FI o _ t) <- F.lookupSEnv (F.symbol f) $ tm_sprop ms
@@ -233,16 +202,16 @@ lookupAmbientType γ b f amb
     accessMember γ b InstanceK f ms
   where
     nm = mkAbsName [] (F.symbol amb)
---
--- -- Accessing the @x@ field of the union type with @ts@ as its parts, returns
--- -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
--- -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
+
+-- | Accessing the @f@ field of the union type with @ts@ as its parts, returns
+-- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
+-- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
 getPropUnion :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
-             => g r -> AccessKind -> f -> [RType r] -> Maybe (RType r, RType r)
+             => g r -> AccessKind -> StaticKind -> f -> [RType r] -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getPropUnion γ b f ts =
-  case unzip [ ts' | Just ts' <- getProp γ b f <$> ts] of
+getPropUnion γ b s f ts =
+  case unzip [ ts' | Just ts' <- getProp γ b s f <$> ts] of
     ([],[]) -> Nothing
     (t1s,t2s) -> Just (mkUnion t1s, mkUnion t2s)
 

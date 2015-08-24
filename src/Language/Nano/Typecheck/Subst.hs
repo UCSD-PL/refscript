@@ -86,7 +86,7 @@ instance Free (RType r) where
   free (TAnd ts)            = free ts
   free (TRef n _)           = free n
   free (TObj es _)          = free es
-  free (TType _ t)          = free t
+  free (TClass t)           = free t
   free (TMod _)             = S.empty
   free (TAll α t)           = S.delete (btvToTV α) $ free t
   free (TFun xts t _)       = free $ [t] ++ (b_type <$> xts)
@@ -274,7 +274,7 @@ appTy θ        (TOr ts)      = TOr (apply θ ts)
 appTy θ        (TAnd ts)     = TAnd (apply θ ts)
 appTy θ        (TRef n r)    = TRef (apply θ n) r
 appTy θ        (TObj es r)   = TObj (apply θ es) r
-appTy θ        (TType k t)   = TType k (apply θ t)
+appTy θ        (TClass t)    = TClass (apply θ t)
 appTy _        (TMod n)      = TMod n
 appTy (Su m)   (TAll α t)    = TAll α $ apply (Su $ HM.delete (btvToTV α) m) t
 appTy θ        (TFun ts t r) = TFun (apply θ ts) (apply θ t) r
@@ -314,7 +314,7 @@ instance (F.Reftable r) => Eq (RType r) where
   TAnd ts   == TAnd ts'    = ts == ts'
   TRef g _  == TRef g' _   = g == g'
   TObj m _  == TObj m' _   = m == m'
-  TType k g == TType k' g' = k == k' && g == g'
+  TClass g  == TClass g'   = g == g'
   TMod n    == TMod n'     = n == n'
   TAll v@(BTV _ b _) t == TAll v'@(BTV _ b' _) t'
                            = b == b' && t == appTy θ t'

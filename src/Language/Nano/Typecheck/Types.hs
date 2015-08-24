@@ -267,7 +267,7 @@ isTUnion t | TOr  _   <- t = True | otherwise = False
 
 maybeTObj (TRef _ _)  = True
 maybeTObj (TObj _ _)  = True
-maybeTObj (TType _ _) = True
+maybeTObj (TClass _)  = True
 maybeTObj (TMod _ )   = True
 maybeTObj (TAll _ t)  = maybeTObj t
 maybeTObj (TOr ts)    = any maybeTObj ts
@@ -302,7 +302,7 @@ rTypeR' (TOr _ )     = Just fTop
 rTypeR' (TFun _ _ r) = Just r
 rTypeR' (TRef _ r)   = Just r
 rTypeR' (TObj _ r)   = Just r
-rTypeR' (TType _ _)  = Just fTop
+rTypeR' (TClass _)   = Just fTop
 rTypeR' (TMod _)     = Just fTop
 rTypeR' (TAnd _ )    = Nothing
 rTypeR' (TAll _ _)   = Nothing

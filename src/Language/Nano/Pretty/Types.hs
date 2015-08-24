@@ -55,15 +55,11 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp (TAnd ts)       = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TRef t r)      = F.ppTy r $ pp t
   pp (TObj ms r)     = F.ppTy r $ braces $ pp ms
-  pp (TType k t)     = pp k <+> pp t
+  pp (TClass t)      = text "class" <+> pp t
   pp (TMod t)        = text "module" <+> pp t
   pp t@(TAll _ _)    = ppArgs angles comma αs <> text "." <+> pp t' where (αs, t') = bkAll t
   pp (TFun xts t _)  = ppArgs parens comma xts <+> text "=>" <+> pp t
   pp (TExp e)        = pprint e
-
-instance PP NamedTypeKind where
-  pp ClassK          = text "class"
-  pp EnumK           = text "enum"
 
 instance (F.Reftable r, PP r) => PP (TypeMembersQ q r) where
   pp (TM fs ms sfs sms cs cts sidx nidx) = ppProp fs  <+> ppMeth ms  <+>

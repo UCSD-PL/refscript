@@ -417,7 +417,7 @@ transRType f               = go
     go αs xs (TAnd ts)     = f αs xs $ TAnd ts'      where ts' = go αs xs <$> ts
     go αs xs (TRef n r)    = f αs xs $ TRef n' r     where n'  = trans f αs xs n
     go αs xs (TObj ms r)   = f αs xs $ TObj ms' r    where ms' = trans f αs xs ms
-    go αs xs (TType k n)   = f αs xs $ TType k n'    where n'  = trans f αs xs n
+    go αs xs (TClass n)    = f αs xs $ TClass n'     where n'  = trans f αs xs n
     go αs xs (TMod m)      = f αs xs $ TMod m
     go αs xs (TAll a t)    = f αs xs $ TAll a t'     where t'  = go (btvToTV a:αs) xs t
     go αs xs (TFun bs t r) = f αs xs $ TFun bs' t' r where bs' = trans f αs xs' <$> bs
@@ -522,7 +522,7 @@ ntransRType f g         = go
     go (TAnd ts)     = TAnd ts'       where ts' = go <$> ts
     go (TRef n r)    = TRef n' r      where n'  = ntrans f g n
     go (TObj ms r)   = TObj ms' r     where ms' = ntrans f g ms
-    go (TType k n)   = TType k n'     where n'  = ntrans f g n
+    go (TClass n)    = TClass n'      where n'  = ntrans f g n
     go (TMod p)      = TMod p'        where p'  = g p
     go (TAll a t)    = TAll a' t'     where a'  = ntrans f g a
                                             t'  = go t

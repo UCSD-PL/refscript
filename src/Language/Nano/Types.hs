@@ -75,7 +75,7 @@ data RTypeQ q r =
   --
   -- Class / Enum
   --
-  | TType NamedTypeKind (BTGenQ q r)
+  | TClass (BTGenQ q r)
   --
   -- Namespace
   --
@@ -93,9 +93,6 @@ data RTypeQ q r =
   --
   | TExp  F.Expr
   deriving (Data, Typeable, Functor, Foldable, Traversable)
-
-data NamedTypeKind    = EnumK | ClassK
-                        deriving (Eq, Data, Typeable)
 
 data TGenQ q r        = Gen { g_name :: QN q
                             , g_args :: [RTypeQ q r]
@@ -326,9 +323,6 @@ instance F.Symbolic (TGenQ q r) where
 instance F.Symbolic (BTGenQ q r) where
   symbol (BGen n _) = F.symbol n
 
-instance F.Symbolic NamedTypeKind where
-  symbol EnumK = F.symbol "enum"
-  symbol ClassK = F.symbol "class"
 
 
 -- | Monoid

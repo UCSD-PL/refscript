@@ -1,24 +1,25 @@
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE TupleSections             #-}
-{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE RankNTypes                #-}
-{-# LANGUAGE ImpredicativeTypes        #-}
-{-# LANGUAGE LiberalTypeSynonyms       #-}
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE DoAndIfThenElse           #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE ImpredicativeTypes        #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE LiberalTypeSynonyms       #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE TupleSections             #-}
 
--- | This module has the code for the Type-Checker Monad. 
+-- | This module has the code for the Type-Checker Monad.
 
 module Language.Nano.Typecheck.TCMonad (
   -- * TC Monad
     TCM
- 
-  -- * Execute 
+
+  -- * Execute
   , execute
   , runFailM, runMaybeM
-              
+
   -- * Errors
   , logError, tcError, tcWrap
 
@@ -35,7 +36,7 @@ module Language.Nano.Typecheck.TCMonad (
   , addAnn {-TEMP-}, getAnns
 
   -- * Unification
-  , unifyTypeM, unifyFunArgsM
+  , unifyTypeM, unifyTypesM
 
   -- * Subtyping
   , subtypeM, isSubtype, checkTypes
@@ -46,79 +47,76 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Verbosity / Options
   , whenLoud', whenLoud, whenQuiet', whenQuiet, getOpts, getAstCount
 
-  )  where 
+  )  where
 
 
-import           Control.Applicative                ((<$>), (<*>))
+import           Control.Applicative                 ((<$>), (<*>))
+import           Control.Monad.Except                (catchError)
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
-import           Control.Monad.Except               (catchError)
-import           Data.Either                        (partitionEithers)
-import           Data.Function                      (on)
-import qualified Data.HashMap.Strict                as M
-import qualified Data.Map.Strict                    as MM
-import           Data.Maybe                         (catMaybes, isJust, maybeToList)
-import           Data.List                          (isPrefixOf) 
-import           Data.Monoid                  
-import qualified Data.IntMap.Strict                 as I
+import           Data.Either                         (partitionEithers)
+import           Data.Function                       (on)
+import qualified Data.HashMap.Strict                 as M
+import qualified Data.IntMap.Strict                  as I
+import           Data.List                           (isPrefixOf)
+import           Data.Maybe                          (catMaybes, isJust, maybeToList)
+import           Data.Monoid
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc 
-import qualified Language.Fixpoint.Types            as F
-import           Language.Nano.AST
+import           Language.Fixpoint.Misc
+import qualified Language.Fixpoint.Types             as F
 import           Language.Nano.Annots
-import           Language.Nano.Pretty
-import           Language.Nano.CmdLine
+import           Language.Nano.AST
 import           Language.Nano.ClassHierarchy
+import           Language.Nano.CmdLine
 import           Language.Nano.Core.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Misc
-import           Language.Nano.Program
+import           Language.Nano.Names
 import           Language.Nano.Pretty
-import           Language.Nano.Types
-import           Language.Nano.Typecheck.Types
+import           Language.Nano.Program
 import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Unify
-import qualified System.Console.CmdArgs.Verbosity   as V
-
-type Unif r = (PP r, F.Reftable r, Substitutable r (Fact r), ExprReftable F.Symbol r, ExprReftable Int r, Free (Fact r)) 
+import           Language.Nano.Types
+import qualified System.Console.CmdArgs.Verbosity    as V
 
 
 -------------------------------------------------------------------------------
--- | Typechecking monad 
+-- | Typechecking monad
 -------------------------------------------------------------------------------
 
 data TCState r = TCS {
-  -- 
+  --
   -- ^ Errors
   --
-    tc_errors   :: ![Error]
-  -- 
+    tc_errors  :: ![Error]
+  --
   -- ^ Substitutions
   --
-  , tc_subst    :: !(RSubst r)
-  -- 
+  , tc_subst   :: !(RSubst r)
+  --
   -- ^ Freshness counter
   --
-  , tc_cnt      :: !Int
-  -- 
+  , tc_cnt     :: !Int
+  --
   -- ^ Annotations
   --
-  , tc_anns     :: AnnInfo r
-  -- 
+  , tc_anns    :: AnnInfo r
+  --
   -- ^ Verbosity
   --
-  , tc_verb     :: V.Verbosity
-  -- 
+  , tc_verb    :: V.Verbosity
+  --
   -- ^ configuration options
   --
-  , tc_opts     :: Config               
-  -- 
+  , tc_opts    :: Config
+  --
   -- ^ AST Counter
   --
-  , tc_ast_cnt  :: NodeId
+  , tc_ast_cnt :: NodeId
 
   }
 
@@ -134,7 +132,7 @@ whenLoud' :: TCM r a -> TCM r a -> TCM r a
 -------------------------------------------------------------------------------
 whenLoud' loud other = do  v <- tc_verb <$> get
                            case v of
-                             V.Loud -> loud 
+                             V.Loud -> loud
                              _      -> other
 
 -------------------------------------------------------------------------------
@@ -145,7 +143,7 @@ whenQuiet  act = whenQuiet' act $ return ()
 -------------------------------------------------------------------------------
 whenQuiet' :: TCM r a -> TCM r a -> TCM r a
 -------------------------------------------------------------------------------
-whenQuiet' quiet other = do  tc_verb <$> get >>= \case 
+whenQuiet' quiet other = do  tc_verb <$> get >>= \case
                                V.Quiet -> quiet
                                _       -> other
 
@@ -153,7 +151,7 @@ getOpts :: TCM r Config
 getOpts = tc_opts <$> get
 
 getAstCount :: TCM r NodeId
-getAstCount = tc_ast_cnt <$> get  
+getAstCount = tc_ast_cnt <$> get
 
 
 -------------------------------------------------------------------------------
@@ -163,37 +161,37 @@ getAstCount = tc_ast_cnt <$> get
 -------------------------------------------------------------------------------
 getSubst :: TCM r (RSubst r)
 -------------------------------------------------------------------------------
-getSubst = tc_subst <$> get 
+getSubst = tc_subst <$> get
 
 -------------------------------------------------------------------------------
-setSubst   :: RSubst r -> TCM r () 
+setSubst   :: RSubst r -> TCM r ()
 -------------------------------------------------------------------------------
 setSubst θ = modify $ \st -> st { tc_subst = θ }
 
 -------------------------------------------------------------------------------
 addSubst :: (Unif r, IsLocated a) => a -> RSubst r -> TCM r ()
 -------------------------------------------------------------------------------
-addSubst l θ = do 
-    θ0 <- appSu θ <$> getSubst 
-    case subCheck θ0 θ of 
+addSubst l θ = do
+    θ0 <- appSu θ <$> getSubst
+    case θ0 <=> θ of
       [] -> return ()
-      ts -> forM_ ts $ (\(t1,t2) -> tcError $ errorMergeSubst (srcPos l) t1 t2)
+      ts -> forM_ ts $ \(t1,t2) -> tcError $ errorMergeSubst (srcPos l) t1 t2
     setSubst $ θ0 `mappend` θ
   where
-    appSu θ               = fromList . (mapSnd (apply θ) <$>) . toList 
-    Su m `subCheck` Su m' = checkIntersection m m' 
-    checkIntersection m n = catMaybes $ check <$> M.toList (M.intersectionWith (,) m n)
-    check (k, (t,t'))     | uninstantiated k t = Nothing
-                          | t == t'            = Nothing
-                          | otherwise          = Just (t,t')
-    eqT                   = on (==) toType
-    uninstantiated k t    = TVar k () `eqV` t
+    inList f        = fromList . f . toList
+    appSu           = inList . fmap . mapSnd . apply
+    Su m <=> Su m'  = catMaybes $ chk <$> M.toList (M.intersectionWith (,) m m')
+    chk (k, (t,t')) | uninstantiated k t = Nothing
+                    | t == t' = Nothing
+                    | otherwise = Just (t,t')
+
+    uninstantiated k t    = TVar k fTop `eqV` t
 
 -------------------------------------------------------------------------------
 extSubst :: (F.Reftable r, PP r) => [TVar] -> TCM r ()
 -------------------------------------------------------------------------------
 extSubst βs = getSubst >>= setSubst . (`mappend` θ)
-  where 
+  where
     θ       = fromList $ zip βs (tVar <$> βs)
 
 
@@ -214,7 +212,7 @@ tcWrap act = (Right <$> act) `catchError` (return . Left)
 -------------------------------------------------------------------------------
 logError   :: Error -> a -> TCM r a
 -------------------------------------------------------------------------------
-logError err x = (modify $ \st -> st { tc_errors = err : tc_errors st}) >> return x
+logError err x = modify (\st -> st { tc_errors = err : tc_errors st}) >> return x
 
 -------------------------------------------------------------------------------
 freshTyArgs :: Unif r => AnnSSA r -> Int -> IContext -> [TVar] -> RType r -> TCM r (RType r)
@@ -224,18 +222,18 @@ freshTyArgs a n ξ αs t = (`apply` t) <$> freshSubst a n ξ αs
 -------------------------------------------------------------------------------
 freshSubst :: Unif r => AnnSSA r -> Int -> IContext -> [TVar] -> TCM r (RSubst r)
 -------------------------------------------------------------------------------
-freshSubst (Ann i l _) n ξ αs
+freshSubst (FA i l _) n ξ αs
   = do when (not $ unique αs) $ logError (errorUniqueTypeParams l) ()
        βs        <- mapM (freshTVar l) αs
        setTyArgs l i n ξ βs
-       extSubst   $ βs 
+       extSubst   $ βs
        return     $ fromList $ zip αs (tVar <$> βs)
 
 -------------------------------------------------------------------------------
 setTyArgs :: (IsLocated l, Unif r) => l -> NodeId -> Int -> IContext -> [TVar] -> TCM r ()
 -------------------------------------------------------------------------------
 setTyArgs _  i n ξ βs
-  = case map tVar βs of 
+  = case map tVar βs of
       [] -> return ()
       vs -> addAnn i $ TypInst n ξ vs
 
@@ -251,52 +249,52 @@ getAnns = do θ     <- tc_subst <$> get
              m     <- tc_anns  <$> get
              let m' = fmap (apply θ {-. sortNub-}) m
              _     <- modify $ \st -> st { tc_anns = m' }
-             return m' 
+             return m'
 
 -------------------------------------------------------------------------------
-addAnn :: Unif r => NodeId -> Fact r -> TCM r () 
+addAnn :: Unif r => NodeId -> Fact r -> TCM r ()
 -------------------------------------------------------------------------------
-addAnn i f = modify $ \st -> st { tc_anns = I.insertWith (++) i [f] $ tc_anns st } 
- 
+addAnn i f = modify $ \st -> st { tc_anns = I.insertWith (++) i [f] $ tc_anns st }
+
 -------------------------------------------------------------------------------
-execute ::  Unif r => Config -> V.Verbosity -> NanoSSAR r -> TCM r a -> Either (F.FixResult Error) a
+execute ::  Unif r => Config -> V.Verbosity -> TcRsc r -> TCM r a -> Either (F.FixResult Error) a
 -------------------------------------------------------------------------------
-execute cfg verb pgm act 
-  = case runState (runExceptT act) $ initState cfg verb pgm of 
+execute cfg verb pgm act
+  = case runState (runExceptT act) $ initState cfg verb pgm of
       (Left err, _) -> Left $ F.Unsafe [err]
       (Right x, st) -> applyNonNull (Right x) (Left . F.Unsafe) (reverse $ tc_errors st)
 
 -------------------------------------------------------------------------------
-initState :: Unif r => Config -> V.Verbosity -> NanoSSAR r -> TCState r
+initState :: Unif r => Config -> V.Verbosity -> TcRsc r -> TCState r
 -------------------------------------------------------------------------------
-initState cfg verb pgm = TCS tc_errors tc_subst tc_cnt tc_anns tc_verb tc_opts tc_ast_cnt
+initState cfg verb pgm = TCS tc_e tc_s tc_c tc_a tc_v tc_o tc_a_c
   where
-    tc_errors   = []
-    tc_subst    = mempty 
-    tc_cnt      = 0
-    tc_anns     = I.empty
-    tc_verb     = verb
-    tc_opts     = cfg
-    tc_ast_cnt  = max_id pgm
+    tc_e   = []
+    tc_s   = mempty
+    tc_c   = 0
+    tc_a   = I.empty
+    tc_v   = verb
+    tc_o   = cfg
+    tc_a_c = maxId pgm
 
 
 --------------------------------------------------------------------------
--- | Generating Fresh Values 
+-- | Generating Fresh Values
 --------------------------------------------------------------------------
 
 tick :: TCM r Int
-tick = do st    <- get 
+tick = do st    <- get
           let n  = tc_cnt st
           put    $ st { tc_cnt = n + 1 }
-          return n 
+          return n
 
-class Freshable a where 
+class Freshable a where
   fresh :: a -> TCM r a
 
--- instance Freshable TVar where 
+-- instance Freshable TVar where
 --   fresh _ = TV . F.intSymbol "T" <$> tick
 
-instance Freshable a => Freshable [a] where 
+instance Freshable a => Freshable [a] where
   fresh = mapM fresh
 
 freshTVar l _ =  ((`TV` l). F.intSymbol (F.symbol "T")) <$> tick
@@ -311,45 +309,42 @@ isCastId (Id _ s) = castPrefix `isPrefixOf` s
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-unifyFunArgsM :: Unif r 
-              => SrcSpan -> TCEnv r -> FunArgs (RType r) 
-              -> FunArgs (RType r) -> TCM r (RSubst r)
+unifyTypesM :: Unif r => SrcSpan -> TCEnv r -> [RType r] -> [RType r] -> TCM r (RSubst r)
 --------------------------------------------------------------------------------
-unifyFunArgsM l γ t1s t2s
-  | t1s `sameLength` t2s
+unifyTypesM l γ t1s t2s
+  | t1s |=| t2s
   = do  θ <- getSubst
-        case unifys l γ θ (toList t1s) (toList t2s) of
+        case unifys l γ θ t1s t2s of
           Left err -> tcError $ err
           Right θ' -> setSubst θ' >> return θ'
   | otherwise
   = tcError $ errorArgMismatch l
-  where 
-    FA to ts `sameLength` FA to' ts' = isJust to == isJust to' && length ts == length ts'
-    toList (FA to ts)                = maybeToList to ++ ts
+  where
+    (|=|) = (==) `on` length
 
 --------------------------------------------------------------------------------
 unifyTypeM :: Unif r => SrcSpan -> TCEnv r -> RType r -> RType r -> TCM r (RSubst r)
 --------------------------------------------------------------------------------
-unifyTypeM l γ t t' = unifyFunArgsM l γ (FA Nothing [t]) (FA Nothing [t'])
+unifyTypeM l γ t t' = unifyTypesM l γ [t] [t']
 
 
 --------------------------------------------------------------------------------
 --  | Cast Helpers
 --------------------------------------------------------------------------------
 
--- | @deadcastM@ wraps an expression @e@ with a dead-cast around @e@. 
+-- | @deadcastM@ wraps an expression @e@ with a dead-cast around @e@.
 --------------------------------------------------------------------------------
 deadcastM :: (Unif r) => IContext -> Error -> Expression (AnnSSA r) -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 deadcastM ξ err e
-  = addCast ξ e $ CDead [err] tNull 
+  = addCast ξ e $ CDead [err] tNull
 
 -- | For the expression @e@, check the subtyping relation between the type @t1@
 --   (the actual type for @e@) and @t2@ (the target type) and insert the cast.
 --------------------------------------------------------------------------------
 castM :: Unif r => TCEnv r -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-castM γ e t1 t2 
+castM γ e t1 t2
   = case convert (srcPos e) γ t1 t2 of
       CNo -> return e
       c   -> addCast (tce_ctx γ) e c
@@ -364,7 +359,7 @@ runFailM a = fst . runState (runExceptT a) <$> get
 --------------------------------------------------------------------------------
 runMaybeM :: Unif r => TCM r a -> TCM r (Maybe a)
 --------------------------------------------------------------------------------
-runMaybeM a = runFailM a >>= \case 
+runMaybeM a = runFailM a >>= \case
                 Right rr -> return $ Just rr
                 Left _   -> return $ Nothing
 
@@ -372,7 +367,7 @@ runMaybeM a = runFailM a >>= \case
 --------------------------------------------------------------------------------
 subtypeM :: Unif r => SrcSpan -> TCEnv r -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
-subtypeM l γ t1 t2 
+subtypeM l γ t1 t2
   = case convert l γ t1 t2 of
       CNo     -> return  ()
       CUp _ _ -> return  ()
@@ -380,77 +375,73 @@ subtypeM l γ t1 t2
 
 addCast ξ e c = addAnn i fact >> wrapCast loc fact e
   where
-    i         = ann_id $ getAnnotation e
-    loc       = ann    $ getAnnotation e
+    i         = fId  $ getAnnotation e
+    loc       = fSrc $ getAnnotation e
     fact      = TCast ξ c
 
-wrapCast _ f (Cast_ (Ann i l fs) e) = Cast_ <$> freshenAnn (Ann i l (f:fs)) <*> return e
-wrapCast l f e                      = Cast_ <$> freshenAnn (Ann (-1) l [f]) <*> return e
+wrapCast _ f (Cast_ (FA i l fs) e) = Cast_ <$> freshenAnn (FA i l (f:fs)) <*> return e
+wrapCast l f e                      = Cast_ <$> freshenAnn (FA (-1) l [f]) <*> return e
 
 freshenAnn :: AnnSSA r -> TCM r (AnnSSA r)
-freshenAnn (Ann _ l a)
-  = do n     <- tc_ast_cnt <$> get 
+freshenAnn (FA _ l a)
+  = do n     <- tc_ast_cnt <$> get
        modify $ \st -> st {tc_ast_cnt = 1 + n}
-       return $ Ann n l a
+       return $ FA n l a
 
 
 -- | tcFunTys: "context-sensitive" function signature
 --------------------------------------------------------------------------------
-tcFunTys :: (Unif r, F.Subable (RType r), F.Symbolic s, PP a) 
+tcFunTys :: (Unif r, F.Subable (RType r), F.Symbolic s, PP a)
          => AnnSSA r -> a -> [s] -> RType r -> TCM r [IOverloadSig r]
 --------------------------------------------------------------------------------
-tcFunTys l f xs ft = either tcError return $ go l f xs ft 
+tcFunTys l f xs ft = either tcError return sigs
   where
-    go l f xs ft | Just ts <- bkFuns ft
-                 = case partitionEithers [funTy l xs t | t <- ts] of 
-                    ([], fts) -> Right $ zip ([0..] :: [Int]) fts
-                    (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
-                 | otherwise
-                 = Left $ errorNonFunction (srcPos l) f ft 
+    sigs | Just ts <- bkFuns ft
+         = case partitionEithers [funTy t | t <- ts] of
+             ([], fts) -> Right $ zip ([0..] :: [Int]) fts
+             (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
+         | otherwise
+         = Left $ errorNonFunction (srcPos l) f ft
 
-    funTy l xs (αs, yts, t) | Just yts' <- padUndefineds xs yts 
-                            = let (su, ts') = renameBinds yts' xs in
-                              Right $ (αs, ts', F.subst su t) 
-                            | otherwise 
-                            = Left  $ errorArgMismatch (srcPos l)
+    funTy (αs, yts, t) | Just yts' <- padUndefineds xs yts
+                       = let (su, ts') = renameBinds yts' in
+                         Right $ (αs, ts', F.subst su t)
+                       | otherwise
+                       = Left  $ errorArgMismatch (srcPos l)
 
-    renameBinds yts xs    = (su, [F.subst su ty | B _ ty <- yts])
-      where 
-        su                = F.mkSubst suL 
-        suL               = safeZipWith "renameBinds" fSub yts xs 
-        fSub yt x         = (b_sym yt, F.eVar x)
-
-
+    renameBinds yts = (su, [F.subst su ty | B _ ty <- yts])
+      where
+        su          = F.mkSubst suL
+        suL         = safeZipWith "renameBinds" fSub yts xs
+        fSub yt x   = (b_sym yt, F.eVar x)
 
 --------------------------------------------------------------------------------
-checkTypes :: Unif r => TCEnv r -> TCM r ()
+checkTypes :: Unif r => ClassHierarchy r -> TCM r ()
 --------------------------------------------------------------------------------
-checkTypes γ  = mapM_ (\(a,ts) -> mapM_ (safeExtends $ setAP a γ) ts) types
-  where 
-    types     = mapSnd (envToList . m_types) <$> qenvToList (tce_mod γ)
-    setAP a γ = γ { tce_path = a } 
-    
+checkTypes cha = mapM_ (\(_,ts) -> mapM_ (safeExtends cha) ts) types
+  where
+    types     = mapSnd (envToList . m_types) <$> qenvToList (cModules cha)
 
 -- TODO | Checks:
--- TODO   
+-- TODO
 -- TODO   * Overwriten types safely extend the previous ones
 -- TODO
 -- TODO   * [TODO] No conflicts between inherited types
 -- TODO
 --------------------------------------------------------------------------------
-safeExtends :: (IsLocated l, Unif r) => TCEnv r -> (l, TypeDecl r) -> TCM r ()
+safeExtends :: (IsLocated l, Unif r) => ClassHierarchy r -> (l, TypeDecl r) -> TCM r ()
 --------------------------------------------------------------------------------
-safeExtends γ (l, t@(TD (TS k (BGen c bvs) (Just p,_)) _))
-  = safeExtends1 γ l c (expand' γ t) p
+safeExtends cha (l, t@(TD (TS k (BGen c bvs) ([p],_)) _))
+  = safeExtends1 cha l c (toTypeMembers cha t) p
 
-safeExtends1 γ l c ms (Gen n ts)
-  | Just td <- resolveTypeInEnv γ n 
+safeExtends1 cha l c ms (Gen n ts)
+  | Just td <- resolveType cha n
   -- , Just ns <- expand' γ td ts
   = return ()
-  -- = if isSubtype γ (mkTCons tImm ms) (mkTCons tImm ns) 
+  -- = if isSubtype γ (mkTCons tImm ms) (mkTCons tImm ns)
   --     then return ()
   --     else tcError $ errorClassExtends (srcPos l) c p (mkTCons ms) (mkTCons ns)
-  | otherwise 
+  | otherwise
   = tcError $ bugExpandType (srcPos l) n
   where
     mkTCons m es = TObj es fTop

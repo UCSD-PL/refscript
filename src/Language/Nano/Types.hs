@@ -83,11 +83,11 @@ data RTypeQ q r =
   --
   -- Forall [A <: T] . S
   --
-  | TAll  (BTVarQ q r) (RTypeQ q r)
+  | TAll (BTVarQ q r) (RTypeQ q r)
   --
   -- Function
   --
-  | TFun  [BindQ q r] (RTypeQ q r) r
+  | TFun [BindQ q r] (RTypeQ q r) r
   --
   -- /// Internal ///
   --
@@ -108,9 +108,6 @@ data BindQ q r        = B { b_sym  :: F.Symbol
                           , b_type :: RTypeQ q r
                           }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
-
-data FunArgs t        = FAargs (Maybe t) [t]
-                        deriving (Functor, Traversable, Foldable)
 
 data TypeMembersQ q r = TM { tm_prop  :: F.SEnv (FieldInfoQ q r)    -- Properties
                            , tm_meth  :: F.SEnv (MethodInfoQ q r)   -- Method signatures
@@ -157,6 +154,7 @@ data StaticKind       = StaticK | InstanceK
 
 data Optionality      = Opt | Req
                         deriving (Eq, Ord, Show, Data, Typeable)
+
 
 ---------------------------------------------------------------------------------
 -- | Enumeration definition
@@ -323,6 +321,8 @@ instance F.Symbolic (TGenQ q r) where
 instance F.Symbolic (BTGenQ q r) where
   symbol (BGen n _) = F.symbol n
 
+instance F.Symbolic (TypeSigQ q r) where
+  symbol (TS _ n _) = F.symbol n
 
 
 -- | Monoid

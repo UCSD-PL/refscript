@@ -272,7 +272,7 @@ rTypeSort (TFun xts t _)      = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t
 rTypeSort (TPrim c _)         = rTypeSortPrim c
 rTypeSort (TRef (Gen n ts) _) = F.FApp (rawStringFTycon $ F.symbol n) (rTypeSort <$> ts)
 rTypeSort (TObj _ _ )         = F.FApp (rawStringFTycon $ F.symbol "Object") []
-rTypeSort (TType k _)         = F.FApp (rawStringFTycon $ F.symbol k ) []
+rTypeSort (TClass _)          = F.FApp (rawStringFTycon $ F.symbol "class" ) []
 rTypeSort (TMod _)            = F.FApp (rawStringFTycon $ F.symbol "module") []
 rTypeSort t                   = error $ render $ text "BUG: Unsupported in rTypeSort"
 
@@ -342,7 +342,7 @@ emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts)
                                    (emapReft f γ' t) (f γ r)
                               where γ' = (b_sym <$> xts) ++ γ
 emapReft f γ (TObj xts r)   = TObj (emapReftTM f γ xts) (f γ r)
-emapReft f γ (TType k n)    = TType k (emapReftBGen f γ n)
+emapReft f γ (TClass n)     = TClass (emapReftBGen f γ n)
 emapReft _ _ (TMod m)       = TMod m
 emapReft f γ (TOr ts)       = TOr (emapReft f γ <$> ts)
 emapReft f γ (TAnd ts)      = TAnd (emapReft f γ <$> ts)
@@ -377,7 +377,7 @@ mapReftM f (TAll α t)      = TAll <$> mapReftBTV f α <*> mapReftM f t
 mapReftM f (TAnd ts)       = TAnd <$> mapM (mapReftM f) ts
 mapReftM f (TOr ts)        = TOr <$> mapM (mapReftM f) ts
 mapReftM f (TObj xts r)    = TObj <$> mapReftTM f xts <*> f r
-mapReftM f (TType k n)     = TType k <$> mapReftBGenM f n
+mapReftM f (TClass n)      = TClass <$> mapReftBGenM f n
 mapReftM _ (TMod a)        = return $ TMod a
 mapReftM _ t               = error $ render $ text "Not supported in mapReftM: " <+> pp t
 
@@ -422,7 +422,7 @@ efoldReft g f = go
                             where γ' = foldr (efoldExt g) γ xts
     go γ z (TAnd ts)      = gos γ z ts
     go γ z (TObj xts r)   = f γ r $ efoldTypeMembers g f xts γ z
-    go γ z (TType _ n)    = gos γ z $ catMaybes $ btv_constr <$> b_args n
+    go γ z (TClass n)     = gos γ z $ catMaybes $ btv_constr <$> b_args n
     go _ z (TMod _)       = z
     go _ _ t              = error $ "UNIMPLEMENTED[efoldReft]: " ++ ppshow t
 
@@ -559,7 +559,7 @@ unionCheck l γ t ts
     ands  = [ t | t@(TAnd _    ) <- ts ]
     refs  = [ t | t@(TRef _ _  ) <- ts ]
     objs  = [ t | t@(TObj _ _  ) <- ts ]
-    tys   = [ t | t@(TType _ _ ) <- ts ]
+    tys   = [ t | t@(TClass _  ) <- ts ]
     mods  = [ t | t@(TMod _    ) <- ts ]
     alls  = [ t | t@(TAll _ _  ) <- ts ]
     funs  = [ t | t@(TFun _ _ _) <- ts ]
@@ -578,8 +578,8 @@ unionCheck l γ t ts
     sameObjs = [ (t1, t2) | (i1, t1) <- iobjs, (i2, t2) <- iobjs, i1 /= i2, t1 `sub` t2 || t2 `sub` t1 ]
 
     itys = zip [0..] tys
-    sameTys = [ (t1, t2) | (i1, t1@(TType k1 n1)) <- itys, (i2, t2@(TType k2 n2)) <- itys
-                          , i1 /= i2, k1 == k2, t1 `sub` t2 || t2 `sub` t1 ]
+    sameTys = [ (t1, t2) | (i1, t1@(TClass n1)) <- itys, (i2, t2@(TClass n2)) <- itys
+                          , i1 /= i2, t1 `sub` t2 || t2 `sub` t1 ]
 
     imods = zip [0..] mods
     sameMods = [ (t1, t2) | (i1, t1@(TMod m1)) <- imods, (i2, t2@(TMod m2)) <- imods, i1 /= i2, m1 == m2 ]

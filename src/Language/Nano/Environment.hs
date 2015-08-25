@@ -57,12 +57,6 @@ class EnvLike r t where
   --
   cha             :: t r -> ClassHierarchy r
 
---   --
---   -- ^ Parent environment
---   --
---   parent          :: t r -> Maybe (t r)
---
-
 -------------------------------------------------------------------------------
 envLikeFindTy' :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (EnvEntry r)
 -------------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE UndecidableInstances  #-}
@@ -14,17 +15,13 @@ module Language.Nano.Lookup (
 
 import           Control.Applicative           (pure, (<$>))
 import           Data.Generics
-import qualified Data.Map.Strict               as M
-import qualified Language.Fixpoint.Bitvector   as BV
 import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.AST
 import           Language.Nano.ClassHierarchy
 import           Language.Nano.Core.Env
 import           Language.Nano.Environment
-import           Language.Nano.Errors
 import           Language.Nano.Names
 import           Language.Nano.Pretty
-import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
 
@@ -35,7 +32,7 @@ import           Language.Nano.Types
 --
 excludedFieldSymbols = F.symbol <$> [ "hasOwnProperty", "prototype", "__proto__" ]
 
-type PPRD r = (ExprReftable F.Symbol r, ExprReftable Int r, PP r, F.Reftable r, Data r)
+type PPRD r = (ExprReftable Int r, PP r, F.Reftable r)
 
 data AccessKind = MethodAccess | FieldAccess
 
@@ -52,22 +49,22 @@ instance PP AccessKind where
 --
 -------------------------------------------------------------------------------
 getProp :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
-        => g r -> AccessKind -> StaticKind -> f -> RType r -> Maybe (RType r, RType r)
+        => g r -> AccessKind -> f -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getProp γ b s f t@(TPrim _ _) = getPropPrim γ b s f t
+getProp γ b f t@(TPrim _ _) = getPropPrim γ b f t
 
-getProp γ b s f (TOr ts) = getPropUnion γ b s f ts
+getProp γ b f (TOr ts) = getPropUnion γ b f ts
 
 -- | TODO: Chain up to 'Object'
-getProp γ b s f t@(TObj es _)
-  = (t,) <$> accessMember γ b s f es -- `M.union` t_elts empty
+getProp γ b f t@(TObj es _)
+  = (t,) <$> accessMember γ b InstanceK f es -- `M.union` t_elts empty
   -- where
   --   emptyObjectInterface = undefined
 
 -- | Enumeration
 -- FIXME: Instead of the actual integer value, assign unique symbolic values:
 --        E.g. A_B_C_1 ...
-getProp γ b s f t@(TRef (Gen n []) _)
+getProp γ _ f t@(TRef (Gen n []) _)
   | Just e  <- resolveEnumInEnv γ n
   , Just io <- envFindTy f $ e_mapping e
   = case io of
@@ -77,29 +74,30 @@ getProp γ b s f t@(TRef (Gen n []) _)
       HexLit _ s -> bitVectorValue s >>= return . (t,) . (tBV32 `strengthen`)
       _          -> Nothing
 
-getProp γ b _ f t@(TRef _ _)
-  = expandType Coercive (cha γ) t >>= getProp γ b InstanceK f
+getProp γ b f t@(TRef _ _)
+  = expandType Coercive (cha γ) t >>= \case
+      TObj ms _ -> (t,) <$> accessMember γ b InstanceK f ms
+      _         -> Nothing
 
-getProp γ b s f t@(TClass _)
-  = expandType Coercive (cha γ) t >>= getProp γ b StaticK f
 
-getProp γ _ s f t@(TMod m)
+getProp γ b f t@(TClass _)
+  = expandType Coercive (cha γ) t >>= \case
+      TObj ms _ -> (t,) <$> accessMember γ b StaticK f ms
+      _         -> Nothing
+
+getProp γ _ f t@(TMod m)
   = do  m'        <- resolveModuleInEnv γ m
         VI _ _ t' <- envFindTy f $ m_variables m'
         return     $ (t,t')
 
-getProp _ _ _ _ _ = Nothing
+getProp _ _ _ _ = Nothing
 
 
 -------------------------------------------------------------------------------
--- getPropPrim :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
---            => g r
---            -> AccessKind
---            -> f
---            -> RType r
---            -> Maybe (RType r, RType r, Mutability)
+getPropPrim :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
+            => g r -> AccessKind -> f -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getPropPrim γ b s f t@(TPrim c _) =
+getPropPrim γ b f t@(TPrim c _) =
   case c of
     TBoolean   -> Nothing
     TUndefined -> Nothing
@@ -108,12 +106,11 @@ getPropPrim γ b s f t@(TPrim c _) =
     TString    -> (t,) <$> lookupAmbientType γ b f "String"
     TStrLit _  -> (t,) <$> lookupAmbientType γ b f "String"
     TBV32      -> (t,) <$> lookupAmbientType γ b f "Number"
-    TTop       -> Nothing
     TVoid      -> Nothing
     TTop       -> Nothing
     TBot       -> Nothing
     TFPBool    -> Nothing
-getPropPrim _ _ _ _ _ = error "getPropPrim should only be applied to TApp"
+getPropPrim _ _ _ _ = error "getPropPrim should only be applied to TApp"
 
 
 -- | `extractCtor γ t` extracts a contructor signature from a type @t@
@@ -145,7 +142,7 @@ extractCtor γ t = go t
 -------------------------------------------------------------------------------
 extractCall :: (EnvLike r g, PPRD r) => g r -> RType r -> [RType r]
 -------------------------------------------------------------------------------
-extractCall γ t          = uncurry mkAll <$> go [] t
+extractCall γ            = (uncurry mkAll <$>) . go []
   where
     go αs t@(TFun _ _ _) = [(αs, t)]
     go αs   (TAnd ts)    = concatMap (go αs) ts
@@ -160,24 +157,26 @@ extractCall γ t          = uncurry mkAll <$> go [] t
 accessMember :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
              => g r -> AccessKind -> StaticKind -> f -> TypeMembers r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-accessMember γ b@MethodAccess StaticK m ms
-  | Just (MI _ _ t) <- F.lookupSEnv (F.symbol m) $ tm_smeth ms
+accessMember _ MethodAccess static m ms
+  | Just (MI _ _ t) <- F.lookupSEnv (F.symbol m) $ meths ms
   = Just t
   | otherwise
   = Nothing
-accessMember γ b@MethodAccess InstanceK m ms
-  | Just (MI _ _ t) <- F.lookupSEnv (F.symbol m) $ tm_meth ms
-  = Just t
-  | otherwise
-  = Nothing
+  where
+    meths | static == StaticK = tm_smeth
+          | otherwise         = tm_meth
 
-accessMember γ b@FieldAccess StaticK f ms
-  | Just f@(FI o _ t) <- F.lookupSEnv (F.symbol f) $ tm_sprop ms
+accessMember _ FieldAccess static f ms
+  | Just (FI o _ t) <- F.lookupSEnv (F.symbol f) $ props ms
   = if o == Opt then Just $ orUndef t
                 else Just $ t
   | Just t <- tm_sidx ms
   , validFieldName f
   = Just t
+  where
+    props | static == StaticK = tm_sprop
+          | otherwise         = tm_prop
+
   -- | otherwise
   -- = accessMemberProto γ b sk f es
 
@@ -191,15 +190,15 @@ accessMember γ b@FieldAccess StaticK f ms
 -------------------------------------------------------------------------------
 validFieldName  :: F.Symbolic f => f -> Bool
 -------------------------------------------------------------------------------
-validFieldName f = not $ F.symbol f `elem` excludedFieldSymbols
+validFieldName f = notElem (F.symbol f) excludedFieldSymbols
 
 -------------------------------------------------------------------------------
 lookupAmbientType :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s, PP f)
                   => g r -> AccessKind -> f -> s -> Maybe (RType r)
 -------------------------------------------------------------------------------
 lookupAmbientType γ b f amb
-  = resolveTypeInEnv γ nm >>= \(TD _ ms) ->
-    accessMember γ b InstanceK f ms
+  = do TD _ ms <- resolveTypeInEnv γ nm
+       accessMember γ b InstanceK f ms
   where
     nm = mkAbsName [] (F.symbol amb)
 
@@ -208,10 +207,10 @@ lookupAmbientType γ b f amb
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
 getPropUnion :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
-             => g r -> AccessKind -> StaticKind -> f -> [RType r] -> Maybe (RType r, RType r)
+             => g r -> AccessKind -> f -> [RType r] -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getPropUnion γ b s f ts =
-  case unzip [ ts' | Just ts' <- getProp γ b s f <$> ts] of
+getPropUnion γ b f ts =
+  case unzip [ ts' | Just ts' <- getProp γ b f <$> ts] of
     ([],[]) -> Nothing
     (t1s,t2s) -> Just (mkUnion t1s, mkUnion t2s)
 

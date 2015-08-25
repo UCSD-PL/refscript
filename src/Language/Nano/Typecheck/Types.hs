@@ -27,7 +27,7 @@ module Language.Nano.Typecheck.Types (
   , mkUnion, mkFun, mkAll, mkAnd, mkInitFldTy, mkTCons
 
   -- * Deconstructing Types
-  , bkFun, bkFuns, bkAll, bkAnd, bkUnion
+  , bkFun, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion
 
   , orUndef, padUndefineds
 
@@ -173,6 +173,9 @@ bkFun t =
       return          $ (αs, xts, t'')
   where
     (αs, t')          = bkAll t
+
+bkFunNoBinds :: RTypeQ q r -> Maybe ([BTVarQ q r], [RTypeQ q r], RTypeQ q r)
+bkFunNoBinds = fmap (mapSnd3 $ map b_type) . bkFun
 
 mkFun :: F.Reftable r  => ([BTVarQ q r], [BindQ q r], RTypeQ q r) -> RTypeQ q r
 mkFun (αs, bs, rt)    = mkAll αs (TFun bs rt fTop)
@@ -427,7 +430,7 @@ immObjectLitTy l ps ts  | length ps == length ts
                         | otherwise
                         = error "Mismatched args for immObjectLit"
   where
-    elts                = tmFromFieldList [ (F.symbol p, FI Req tImm t) | (p,t) <- safeZip "immObjectLitTy" ps ts ]
+    elts = tmFromFieldList [ (F.symbol p, FI Req tImm t) | (p,t) <- safeZip "immObjectLitTy" ps ts ]
 
 -- | setProp<A, M extends Mutable>(o: { f[M]: A }, x: A) => A
 --

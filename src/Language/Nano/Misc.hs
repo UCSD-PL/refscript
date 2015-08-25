@@ -30,7 +30,7 @@ module Language.Nano.Misc (
   , unzip4
 
   -- Maybe
-  , maybeM, maybeM_, fromJust', maybeToEither, mseq
+  , maybeM, maybeM_, fromJust', maybeToEither, mseq, nths
 
   -- Container operations
   , isProperSubsetOf, isEqualSet, isProperSubmapOf
@@ -235,3 +235,6 @@ justM = (Just <$>)
 
 (&) :: a -> (a -> b) -> b
 x & f = f x
+
+nths = repeat Nothing
+

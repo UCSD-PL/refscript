@@ -152,6 +152,13 @@ data FAnnQ q r = FA  { fId   :: NodeId
 instance IsLocated (FAnnQ q r) where
   srcPos (FA _ s _) = s
 
+instance Default (FAnnQ q r) where
+  def = FA def def []
+
+instance Eq (FAnnQ q r) where
+  (FA i1 s1 _) == (FA i2 s2 _) = (i1,s1) == (i2,s2)
+
+
 type AnnR   r  = FAnnQ AK r                      -- absolute paths,
 type AnnRel r  = FAnnQ RK r                      -- relative paths, NO facts, parsed versioin
 type AnnBare r = AnnR r                         -- absolute paths, NO facts

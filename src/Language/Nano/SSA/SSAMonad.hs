@@ -39,6 +39,7 @@ module Language.Nano.SSA.SSAMonad (
    , getAsgn
    , setMeas, getMeas
    , getProgram
+   , getCHA
 
    -- Classes / Modules
    , withinClass
@@ -52,17 +53,18 @@ module Language.Nano.SSA.SSAMonad (
 
    ) where
 
-import           Control.Applicative        ((<$>), (<*>))
+import           Control.Applicative          ((<$>), (<*>))
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
-import qualified Data.HashSet               as S
-import qualified Data.IntMap.Strict         as IM
-import qualified Data.IntSet                as I
-import           Data.Maybe                 (fromMaybe)
+import qualified Data.HashSet                 as S
+import qualified Data.IntMap.Strict           as IM
+import qualified Data.IntSet                  as I
+import           Data.Maybe                   (fromMaybe)
 import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types    as F
+import qualified Language.Fixpoint.Types      as F
 import           Language.Nano.Annots
 import           Language.Nano.AST
+import           Language.Nano.ClassHierarchy
 import           Language.Nano.Core.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
@@ -79,7 +81,11 @@ data SsaState r = SsaST {
   --
   -- ^ Program
   --
-    ssa_pgm     :: NanoBareR r
+    ssa_pgm     :: SsaRsc r
+  --
+  -- ^ Class hierarchy
+  --
+  , ssa_cha     :: ClassHierarchy r
   --
   -- ^ Assignability status
   --
@@ -249,7 +255,7 @@ freshenAnn :: IsLocated l => l -> SSAM r (AnnSSA r)
 freshenAnn l
   = do n     <- ssa_ast_cnt <$> get
        modify $ \st -> st {ssa_ast_cnt = 1 + n}
-       return $ Ann n (srcPos l) []
+       return $ FA n (srcPos l) []
 
 -------------------------------------------------------------------------------------
 freshenIdSSA         :: IsLocated l => Id l -> SSAM r (Var r)
@@ -266,31 +272,27 @@ findSsaEnv x
          Nothing     -> return $ Nothing
 
 
-addAnn l f = modify $ \st -> st { anns = IM.insertWith (++) (ann_id l) [f] (anns st) }
-getAnns    = anns <$> get
+addAnn l f = modify $ \st -> st { anns = IM.insertWith (++) (fId l) [f] (anns st) }
+setGlobs g = modify $ \st -> st { ssa_globs = g }
+setMeas m  = modify $ \st -> st { ssa_meas= m }
 
-setGlobs g =  modify $ \st -> st { ssa_globs = g }
+getMeas    = ssa_meas  <$> get
+getAnns    = anns      <$> get
 getGlobs   = ssa_globs <$> get
-
-setMeas m =  modify $ \st -> st { ssa_meas= m }
-getMeas   = ssa_meas <$> get
-
-getProgram = ssa_pgm <$> get
-
-getAsgn    = assign <$> get
-
+getProgram = ssa_pgm   <$> get
+getCHA     = ssa_cha   <$> get
+getAsgn    = assign    <$> get
 
 -------------------------------------------------------------------------------------
 ssaError :: Error -> SSAM r a
 -------------------------------------------------------------------------------------
 ssaError = throwE
 
-
 -------------------------------------------------------------------------------------
-execute         :: NanoBareR r -> SSAM r a -> Either (F.FixResult Error) a
+execute :: BareRsc r -> ClassHierarchy r -> SSAM r a -> Either (F.FixResult Error) a
 -------------------------------------------------------------------------------------
-execute p act
-  = case runState (runExceptT act) (initState p) of
+execute p cha act
+  = case runState (runExceptT act) (initState p cha) of
       (Left err, _) -> Left $ F.Unsafe [err]
       (Right x, _)  -> Right x
 
@@ -298,16 +300,9 @@ execute p act
 -- The state will be intact in the end. Just the result will be returned
 tryAction act = get >>= return . runState (runExceptT act)
 
-initState :: NanoBareR r -> SsaState r
-initState p = SsaST p
-                    envEmpty
-                    envEmpty
-                    envEmpty
-                    0
-                    IM.empty
-                    I.empty
-                    S.empty
-                    (maxId p)
-                    Nothing
-                    (mkAbsPath [])
+-------------------------------------------------------------------------------------
+initState :: BareRsc r -> ClassHierarchy r -> SsaState r
+-------------------------------------------------------------------------------------
+initState p cha = SsaST p cha envEmpty envEmpty envEmpty 0 IM.empty
+                        I.empty S.empty (maxId p) Nothing (mkAbsPath [])
 

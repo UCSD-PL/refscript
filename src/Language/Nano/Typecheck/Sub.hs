@@ -160,7 +160,7 @@ compareObjs l γ t1@(TRef (Gen x1 (m1:t1s)) _) t2@(TRef (Gen x2 (m2:t2s)) _)
 
       (_, _) -> SubErr [bugWeakenAncestors (srcPos l) x1 x2]
 
-compareObjs l γ (TType k1 c1) (TType k2 c2) | k1 == k2 = convertTClass l γ c1 c2
+compareObjs l γ (TClass c1) (TClass c2) = convertTClass l γ c1 c2
 
 compareObjs l _ (TMod m1) (TMod m2) = convertTModule l m1 m2
 --

@@ -100,9 +100,9 @@ aliasVarT (l, x)
 optionP   = string "REALS" >> return RealOption
 
 interfaceP :: Parser (TypeDeclQ RK Reft)
-interfaceP = TD <$> typeSignatureP InterfaceKind<*> typeBodyP
+interfaceP = TD <$> typeSignatureP InterfaceTDK <*> typeBodyP
 
-classDeclP = typeSignatureP ClassKind
+classDeclP = typeSignatureP ClassTDK
 
 -- Mutability parameter should be included here.
 typeSignatureP :: TypeDeclKind -> Parser (TypeSigQ RK Reft)
@@ -337,7 +337,7 @@ indexP = xyP id colon sn
     sn = withinSpacesP (string "string" <|> string "number")
 
 -- | [STATIC] [MUTABILITY] f[?]: t     (Default value for [MUTABILITY] is Mutable)
-propP = do  s     <- (reserved "static" >> return StaticMember) <|> (return InstanceMember)
+propP = do  s     <- (reserved "static" >> return StaticK) <|> (return InstanceK)
             m     <- option trMut mutabilityP
             x     <- symbol <$> binderP
             o     <- option Req (withinSpacesP (char '?') *> return Opt)
@@ -346,7 +346,7 @@ propP = do  s     <- (reserved "static" >> return StaticMember) <|> (return Inst
             return $ (x, s, o, m, t)
 
 -- | [STATIC] [MUTABILITY] m[<A..>](x:t,..): t
-methP = do  s     <- (reserved "static" >> return StaticMember) <|> (return InstanceMember)
+methP = do  s     <- (reserved "static" >> return StaticK) <|> (return InstanceK)
             m     <- methMutabilityP
             x     <- symbol <$> identifierP
             o     <- maybe Req (\_ -> Opt) <$> optionMaybe (withinSpacesP $ char '?')

@@ -43,7 +43,7 @@ import qualified Text.PrettyPrint.HughesPJ     as P
 ---------------------------------------------------------------------------------
 scrapeQuals :: [F.Qualifier] -> [Statement (AnnRel F.Reft)] -> [F.Qualifier]
 ---------------------------------------------------------------------------------
-scrapeQuals qs ss = qs ++ qualifiers (mkUq $ foldStmts tbv [] [] ss)
+scrapeQuals qs ss = qs ++ qualifiers (mkUq $ foldStmts tbv [] ss)
   where
     qualifiers = undefined
     tbv = defaultVisitor { accStmt = stmtTypeBindings

@@ -7,8 +7,8 @@
 module Language.Nano.Typecheck.Unify (
 
   -- * Unification
-  unifys
-
+    unifys
+  , Unif
   ) where
 
 import           Control.Monad                       (foldM)
@@ -42,7 +42,7 @@ import           Language.Nano.Types
 -- | Unification
 -----------------------------------------------------------------------------
 
-type Unif r = (PP r, F.Reftable r, ExprReftable F.Symbol r, ExprReftable Int r, Free (Fact r))
+type Unif r = (PP r, F.Reftable r, ExprReftable Int r, ExprReftable F.Symbol r, Free (Fact r))
 
 -----------------------------------------------------------------------------
 unify :: (Unif r)
@@ -80,8 +80,8 @@ unify l γ θ (TRef (Gen x1 t1s) _) (TRef (Gen x2 t2s) _)
       (_, Just (Gen _ t2s')) -> unifys l γ θ t1s t2s'
       (_, _) -> Left $ bugWeakenAncestors (srcPos l) x1 x2
 
-unify l γ θ (TType k1 (BGen n1 b1s)) (TType k2 (BGen n2 b2s))
-  | k1 == k2, n1 == n2
+unify l γ θ (TClass (BGen n1 b1s)) (TClass (BGen n2 b2s))
+  | n1 == n2
   = unifys l γ θ t1s t2s
   where
     (t1s, t2s) = unzip [ (t1, t2) | (Just t1, Just t2) <- map btv_constr b1s `zip` map btv_constr b2s ]
@@ -136,7 +136,7 @@ unifyUnions l γ θ t1 t2
     match (TVar v1 _)           (TVar v2 _)         = v1 == v2
     match (TRef (Gen n1 _) _)   (TRef (Gen n2 _) _) = n1 == n2
     match (TObj _ _ )           (TObj _ _)          = True
-    match (TType k1 b1)         (TType k2 b2)       = k1 == k2 && b1 == b2
+    match (TClass b1)           (TClass b2)         = b1 == b2
     match (TMod m1)             (TMod m2)           = m1 == m2
     match (TFun _ _ _)          (TFun _ _ _)        = True
     match _                     _                   = False

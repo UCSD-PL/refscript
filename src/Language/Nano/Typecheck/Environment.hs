@@ -27,10 +27,7 @@ data TCEnv r  = TCE {
   , tce_bounds :: Env (RType r)
   , tce_ctx    :: IContext
   , tce_path   :: AbsPath
-  , tce_mod    :: QEnv (ModuleDef r)
   , tce_cha    :: ClassHierarchy r
-
-  -- , tce_parent      :: Maybe (TCEnv r)
   }
   deriving (Functor) -- , Data, Typeable)
 

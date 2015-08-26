@@ -171,9 +171,7 @@ tcFun1 g l f xs body fty
         tcFunBody g1 l body' t
   where
     g1 = initFuncEnv l g f fty body
-    -- arg = [(argId $ srcPos l, VI Ambient Initialized aTy)]
     (_, (_,_,t)) = fty
-    -- aTy = mkArgTy l ts
 
 addReturnStmt l t body | isTVoid t
                        = (body ++) . single <$> (`ReturnStmt` Nothing)
@@ -190,36 +188,15 @@ tcFunBody γ l body t
 ---------------------------------------------------------------------------------------
 tcClassElt :: Unif r => TCEnv r -> TypeDecl r -> ClassElt (AnnTc r) -> TCM r (ClassElt (AnnTc r))
 ---------------------------------------------------------------------------------------
-tcClassElt γ0 d@(TD (TS _ (BGen nm bs) _) ms) (Constructor l xs body)
+-- | Constructor
+--
+tcClassElt γ0 (TD sig@(TS _ (BGen _ bs) _) ms) (Constructor l xs body)
   = do  its    <- tcFunTys l ctor xs ctorTy
         body'  <- foldM (tcFun1 γ l ctor xs) body its
         return  $ Constructor l xs body'
   where
-    γ           = addSuper (addExit γ0)
-    addSuper    | Just t <- parentOfTypeDecl (map btVar bs) d
-                = tcEnvAdd super (VI Ambient Initialized t)
-                | otherwise
-                = id
-    addExit     = tcEnvAdd ctorExit (VI Ambient Initialized mkCtorExitTy)
-    ctor        = builtinOpId BICtor
-    ctorExit    = builtinOpId BICtorExit
-    super       = builtinOpId BISuper
-
-    this_t      = TRef (Gen nm (map btVar bs)) fTop
-
-    -- XXX: * Keep the right order of fields
-    -- * Make the return object immutable to avoid contra-variance
-    --   checks at the return from the constructor.
-    mkCtorExitTy  = mkFun (bs, xts, this_t) -- tVoid)
-      where
-        xts | Just (TObj ms _) <- expandType Coercive (envCHA γ) this_t
-            = sortBy c_sym [ B x t | (x, FI _ _ t) <- F.toListSEnv $ tm_prop ms ]
-            | otherwise
-            = []
-
-    c_sym = on compare b_sym
-
-    -- This works now cause each class is required to have a constructor
+    γ      = initClassCtorEnv γ0 sig    -- TODO: TEST THIS
+    ctor   = builtinOpId BICtor
     ctorTy | Just t <- tm_ctor ms = mkAll bs t
            | otherwise = die $ unsupportedNonSingleConsTy (srcPos l)
 
@@ -231,7 +208,6 @@ tcClassElt γ (TD sig ms) (MemberVarDecl l True x (Just e))
         return $ MemberVarDecl l True x $ Just e'
   | otherwise
   = tcError $ errorClassEltAnnot (srcPos l) sig x
-  where
 
 tcClassElt _ _ (MemberVarDecl l True x Nothing)
   = tcError $ unsupportedStaticNoInit (srcPos l) x
@@ -257,18 +233,15 @@ tcClassElt γ (TD sig ms) (MemberMethDef l True x xs body)
 --
 -- TODO: check method mutability
 --
-tcClassElt γ (TD sig ms) (MemberMethDef l False x xs bd)
+tcClassElt γ0 (TD sig ms) (MemberMethDef l False x xs bd)
   | Just (MI _ _ t) <- F.lookupSEnv (F.symbol x) $ tm_meth ms
   = do  its <- tcFunTys l x xs t
-        bd' <- foldM (tcFun1 γ l x xs) bd $ addSelfB <$> its
+        bd' <- foldM (tcFun1 γ l x xs) bd its
         return $ MemberMethDef l False x xs bd'
   | otherwise
   = tcError $ errorClassEltAnnot (srcPos l) (sig) x
   where
-    addSelfB (i,(vs,xs,y)) = (i, (vs, xs, y))
-    rn                 = QN (envPath γ) (F.symbol sig)
-    mkThis m (_:αs)    = TRef (Gen rn (m : map tVar αs)) fTop
-    mkThis _ _         = throw $ bug (srcPos l) "Typecheck.Typecheck.tcClassElt MemberMethDef"
+    γ = initClassMethEnv γ0 sig
 
 tcClassElt _ _ m@(MemberMethDecl _ _ _ _ ) = return m
 
@@ -402,8 +375,7 @@ tcStmt γ (ClassStmt l x e is ce)
         ms <- mapM (tcClassElt γ d) ce
         return $ (ClassStmt l x e is ms, Just γ)
   where
-    rn = QN (QP AK_ (srcPos l) ss) (F.symbol x)
-    QP AK_ _ ss = tce_path γ
+    rn = QN (envPath γ) (F.symbol x)
 
 -- | module M { ... }
 tcStmt γ (ModuleStmt l n body)

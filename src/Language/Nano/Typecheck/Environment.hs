@@ -9,10 +9,14 @@
 module Language.Nano.Typecheck.Environment
     ( TCEnv(..), TCEnvO
     , initFuncEnv, initModuleEnv, initGlobalEnv
+    , initClassCtorEnv, initClassMethEnv
     , tcEnvFindTy, tcEnvFindTypeDefM, tcEnvFindTyForAsgn
     , tcEnvFindReturn, tcEnvAdd, tcEnvAdds, safeTcEnvFindTy
+    , tcEnvAddBounds
     ) where
 
+import           Data.Function                 (on)
+import           Data.List                     (sortBy)
 import           Data.Monoid
 import           Language.Fixpoint.Errors      (die)
 import           Language.Fixpoint.Misc        (single)
@@ -107,14 +111,18 @@ initFuncEnv l γ f fty s = TCE nms bnds ctx pth cha
     tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
     varBs = [(x       , VI WriteLocal Initialized $ t     ) | B x t <- xts]
     arg   = single (argId $ srcPos l, mkArgTy l ts)
-    toFgn = envMap $ \v -> v { v_asgn = ForeignLocal }
     bnds  = envAdds [(s,t) | BTV s _ (Just t) <- bs] $ envBounds γ
-    ctx   = pushContext i (tce_ctx γ)
+    ctx   = pushContext i (envCtx γ)
     pth   = envPath γ
     cha   = envCHA γ
     (i, (bs,xts,t)) = fty
     ts    = map b_type xts
     αs    = map btvToTV bs
+
+toFgn = envMap go
+  where
+    go (VI WriteLocal i t) = VI ForeignLocal i t
+    go v = v
 
 ---------------------------------------------------------------------------------------
 initModuleEnv :: (Unif r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnTc r)] -> TCEnv r
@@ -123,9 +131,48 @@ initModuleEnv γ n s = TCE nms bnds ctx pth cha
   where
     nms   = mkVarEnv (accumVars s)
     bnds  = envBounds γ
-    ctx   = tce_ctx γ
+    ctx   = envCtx γ
     pth   = extendAbsPath (envPath γ) n
     cha   = envCHA γ
+
+-- `initFuncEnv` will be called afterwards. No need to include local bindings,
+-- bounds (will be included in constructor's type), etc
+---------------------------------------------------------------------------------------
+initClassCtorEnv :: Unif r => TCEnv r -> TypeSigQ AK r -> TCEnv r
+---------------------------------------------------------------------------------------
+initClassCtorEnv γ sig@(TS _ (BGen nm bs) _) =
+  γ { tce_names = addSuper $ addExit $ envNames γ }
+  where
+    addSuper | Just t <- getImmediateSuperclass sig
+             = envAdd super (VI Ambient Initialized t)
+             | otherwise
+             = id
+    addExit  = envAdd ctorExit (VI Ambient Initialized exitTy)
+    ctorExit = builtinOpId BICtorExit
+    super    = builtinOpId BISuper
+    -- XXX: * Keep the right order of fields
+    -- * Make the return object immutable to avoid contra-variance
+    --   checks at the return from the constructor.
+    exitTy   = mkFun (bs, xts, tThis)
+    xts      | Just (TObj ms _) <- expandType Coercive (envCHA γ) tThis
+             = sortBy c_sym [ B x t | (x, FI _ _ t) <- F.toListSEnv $ tm_prop ms ]
+             | otherwise
+             = []
+    c_sym    = on compare b_sym
+    tThis    = TRef (Gen nm (map btVar bs)) fTop
+
+-- `initFuncEnv` will be called afterwards. No need to include local bindings
+---------------------------------------------------------------------------------------
+initClassMethEnv :: Unif r => TCEnv r -> TypeSigQ AK r -> TCEnv r
+---------------------------------------------------------------------------------------
+initClassMethEnv γ sig@(TS _ (BGen nm bs) _) =
+  γ { tce_names  = addThis $ envNames γ
+    , tce_bounds = envAdds [(s,t) | BTV s _ (Just t) <- bs] $ envBounds γ
+    }
+  where
+    addThis = envAdd this (VI Ambient Initialized tThis)
+    tThis   = TRef (Gen nm (map btVar bs)) fTop -- XXX: top-level refinement is top
+    this    = builtinOpId BIThis
 
 
 -------------------------------------------------------------------------------
@@ -169,4 +216,10 @@ tcEnvFindTypeDefM l γ x
       Just t  -> return t
       Nothing -> die $ bugClassDefNotFound (srcPos l) x
 
+-------------------------------------------------------------------------------
+tcEnvAddBounds :: [BTVar r] -> TCEnv r -> TCEnv r
+-------------------------------------------------------------------------------
+tcEnvAddBounds = flip $ foldr go
+  where
+    go (BTV α _ (Just t)) γ = γ { tce_bounds = envAdd α t $ tce_bounds γ }
 

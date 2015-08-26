@@ -138,10 +138,15 @@ data MutabilityMod    = Mutable
 
 type Mutability r     = RType r
 
-data TypeSigQ q r     = TS TypeDeclKind (BTGenQ q r) (HeritageQ q r)
+data TypeSigQ q r     = TS { sigKind  :: TypeDeclKind
+                           , sigTRef  :: BTGenQ q r
+                           , sigHerit :: HeritageQ q r
+                           }
                         deriving (Data, Typeable, Foldable, Traversable, Functor)
 
-data TypeDeclQ q r    = TD (TypeSigQ q r) (TypeMembersQ q r)
+data TypeDeclQ q r    = TD { typeSig  :: TypeSigQ q r
+                           , typeBody :: TypeMembersQ q r
+                           }
                         deriving (Data, Typeable, Foldable, Traversable, Functor)
 
 type HeritageQ q r    = ([TGenQ q r], [TGenQ q r])

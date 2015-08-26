@@ -16,15 +16,6 @@ module Language.Nano.Liquid.Types (
   -- * Refinement Types
     RefType
 
-  -- * Constraint Environments
-  , CGEnvR(..), CGEnv
-
-  -- * Constraint Information
-  , Cinfo (..), ci
-
-  -- * Constraints
-  , SubC (..) , WfC (..), FixSubC   , FixWfC
-
   -- * Some Operators on Pred
   , pAnd, pOr
 
@@ -42,9 +33,6 @@ module Language.Nano.Liquid.Types (
 
   -- * Useful Operations
   , foldReft, efoldRType -- , emapReft, mapReftM
-
-  -- * Annotations
-  , AnnTypeR
 
   -- * Accessing Spec Annotations
   , getSpec, getRequires, getEnsures, getAssume, getAssert
@@ -64,30 +52,30 @@ module Language.Nano.Liquid.Types (
   ) where
 
 import           Control.Applicative
-import           Control.Monad                    (liftM, zipWithM)
-import qualified Data.HashMap.Strict              as HM
-import qualified Data.List                        as L
-import qualified Data.Map.Strict                  as M
-import           Data.Maybe                       (catMaybes, fromMaybe, maybeToList)
-import           Data.Monoid                      (mconcat)
-import qualified Data.Traversable                 as T
-import qualified Language.Fixpoint.Bitvector      as BV
+import           Control.Monad                 (liftM, zipWithM)
+import qualified Data.HashMap.Strict           as HM
+import qualified Data.List                     as L
+import qualified Data.Map.Strict               as M
+import           Data.Maybe                    (catMaybes, fromMaybe, maybeToList)
+import           Data.Monoid                   (mconcat)
+import qualified Data.Traversable              as T
+import qualified Language.Fixpoint.Bitvector   as BV
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
-import qualified Language.Fixpoint.Types          as F
-import qualified Language.Fixpoint.Visitor        as V
+import qualified Language.Fixpoint.Types       as F
+import qualified Language.Fixpoint.Visitor     as V
 import           Language.Nano.Annots
 import           Language.Nano.AST
-import           Language.Nano.ClassHierarchy
+-- import           Language.Nano.ClassHierarchy
 import           Language.Nano.Errors
-import           Language.Nano.Liquid.Environment
+-- import           Language.Nano.Liquid.Environment
 import           Language.Nano.Locations
 import           Language.Nano.Misc
 import           Language.Nano.Names
 import           Language.Nano.Pretty
 import           Language.Nano.Program
-import           Language.Nano.Typecheck.Sub
+-- import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
@@ -101,73 +89,10 @@ import           Text.Printf
 -------------------------------------------------------------------------------------
 
 type RefType     = RType F.Reft
-type AnnTypeR    = AnnType F.Reft
 
-----------------------------------------------------------------------------
--- | Constraint Information
-----------------------------------------------------------------------------
-
-data Cinfo = Ci { ci_info    :: !Error
-                , ci_srcspan :: !SrcSpan
-                } deriving (Eq, Ord, Show)
-
-ci   :: (IsLocated a) => Error -> a -> Cinfo
-ci e = Ci e . srcPos
-
-instance PP Cinfo where
-  pp (Ci e l)   = text "CInfo:" <+> pp l <+> (parens $ pp e)
-
-instance IsLocated Cinfo where
-  srcPos = ci_srcspan
-
-instance F.Fixpoint Cinfo where
-  toFix = pp . ci_srcspan
-
-----------------------------------------------------------------------------
--- | Constraints
-----------------------------------------------------------------------------
-
--- | Subtyping Constraints
-
-data SubC
-  = Sub { senv  :: !CGEnv      -- ^ Environment
-        , sinfo :: !Cinfo      -- ^ Source Information
-        , slhs  :: !RefType    -- ^ Subtyping LHS
-        , srhs  :: !RefType    -- ^ Subtyping RHS   ... senv |- slhs <: srhs
-        }
-
--- | Wellformedness Constraints
-
-data WfC
-  = W { wenv  :: !CGEnv      -- ^ Scope/Environment
-      , winfo :: !Cinfo      -- ^ Source Information
-      , wtyp  :: !RefType    -- ^ Type to be Well-formed ... wenv |- wtyp
-      }
 
 instance PP F.Reft where
   pp = pprint
-
-instance PP SubC where
-  pp (Sub γ i t t') = pp (cge_names γ) $+$ pp (cge_guards γ)
-                        $+$ ((text "|-") <+> (pp t $+$ text "<:" $+$ pp t'))
-                        $+$ ((text "from:") <+> pp i)
-
-instance PP WfC where
-  pp (W γ t i)      = pp (cge_names γ)
-                        $+$ (text "|-" <+> pp t)
-                        $+$ ((text "from:") <+> pp i)
-
-instance IsLocated SubC where
-  srcPos = srcPos . sinfo
-
-instance IsLocated WfC where
-  srcPos = srcPos . winfo
-
--- | Aliases for Fixpoint Constraints
-
-type FixSubC = F.SubC Cinfo
-type FixWfC  = F.WfC  Cinfo
-
 
 ------------------------------------------------------------------
 -- | Converting `Nano` values into `Fixpoint` values,
@@ -536,53 +461,53 @@ normalize t
   | TVar _ _  <- t = t
 --  | TOr ts    <- t = TOr $ unionCheck $ normalize <$> ts
 
---------------------------------------------------------------------------------
-unionCheck :: IsLocated l => l -> CGEnv -> RefType -> [RefType] -> Either [Error] [RefType]
---------------------------------------------------------------------------------
-unionCheck l γ t ts
-  | not $ null samePrims = Left $ uncurry (errorUnionMergePrims l t) <$> samePrims
-  | not $ null sameVars  = Left $ uncurry (errorUnionMergeVars l t) <$> sameVars
-  | not $ null sameAnds  = Left $ uncurry (errorUnionMergeAnds l t) <$> sameAnds
-  | not $ null sameObjs  = Left $ uncurry (errorUnionMergeObjs l t) <$> sameObjs
-  | not $ null sameTys   = Left $ uncurry (errorUnionMergeTys l t) <$> sameTys
-  | not $ null sameMods  = Left $ uncurry (errorUnionMergeMods l t) <$> sameMods
-  | length alls > 0      = Left [ errorUnionMergeAlls l t ]
-  | length funs > 0      = Left [ errorUnionMergeFuns l t ]
-  | length exps > 0      = Left [ bugUnionMergeExps l t ]
-  | otherwise            = Right $ prims ++ vars ++ ands ++ refs ++ objs ++ tys ++ mods ++ funs
-
-  where
-    sub   = isSubtype γ
-    -- no unions here
-    prims = [ t | t@(TPrim _ _ ) <- ts ]
-    vars  = [ t | t@(TVar _ _  ) <- ts ]
-    ands  = [ t | t@(TAnd _    ) <- ts ]
-    refs  = [ t | t@(TRef _ _  ) <- ts ]
-    objs  = [ t | t@(TObj _ _  ) <- ts ]
-    tys   = [ t | t@(TClass _  ) <- ts ]
-    mods  = [ t | t@(TMod _    ) <- ts ]
-    alls  = [ t | t@(TAll _ _  ) <- ts ]
-    funs  = [ t | t@(TFun _ _ _) <- ts ]
-    exps  = [ t | t@(TExp _    ) <- ts ]
-
-    iprims = zip [0..] prims
-    samePrims = [ (t1, t2) | (i1, t1@(TPrim p1 _)) <- iprims, (i2, t2@(TPrim p2 _)) <- iprims, p1 == p2, i1 /= i2 ]
-
-    ivars = zip [0..] vars
-    sameVars = [ (t1, t2) | (i1, t1@(TVar v1 _)) <- ivars, (i2, t2@(TVar v2 _)) <- ivars, v1 == v2, i1 /= i2 ]
-
-    iands = zip [0..] ands
-    sameAnds = [ (t1, t2) | (i1, t1@(TAnd _)) <- iands, (i2, t2@(TAnd _)) <- iands, i1 /= i2 ]
-
-    iobjs = zip [0..] $ refs ++ objs
-    sameObjs = [ (t1, t2) | (i1, t1) <- iobjs, (i2, t2) <- iobjs, i1 /= i2, t1 `sub` t2 || t2 `sub` t1 ]
-
-    itys = zip [0..] tys
-    sameTys = [ (t1, t2) | (i1, t1@(TClass n1)) <- itys, (i2, t2@(TClass n2)) <- itys
-                          , i1 /= i2, t1 `sub` t2 || t2 `sub` t1 ]
-
-    imods = zip [0..] mods
-    sameMods = [ (t1, t2) | (i1, t1@(TMod m1)) <- imods, (i2, t2@(TMod m2)) <- imods, i1 /= i2, m1 == m2 ]
+-- NEW -- --------------------------------------------------------------------------------
+-- NEW -- unionCheck :: IsLocated l => l -> CGEnv -> RefType -> [RefType] -> Either [Error] [RefType]
+-- NEW -- --------------------------------------------------------------------------------
+-- NEW -- unionCheck l γ t ts
+-- NEW --   | not $ null samePrims = Left $ uncurry (errorUnionMergePrims l t) <$> samePrims
+-- NEW --   | not $ null sameVars  = Left $ uncurry (errorUnionMergeVars l t) <$> sameVars
+-- NEW --   | not $ null sameAnds  = Left $ uncurry (errorUnionMergeAnds l t) <$> sameAnds
+-- NEW --   | not $ null sameObjs  = Left $ uncurry (errorUnionMergeObjs l t) <$> sameObjs
+-- NEW --   | not $ null sameTys   = Left $ uncurry (errorUnionMergeTys l t) <$> sameTys
+-- NEW --   | not $ null sameMods  = Left $ uncurry (errorUnionMergeMods l t) <$> sameMods
+-- NEW --   | length alls > 0      = Left [ errorUnionMergeAlls l t ]
+-- NEW --   | length funs > 0      = Left [ errorUnionMergeFuns l t ]
+-- NEW --   | length exps > 0      = Left [ bugUnionMergeExps l t ]
+-- NEW --   | otherwise            = Right $ prims ++ vars ++ ands ++ refs ++ objs ++ tys ++ mods ++ funs
+-- NEW --
+-- NEW --   where
+-- NEW --     sub   = isSubtype γ
+-- NEW --     -- no unions here
+-- NEW --     prims = [ t | t@(TPrim _ _ ) <- ts ]
+-- NEW --     vars  = [ t | t@(TVar _ _  ) <- ts ]
+-- NEW --     ands  = [ t | t@(TAnd _    ) <- ts ]
+-- NEW --     refs  = [ t | t@(TRef _ _  ) <- ts ]
+-- NEW --     objs  = [ t | t@(TObj _ _  ) <- ts ]
+-- NEW --     tys   = [ t | t@(TClass _  ) <- ts ]
+-- NEW --     mods  = [ t | t@(TMod _    ) <- ts ]
+-- NEW --     alls  = [ t | t@(TAll _ _  ) <- ts ]
+-- NEW --     funs  = [ t | t@(TFun _ _ _) <- ts ]
+-- NEW --     exps  = [ t | t@(TExp _    ) <- ts ]
+-- NEW --
+-- NEW --     iprims = zip [0..] prims
+-- NEW --     samePrims = [ (t1, t2) | (i1, t1@(TPrim p1 _)) <- iprims, (i2, t2@(TPrim p2 _)) <- iprims, p1 == p2, i1 /= i2 ]
+-- NEW --
+-- NEW --     ivars = zip [0..] vars
+-- NEW --     sameVars = [ (t1, t2) | (i1, t1@(TVar v1 _)) <- ivars, (i2, t2@(TVar v2 _)) <- ivars, v1 == v2, i1 /= i2 ]
+-- NEW --
+-- NEW --     iands = zip [0..] ands
+-- NEW --     sameAnds = [ (t1, t2) | (i1, t1@(TAnd _)) <- iands, (i2, t2@(TAnd _)) <- iands, i1 /= i2 ]
+-- NEW --
+-- NEW --     iobjs = zip [0..] $ refs ++ objs
+-- NEW --     sameObjs = [ (t1, t2) | (i1, t1) <- iobjs, (i2, t2) <- iobjs, i1 /= i2, t1 `sub` t2 || t2 `sub` t1 ]
+-- NEW --
+-- NEW --     itys = zip [0..] tys
+-- NEW --     sameTys = [ (t1, t2) | (i1, t1@(TClass n1)) <- itys, (i2, t2@(TClass n2)) <- itys
+-- NEW --                           , i1 /= i2, t1 `sub` t2 || t2 `sub` t1 ]
+-- NEW --
+-- NEW --     imods = zip [0..] mods
+-- NEW --     sameMods = [ (t1, t2) | (i1, t1@(TMod m1)) <- imods, (i2, t2@(TMod m2)) <- imods, i1 /= i2, m1 == m2 ]
 
 
 

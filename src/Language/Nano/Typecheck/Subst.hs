@@ -33,6 +33,7 @@ import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.Annots
 import           Language.Nano.AST
 import           Language.Nano.Core.Env
+import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Pretty
 import           Language.Nano.Typecheck.Types
@@ -177,8 +178,11 @@ instance F.Reftable r => SubstitutableQ q r (RTypeQ q r) where
 instance F.Reftable r => SubstitutableQ q r (BindQ q r) where
   apply θ (B z t)           = B z $ appTy θ t
 
-instance (SubstitutableQ q r t) => SubstitutableQ q r (Env t) where
-  apply                     = envMap . apply
+instance SubstitutableQ q r t => SubstitutableQ q r (Located t) where
+  apply θ (Loc s v)         = Loc s $ apply θ v
+
+instance F.Reftable r => SubstitutableQ q r (VarInfoQ q r) where
+  apply θ (VI a i t)        = VI a i $ apply θ t
 
 instance F.Reftable r => SubstitutableQ q r (CastQ q r) where
   apply _ CNo         = CNo
@@ -263,6 +267,9 @@ instance SubstitutableQ q r Initialization where
 
 instance (SubstitutableQ q r a, SubstitutableQ q r b, SubstitutableQ q r c) => SubstitutableQ q r (a,b,c) where
   apply θ (a,b,c)           = (apply θ a, apply θ b, apply θ c)
+
+instance F.Reftable r => SubstitutableQ q r (FAnnQ q r) where
+  apply θ (FA i s fs) = FA i s $ apply θ fs
 
 
 ---------------------------------------------------------------------------------

@@ -59,7 +59,7 @@ import           Data.Function                       (on)
 import qualified Data.HashMap.Strict                 as M
 import qualified Data.IntMap.Strict                  as I
 import           Data.List                           (isPrefixOf)
-import           Data.Maybe                          (catMaybes, isJust, maybeToList)
+import           Data.Maybe                          (catMaybes)
 import           Data.Monoid
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
@@ -409,7 +409,7 @@ tcFunTys l f xs ft = either tcError return sigs
                        | otherwise
                        = Left  $ errorArgMismatch (srcPos l)
 
-    renameBinds yts = (su, [F.subst su ty | B _ ty <- yts])
+    renameBinds yts = (su, [B x $ F.subst su ty | B x ty <- yts])
       where
         su          = F.mkSubst suL
         suL         = safeZipWith "renameBinds" fSub yts xs

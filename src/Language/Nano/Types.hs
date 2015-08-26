@@ -185,8 +185,8 @@ type VarInfo r        = VarInfoQ AK r
 
 type Type             = RType ()
 
-type OverloadSig r    = ([BTVar r], [RType r], RType r)
-type IOverloadSig r   = (Int, OverloadSig r)
+type OverloadSig r    = ([BTVar r], [Bind r], RType r)
+type IOverloadSig r   = (IntCallSite, OverloadSig r)
 
 
 ------------------------------------------------------------------------------------------
@@ -368,6 +368,8 @@ emptyContext = IC []
 
 pushContext :: (CallSite a) => a -> IContext -> IContext
 pushContext s (IC c) = IC (siteIndex s : c)
+
+type IntCallSite = Int
 
 
 -----------------------------------------------------------------------

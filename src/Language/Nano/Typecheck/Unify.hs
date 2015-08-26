@@ -72,8 +72,8 @@ unify l γ θ (TFun t1s o1 _) (TFun t2s o2 _)
 unify l γ θ (TRef (Gen x1 t1s) _) (TRef (Gen x2 t2s) _)
   | x1 == x2
   = unifys l γ θ t1s t2s
-  | isAncestor (cha γ) x1 x2 || isAncestor (cha γ) x2 x1
-  = case (weaken (cha γ) (Gen x1 t1s) x2, weaken (cha γ) (Gen x2 t2s) x1) of
+  | isAncestor (envCHA γ) x1 x2 || isAncestor (envCHA γ) x2 x1
+  = case (weaken (envCHA γ) (Gen x1 t1s) x2, weaken (envCHA γ) (Gen x2 t2s) x1) of
       -- Adjusting `t1` to reach `t2` moving upward in the type hierarchy (Upcast)
       (Just (Gen _ t1s'), _) -> unifys l γ θ t1s' t2s
       -- Adjusting `t2` to reach `t1` moving upward in the type hierarchy (DownCast)
@@ -89,8 +89,8 @@ unify l γ θ (TClass (BGen n1 b1s)) (TClass (BGen n2 b2s))
 -- "Object"-ify types that can be expanded to an object literal type
 unify l γ θ t1 t2
   | all maybeTObj [t1,t2]
-  , Just (TObj m1 _) <- expandType NonCoercive (cha γ) t1
-  , Just (TObj m2 _) <- expandType NonCoercive (cha γ) t2
+  , Just (TObj m1 _) <- expandType NonCoercive (envCHA γ) t1
+  , Just (TObj m2 _) <- expandType NonCoercive (envCHA γ) t2
   = unifyMembers l γ θ m1 m2
 
 -- The rest of the cases do not cause any unification.

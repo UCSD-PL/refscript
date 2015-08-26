@@ -1,11 +1,6 @@
 -- | Global type definitions for Refinement Type Checker
 
 {-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE DeriveDataTypeable        #-}
-{-# LANGUAGE DeriveFoldable            #-}
-{-# LANGUAGE DeriveFunctor             #-}
-{-# LANGUAGE DeriveGeneric             #-}
-{-# LANGUAGE DeriveTraversable         #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE IncoherentInstances       #-}
@@ -43,7 +38,7 @@ module Language.Nano.Typecheck.Types (
   -- * Primitive Types
 
   --   # Constructors
-  , tNum, tBV32, tBool, tString, tTop, tVoid, tErr, tVar, tUndef, tNull, tBot
+  , tNum, tBV32, tBool, tString, tTop, tVoid, tErr, tVar, btVar, tUndef, tNull, tBot
 
   --   # Tests
   , isTPrim, isTTop, isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
@@ -335,6 +330,9 @@ btvToTV  (BTV s l _ ) = TV s l
 tVar :: (F.Reftable r) => TVar -> RType r
 tVar = (`TVar` fTop)
 
+btVar :: (F.Reftable r) => BTVar r -> RType r
+btVar = tVar . btvToTV
+
 tNum, tBV32, tBool, tString, tTop, tVoid, tBot, tUndef, tNull, tErr :: F.Reftable r => RTypeQ q r
 tPrim   = (`TPrim` fTop)
 tNum    = tPrim TNumber
@@ -411,9 +409,10 @@ instance F.Symbolic (Prop a) where
 --   where T is an object literal containing the non-undefined `ts`.
 --
 --------------------------------------------------------------------------------------------
-mkArgTy :: (F.Reftable r, IsLocated l) => l -> [RType r] -> RType r
+mkArgTy :: (F.Reftable r, IsLocated l) => l -> [RType r] -> VarInfo r
 --------------------------------------------------------------------------------------------
-mkArgTy l ts   = immObjectLitTy l [pLen] [tLen]
+mkArgTy l ts   = VI Ambient Initialized
+               $ immObjectLitTy [pLen] [tLen]
   where
     ts'        = take k ts
     ps'        = PropNum l . toInteger <$> [0 .. k-1]
@@ -423,12 +422,12 @@ mkArgTy l ts   = immObjectLitTy l [pLen] [tLen]
     k          = fromMaybe (length ts) $ L.findIndex isTUndef ts
 
 --------------------------------------------------------------------------------------------
-immObjectLitTy :: (F.Reftable r, IsLocated l) => l -> [Prop l] -> [RType r] -> RType r
+immObjectLitTy :: F.Reftable r => [Prop l] -> [RType r] -> RType r
 --------------------------------------------------------------------------------------------
-immObjectLitTy l ps ts  | length ps == length ts
-                        = TObj elts fTop
-                        | otherwise
-                        = error "Mismatched args for immObjectLit"
+immObjectLitTy ps ts | length ps == length ts
+                     = TObj elts fTop
+                     | otherwise
+                     = error "Mismatched args for immObjectLit"
   where
     elts = tmFromFieldList [ (F.symbol p, FI Req tImm t) | (p,t) <- safeZip "immObjectLitTy" ps ts ]
 

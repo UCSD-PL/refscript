@@ -22,7 +22,7 @@ module Language.Nano.Annots (
   , Annot (..)
   , FAnnQ (..)
   , AnnR, AnnRel, AnnBare, UAnnBare, AnnSSA , UAnnSSA
-  , AnnType, UAnnType, AnnInfo, UAnnInfo
+  , AnnTc, UAnnTc, AnnInfo, UAnnInfo
 
   -- Options
   , RscOption (..)
@@ -163,12 +163,13 @@ type AnnR   r  = FAnnQ AK r                      -- absolute paths,
 type AnnRel r  = FAnnQ RK r                      -- relative paths, NO facts, parsed versioin
 type AnnBare r = AnnR r                         -- absolute paths, NO facts
 type AnnSSA  r = AnnR r                         -- absolute paths, Phi facts
-type AnnType r = AnnR r                         -- absolute paths, Phi + t. annot. + Cast facts
+type AnnTc   r = AnnR r                         -- absolute paths, Phi + t. annot. + Cast facts
+
 type AnnInfo r = I.IntMap [Fact r]
 
 type UAnnBare  = AnnBare ()
 type UAnnSSA   = AnnSSA  ()
-type UAnnType  = AnnType ()
+type UAnnTc    = AnnTc ()
 type UAnnInfo  = AnnInfo ()
 
 

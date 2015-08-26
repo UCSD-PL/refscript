@@ -75,13 +75,13 @@ getProp γ _ f t@(TRef (Gen n []) _)
       _          -> Nothing
 
 getProp γ b f t@(TRef _ _)
-  = expandType Coercive (cha γ) t >>= \case
+  = expandType Coercive (envCHA γ) t >>= \case
       TObj ms _ -> (t,) <$> accessMember γ b InstanceK f ms
       _         -> Nothing
 
 
 getProp γ b f t@(TClass _)
-  = expandType Coercive (cha γ) t >>= \case
+  = expandType Coercive (envCHA γ) t >>= \case
       TObj ms _ -> (t,) <$> accessMember γ b StaticK f ms
       _         -> Nothing
 
@@ -129,7 +129,7 @@ extractCtor γ t = go t
     -- interface IA<V extends T> { new(x: T) { ... } }
     -- var a: IA<S>;  // S <: T
     -- var x = new a(x);
-    go (TRef _ _)          = expandType Coercive (cha γ) t >>= go
+    go (TRef _ _)          = expandType Coercive (envCHA γ) t >>= go
     go (TObj ms _)         = tm_ctor ms
     go _                   = Nothing
 
@@ -147,7 +147,7 @@ extractCall γ            = (uncurry mkAll <$>) . go []
     go αs t@(TFun _ _ _) = [(αs, t)]
     go αs   (TAnd ts)    = concatMap (go αs) ts
     go αs   (TAll α t)   = go (αs ++ [α]) t
-    go αs t@(TRef _ _)   | Just t' <- expandType Coercive (cha γ) t
+    go αs t@(TRef _ _)   | Just t' <- expandType Coercive (envCHA γ) t
                          = go αs t'
     go αs   (TObj ms _)  | Just t <- tm_call ms
                          = go αs t

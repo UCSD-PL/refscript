@@ -12,16 +12,6 @@ import           Language.Nano.Errors
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Locations
 
-
--- nanoQualifiers   :: NanoRefType -> [Qualifier]
--- nanoQualifiers p  = pQuals p ++ nanoQualifiers' p
---
--- nanoQualifiers'  :: NanoRefType -> [Qualifier]
--- nanoQualifiers' p = concatMap (refTypeQualifiers γ0) $ envToList env
---   where
---     γ0            = envSEnv $ envMap rTypeSort env
---     env           = tracePP "qualPool" $ qualPool p
-
 qualifiers xts = concatMap (refTypeQualifiers γ0) xts
   where
      γ0        = envSEnv $ envMap rTypeSort $ envFromList xts

@@ -10,33 +10,26 @@ module Language.Nano.Traversals (
     scrapeQuals
   , accumNamesAndPaths
   , accumModuleStmts
+
+  , accumVars
   ) where
 
-import           Control.Applicative           hiding (empty)
+import           Control.Applicative             hiding (empty)
 import           Data.Default
 import           Data.Generics
-import qualified Data.HashSet                  as H
-import           Data.List                     (partition)
-import qualified Data.Map.Strict               as M
-import           Data.Maybe                    (fromMaybe, listToMaybe, maybeToList)
-import qualified Data.Traversable              as T
+import qualified Data.HashSet                    as H
+import           Data.Maybe                      (fromMaybe, listToMaybe, maybeToList)
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Names
-import qualified Language.Fixpoint.Types       as F
-import           Language.Nano.Annots          hiding (err)
+import qualified Language.Fixpoint.Types         as F
+import           Language.Nano.Annots            hiding (err)
 import           Language.Nano.AST
-import           Language.Nano.Core.Env
--- import           Language.Nano.Environment
--- import           Language.Nano.Liquid.Qualifiers
+import           Language.Nano.AST
+import           Language.Nano.Liquid.Qualifiers
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Pretty
-import           Language.Nano.Program
-import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
 import           Language.Nano.Visitor
-import qualified Text.PrettyPrint.HughesPJ     as P
 
 
 -- | Extracts all qualifiers from a RefScript program
@@ -45,28 +38,22 @@ scrapeQuals :: [F.Qualifier] -> [Statement (AnnRel F.Reft)] -> [F.Qualifier]
 ---------------------------------------------------------------------------------
 scrapeQuals qs ss = qs ++ qualifiers (mkUq $ foldStmts tbv [] ss)
   where
-    qualifiers = undefined
-    tbv = defaultVisitor { accStmt = stmtTypeBindings
-                         , accCElt = celtTypeBindings }
+    tbv = defaultVisitor { accStmt = gos, accCElt = goe }
+
+    gos _ (FunctionStmt l f _ _) = [(f, t) | FuncAnn t          <- fFact l ] ++
+                                 [(f, t) | VarAnn  _ (Just t) <- fFact l ]
+    gos _ (VarDeclStmt _ vds)    = [(x, t) | VarDecl l x _      <- vds
+                                         , VarAnn  _ (Just t) <- fFact l ]
+    gos _ _                      = []
+
+    goe _ (Constructor l _ _)       = [(x, t) | ConsAnn  t <- fFact l, let x = Id l "ctor" ]
+    goe _ (MemberVarDecl l _ x _)   = [(x, t) | FieldAnn _ (FI _ _ t) <- fFact l ]
+    goe _ (MemberMethDef l _ x _ _) = [(x, t) | MethAnn  _ (MI _ _ t) <- fFact l ]
+    goe _ _                         = []
 
 mkUq = zipWith tx ([0..] :: [Int])
   where
     tx i (Id l s, t) = (Id l $ s ++ "_" ++ show i, t)
-
-stmtTypeBindings _ = go
-  where
-    go (FunctionStmt l f _ _) = [(f, t) | FuncAnn t          <- fFact l ] ++
-                                [(f, t) | VarAnn  _ (Just t) <- fFact l ]
-    go (VarDeclStmt _ vds)    = [(x, t) | VarDecl l x _      <- vds
-                                        , VarAnn  _ (Just t) <- fFact l ]
-    go _                      = []
-
-celtTypeBindings _               = go
-  where
-    go (Constructor l _ _)       = [(x, t) | ConsAnn  t <- fFact l, let x = Id l "ctor" ]
-    go (MemberVarDecl l _ x _)   = [(x, t) | FieldAnn _ (FI _ _ t) <- fFact l ]
-    go (MemberMethDef l _ x _ _) = [(x, t) | MethAnn  _ (MI _ _ t) <- fFact l ]
-    go _                         = []
 
 -- debugTyBinds p@(Rsc { code = Src ss }) = trace msg p
 --   where
@@ -90,7 +77,6 @@ everythingButWithContext s0 f q x
   | otherwise = foldl f r (gmapQ (everythingButWithContext s' f q) x)
     where (r, s', stop) = q x s0
 
-
 -- | Accumulate moudules (only descend down modules)
 -------------------------------------------------------------------------------
 accumModuleStmts :: (IsLocated a, Data a, Typeable a) => [Statement a] -> [(AbsPath, [Statement a])]
@@ -103,7 +89,6 @@ accumModuleStmts ss = topLevel : rest ss
                                 ([(QP AK_ (srcPos e) p, ms)], p, False)
     f _ s  = ([], s, True)
 
-
 ---------------------------------------------------------------------------------------
 accumNamesAndPaths :: PPRD r => [Statement (AnnRel r)] -> (H.HashSet AbsName, H.HashSet AbsPath)
 ---------------------------------------------------------------------------------------
@@ -114,7 +99,7 @@ accumNamesAndPaths stmts = (namesSet, modulesSet)
     namesSet    = H.fromList [ nm | (ap,ss) <- allModStmts, nm <- accumAbsNames ap ss ]
 
 ---------------------------------------------------------------------------------------
-accumAbsNames :: IsLocated a => AbsPath -> [ Statement a ] -> [ AbsName ]
+accumAbsNames :: IsLocated a => AbsPath -> [Statement a] -> [AbsName]
 ---------------------------------------------------------------------------------------
 accumAbsNames (QP AK_ _ ss)  = concatMap go
   where
@@ -126,32 +111,29 @@ accumAbsNames (QP AK_ _ ss)  = concatMap go
 
 -- Not including class, module, enum names
 ---------------------------------------------------------------------------------------
-visibleVars :: Data r => [Statement (AnnSSA r)] -> [(Id SrcSpan, VarInfo r)]
+accumVars :: [Statement (AnnR r)] -> [(Id SrcSpan, SyntaxKind, VarInfo r)]
 ---------------------------------------------------------------------------------------
-visibleVars s = [ (fSrc <$> n, VI a i t)  | (n,l,k,a,i) <- hoistBindings s
-                                          , f           <- fFact l
-                                          , t           <- annToType a f ]
+accumVars s = [ (fSrc <$> n, k, VI a i t)  | (n,l,k,a,i) <- hoistBindings s
+                                         , f          <- fFact l
+                                         , t          <- annToType a f ]
   where
     annToType Ambient (VarAnn _ t)  = maybeToList t -- Hoist ReadOnly & ImportDecls
-    annToType Ambient (AmbVarAnn t) = [t] -- Hoist ReadOnly vars (i.e. function defs)
-    annToType Ambient (AmbVarAnn t) = [t] -- Hoist ImportDecl (i.e. function decls)
+    annToType Ambient (AmbVarAnn t) = [t]           -- Hoist ReadOnly vars (i.e. function defs)
+    annToType Ambient (AmbVarAnn t) = [t]           -- Hoist ImportDecl (i.e. function decls)
     annToType _       _             = [ ]
 
 type BindInfo a = (Id a, a, SyntaxKind, Assignability, Initialization)
 
--- | Find all language level bindings in the scope of @s@.
---   This includes:
---
---    * function definitions/declarations,
---    * classes,
---    * modules,
---    * variables
+-- | Find all language level bindings in the scope of @s@. This includes:
+--   * function definitions/declarations,
+--   * classes,
+--   * modules,
+--   * variables
 --
 --   E.g. declarations in the If-branch of a conditional expression. Note how
 --   declarations do not escape module or function blocks.
-
 -------------------------------------------------------------------------------
-hoistBindings :: Data r => [Statement (AnnSSA r)] -> [BindInfo (AnnSSA r)]
+hoistBindings :: [Statement (AnnR r)] -> [BindInfo (AnnR r)]
 -------------------------------------------------------------------------------
 hoistBindings = snd . visitStmts vs ()
   where

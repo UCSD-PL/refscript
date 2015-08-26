@@ -76,7 +76,7 @@ ssaNano p@(Rsc { code = Src fs })
 --  * cannot appear in refinements
 --  * can only use a single monolithic type (declared or inferred)
 -------------------------------------------------------------------------------
-writeGlobalVars           :: Data r => [Statement (AnnType r)] -> [Id (AnnType r)]
+writeGlobalVars           :: Data r => [Statement (AnnSSA r)] -> [Id (AnnSSA r)]
 -------------------------------------------------------------------------------
 writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
   where

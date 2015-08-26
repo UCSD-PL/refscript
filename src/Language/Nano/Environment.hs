@@ -39,28 +39,28 @@ class EnvLike r t where
   --
   -- | Bindings in scope
   --
-  names           :: t r -> Env (EnvEntry r)
+  envNames  :: t r -> Env (EnvEntry r)
   --
   -- | Bounds for type variables
   --
-  bounds          :: t r -> Env (RType r)
+  envBounds :: t r -> Env (RType r)
   --
   -- | Calling context
   --
-  context         :: t r -> IContext
+  envCtx    :: t r -> IContext
   --
   -- | Namespace absolute path
   --
-  absPath         :: t r -> AbsPath
+  envPath   :: t r -> AbsPath
   --
   -- | ClassHierarchy
   --
-  cha             :: t r -> ClassHierarchy r
+  envCHA    :: t r -> ClassHierarchy r
 
 -------------------------------------------------------------------------------
 envLikeFindTy' :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (EnvEntry r)
 -------------------------------------------------------------------------------
-envLikeFindTy' x (names -> γ) = envFindTy x γ
+envLikeFindTy' x (envNames -> γ) = envFindTy x γ
 
 -- envLikeFindTy' x γ | Just t  <- envFindTy x $ names γ = Just t
 --                    | Just γ' <- parent γ              = envLikeFindTy' x γ'
@@ -74,18 +74,16 @@ envLikeFindTy x = fmap v_type . envLikeFindTy' x
 -------------------------------------------------------------------------------
 envFindBound :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-envFindBound x (bounds -> b) = envFindTy x b
-
-
+envFindBound x (envBounds -> b) = envFindTy x b
 
 --------------------------------------------------------------------------------
 resolveModuleInEnv  :: EnvLike r t => t r -> AbsPath -> Maybe (ModuleDef r)
 resolveTypeInEnv    :: EnvLike r t => t r -> AbsName -> Maybe (TypeDecl r)
 resolveEnumInEnv    :: EnvLike r t => t r -> AbsName -> Maybe EnumDef
 --------------------------------------------------------------------------------
-resolveModuleInEnv (cha -> c) = resolveModule c
-resolveTypeInEnv   (cha -> c) = resolveType c
-resolveEnumInEnv   (cha -> c) = resolveEnum c
+resolveModuleInEnv (envCHA -> c) = resolveModule c
+resolveTypeInEnv   (envCHA -> c) = resolveType c
+resolveEnumInEnv   (envCHA -> c) = resolveEnum c
 
 
 -- isClassType :: EnvLike r g => g r -> RType r -> Bool

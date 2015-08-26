@@ -32,6 +32,7 @@ module Language.Nano.Names (
   , mkRelName
   , mkAbsName
   , mkAbsPath
+  , emptyPath
 
   , absoluteName
   , absolutePath
@@ -118,10 +119,8 @@ instance Default SrcSpan where
 instance Default AK where
   def = AK_
 
-
 instance F.Fixpoint String where
   toFix = text
-
 
 extendAbsPath :: F.Symbolic s => AbsPath -> s -> AbsPath
 extendAbsPath (QP _ l ps) s = QP AK_ l $ ps ++ [F.symbol s]
@@ -175,6 +174,8 @@ mkRelName n = QN (QP RK_ def n) . F.symbol
 mkAbsName n = QN (QP AK_ def n) . F.symbol
 
 mkAbsPath = QP AK_ $ srcPos dummySpan
+
+emptyPath = mkAbsPath []
 
 
 --------------------------------------------------------------------------

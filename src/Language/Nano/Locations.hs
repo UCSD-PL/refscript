@@ -37,17 +37,16 @@ module Language.Nano.Locations (
 
 ) where
 
-import           Data.Generics                 (Data)
-import           Data.Typeable                 (Typeable)
+import           Data.Generics            (Data)
+import           Data.Typeable            (Typeable)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.PrettyPrint
-import qualified Language.Fixpoint.Types       as F
-import           Text.Parsec.Pos               (SourcePos)
+import qualified Language.Fixpoint.Types  as F
+import           Text.Parsec.Pos          (SourcePos)
 
 
 ---------------------------------------------------------------------
--- | Tracking Source Code Locations ---------------------------------
+-- | Tracking Source Code Locations
 ---------------------------------------------------------------------
 
 data Located a

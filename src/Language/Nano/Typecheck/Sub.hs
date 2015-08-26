@@ -117,7 +117,7 @@ compareObjs :: FE g => SrcSpan -> g () -> Type -> Type -> SubTRes
 --   Interfaces are OK.
 --
 compareObjs l γ t1 t2
-  | not (isClassType (cha γ) t1) && isClassType (cha γ) t2
+  | not (isClassType (envCHA γ) t1) && isClassType (envCHA γ) t2
   = SubErr [errorObjectType l t1 t2]
 
 compareObjs l γ t1@(TObj e1s _) t2@(TObj e2s _)
@@ -145,8 +145,8 @@ compareObjs l γ t1@(TRef (Gen x1 (m1:t1s)) _) t2@(TRef (Gen x2 (m2:t2s)) _)
   --
   -- * Compatible mutabilities, differenet names:
   --
-  | isAncestor (cha γ) x1 x2 || isAncestor (cha γ) x2 x1
-  = case (weaken (cha γ) (Gen x1 (m1:t1s)) x2, weaken (cha γ) (Gen x2 (m2:t2s)) x1) of
+  | isAncestor (envCHA γ) x1 x2 || isAncestor (envCHA γ) x2 x1
+  = case (weaken (envCHA γ) (Gen x1 (m1:t1s)) x2, weaken (envCHA γ) (Gen x2 (m2:t2s)) x1) of
       --
       -- * Adjusting `t1` to reach `t2` moving upward in the type
       --   hierarchy -- this is equivalent to Upcast
@@ -167,7 +167,7 @@ compareObjs l _ (TMod m1) (TMod m2) = convertTModule l m1 m2
 -- * Fall back to structural subtyping
 --
 compareObjs l γ t1 t2 =
-  case (expandType NonCoercive (cha γ) t1, expandType NonCoercive (cha γ) t2) of
+  case (expandType NonCoercive (envCHA γ) t1, expandType NonCoercive (envCHA γ) t2) of
     (Just ft1, Just ft2) -> compareObjs l γ ft1 ft2
     (Nothing , Nothing ) -> SubErr [errorUnresolvedTypes l t1 t2]
     (Nothing , _       ) -> SubErr [errorNonObjectType l t1]

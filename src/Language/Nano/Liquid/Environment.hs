@@ -19,11 +19,6 @@ import           Text.PrettyPrint.HughesPJ
 
 import qualified Language.Fixpoint.Types      as F
 
--- import           Debug.Trace                        (trace)
---
---
--- TODO: keep ID for each environment: the pair (env_id, symbol) should be
---       unique ...
 
 -------------------------------------------------------------------------------------
 -- | Constraint Generation Environment

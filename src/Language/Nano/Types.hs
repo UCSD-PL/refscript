@@ -248,15 +248,15 @@ instance Monoid (ModuleDefQ q r) where
 --  |     Kind      |    Comment   | In refinements |   SSA-ed  |
 --  |_______________|______________|________________|___________|
 --  |               |              |                |           |
---  | Ambient       | Imported/RO  |       Yes      |     No    |
+--  | Ambient       | Imported/RO  |        Y       |     N     |
 --  |               |              |                |           |
---  | WriteLocal    | Local scope  |       No       |     Yes   |
+--  | WriteLocal    | Local scope  |        N       |     Y     |
 --  |               |              |                |           |
---  | ForeignLocal  | Outer scope  |       No       |     No    |
+--  | ForeignLocal  | Outer scope  |        N       |     N     |
 --  |               |              |                |           |
---  | WriteGlobal   | WR anywhere  |       No       |     No    |
+--  | WriteGlobal   | WR anywhere  |        N       |     N     |
 --  |               |              |                |           |
---  | ReturnVar     |  return var  |       _        |     No    |
+--  | ReturnVar     |  return var  |        _       |     N     |
 --  |_______________|______________|________________|___________|
 
 data Assignability = Ambient | WriteLocal | ForeignLocal | WriteGlobal | ReturnVar

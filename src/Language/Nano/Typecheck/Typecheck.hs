@@ -246,7 +246,7 @@ tcClassElt γ0 (TD sig ms) (MemberMethDef l False x xs bd)
 tcClassElt _ _ m@(MemberMethDecl _ _ _ _ ) = return m
 
 --------------------------------------------------------------------------------
-tcSeq :: (TCEnv r -> a -> TCM r (a, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([a], TCEnvO r)
+   tcSeq :: (TCEnv r -> a -> TCM r (a, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([a], TCEnvO r)
 --------------------------------------------------------------------------------
 tcSeq f             = go []
   where

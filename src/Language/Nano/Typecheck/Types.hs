@@ -42,7 +42,7 @@ module Language.Nano.Typecheck.Types (
 
   --   # Tests
   , isTPrim, isTTop, isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
-  , isExpandable, isTNull, isTVoid, isTFun, isArr
+  , isTNull, isTVoid, isTFun, isArr
 
   --   # Operations
   , orNull
@@ -51,7 +51,7 @@ module Language.Nano.Typecheck.Types (
   , fTop
 
   -- * Type Definitions
-  , tmFromFields, tmFromFieldList -- , typesOfTM
+  , tmFromFields, tmFromFieldList, typesOfTM
 
   -- * Operator Types
   , infixOpId, prefixOpId, builtinOpId, arrayLitTy, objLitTy, setPropTy, localTy, finalizeTy
@@ -69,7 +69,7 @@ module Language.Nano.Typecheck.Types (
 import           Control.Applicative         hiding (empty)
 import           Data.Default
 import qualified Data.List                   as L
-import           Data.Maybe                  (fromMaybe)
+import           Data.Maybe                  (fromMaybe, maybeToList)
 import           Data.Monoid                 hiding ((<>))
 import           Data.Typeable               ()
 import qualified Language.Fixpoint.Bitvector as BV
@@ -221,9 +221,9 @@ flattenUnions t         = t
 ----------------------------------------------------------------------------------------
 orUndef :: F.Reftable r => RType r -> RType r
 ----------------------------------------------------------------------------------------
-orUndef t   | any isTUndef ts = t
-            | otherwise = mkUnion $ tUndef:ts
-  where ts  = bkUnion t
+orUndef t  | any isTUndef ts = t
+           | otherwise = mkUnion $ tUndef:ts
+  where ts = bkUnion t
 
 
 -- | Strengthen the top-level refinement
@@ -270,8 +270,6 @@ maybeTObj (TMod _ )   = True
 maybeTObj (TAll _ t)  = maybeTObj t
 maybeTObj (TOr ts)    = any maybeTObj ts
 maybeTObj _           = False
-
-isExpandable v        = maybeTObj v || isTNum v || isTBool v || isTStr v
 
 isTFun (TFun _ _ _)   = True
 isTFun (TAnd ts)      = all isTFun ts
@@ -459,16 +457,16 @@ tmFromFieldList :: F.Symbolic s => [(s, FieldInfo r)] -> TypeMembers r
 tmFromFieldList f = TM (F.fromListSEnv $ mapFst F.symbol <$> f)
                      mempty mempty mempty Nothing Nothing Nothing Nothing
 
--- --------------------------------------------------------------------------------------------
--- typesOfTM :: TypeMembers r -> [RType r]
--- --------------------------------------------------------------------------------------------
--- typesOfTM (TM p m sp sm c k s n) =
---   concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv p) ++
---   concatMap (\(MI _ _ t') -> [t']) (map snd $ F.toListSEnv m) ++
---   concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv sp) ++
---   concatMap (\(MI _ _ t') -> [t']) (map snd $ F.toListSEnv sm) ++
---   concatMap maybeToList [c, k, s, n]
---
+--------------------------------------------------------------------------------------------
+typesOfTM :: TypeMembers r -> [RType r]
+--------------------------------------------------------------------------------------------
+typesOfTM (TM p m sp sm c k s n) =
+  concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv p) ++
+  concatMap (\(MI _ _ t') -> [t'  ]) (map snd $ F.toListSEnv m) ++
+  concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv sp) ++
+  concatMap (\(MI _ _ t') -> [t'  ]) (map snd $ F.toListSEnv sm) ++
+  concatMap maybeToList [c, k, s, n]
+
 ---------------------------------------------------------------------------------
 returnTy :: F.Reftable r => RType r -> Bool -> RType r
 ---------------------------------------------------------------------------------

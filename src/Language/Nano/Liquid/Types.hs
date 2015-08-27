@@ -32,7 +32,9 @@ module Language.Nano.Liquid.Types (
   , isTrivialRefType
 
   -- * Useful Operations
-  , foldReft, efoldRType -- , emapReft, mapReftM
+  , foldReft, efoldRType -- , emapReft,
+  , mapReftM, mapReftTM
+  , mapTypeMembersM
 
   -- * Accessing Spec Annotations
   , getSpec, getRequires, getEnsures, getAssume, getAssert
@@ -46,7 +48,10 @@ module Language.Nano.Liquid.Types (
   -- , zipType
 
   -- * 'this' related substitutions
-  -- , substThis, unqualifyThis, mkQualSym, mkOffset
+  , substThis
+  -- , unqualifyThis
+  , mkQualSym
+  , mkOffset
   -- , substOffsetThis
 
   ) where
@@ -121,11 +126,9 @@ instance F.Predicate  (Expression a) where
   prop e@(InfixExpr _ _ _ _ )      = eProp e
   prop e                           = convertError "F.Pred" e
 
-
 ------------------------------------------------------------------
 eProp :: Expression a -> F.Pred
 ------------------------------------------------------------------
-
 eProp (InfixExpr _ OpLT   e1 e2)       = F.PAtom F.Lt (F.expr e1) (F.expr e2)
 eProp (InfixExpr _ OpLEq  e1 e2)       = F.PAtom F.Le (F.expr e1) (F.expr e2)
 eProp (InfixExpr _ OpGT   e1 e2)       = F.PAtom F.Gt (F.expr e1) (F.expr e2)
@@ -141,7 +144,6 @@ eProp e                                = convertError "InfixExpr -> F.Prop" e
 ------------------------------------------------------------------
 bop       :: InfixOp -> F.Bop
 ------------------------------------------------------------------
-
 bop OpSub = F.Minus
 bop OpAdd = F.Plus
 bop OpMul = F.Times
@@ -149,10 +151,8 @@ bop OpDiv = F.Div
 bop OpMod = F.Mod
 bop o     = convertError "F.Bop" o
 
-------------------------------------------------------------------
 pAnd p q  = F.pAnd [p, q]
 pOr  p q  = F.pOr  [p, q]
-
 
 
 ------------------------------------------------------------------------
@@ -291,8 +291,8 @@ emapReftFI f γ (FI m t1 t2) = FI m (emapReft f γ t1) (emapReft f γ t2)
 emapReftMI f γ (MI m n  t2) = MI m n (emapReft f γ t2)
 
 ------------------------------------------------------------------------------------------
-mapReftM :: (F.Reftable r, PP r, Applicative f, Monad f)
-         => (r -> f r') -> RTypeQ q r -> f (RTypeQ q r')
+mapReftM :: (F.Reftable r, PP r, Applicative m, Monad m)
+         => (r -> m r') -> RTypeQ q r -> m (RTypeQ q r')
 ------------------------------------------------------------------------------------------
 mapReftM f (TVar α r)      = TVar α <$> f r
 mapReftM f (TPrim c r)     = TPrim c <$> f r
@@ -355,7 +355,10 @@ efoldReft g f = go
 
 efoldExt g xt γ           = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
 
--- TODO: add immutable field bindings ???
+------------------------------------------------------------------------------------------
+efoldTypeMembers :: PPR r => (RTypeQ q r -> b) -> (F.SEnv b -> r -> a -> a)
+                          -> TypeMembersQ q r -> F.SEnv b -> a -> a
+------------------------------------------------------------------------------------------
 efoldTypeMembers g f (TM p m sp sm c k s n) γ z =
     L.foldl' (efoldReft g f γ) z $ pl ++ ml ++ spl ++ sml ++ cl ++ kl ++ sl ++ nl
   where
@@ -367,6 +370,23 @@ efoldTypeMembers g f (TM p m sp sm c k s n) γ z =
     kl  = maybeToList k
     sl  = maybeToList s
     nl  = maybeToList n
+
+------------------------------------------------------------------------------------------
+mapTypeMembersM :: (Applicative m, Monad m)
+                => (RType r -> m (RType r)) -> TypeMembers r -> m (TypeMembers r)
+------------------------------------------------------------------------------------------
+mapTypeMembersM f (TM p m sp sm c k s n)
+  = TM <$> T.mapM (mapFieldInfoM f) p
+       <*> T.mapM (mapMethInfoM f) m
+       <*> T.mapM (mapFieldInfoM f) sp
+       <*> T.mapM (mapMethInfoM f) sm
+       <*> T.mapM f c
+       <*> T.mapM f k
+       <*> T.mapM f s
+       <*> T.mapM f n
+
+mapFieldInfoM f (FI o m t) = FI o <$> f m <*> f t
+mapMethInfoM  f (MI o m t) = MI o       m <$> f t
 
 
 -- XXX: TODO Restore
@@ -695,9 +715,9 @@ normalize t
 -- appZ (f,r) = f r
 --
 -- expandTypeWithSub g x t = substThis' g (x,t) <$> expandType Coercive g t
---
--- substThis x t         = F.subst (F.mkSubst [(thisSym,F.expr x)]) t
---
+
+substThis x t         = F.subst (F.mkSubst [(thisSym,F.expr x)]) t
+
 -- substOffsetThis = emapReft (\_ -> V.trans vs () ()) []
 --   where
 --     vs     = V.defaultVisitor { V.txExpr = tx }
@@ -742,14 +762,15 @@ normalize t
 --     this          = F.symbol $ builtinOpId BIThis
 --     qFld x f      = F.qualifySymbol (F.symbol x) f
 --     subPair f     = (qFld this f, F.expr f)
---
---
--- -------------------------------------------------------------------------------
--- mkQualSym :: (F.Symbolic x, F.Symbolic f) => x -> f -> F.Symbol
--- -------------------------------------------------------------------------------
--- mkQualSym    x f = F.qualifySymbol (F.symbol x) (F.symbol f)
---
--- -------------------------------------------------------------------------------
--- mkOffset :: (F.Symbolic f, F.Expression x) => x -> f -> F.Expr
--- -------------------------------------------------------------------------------
--- mkOffset x f = F.EApp offsetLocSym [F.expr x, F.expr $ F.symbolText $ F.symbol f]
+
+
+-------------------------------------------------------------------------------
+mkQualSym :: (F.Symbolic x, F.Symbolic f) => x -> f -> F.Symbol
+-------------------------------------------------------------------------------
+mkQualSym    x f = F.qualifySymbol (F.symbol x) (F.symbol f)
+
+-------------------------------------------------------------------------------
+mkOffset :: (F.Symbolic f, F.Expression x) => x -> f -> F.Expr
+-------------------------------------------------------------------------------
+mkOffset x f = F.EApp offsetLocSym [F.expr x, F.expr $ F.symbolText $ F.symbol f]
+

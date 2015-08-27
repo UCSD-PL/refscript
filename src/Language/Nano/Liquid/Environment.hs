@@ -5,64 +5,35 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE UndecidableInstances      #-}
+{-# LANGUAGE ViewPatterns              #-}
 
 module Language.Nano.Liquid.Environment where
 
-import           Language.Nano.Annots         ()
+import qualified Language.Fixpoint.Types       as F
+import           Language.Nano.Annots          ()
 import           Language.Nano.ClassHierarchy
 import           Language.Nano.Core.Env
 import           Language.Nano.Environment
+import           Language.Nano.Liquid.Types
+import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Pretty
+import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
-import           Text.PrettyPrint.HughesPJ
-
-import qualified Language.Fixpoint.Types      as F
-
 
 -------------------------------------------------------------------------------------
 -- | Constraint Generation Environment
 -------------------------------------------------------------------------------------
 
 data CGEnvR r = CGE {
-  --
-  -- | Bindings in scope
-  --
     cge_names  :: !(Env (EnvEntry r))
-  --
-  -- | Bounds for type variables
-  --
   , cge_bounds :: !(Env (RType r))
-  --
-  -- ^ fixpoint bindings
-  --
-  , cge_fenv   :: F.SEnv F.IBindEnv
-  --
-  -- ^ branch target conditions
-  --
-  , cge_guards :: ![F.Pred]
-  --
-  -- ^ intersection-type context
-  --
   , cge_ctx    :: !IContext
-  --
-  -- ^ ClassHierarchy
-  --
-  , cge_cha    :: ClassHierarchy r
-  --
-  -- ^ Namespace absolute path
-  --
-  , cge_path   :: AbsPath
-  --
-  -- ^ Constants
-  --
-  , cge_consts :: Env (RType r)
-
---   --
---   -- ^ Parent namespace environment
---   --
---   , cge_parent  :: Maybe (CGEnvR r)
-
+  , cge_path   :: !AbsPath
+  , cge_cha    :: !(ClassHierarchy r)
+  , cge_fenv   :: !(F.SEnv F.IBindEnv)  -- Fixpoint bindings
+  , cge_guards :: ![F.Pred]             -- Branch target conditions
+  , cge_consts :: !(Env (RType r))      -- Constants
   } deriving (Functor)
 
 type CGEnv = CGEnvR F.Reft
@@ -70,22 +41,36 @@ type CGEnv = CGEnvR F.Reft
 type CGEnvEntry = EnvEntry F.Reft
 
 instance EnvLike r CGEnvR where
-  names     = cge_names
-  bounds    = cge_bounds
-  cha       = cge_cha
-  absPath   = cge_path
-  context   = cge_ctx
---   parent    = cge_parent
+  envNames  = cge_names
+  envBounds = cge_bounds
+  envCHA    = cge_cha
+  envPath   = cge_path
+  envCtx    = cge_ctx
+
+type EnvKey x = (IsLocated x, F.Symbolic x, PP x, F.Expression x)
 
 
-instance (PP r, F.Reftable r) => PP (CGEnvR r) where
-  pp = ppTCEnv
+-- Only include the "singleton" refinement in the case where Assignability is
+-- either ReadOnly of WriteLocal (SSAed)
+---------------------------------------------------------------------------------------
+envFindTyWithAsgn :: (EnvKey x, F.Expression x) => x -> CGEnv -> Maybe CGEnvEntry
+---------------------------------------------------------------------------------------
+envFindTyWithAsgn x (envNames -> γ) = fmap singleton (envFindTy x γ)
+  where
+    singleton v@(VI WriteGlobal Initialized   _) = v
+    singleton v@(VI WriteGlobal Uninitialized t) = v { v_type = orUndef t }
+    singleton v = v { v_type = eSingleton (v_type v) x }
 
+-- ---------------------------------------------------------------------------------------
+-- envAddReturn :: (IsLocated f)  => f -> RefType -> CGEnv -> CGEnv
+-- ---------------------------------------------------------------------------------------
+-- envAddReturn f t g  = g { cge_names = E.envAddReturn f e $ cge_names g }
+--   where
+--     e = VI ReturnVar Initialized t
 
-ppTCEnv :: (PP r, F.Reftable r) => CGEnvR r -> Doc
-ppTCEnv g
-  =   text "******************** Environment ************************"
-  $+$ pp (names g)
-  $+$ text "******************** Absolute path **********************"
-  $+$ pp (absPath g)
+---------------------------------------------------------------------------------------
+cgEnvFindReturn :: CGEnv -> RefType
+---------------------------------------------------------------------------------------
+cgEnvFindReturn = v_type . envFindReturn . cge_names
+
 

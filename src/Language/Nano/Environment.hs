@@ -26,8 +26,10 @@ import           Language.Nano.Core.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Names
+import           Language.Nano.Pretty
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
+import           Text.PrettyPrint.HughesPJ
 
 -------------------------------------------------------------------------------
 -- | Typecheck Environment
@@ -86,4 +88,17 @@ resolveTypeInEnv   (envCHA -> c) = resolveType c
 resolveEnumInEnv   (envCHA -> c) = resolveEnum c
 
 
--- isClassType :: EnvLike r g => g r -> RType r -> Bool
+instance (PP r, F.Reftable r, EnvLike r t) => PP (t r) where
+  pp = ppTCEnv
+
+--------------------------------------------------------------------------------
+ppTCEnv :: (EnvLike r t, PP r, F.Reftable r) => t r -> Doc
+--------------------------------------------------------------------------------
+ppTCEnv g
+  =   text "******************** Environment ************************"
+  $+$ pp (envNames g)
+  -- $+$ text "******************** Modules ****************************"
+  -- $+$ pp (modules g)
+  $+$ text "******************** Absolute path **********************"
+  $+$ pp (envPath g)
+

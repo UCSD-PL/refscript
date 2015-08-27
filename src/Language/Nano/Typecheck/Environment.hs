@@ -50,7 +50,7 @@ data TCEnv r  = TCE {
   , tce_path   :: AbsPath
   , tce_cha    :: ClassHierarchy r
   }
-  deriving (Functor) -- , Data, Typeable)
+  deriving (Functor)
 
 --   We define this alias as the "output" type for typechecking any entity
 --   that can create or affect binders (e.g. @VarDecl@ or @Statement@)
@@ -65,18 +65,6 @@ instance EnvLike r TCEnv where
   envPath   = tce_path
   envCtx    = tce_ctx
   envCHA    = tce_cha
-
-instance (PP r, F.Reftable r) => PP (TCEnv r) where
-  pp = ppTCEnv
-
-ppTCEnv :: (PP r, F.Reftable r) => TCEnv r -> Doc
-ppTCEnv g
-  =   text "******************** Environment ************************"
-  $+$ pp (envNames g)
-  -- $+$ text "******************** Modules ****************************"
-  -- $+$ pp (modules g)
-  $+$ text "******************** Absolute path **********************"
-  $+$ pp (envPath g)
 
 
 -------------------------------------------------------------------------------

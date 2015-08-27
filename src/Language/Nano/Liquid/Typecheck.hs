@@ -36,13 +36,13 @@ import           Language.Nano.Errors
 import           Language.Nano.Liquid.CGMonad
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Locations
+import           Language.Nano.Lookup
 import           Language.Nano.Misc                (mseq)
 import           Language.Nano.Names
 import           Language.Nano.Parser
 import           Language.Nano.Program
 import           Language.Nano.SSA.SSA
 import qualified Language.Nano.SystemUtils         as A
-import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Typecheck (typeCheck)
 import           Language.Nano.Typecheck.Types
@@ -57,9 +57,9 @@ type PPRS r = (PPR r, Substitutable r (Fact r))
 --------------------------------------------------------------------------------
 verifyFile    :: Config -> FilePath -> [FilePath] -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
-verifyFile cfg f fs = parse     fs
+verifyFile cfg f fs = parse fs
                     $ ssa
-                    $ tc    cfg
+                    $ tc cfg
                     $ refTc cfg f
 
 parse fs next

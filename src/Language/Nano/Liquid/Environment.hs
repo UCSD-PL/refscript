@@ -9,11 +9,14 @@
 
 module Language.Nano.Liquid.Environment where
 
+import           Data.Maybe                    (catMaybes)
+import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types       as F
 import           Language.Nano.Annots          ()
 import           Language.Nano.ClassHierarchy
 import           Language.Nano.Core.Env
 import           Language.Nano.Environment
+import           Language.Nano.Errors
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Locations
 import           Language.Nano.Names
@@ -31,7 +34,7 @@ data CGEnvR r = CGE {
   , cge_ctx    :: !IContext
   , cge_path   :: !AbsPath
   , cge_cha    :: !(ClassHierarchy r)
-  , cge_fenv   :: !(F.SEnv F.IBindEnv)  -- Fixpoint bindings
+  , cge_fenv   :: !(F.SEnv F.IBindEnv)  -- Fixpoint bindings - XXX: Why not in monad? Remove?
   , cge_guards :: ![F.Pred]             -- Branch target conditions
   , cge_consts :: !(Env (RType r))      -- Constants
   } deriving (Functor)
@@ -61,16 +64,59 @@ envFindTyWithAsgn x (envNames -> γ) = fmap singleton (envFindTy x γ)
     singleton v@(VI WriteGlobal Uninitialized t) = v { v_type = orUndef t }
     singleton v = v { v_type = eSingleton (v_type v) x }
 
--- ---------------------------------------------------------------------------------------
--- envAddReturn :: (IsLocated f)  => f -> RefType -> CGEnv -> CGEnv
--- ---------------------------------------------------------------------------------------
--- envAddReturn f t g  = g { cge_names = E.envAddReturn f e $ cge_names g }
---   where
---     e = VI ReturnVar Initialized t
-
 ---------------------------------------------------------------------------------------
 cgEnvFindReturn :: CGEnv -> RefType
 ---------------------------------------------------------------------------------------
 cgEnvFindReturn = v_type . envFindReturn . cge_names
 
+
+---------------------------------------------------------------------------------------
+-- | Well-Formedness
+---------------------------------------------------------------------------------------
+
+-- | Valid symbols:
+--
+--   * The respective defined symbol @x@
+--   * The value variable (v)
+--   * Explicitly acceptable symbols (@ok@)
+--   * Internal binders
+--   * Constant measures
+--   * Additional builtin symbols
+--   * ReadOnly ... binders in the environment
+--
+---------------------------------------------------------------------------------------
+checkSyms :: EnvKey a => String -> CGEnv -> [a] -> a -> RefType -> [Error]
+---------------------------------------------------------------------------------------
+checkSyms m g ok x t = efoldRType h f F.emptySEnv [] t
+  where
+    h _        = ()
+    f γ t' s   = s ++ catMaybes (fmap (chk γ t') (F.syms (noKVars $ rTypeReft t')))
+
+    chk γ t' s | s `elem` biReserved
+               = Just $ unimplementedReservedSyms l
+               | s == x_sym
+               = Nothing
+               | s == rTypeValueVar t'
+               = Nothing
+               | s `elem` ok_syms
+               = Nothing
+               | s `F.memberSEnv` γ
+               = Nothing
+               | s `F.memberSEnv` cge_consts g
+               = Nothing
+               | s `elem` biExtra
+               = Nothing
+               | Just (VI a _ _) <- envLikeFindTy' s g
+               = if a `elem` validAsgn then Nothing
+                                         else Just $ errorAsgnInRef l x t a
+               | otherwise
+               = Just $ errorUnboundSyms l (F.symbol x) t s m
+
+    l          = srcPos x
+    biReserved = map F.symbol ["func", "obj"]
+    -- FIXME: Check for this
+    biExtra    = map F.symbol ["bvor", "bvand", "builtin_BINumArgs", "offset", "this"]
+    x_sym      = F.symbol x
+    ok_syms    = map F.symbol ok
+    validAsgn  = [Ambient, WriteLocal]
 

@@ -243,21 +243,24 @@ instance Monoid (ModuleDefQ q r) where
 ------------------------------------------------------------------------------------------
 -- | Assignability
 ------------------------------------------------------------------------------------------
---   ___________________________________________________________
---  |               |              |                |           |
---  |     Kind      |    Comment   | In refinements |   SSA-ed  |
---  |_______________|______________|________________|___________|
---  |               |              |                |           |
---  | Ambient       | Imported/RO  |        Y       |     N     |
---  |               |              |                |           |
---  | WriteLocal    | Local scope  |        N       |     Y     |
---  |               |              |                |           |
---  | ForeignLocal  | Outer scope  |        N       |     N     |
---  |               |              |                |           |
---  | WriteGlobal   | WR anywhere  |        N       |     N     |
---  |               |              |                |           |
---  | ReturnVar     |  return var  |        _       |     N     |
---  |_______________|______________|________________|___________|
+{-
+   ___________________________________________________________
+  |               |              |                |           |
+  |     Kind      |    Comment   | In refinements |   SSA-ed  |
+  |_______________|______________|________________|___________|
+  |               |              |                |           |
+  | Ambient       | Imported/RO  |        Y       |     N     |
+  |               |              |                |           |
+  | WriteLocal    | Local scope  |        N       |     Y     |
+  |               |              |                |           |
+  | ForeignLocal  | Outer scope  |        N       |     N     |
+  |               |              |                |           |
+  | WriteGlobal   | WR anywhere  |        N       |     N     |
+  |               |              |                |           |
+  | ReturnVar     |  return var  |        _       |     N     |
+  |_______________|______________|________________|___________|
+
+-}
 
 data Assignability = Ambient | WriteLocal | ForeignLocal | WriteGlobal | ReturnVar
                      deriving (Show, Eq, Data, Typeable)
@@ -308,6 +311,18 @@ instance IsLocated (BTVarQ q r) where
 instance Hashable TVar where
   hashWithSalt i α = hashWithSalt i $ tv_sym α
 
+instance Hashable TPrim where
+  hashWithSalt i TString     = i `hashWithSalt` (0 :: Int)
+  hashWithSalt i (TStrLit s) = i `hashWithSalt` (1 :: Int) `hashWithSalt` s
+  hashWithSalt i TNumber     = i `hashWithSalt` (2 :: Int)
+  hashWithSalt i TBoolean    = i `hashWithSalt` (3 :: Int)
+  hashWithSalt i TBV32       = i `hashWithSalt` (4 :: Int)
+  hashWithSalt i TVoid       = i `hashWithSalt` (5 :: Int)
+  hashWithSalt i TUndefined  = i `hashWithSalt` (6 :: Int)
+  hashWithSalt i TNull       = i `hashWithSalt` (7 :: Int)
+  hashWithSalt i TTop        = i `hashWithSalt` (8 :: Int)
+  hashWithSalt i TBot        = i `hashWithSalt` (9 :: Int)
+  hashWithSalt i TFPBool     = i `hashWithSalt` (10 :: Int)
 
 -- | Symbolic
 

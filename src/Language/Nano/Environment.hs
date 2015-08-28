@@ -13,6 +13,7 @@ module Language.Nano.Environment (
   , envLikeFindTy, envLikeFindTy'
   , envFindBound
   , resolveModuleInEnv, resolveTypeInEnv, resolveEnumInEnv
+  , toFgn
 
 ) where
 
@@ -101,4 +102,13 @@ ppTCEnv g
   -- $+$ pp (modules g)
   $+$ text "******************** Absolute path **********************"
   $+$ pp (envPath g)
+
+
+--------------------------------------------------------------------------------
+toFgn :: Env (VarInfoQ q r) -> Env (VarInfoQ q r)
+--------------------------------------------------------------------------------
+toFgn = envMap go
+  where
+    go (VI WriteLocal i t) = VI ForeignLocal i t
+    go v = v
 

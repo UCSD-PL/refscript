@@ -96,9 +96,6 @@ import           Text.Printf
 type RefType     = RType F.Reft
 
 
-instance PP F.Reft where
-  pp = pprint
-
 ------------------------------------------------------------------
 -- | Converting `Nano` values into `Fixpoint` values,
 --   i.e. *language* level entities into *logic* level entities.

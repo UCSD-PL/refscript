@@ -193,3 +193,14 @@ instance (PP r, F.Reftable r) => PP (Rsc a r) where
     $+$ vcat (pp <$> invts pgm)
     $+$ text "\n***********************************************\n"
 
+-- | PP Fixpoint
+
+instance PP (F.SortedReft) where
+  pp (F.RR _ b) = pp b
+
+instance PP F.Reft where
+  pp = pprint
+
+instance PP (F.SubC c) where
+  pp s = pp (F.lhsCs s) <+> text " <: " <+> pp (F.rhsCs s)
+

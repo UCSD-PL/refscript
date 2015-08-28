@@ -95,9 +95,10 @@ initFuncEnv l γ f fty s = TCE nms bnds ctx pth cha
           $ envAdds arg
           $ envUnion (mkVarEnv (accumVars s))
           $ toFgn (envNames γ)
-    tyBs  = [(tVarId α, VI Ambient    Initialized $ tVar α) | α     <- αs ]
-    tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
-    varBs = [(x       , VI WriteLocal Initialized $ t     ) | B x t <- xts]
+    -- tyBs  = [(tVarId α, VI Ambient Initialized $ tVar α) | α <- αs]
+    -- tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
+    tyBs  = [(Loc (srcPos l) α, VI Ambient Initialized $ tVar α) | α <- αs]
+    varBs = [(x, VI WriteLocal Initialized t) | B x t <- xts]
     arg   = single (argId $ srcPos l, mkArgTy l ts)
     bnds  = envAdds [(s,t) | BTV s _ (Just t) <- bs] $ envBounds γ
     ctx   = pushContext i (envCtx γ)
@@ -106,11 +107,6 @@ initFuncEnv l γ f fty s = TCE nms bnds ctx pth cha
     (i, (bs,xts,t)) = fty
     ts    = map b_type xts
     αs    = map btvToTV bs
-
-toFgn = envMap go
-  where
-    go (VI WriteLocal i t) = VI ForeignLocal i t
-    go v = v
 
 ---------------------------------------------------------------------------------------
 initModuleEnv :: (Unif r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnTc r)] -> TCEnv r

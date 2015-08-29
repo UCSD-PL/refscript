@@ -39,7 +39,7 @@ module Language.Nano.Liquid.CGMonad (
   , cgEnvAddFresh, cgEnvAdds
   , envAddGuard, envPopGuard
   , envFindTy, envFindTyWithAsgn
-  -- , safeEnvFindTy, safeEnvFindTyWithAsgn
+  , safeEnvFindTyM, safeEnvFindTyWithAsgnM
   , envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
 
@@ -246,6 +246,24 @@ envGetContextTypArgs n g a αs
              , n == m ]
 
 
+-- | Monadic environment search wrappers
+
+---------------------------------------------------------------------------------------
+safeEnvFindTyM :: (EnvKey x, F.Expression x) => x -> CGEnv -> CGM RefType
+---------------------------------------------------------------------------------------
+safeEnvFindTyM x (envNames -> γ) | Just t <- envFindTy x γ
+                                 = return $ v_type t
+                                 | otherwise
+                                 = cgError $ bugEnvFindTy (srcPos x) x
+
+---------------------------------------------------------------------------------------
+safeEnvFindTyWithAsgnM :: EnvKey x => x -> CGEnv -> CGM CGEnvEntry
+---------------------------------------------------------------------------------------
+safeEnvFindTyWithAsgnM x g | Just t <- envFindTyWithAsgn x g
+                           = return t
+                           | otherwise
+                           = cgError $ bugEnvFindTy (srcPos x) x
+
 ---------------------------------------------------------------------------------------
 cgEnvAddFresh :: IsLocated l => String -> l -> VarInfo F.Reft -> CGEnv -> CGM (Id AnnLq, CGEnv)
 ---------------------------------------------------------------------------------------
@@ -427,23 +445,12 @@ instance F.Expression TVar where
   expr (TV a _) = F.expr a
 
 
--- | Monadic environment search wrappers
-
----------------------------------------------------------------------------------------
-safeEnvFindTyM :: (EnvKey x, F.Expression x) => x -> CGEnv -> CGM RefType
----------------------------------------------------------------------------------------
-safeEnvFindTyM x (envNames -> γ) | Just t <- envFindTy x γ
-                                 = return $ v_type t
-                                 | otherwise
-                                 = cgError $ bugEnvFindTy (srcPos x) x
-
----------------------------------------------------------------------------------------
-safeEnvFindTyWithAsgnM :: EnvKey x => x -> CGEnv -> CGM CGEnvEntry
----------------------------------------------------------------------------------------
-safeEnvFindTyWithAsgnM x g | Just t <- envFindTyWithAsgn x g
-                           = return t
-                           | otherwise
-                           = cgError $ bugEnvFindTy (srcPos x) x
+-- IN FIXPOINT meetReft (F.Reft (v, ras)) (F.Reft (v', ras'))
+-- IN FIXPOINT   | v == v'            = F.Reft (v , L.nubBy cmp $ ras  ++ ras')
+-- IN FIXPOINT   | v == F.dummySymbol = F.Reft (v', L.nubBy cmp $ ras' ++ (ras `F.subst1`  (v , F.EVar v')))
+-- IN FIXPOINT   | otherwise          = F.Reft (v , L.nubBy cmp $ ras  ++ (ras' `F.subst1` (v', F.EVar v )))
+-- IN FIXPOINT   where
+-- IN FIXPOINT     cmp = (==) `on` (show . F.toFix)
 
 
 ---------------------------------------------------------------------------------------
@@ -892,11 +899,7 @@ envTyAdds msg l xts g
 
 ------------------------------------------------------------------------------
 cgFunTys :: (IsLocated l, F.Symbolic b, PP x, PP [b])
-         => l
-         -> x
-         -> [b]
-         -> RefType
-         -> CGM [(Int, ([BTVar F.Reft], [RefType], RefType))]
+         => l -> x -> [b] -> RefType -> CGM [(Int, ([BTVar F.Reft], [RefType], RefType))]
 ------------------------------------------------------------------------------
 cgFunTys l f xs ft   | Just ts <- bkFuns ft
                      = zip ([0..] :: [Int]) <$> mapM fTy ts

@@ -8,6 +8,7 @@
 
 module Language.Nano.Lookup (
     getProp
+  , getFieldMutability
   , extractCall
   , extractCtor
   , AccessKind(..)
@@ -213,4 +214,11 @@ getPropUnion γ b f ts =
   case unzip [ ts' | Just ts' <- getProp γ b f <$> ts] of
     ([],[]) -> Nothing
     (t1s,t2s) -> Just (mkUnion t1s, mkUnion t2s)
+
+getFieldMutability cha t f | Just (TObj ms _) <- expandType Coercive cha t
+                           , Just (FI _ m _)  <- F.lookupSEnv f $ tm_prop ms
+                           = Just m
+                           | otherwise
+                           = Nothing
+
 

@@ -8,8 +8,10 @@
 
 module Language.Nano.Typecheck.Environment
     ( TCEnv(..), TCEnvO
-    , initFuncEnv, initModuleEnv, initGlobalEnv
+    , initModuleEnv, initGlobalEnv
     , initClassCtorEnv, initClassMethEnv
+    , initCallableEnv
+    , initClassInstanceEnv
     , tcEnvFindTy, tcEnvFindTypeDefM, tcEnvFindTyForAsgn
     , tcEnvFindReturn, tcEnvAdd, tcEnvAdds, safeTcEnvFindTy
     , tcEnvAddBounds
@@ -49,6 +51,8 @@ data TCEnv r  = TCE {
   , tce_ctx    :: IContext
   , tce_path   :: AbsPath
   , tce_cha    :: ClassHierarchy r
+  , tce_mut    :: Maybe (MutabilityMod)
+  , tce_this   :: Maybe (RType r)
   }
   deriving (Functor)
 
@@ -65,6 +69,7 @@ instance EnvLike r TCEnv where
   envPath   = tce_path
   envCtx    = tce_ctx
   envCHA    = tce_cha
+  envThis   = tce_this
 
 
 -------------------------------------------------------------------------------
@@ -75,19 +80,26 @@ instance EnvLike r TCEnv where
 initGlobalEnv :: Unif r => TcRsc r -> ClassHierarchy r -> TCEnv r
 -------------------------------------------------------------------------------
 initGlobalEnv pgm@(Rsc { code = Src ss }) cha
-  = TCE nms bnds ctx pth cha
+  = TCE nms bnds ctx pth cha mut tThis
   where
-    nms  = mkVarEnv (accumVars ss)    -- modules ?
-    bnds = mempty
-    ctx  = emptyContext
-    pth  = emptyPath
+    nms   = mkVarEnv (accumVars ss)    -- modules ?
+    bnds  = mempty
+    ctx   = emptyContext
+    pth   = emptyPath
+    mut   = Nothing
+    tThis = Nothing
 
+-- This will be called *last* on every contructor, method, function.
+-- It is transparent to the incoming environment's: path, cha, mut, this
 -------------------------------------------------------------------------------
-initFuncEnv :: (IsLocated l, Unif r)
-            => AnnTc r -> TCEnv r -> l -> IOverloadSig r
-            -> [Statement (AnnTc r)] -> TCEnv r
+initCallableEnv :: (IsLocated l, Unif r)
+                => AnnTc r -> TCEnv r -> l
+                -> IOverloadSig r
+                -> [Statement (AnnTc r)]
+                -> TCEnv r
 -------------------------------------------------------------------------------
-initFuncEnv l γ f fty s = TCE nms bnds ctx pth cha
+initCallableEnv l γ f fty s
+  = TCE nms bnds ctx pth cha mut tThis
   where
     nms   = envAddReturn f (VI ReturnVar Initialized t)
           $ envAdds tyBs
@@ -104,39 +116,60 @@ initFuncEnv l γ f fty s = TCE nms bnds ctx pth cha
     ctx   = pushContext i (envCtx γ)
     pth   = envPath γ
     cha   = envCHA γ
+    mut   = envMut γ
+    tThis = envThis γ
     (i, (bs,xts,t)) = fty
     ts    = map b_type xts
     αs    = map btvToTV bs
 
----------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+initClassInstanceEnv :: TypeSig r -> TCEnv r -> TCEnv r
+-------------------------------------------------------------------------------
+initClassInstanceEnv (TS _ (BGen _ bs) _) γ =
+  γ { tce_bounds = envAdds bts (tce_bounds γ) }
+  where
+    bts = [(s,t) | BTV s _ (Just t) <- bs]
+
+-------------------------------------------------------------------------------
+initClassMethEnv :: Unif r => MutabilityMod -> TypeSig r -> TCEnv r -> TCEnv r
+-------------------------------------------------------------------------------
+initClassMethEnv m (TS _ (BGen nm bs) _) γ
+  = γ { tce_mut  = Just m
+      , tce_this = Just $ TRef (Gen nm (map btVar bs)) fTop }
+
+-------------------------------------------------------------------------------
 initModuleEnv :: (Unif r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnTc r)] -> TCEnv r
----------------------------------------------------------------------------------------
-initModuleEnv γ n s = TCE nms bnds ctx pth cha
+-------------------------------------------------------------------------------
+initModuleEnv γ n s = TCE nms bnds ctx pth cha mut tThis
   where
     nms   = mkVarEnv (accumVars s)
     bnds  = envBounds γ
     ctx   = envCtx γ
     pth   = extendAbsPath (envPath γ) n
     cha   = envCHA γ
+    mut   = Nothing -- 'this' gets out of scope when entering a module
+    tThis = Nothing
 
--- `initFuncEnv` will be called afterwards. No need to include local bindings,
--- bounds (will be included in constructor's type), etc
----------------------------------------------------------------------------------------
-initClassCtorEnv :: Unif r => TCEnv r -> TypeSigQ AK r -> TCEnv r
----------------------------------------------------------------------------------------
-initClassCtorEnv γ sig@(TS _ (BGen nm bs) _) =
-  γ { tce_names = addSuper $ addExit $ envNames γ }
+-- initCallable will be called later on the result
+-------------------------------------------------------------------------------
+initClassCtorEnv :: Unif r => TypeSigQ AK r -> TCEnv r -> TCEnv r
+-------------------------------------------------------------------------------
+initClassCtorEnv (TS _ (BGen nm bs) _) γ
+  = γ { tce_names = addExit (envNames γ)
+      , tce_mut   = Just AssignsFields
+      , tce_this  = Just tThis
+      }
   where
-    addSuper | Just t <- getImmediateSuperclass sig
-             = envAdd super (VI Ambient Initialized t)
-             | otherwise
-             = id
+    -- addSuper | Just t <- getImmediateSuperclass sig
+    --          = envAdd super (VI Ambient Initialized t)
+    --          | otherwise
+    --          = id
+    -- super    = builtinOpId BISuper
     addExit  = envAdd ctorExit (VI Ambient Initialized exitTy)
     ctorExit = builtinOpId BICtorExit
-    super    = builtinOpId BISuper
     -- XXX: * Keep the right order of fields
-    -- * Make the return object immutable to avoid contra-variance
-    --   checks at the return from the constructor.
+    --      * Make the return object immutable to avoid contra-variance
+    --        checks at the return from the constructor.
     exitTy   = mkFun (bs, xts, tThis)
     xts      | Just (TObj ms _) <- expandType Coercive (envCHA γ) tThis
              = sortBy c_sym [ B x t | (x, FI _ _ t) <- F.toListSEnv $ tm_prop ms ]
@@ -144,19 +177,6 @@ initClassCtorEnv γ sig@(TS _ (BGen nm bs) _) =
              = []
     c_sym    = on compare b_sym
     tThis    = TRef (Gen nm (map btVar bs)) fTop
-
--- `initFuncEnv` will be called afterwards. No need to include local bindings
----------------------------------------------------------------------------------------
-initClassMethEnv :: Unif r => TCEnv r -> TypeSigQ AK r -> TCEnv r
----------------------------------------------------------------------------------------
-initClassMethEnv γ sig@(TS _ (BGen nm bs) _) =
-  γ { tce_names  = addThis $ envNames γ
-    , tce_bounds = envAdds [(s,t) | BTV s _ (Just t) <- bs] $ envBounds γ
-    }
-  where
-    addThis = envAdd this (VI Ambient Initialized tThis)
-    tThis   = TRef (Gen nm (map btVar bs)) fTop -- XXX: top-level refinement is top
-    this    = builtinOpId BIThis
 
 
 -------------------------------------------------------------------------------

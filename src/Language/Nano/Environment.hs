@@ -60,6 +60,17 @@ class EnvLike r t where
   --
   envCHA    :: t r -> ClassHierarchy r
 
+  -- | Class related
+  --
+  --   * Method Mutability
+  --
+  envMut    :: t r -> Maybe (MutabilityMod)
+  --
+  --   * Type for this
+  --
+  envThis   :: t r -> Maybe (RType r)
+
+
 -------------------------------------------------------------------------------
 envLikeFindTy' :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (EnvEntry r)
 -------------------------------------------------------------------------------

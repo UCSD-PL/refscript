@@ -35,7 +35,7 @@ import           Language.Nano.Environment
 import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Lookup
-import           Language.Nano.Misc                  (dup, nths, zipWith3M)
+import           Language.Nano.Misc                  (dup, nths, zipWith3M, (&))
 import           Language.Nano.Names
 import           Language.Nano.Parser
 import           Language.Nano.Pretty
@@ -154,96 +154,50 @@ tcFun :: Unif r => TCEnv r -> Statement (AnnTc r)
 tcFun γ (FunctionStmt l f xs body)
   | Just ft   <- tcEnvFindTy f γ
   = do  ts    <- tcFunTys l f xs ft
-        body' <- foldM (tcFun1 γ l f xs) body ts
+        body' <- foldM (tcCallable γ l f xs) body ts
         return $ (FunctionStmt l f xs body', Just γ)
   | otherwise
   = die $ errorMissingSpec (srcPos l) f
 
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
+-- -------------------------------------------------------------------------------
+-- tcFun1 :: (Unif r, IsLocated l, PP l)
+--        => TCEnv r -> AnnTc r -> l
+--        -> [Id (AnnTc r)]
+--        -> [Statement (AnnTc r)]
+--        -> IOverloadSig r
+--        -> TCM r [Statement (AnnTc r)]
+-- -------------------------------------------------------------------------------
+-- tcFun1 γ l f xs body fty
+--   = addReturnStmt l γ body >>= tcFunBody γ l
+
+-- | `tcCallable g l f xs fty body` checks @body@ under the environment @g@
+-- (which needs to be set beforehand), with input arguments @xs@ and overload
+-- signature @fty@ (which includes the context number).
 -------------------------------------------------------------------------------
-tcFun1 :: (Unif r, IsLocated l, PP l)
-       => TCEnv r -> AnnTc r -> l -> [Id (AnnTc r)]
-       -> [Statement (AnnTc r)] -> IOverloadSig r -> TCM r [Statement (AnnTc r)]
+tcCallable :: (Unif r, IsLocated l, PP l)
+           => TCEnv r -> AnnTc r -> l
+           -> [Id (AnnTc r)]
+           -> [Statement (AnnTc r)]
+           -> IOverloadSig r
+           -> TCM r [Statement (AnnTc r)]
 -------------------------------------------------------------------------------
-tcFun1 g l f xs body fty
-  = do  body' <- addReturnStmt l t body
-        tcFunBody g1 l body' t
-  where
-    g1 = initFuncEnv l g f fty body
-    (_, (_,_,t)) = fty
+tcCallable γ l f xs body fty
+  = do  let γ' = initCallableEnv l γ f fty body
+        body' <- addReturnStmt l γ' body
+        tcFunBody γ' l body'
 
-addReturnStmt l t body | isTVoid t
-                       = (body ++) . single <$> (`ReturnStmt` Nothing)
-                                            <$> freshenAnn l
-                       | otherwise
-                       = return body
-
-tcFunBody γ l body t
-  = do  z                          <- tcStmts γ body
-        case z of
-          (_, Just _) | t /= tVoid -> tcError $ errorMissingReturn (srcPos l)
-          (b, _     ) | otherwise  -> return b
-
----------------------------------------------------------------------------------------
-tcClassElt :: Unif r => TCEnv r -> TypeDecl r -> ClassElt (AnnTc r) -> TCM r (ClassElt (AnnTc r))
----------------------------------------------------------------------------------------
--- | Constructor
---
-tcClassElt γ0 (TD sig@(TS _ (BGen _ bs) _) ms) (Constructor l xs body)
-  = do  its    <- tcFunTys l ctor xs ctorTy
-        body'  <- foldM (tcFun1 γ l ctor xs) body its
-        return  $ Constructor l xs body'
-  where
-    γ      = initClassCtorEnv γ0 sig    -- TODO: TEST THIS
-    ctor   = builtinOpId BICtor
-    ctorTy | Just t <- tm_ctor ms = mkAll bs t
-           | otherwise = die $ unsupportedNonSingleConsTy (srcPos l)
-
--- | Static field
---
-tcClassElt γ (TD sig ms) (MemberVarDecl l True x (Just e))
-  | Just (FI _ _ t) <- F.lookupSEnv (F.symbol x) $ tm_sprop ms
-  = do  ([e'],_) <- tcNormalCall γ l "field init" [(e, Just t)] $ mkInitFldTy t
-        return $ MemberVarDecl l True x $ Just e'
+addReturnStmt l γ body
+  | isTVoid (tcEnvFindReturn γ)
+  = (body ++) . single <$> (`ReturnStmt` Nothing) <$> freshenAnn l
   | otherwise
-  = tcError $ errorClassEltAnnot (srcPos l) sig x
+  = return body
 
-tcClassElt _ _ (MemberVarDecl l True x Nothing)
-  = tcError $ unsupportedStaticNoInit (srcPos l) x
-
--- | Instance variable
---
-tcClassElt _ _ m@(MemberVarDecl _ False _ Nothing)
-  = return m
-tcClassElt _ _ (MemberVarDecl l False x _)
-  = die $ bugClassInstVarInit (srcPos l) x
-
--- | Static method
---
-tcClassElt γ (TD sig ms) (MemberMethDef l True x xs body)
-  | Just (MI _ _ t) <- F.lookupSEnv (F.symbol x) $ tm_smeth ms
-  = do  its <- tcFunTys l x xs t
-        body' <- foldM (tcFun1 γ l x xs) body its
-        return $ MemberMethDef l True x xs body'
-  | otherwise
-  = tcError $ errorClassEltAnnot (srcPos l) (sig) x
-
--- | Instance method
---
--- TODO: check method mutability
---
-tcClassElt γ0 (TD sig ms) (MemberMethDef l False x xs bd)
-  | Just (MI _ _ t) <- F.lookupSEnv (F.symbol x) $ tm_meth ms
-  = do  its <- tcFunTys l x xs t
-        bd' <- foldM (tcFun1 γ l x xs) bd its
-        return $ MemberMethDef l False x xs bd'
-  | otherwise
-  = tcError $ errorClassEltAnnot (srcPos l) (sig) x
-  where
-    γ = initClassMethEnv γ0 sig
-
-tcClassElt _ _ m@(MemberMethDecl _ _ _ _ ) = return m
+tcFunBody γ l body
+  = tcStmts γ body >>= \case
+      (_, Just _) | tcEnvFindReturn γ /= tVoid -> tcError $ errorMissingReturn (srcPos l)
+      (b, _     ) | otherwise  -> return b
 
 --------------------------------------------------------------------------------
 tcSeq :: (TCEnv r -> a -> TCM r (a, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([a], TCEnvO r)
@@ -436,6 +390,73 @@ tcVarDecl γ v@(VarDecl _ x Nothing)
         return $ (v, Just $ tcEnvAdds [(x, VI Ambient Initialized t)] γ)
       -- The rest should have fallen under the 'undefined' initialization case
       _ -> error "TC-tcVarDecl: this shouldn't happen"
+
+
+---------------------------------------------------------------------------------------
+tcClassElt :: Unif r => TCEnv r -> TypeDecl r -> ClassElt (AnnTc r) -> TCM r (ClassElt (AnnTc r))
+---------------------------------------------------------------------------------------
+-- | Constructor
+--
+tcClassElt γ (TD sig@(TS _ (BGen _ bs) _) ms) (Constructor l xs body)
+  = do  its    <- tcFunTys l ctor xs ctorTy
+        body'  <- foldM (tcCallable γ' l ctor xs) body its
+        return  $ Constructor l xs body'
+  where
+    γ'     = γ
+           & initClassInstanceEnv sig
+           & initClassCtorEnv sig
+           -- TODO: TEST THIS
+    ctor   = builtinOpId BICtor
+    ctorTy | Just t <- tm_ctor ms = mkAll bs t
+           | otherwise = die $ unsupportedNonSingleConsTy (srcPos l)
+
+-- | Static field
+--
+tcClassElt γ (TD sig ms) (MemberVarDecl l True x (Just e))
+  | Just (FI _ _ t) <- F.lookupSEnv (F.symbol x) $ tm_sprop ms
+  = do  ([e'],_) <- tcNormalCall γ l "field init" [(e, Just t)] $ mkInitFldTy t
+        return $ MemberVarDecl l True x $ Just e'
+  | otherwise
+  = tcError $ errorClassEltAnnot (srcPos l) sig x
+
+tcClassElt _ _ (MemberVarDecl l True x Nothing)
+  = tcError $ unsupportedStaticNoInit (srcPos l) x
+
+-- | Instance variable
+--
+tcClassElt _ _ m@(MemberVarDecl _ False _ Nothing)
+  = return m
+tcClassElt _ _ (MemberVarDecl l False x _)
+  = die $ bugClassInstVarInit (srcPos l) x
+
+-- | Static method: The classes type parameters should not be included in the
+-- environment
+--
+tcClassElt γ (TD sig ms) (MemberMethDef l True x xs body)
+  | Just (MI _ _ t) <- F.lookupSEnv (F.symbol x) $ tm_smeth ms
+  = do  its <- tcFunTys l x xs t
+        body' <- foldM (tcCallable γ l x xs) body its
+        return $ MemberMethDef l True x xs body'
+  | otherwise
+  = tcError $ errorClassEltAnnot (srcPos l) (sig) x
+
+-- | Instance method
+--
+-- TODO: check method mutability
+--
+tcClassElt γ0 (TD sig ms) (MemberMethDef l False x xs bd)
+  | Just (MI _ m t) <- F.lookupSEnv (F.symbol x) (tm_meth ms)
+  = do  let γ = γ0
+              & initClassInstanceEnv sig    -- Adds class bounded type params
+              & initClassMethEnv m sig      -- Adds method's mutability and type for 'this'
+        its <- tcFunTys l x xs t
+        bd' <- foldM (tcCallable γ l x xs) bd its
+        return $ MemberMethDef l False x xs bd'
+  | otherwise
+  = tcError $ errorClassEltAnnot (srcPos l) (sig) x
+
+tcClassElt _ _ m@(MemberMethDecl _ _ _ _ ) = return m
+
 
 
 -------------------------------------------------------------------------------
@@ -668,7 +689,7 @@ tcExpr γ e@(SuperRef l) _
 tcExpr γ (FuncExpr l fo xs body) tCtxO
   | Just ft   <- funTy
   =  do ts    <- tcFunTys l f xs ft
-        body' <- foldM (tcFun1 γ l f xs) body ts
+        body' <- foldM (tcCallable γ l f xs) body ts
         return $ (FuncExpr l fo xs body', ft)
   | otherwise
   = tcError $ errorNoFuncAnn $ srcPos l

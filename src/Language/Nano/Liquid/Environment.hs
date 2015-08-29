@@ -34,9 +34,11 @@ data CGEnvR r = CGE {
   , cge_ctx    :: !IContext
   , cge_path   :: !AbsPath
   , cge_cha    :: !(ClassHierarchy r)
-  , cge_fenv   :: !(F.SEnv F.IBindEnv)  -- Fixpoint bindings - XXX: Why not in monad? Remove?
-  , cge_guards :: ![F.Pred]             -- Branch target conditions
-  , cge_consts :: !(Env (RType r))      -- Constants
+  , cge_fenv   :: !(F.SEnv F.IBindEnv)    -- Fixpoint bindings - XXX: Why not in monad? Remove?
+  , cge_guards :: ![F.Pred]               -- Branch target conditions
+  , cge_consts :: !(Env (RType r))        -- Constants
+  , cge_mut    :: !(Maybe MutabilityMod)  -- Method mutability
+  , cge_this   :: !(Maybe (RType r))      -- Method mutability
   } deriving (Functor)
 
 type CGEnv = CGEnvR F.Reft
@@ -49,6 +51,8 @@ instance EnvLike r CGEnvR where
   envCHA    = cge_cha
   envPath   = cge_path
   envCtx    = cge_ctx
+  envMut    = cge_mut
+  envThis   = cge_this
 
 type EnvKey x = (IsLocated x, F.Symbolic x, PP x, F.Expression x)
 
@@ -119,4 +123,28 @@ checkSyms m g ok x t = efoldRType h f F.emptySEnv [] t
     x_sym      = F.symbol x
     ok_syms    = map F.symbol ok
     validAsgn  = [Ambient, WriteLocal]
+
+
+-------------------------------------------------------------------------------
+initClassInstanceEnv :: TypeSig F.Reft -> CGEnv -> CGEnv
+-------------------------------------------------------------------------------
+initClassInstanceEnv sig@(TS _ (BGen nm bs) _) γ =
+  γ { cge_bounds = envAdds bts (cge_bounds γ) }
+  where
+    bts = [(s,t) | BTV s _ (Just t) <- bs]
+
+-- Initializes mutability and type of 'this'
+-------------------------------------------------------------------------------
+initClassCtorEnv :: TypeSig F.Reft -> CGEnv -> CGEnv
+-------------------------------------------------------------------------------
+initClassCtorEnv (TS _ (BGen nm bs) _) γ
+  = γ { cge_mut   = Just AssignsFields
+      , cge_this  = Just $ TRef (Gen nm (map btVar bs)) fTop }
+
+-------------------------------------------------------------------------------
+initClassMethEnv :: MutabilityMod -> TypeSig F.Reft -> CGEnv -> CGEnv
+-------------------------------------------------------------------------------
+initClassMethEnv m (TS _ (BGen nm bs) _) γ
+  = γ { cge_mut  = Just m
+      , cge_this = Just $ TRef (Gen nm (map btVar bs)) fTop }
 

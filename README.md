@@ -392,13 +392,13 @@ Bundle 'panagosg7/vim-annotations'
 2. Copy the following files
 
 ~~~~~
-cp ext/vim/typescript/nanojs.vim  ~/.vim/bundle/syntastic/syntax_checkers/typescript/nanojs.vim
-cp ext/vim/typescript/nanojs.vim  ~/.vim/bundle/syntastic/syntax_checkers/typescript/nanojs.vim
+cp ext/vim/typescript/rsc.vim  ~/.vim/bundle/syntastic/syntax_checkers/typescript/rsc.vim
+cp ext/vim/typescript/rsc.vim  ~/.vim/bundle/syntastic/syntax_checkers/typescript/rsc.vim
 ~~~~~
 
 **Run**
 
-+ `:SyntasticCheck liquid` runs `nanojs` on the current buffer.
++ `:SyntasticCheck liquid` runs `rsc` on the current buffer.
 
 **View**
 
@@ -419,7 +419,7 @@ let g:syntastic_typescript_checkers += ['liquid']
 let g:syntastic_javascript_checkers += ['liquid']
 ~~~~~
 
-+ To pass extra options to `nanojs` add: 
++ To pass extra options to `rsc` add: 
 
 ~~~~~
 let g:syntastic_typescript_liquid_args = '...'

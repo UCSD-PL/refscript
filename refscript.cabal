@@ -60,7 +60,7 @@ Executable rsc
                   , RefScript
 
 --  ghc-options:    -W -O2  
-  Main-is:        Nano.hs
+  Main-is:        Rsc.hs
   hs-source-dirs: src
 
                   

@@ -12,7 +12,7 @@ module Language.Nano.Typecheck.Environment
     , initClassCtorEnv, initClassMethEnv
     , initCallableEnv
     , initClassInstanceEnv
-    , tcEnvFindTy, tcEnvFindTypeDefM, tcEnvFindTyForAsgn
+    , tcEnvFindTy, resolveTypeM, tcEnvFindTyForAsgn
     , tcEnvFindReturn, tcEnvAdd, tcEnvAdds, safeTcEnvFindTy
     , tcEnvAddBounds
     ) where
@@ -30,6 +30,7 @@ import           Language.Nano.Core.Env
 import           Language.Nano.Environment
 import           Language.Nano.Errors
 import           Language.Nano.Locations
+import           Language.Nano.Misc
 import           Language.Nano.Names
 import           Language.Nano.Pretty
 import           Language.Nano.Program
@@ -101,12 +102,12 @@ initCallableEnv :: (IsLocated l, Unif r)
 initCallableEnv l γ f fty s
   = TCE nms bnds ctx pth cha mut tThis
   where
-    nms   = envAddReturn f (VI ReturnVar Initialized t)
-          $ envAdds tyBs
-          $ envAdds varBs
-          $ envAdds arg
-          $ envUnion (mkVarEnv (accumVars s))
-          $ toFgn (envNames γ)
+    nms   = toFgn (envNames γ)
+          & envUnion (mkVarEnv (accumVars s))
+          & envAdds arg
+          & envAdds varBs
+          & envAdds tyBs
+          & envAddReturn f (VI ReturnVar Initialized t)
     -- tyBs  = [(tVarId α, VI Ambient Initialized $ tVar α) | α <- αs]
     -- tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
     tyBs  = [(Loc (srcPos l) α, VI Ambient Initialized $ tVar α) | α <- αs]
@@ -215,7 +216,7 @@ safeTcEnvFindTy l γ x | Just t <- tcEnvFindTy x γ = return t
 
 tcEnvFindReturn = v_type . envFindReturn . tce_names
 
-tcEnvFindTypeDefM l γ x
+resolveTypeM l γ x
   = case resolveTypeInEnv γ x of
       Just t  -> return t
       Nothing -> die $ bugClassDefNotFound (srcPos l) x

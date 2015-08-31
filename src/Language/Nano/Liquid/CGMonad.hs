@@ -36,12 +36,16 @@ module Language.Nano.Liquid.CGMonad (
   , Freshable (..)
 
   -- * Environment API
-  , cgEnvAddFresh, cgEnvAdds
+  , cgEnvAddFresh
+  , cgEnvAdds
+
+  , resolveTypeM
+
+  , cgSafeEnvFindTyM
+
   , envAddGuard, envPopGuard
-  , envFindTy, envFindTyWithAsgn
-  , safeEnvFindTyM, safeEnvFindTyWithAsgnM
-  , envFindReturn, envPushContext
-  , envGetContextCast, envGetContextTypArgs
+  , envFindTyWithAsgn
+  , envPushContext, envGetContextCast, envGetContextTypArgs
 
   -- * Add Subtyping Constraints
   , subType, wellFormed -- , safeExtends
@@ -55,7 +59,7 @@ module Language.Nano.Liquid.CGMonad (
   -- * Zip type wrapper
   -- , zipTypeUpM, zipTypeDownM
 
-  , checkSyms
+  , unqualifyThis
 
   ) where
 
@@ -72,6 +76,7 @@ import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Annots
+import           Language.Nano.AST
 import           Language.Nano.ClassHierarchy
 import           Language.Nano.CmdLine
 import           Language.Nano.Core.Env
@@ -199,7 +204,6 @@ measureEnv :: RefScript -> F.SEnv F.SortedReft
 ---------------------------------------------------------------------------------------
 measureEnv = fmap rTypeSortedReft . envSEnv . consts
 
-
 ---------------------------------------------------------------------------------------
 cgError     :: Error -> CGM b
 ---------------------------------------------------------------------------------------
@@ -211,12 +215,10 @@ cgError err = throwE $ catMessage err "CG-ERROR\n"
 
 ---------------------------------------------------------------------------------------
 envPushContext :: (CallSite a) => a -> CGEnv -> CGEnv
----------------------------------------------------------------------------------------
-envPushContext c g = g {cge_ctx = pushContext c (cge_ctx g)}
-
----------------------------------------------------------------------------------------
 envGetContextCast :: CGEnv -> AnnLq -> Cast F.Reft
 ---------------------------------------------------------------------------------------
+envPushContext c g = g { cge_ctx = pushContext c (cge_ctx g) }
+
 envGetContextCast g a
   = case [c | TCast cx c <- fFact a, cx == cge_ctx g] of
       [ ] -> CNo
@@ -239,7 +241,7 @@ envGetContextTypArgs _ _ _ [] = []
 envGetContextTypArgs n g a αs
   = case tys of
       [i] | length i == length αs -> i
-      _                           -> die $ bugMissingTypeArgs $ srcPos a
+      _ -> die $ bugMissingTypeArgs $ srcPos a
   where
     tys = [i | TypInst m ξ' i <- fFact a
              , ξ' == cge_ctx g
@@ -249,20 +251,13 @@ envGetContextTypArgs n g a αs
 -- | Monadic environment search wrappers
 
 ---------------------------------------------------------------------------------------
-safeEnvFindTyM :: (EnvKey x, F.Expression x) => x -> CGEnv -> CGM RefType
+cgSafeEnvFindTyM :: (EnvKey x, F.Expression x) => x -> CGEnv -> CGM RefType
 ---------------------------------------------------------------------------------------
-safeEnvFindTyM x (envNames -> γ) | Just t <- envFindTy x γ
-                                 = return $ v_type t
-                                 | otherwise
-                                 = cgError $ bugEnvFindTy (srcPos x) x
-
----------------------------------------------------------------------------------------
-safeEnvFindTyWithAsgnM :: EnvKey x => x -> CGEnv -> CGM CGEnvEntry
----------------------------------------------------------------------------------------
-safeEnvFindTyWithAsgnM x g | Just t <- envFindTyWithAsgn x g
-                           = return t
-                           | otherwise
-                           = cgError $ bugEnvFindTy (srcPos x) x
+cgSafeEnvFindTyM x (envNames -> γ)
+  | Just t <- envFindTy x γ
+  = return $ v_type t
+  | otherwise
+  = cgError $ bugEnvFindTy (srcPos x) x
 
 ---------------------------------------------------------------------------------------
 cgEnvAddFresh :: IsLocated l => String -> l -> VarInfo F.Reft -> CGEnv -> CGM (Id AnnLq, CGEnv)
@@ -304,6 +299,14 @@ envAddGroup msg ks g (x, xts)
     inv Initialized = addInvariant g
     inv _           = return
     toIBindEnv      = (`F.insertsIBindEnv` F.emptyIBindEnv)
+
+-------------------------------------------------------------------------------
+resolveTypeM :: IsLocated a => a -> CGEnv -> AbsName -> CGM (TypeDecl F.Reft)
+-------------------------------------------------------------------------------
+resolveTypeM l γ x
+  | Just t <- resolveTypeInEnv γ x = return t
+  | otherwise = die $ bugClassDefNotFound (srcPos l) x
+
 
 -- | Bindings for IMMUTABLE fields
 ---------------------------------------------------------------------------------------
@@ -899,7 +902,7 @@ envTyAdds msg l xts g
 
 ------------------------------------------------------------------------------
 cgFunTys :: (IsLocated l, F.Symbolic b, PP x, PP [b])
-         => l -> x -> [b] -> RefType -> CGM [(Int, ([BTVar F.Reft], [RefType], RefType))]
+         => l -> x -> [b] -> RefType -> CGM [(Int, ([BTVar F.Reft], [Bind F.Reft], RefType))]
 ------------------------------------------------------------------------------
 cgFunTys l f xs ft   | Just ts <- bkFuns ft
                      = zip ([0..] :: [Int]) <$> mapM fTy ts
@@ -911,9 +914,14 @@ cgFunTys l f xs ft   | Just ts <- bkFuns ft
                      | otherwise
                      = cgError $ errorArgMismatch (srcPos l)
 
-
 -- | Avoids capture of function binders by existing value variables
-subNoCapture _ yts xs t   = (,) <$> mapM (mapReftM ff) (b_type <$> yts)
+------------------------------------------------------------------------------
+subNoCapture :: F.Symbolic a => t -> [Bind F.Reft] -> [a] -> RefType -> CGM ([Bind F.Reft], RefType)
+------------------------------------------------------------------------------
+subNoCapture _ yts xs t   | length yts /= length xs
+                          = error "subNoCapture - length test failed"
+                          | otherwise
+                          = (,) <$> mapM (\(B s t) -> B s <$> mapReftM ff t) yts
                                 <*> mapReftM ff t
   where
     -- If the symbols we are about to introduce are already capture by some
@@ -929,6 +937,21 @@ subNoCapture _ yts xs t   = (,) <$> mapM (mapReftM ff) (b_type <$> yts)
     xss                   = F.symbol <$> xs
     su                    = F.mkSubst $ safeZipWith "subNoCapture" fSub yts xs
     fSub yt x             = (b_sym yt, F.eVar x)
+
+
+-- | Substitute occurences of 'this.f' in type @t'@, with 'f'
+-------------------------------------------------------------------------------
+unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
+-------------------------------------------------------------------------------
+unqualifyThis g t = F.subst $ F.mkSubst fieldSu
+  where
+    fieldSu | Just (TObj fs _) <- expandType Coercive (envCHA g) t
+            = [ subPair f | (f, FI _ m _) <- F.toListSEnv $ tm_prop fs, isImm m ]
+            | otherwise
+            = []
+    this      = F.symbol $ builtinOpId BIThis
+    qFld x f  = F.qualifySymbol (F.symbol x) f
+    subPair f = (qFld this f, F.expr f)
 
 
 -- --------------------------------------------------------------------------------

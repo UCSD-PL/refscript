@@ -30,6 +30,7 @@ import           Language.Nano.Annots
 import           Language.Nano.AST
 import           Language.Nano.ClassHierarchy
 import           Language.Nano.CmdLine               (Config, noFailCasts)
+import           Language.Nano.Core.EitherIO
 import           Language.Nano.Core.Env
 import           Language.Nano.Environment
 import           Language.Nano.Errors
@@ -65,15 +66,13 @@ type FError = F.FixResult Error
 verifyFile :: Config -> [FilePath] -> IO (UAnnSol a, FError)
 --------------------------------------------------------------------------------
 verifyFile cfg fs
-  = parseNanoFromFiles fs >>= \case
-      Left  l -> pure (NoAnn, l)
-      Right x -> pure (mkCHA x) >>= \case
-                   Left l  -> return (NoAnn, l)
-                   Right cha -> ssaTransform x cha >>= \case
-                                  Left  l -> return (NoAnn, l)
-                                  Right y -> typeCheck cfg y cha >>= \case
-                                               Left  l -> unsafe l
-                                               Right z -> return $ safe cfg z
+  = runEitherIO (do p   <- EitherIO   $ parseNanoFromFiles fs
+                    cha <- liftEither $ mkCHA p
+                    ssa <- EitherIO   $ ssaTransform p cha
+                    tc  <- EitherIO   $ typeCheck cfg ssa cha
+                    return tc)
+  >>= either unsafe (pure . safe cfg)
+
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
                  return $ (NoAnn, errs)
@@ -81,9 +80,9 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
 safe cfg (Rsc {code = Src fs}) = (NoAnn, failCasts (noFailCasts cfg) fs)
     where
         failCasts True  _   = F.Safe
-        failCasts False fs  = applyNonNull F.Safe F.Unsafe
+        failCasts False f   = applyNonNull F.Safe F.Unsafe
                             $ concatMap castErrors
-                            $ casts fs
+                            $ casts f
 
         casts              :: Data r => [Statement (AnnTc r)] -> [AnnTc r]
         casts stmts         = everything (++) ([] `mkQ` f) stmts
@@ -325,7 +324,7 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 
 -- | class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 tcStmt γ (ClassStmt l x e is ce)
-  = do  d  <- tcEnvFindTypeDefM l γ rn
+  = do  d  <- resolveTypeM l γ rn
         ms <- mapM (tcClassElt γ d) ce
         return $ (ClassStmt l x e is ms, Just γ)
   where

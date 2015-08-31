@@ -1,33 +1,35 @@
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverlappingInstances      #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 
-import qualified Language.Nano.Liquid.Typecheck    as LQ
-import qualified Language.Nano.Liquid.Types        as L
-import qualified Language.Nano.Typecheck.Typecheck as TC
+import qualified Language.Nano.Liquid.Checker    as LQ
+import qualified Language.Nano.Liquid.Types      as L
+import qualified Language.Nano.Typecheck.Checker as TC
 
-import           Control.Applicative               ((<$>), (<*>))
-import           Control.Exception                 (catch)
+import           Control.Applicative             ((<$>), (<*>))
+import           Control.Exception               (catch)
 import           Control.Monad
-import           Data.Aeson                        (eitherDecode)
-import           Data.Aeson.Types                  hiding (Error, Parser, parse)
-import qualified Data.ByteString.Lazy.Char8        as B
-import           Data.List                         (nub, sort)
+import           Data.Aeson                      (eitherDecode)
+import           Data.Aeson.Types                hiding (Error, Parser, parse)
+import qualified Data.ByteString.Lazy.Char8      as B
+import           Data.List                       (nub, sort)
 import           Data.Monoid
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Files
-import           Language.Fixpoint.Interface       (resultExit)
+import           Language.Fixpoint.Interface     (resultExit)
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types           as F
+import qualified Language.Fixpoint.Types         as F
 import           Language.Nano.CmdLine
+import           Language.Nano.Core.EitherIO
 import           Language.Nano.Core.Files
 import           Language.Nano.Errors
-import           Language.Nano.Misc                (mapi)
+import           Language.Nano.Misc              (mapi)
 import           Language.Nano.Pretty
 import           Language.Nano.SystemUtils
-import           System.Console.CmdArgs            hiding (Loud)
-import           System.Directory                  (createDirectoryIfMissing, doesFileExist)
+import           System.Console.CmdArgs          hiding (Loud)
+import           System.Directory                (createDirectoryIfMissing, doesFileExist)
 import           System.Exit
 import           System.FilePath.Posix
 import           System.Process
@@ -38,14 +40,14 @@ main = do cfg  <- cmdArgs config
           run (verifier cfg) cfg
 
 -------------------------------------------------------------------------------
-verifier           :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult Error)
+verifier :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult Error)
 -------------------------------------------------------------------------------
 verifier cfg f
   = json cfg f >>= \case
       Left  e     -> return (NoAnn, e)
       Right jsons -> case cfg of
                        TC     {} -> TC.verifyFile cfg   jsons
-                       Liquid {} -> LQ.verifyFile cfg f jsons
+                       Liquid {} -> undefined -- LQ.verifyFile cfg f jsons
 
 -------------------------------------------------------------------------------
 json :: Config -> FilePath -> IO (Either (F.FixResult Error) [FilePath])

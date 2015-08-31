@@ -2,6 +2,7 @@
 
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -45,8 +46,8 @@ import           Text.PrettyPrint.HughesPJ (nest, punctuate, render, text, vcat,
 -- | Type Definitions For Annotations ----------------------------------------
 ------------------------------------------------------------------------------
 
-data AnnBind t        = AnnBind { ann_bind :: F.Symbol,
-                                ann_type   :: t }
+data AnnBind t      = AnnBind { ann_bind :: F.Symbol,
+                                ann_type :: t }
 
 {-@ type NonNull a = {v: [a] | 0 < (len v)} @-}
 type    NonEmpty a  = [a]

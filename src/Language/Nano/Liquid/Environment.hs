@@ -70,8 +70,10 @@ envFindTyWithAsgn x (envNames -> γ) = fmap singleton (envFindTy x γ)
 
 ---------------------------------------------------------------------------------------
 cgEnvFindReturn :: CGEnv -> RefType
+cgEnvFindTy     :: F.Symbolic x => x -> CGEnvR r -> Maybe (RTypeQ AK r)
 ---------------------------------------------------------------------------------------
 cgEnvFindReturn = v_type . envFindReturn . cge_names
+cgEnvFindTy x   = fmap v_type . envFindTy x . cge_names
 
 
 ---------------------------------------------------------------------------------------

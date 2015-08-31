@@ -53,11 +53,13 @@ module Language.Nano.Liquid.Types (
   , mkQualSym
   , mkOffset
   -- , substOffsetThis
+  , mkCastFunTy
 
   ) where
 
 import           Control.Applicative
 import           Control.Monad                 (liftM, zipWithM)
+import           Data.Default
 import qualified Data.HashMap.Strict           as HM
 import qualified Data.List                     as L
 import qualified Data.Map.Strict               as M
@@ -744,21 +746,6 @@ substThis x t         = F.subst (F.mkSubst [(thisSym,F.expr x)]) t
 --     subPair f     = (qFld this f, F.expr $ qFld x f)
 --
 --
---
--- -- | Substitute occurences of 'this.f' in type @t'@, with 'f'
--- -------------------------------------------------------------------------------
--- unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
--- -------------------------------------------------------------------------------
--- unqualifyThis g t = F.subst $ F.mkSubst fieldSu
---   where
---     fieldSu       | Just (TCons _ fs _) <- expandType Coercive g t
---                   = [ subPair f | ((f,InstanceMember), FieldSig _ _ m _) <- M.toList fs
---                                 , isImmutable m ]
---                   | otherwise
---                   = []
---     this          = F.symbol $ builtinOpId BIThis
---     qFld x f      = F.qualifySymbol (F.symbol x) f
---     subPair f     = (qFld this f, F.expr f)
 
 
 -------------------------------------------------------------------------------
@@ -770,4 +757,18 @@ mkQualSym    x f = F.qualifySymbol (F.symbol x) (F.symbol f)
 mkOffset :: (F.Symbolic f, F.Expression x) => x -> f -> F.Expr
 -------------------------------------------------------------------------------
 mkOffset x f = F.EApp offsetLocSym [F.expr x, F.expr $ F.symbolText $ F.symbol f]
+
+
+-- | Cast function
+--
+---------------------------------------------------------------------------------
+mkCastFunTy :: RefType -> RefType
+---------------------------------------------------------------------------------
+mkCastFunTy t
+  = TAll (BTV a def (Just t))
+  $ TFun [B x α] (α `strengthen` (F.uexprReft x))  fTop
+  where
+    a = F.symbol "A"
+    α = TVar (TV a def) fTop
+    x = F.symbol "x"
 

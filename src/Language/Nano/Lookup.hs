@@ -215,10 +215,14 @@ getPropUnion γ b f ts =
     ([],[]) -> Nothing
     (t1s,t2s) -> Just (mkUnion t1s, mkUnion t2s)
 
+-------------------------------------------------------------------------------
+getFieldMutability ::
+  (ExprReftable Int r, F.Reftable r) =>
+  ClassHierarchy r -> RType r -> F.Symbol -> Maybe (RType r)
+-------------------------------------------------------------------------------
 getFieldMutability cha t f | Just (TObj ms _) <- expandType Coercive cha t
                            , Just (FI _ m _)  <- F.lookupSEnv f $ tm_prop ms
                            = Just m
                            | otherwise
                            = Nothing
-
 

@@ -2,10 +2,10 @@
 
 module Language.Rsc.Liquid.Qualifiers (qualifiers) where
 
-import           Data.List                  (delete, nub)
-import           Data.Maybe                 (fromMaybe)
+import           Data.List                 (delete, nub)
+import           Data.Maybe                (fromMaybe)
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Types    hiding (quals)
+import           Language.Fixpoint.Types   hiding (quals)
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors

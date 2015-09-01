@@ -719,7 +719,7 @@ tcCall γ (InfixExpr l o@OpInstanceof e1 e2)
             do  opTy <- safeTcEnvFindTy l γ (infixOpId o)
                 ([e1',_], t) <- let args = [e1, StringLit l2 (F.symbolString x)] `zip` nths in
                                 tcNormalCall γ l o args opTy
-                      -- FIXME: add qualified name
+                      -- TODO: add qualified name
                 return (InfixExpr l o e1' e2', t)
          _  -> tcError $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
   where
@@ -812,7 +812,7 @@ tcCall _ (CallExpr _ (SuperRef _)  _)
 
 -- | `e.m(es)`
 --
---  FIXME: cast @e@ to the subtype for which @f@ is an existing field.
+--  TODO: cast @e@ to the subtype for which @f@ is an existing field.
 --
 tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
   = runFailM (tcExpr γ e Nothing) >>= go

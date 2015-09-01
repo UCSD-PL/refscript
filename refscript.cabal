@@ -20,11 +20,11 @@ data-files:          README.md,
 Source-Repository this
   Tag:         0.1
   Type:        git
-  Location:    https://github.com/UCSD-PL/RefScript
+  Location:    https://github.com/UCSD-PL/refscript
 
 Source-Repository head
   Type:        git
-  Location:    https://github.com/UCSD-PL/RefScript
+  Location:    https://github.com/UCSD-PL/refscript
 
 Executable rsc 
   Default-language:

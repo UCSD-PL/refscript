@@ -13,16 +13,16 @@
 {-# LANGUAGE TypeSynonymInstances      #-}
 
 
-module Language.Rsc.Typecheck.Sub (convert, isSubtype) where
+module Language.Rsc.Typecheck.Sub (convert, isSubtype, isConvertible) where
 
-import           Control.Applicative           ((<$>))
+import           Control.Applicative          ((<$>))
 import           Data.Default
-import           Data.Maybe                    (fromMaybe)
+import           Data.Maybe                   (fromMaybe)
 import           Data.Monoid
-import           Data.Tuple                    (swap)
+import           Data.Tuple                   (swap)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Types       (differenceSEnv, intersectWithSEnv, toListSEnv)
+import           Language.Fixpoint.Types      (differenceSEnv, intersectWithSEnv, toListSEnv)
 import           Language.Rsc.Annots
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment

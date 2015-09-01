@@ -1,6 +1,4 @@
 {-# LANGUAGE ConstraintKinds      #-}
-{-# LANGUAGE DeriveDataTypeable   #-}
-{-# LANGUAGE DeriveFunctor        #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE RankNTypes           #-}
 {-# LANGUAGE TupleSections        #-}
@@ -14,15 +12,14 @@ module Language.Rsc.Traversals (
   , accumVars
   ) where
 
-import           Control.Applicative             hiding (empty)
+import           Control.Applicative            hiding (empty)
 import           Data.Default
 import           Data.Generics
-import qualified Data.HashSet                    as H
-import           Data.Maybe                      (fromMaybe, listToMaybe, maybeToList)
+import qualified Data.HashSet                   as H
+import           Data.Maybe                     (fromMaybe, listToMaybe, maybeToList)
 import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types         as F
+import qualified Language.Fixpoint.Types        as F
 import           Language.Rsc.Annots            hiding (err)
-import           Language.Rsc.AST
 import           Language.Rsc.AST
 import           Language.Rsc.Liquid.Qualifiers
 import           Language.Rsc.Locations
@@ -119,7 +116,7 @@ accumVars s = [ (fSrc <$> n, k, VI a i t)  | (n,l,k,a,i) <- hoistBindings s
   where
     annToType Ambient (VarAnn _ t)  = maybeToList t -- Hoist ReadOnly & ImportDecls
     annToType Ambient (AmbVarAnn t) = [t]           -- Hoist ReadOnly vars (i.e. function defs)
-    annToType Ambient (AmbVarAnn t) = [t]           -- Hoist ImportDecl (i.e. function decls)
+                                                    -- Hoist ImportDecl (i.e. function decls)
     annToType _       _             = [ ]
 
 type BindInfo a = (Id a, a, SyntaxKind, Assignability, Initialization)

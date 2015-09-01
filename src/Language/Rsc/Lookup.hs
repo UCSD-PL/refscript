@@ -63,7 +63,7 @@ getProp γ b f t@(TObj es _)
   --   emptyObjectInterface = undefined
 
 -- | Enumeration
--- FIXME: Instead of the actual integer value, assign unique symbolic values:
+-- TODO: Instead of the actual integer value, assign unique symbolic values:
 --        E.g. A_B_C_1 ...
 getProp γ _ f t@(TRef (Gen n []) _)
   | Just e  <- resolveEnumInEnv γ n

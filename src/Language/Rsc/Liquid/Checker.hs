@@ -652,7 +652,7 @@ consExpr g c@(CallExpr l em@(DotRef _ e f) es) _
 
              -- Accessing and calling a function field
              --
-             -- FIXME: 'this' should not appear in ft
+             -- TODO: 'this' should not appear in ft
              --        Add check for this.
              --
              | Just (_,ft) <- getProp g FieldAccess f t, isTFun ft
@@ -1060,7 +1060,7 @@ envJoin' l g g1 g2
         -- pass TC (we don't need to pad / fix them before joining).
         -- So we can use the raw type from one of the two branches and freshen
         -- up that one.
-        -- FIXME: Add a raw type check on t1 and t2
+        -- TODO: Add a raw type check on t1 and t2
         --
         (g',ls)   <- freshTyPhis' l g xls $ (\(VI a i t) -> VI a i $ toType t) <$> l1s
         l1s'      <- mapM (`cgSafeEnvFindTyM` g1') xls

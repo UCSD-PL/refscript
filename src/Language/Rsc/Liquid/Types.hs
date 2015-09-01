@@ -32,20 +32,16 @@ module Language.Rsc.Liquid.Types (
   , isTrivialRefType
 
   -- * Useful Operations
-  , foldReft, efoldRType -- , emapReft,
+  , foldReft, efoldReft
   , mapReftM, mapReftTM
   , mapTypeMembersM
 
   -- * Accessing Spec Annotations
   , getSpec, getRequires, getEnsures, getAssume, getAssert
   , getInvariant, getFunctionIds
-    -- ,  returnSymbol, returnId, symbolId, mkId
 
   -- * Raw low-level Location-less constructors
   , rawStringSymbol
-
-  -- * Zip types
-  -- , zipType
 
   -- * 'this' related substitutions
   , substThis
@@ -58,38 +54,20 @@ module Language.Rsc.Liquid.Types (
   ) where
 
 import           Control.Applicative
-import           Control.Monad                 (liftM, zipWithM)
 import           Data.Default
-import qualified Data.HashMap.Strict           as HM
-import qualified Data.List                     as L
-import qualified Data.Map.Strict               as M
-import           Data.Maybe                    (catMaybes, fromMaybe, maybeToList)
-import           Data.Monoid                   (mconcat)
-import qualified Data.Traversable              as T
-import qualified Language.Fixpoint.Bitvector   as BV
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc
-import           Language.Fixpoint.PrettyPrint
-import qualified Language.Fixpoint.Types       as F
-import qualified Language.Fixpoint.Visitor     as V
-import           Language.Rsc.Annots
+import qualified Data.HashMap.Strict          as HM
+import qualified Data.List                    as L
+import           Data.Maybe                   (catMaybes, fromMaybe, maybeToList)
+import           Data.Monoid                  (mconcat)
+import qualified Data.Traversable             as T
+import qualified Language.Fixpoint.Bitvector  as BV
+import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.AST
--- import           Language.Rsc.ClassHierarchy
-import           Language.Rsc.Errors
--- import           Language.Rsc.Liquid.Environment
-import           Language.Rsc.Locations
-import           Language.Rsc.Misc
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
-import           Language.Rsc.Program
--- import           Language.Rsc.Typecheck.Sub
-import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
-import           Text.Printf
-
--- import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------------
 -- | Refinement Types and Annotations
@@ -132,7 +110,7 @@ eProp (InfixExpr _ OpLT   e1 e2)       = F.PAtom F.Lt (F.expr e1) (F.expr e2)
 eProp (InfixExpr _ OpLEq  e1 e2)       = F.PAtom F.Le (F.expr e1) (F.expr e2)
 eProp (InfixExpr _ OpGT   e1 e2)       = F.PAtom F.Gt (F.expr e1) (F.expr e2)
 eProp (InfixExpr _ OpGEq  e1 e2)       = F.PAtom F.Ge (F.expr e1) (F.expr e2)
--- FIXME:
+-- TODO:
 -- eProp (InfixExpr _ OpEq   e1 e2)       = F.PAtom F.Eq (F.expr e1) (F.expr e2)
 eProp (InfixExpr _ OpStrictEq   e1 e2) = F.PAtom F.Eq (F.expr e1) (F.expr e2)
 eProp (InfixExpr _ OpNEq  e1 e2)       = F.PAtom F.Ne (F.expr e1) (F.expr e2)
@@ -198,7 +176,7 @@ rTypeSort (TRef (Gen n ts) _) = F.FApp (rawStringFTycon $ F.symbol n) (rTypeSort
 rTypeSort (TObj _ _ )         = F.FApp (rawStringFTycon $ F.symbol "Object") []
 rTypeSort (TClass _)          = F.FApp (rawStringFTycon $ F.symbol "class" ) []
 rTypeSort (TMod _)            = F.FApp (rawStringFTycon $ F.symbol "module") []
-rTypeSort t                   = error $ render $ text "BUG: Unsupported in rTypeSort"
+rTypeSort _                   = error $ render $ text "BUG: Unsupported in rTypeSort"
 
 rTypeSortPrim TBV32      = BV.mkSort BV.S32
 rTypeSortPrim TNumber    = F.intSort
@@ -339,13 +317,13 @@ efoldReft :: PPR r => (RTypeQ q r -> b) -> (F.SEnv b -> r -> a -> a)
 efoldReft g f = go
   where
     go γ z (TVar _ r)     = f γ r z
-    go γ z (TPrim p r)    = f γ r z
+    go γ z (TPrim _ r)    = f γ r z
     go γ z (TRef n r)     = f γ r $ gos γ z $ g_args n
     go γ z (TAll _ t)     = go γ z t
     go γ z (TFun xts t r) = f γ r $ go γ' (gos γ' z $ map b_type xts) t
                             where γ' = foldr (efoldExt g) γ xts
     go γ z (TAnd ts)      = gos γ z ts
-    go γ z (TObj xts r)   = f γ r $ efoldTypeMembers g f xts γ z
+    go γ z (TObj xts r)   = f γ r $ efoldReftTM g f xts γ z
     go γ z (TClass n)     = gos γ z $ catMaybes $ btv_constr <$> b_args n
     go _ z (TMod _)       = z
     go _ _ t              = error $ "UNIMPLEMENTED[efoldReft]: " ++ ppshow t
@@ -355,10 +333,10 @@ efoldReft g f = go
 efoldExt g xt γ           = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
 
 ------------------------------------------------------------------------------------------
-efoldTypeMembers :: PPR r => (RTypeQ q r -> b) -> (F.SEnv b -> r -> a -> a)
-                          -> TypeMembersQ q r -> F.SEnv b -> a -> a
+efoldReftTM :: PPR r => (RTypeQ q r -> b) -> (F.SEnv b -> r -> a -> a)
+                     -> TypeMembersQ q r -> F.SEnv b -> a -> a
 ------------------------------------------------------------------------------------------
-efoldTypeMembers g f (TM p m sp sm c k s n) γ z =
+efoldReftTM g f (TM p m sp sm c k s n) γ z =
     L.foldl' (efoldReft g f γ) z $ pl ++ ml ++ spl ++ sml ++ cl ++ kl ++ sl ++ nl
   where
     pl  = L.foldr (\(_, FI _ t t') -> ([t,t'] ++) ) [] $ F.toListSEnv p
@@ -387,37 +365,42 @@ mapTypeMembersM f (TM p m sp sm c k s n)
 mapFieldInfoM f (FI o m t) = FI o <$> f m <*> f t
 mapMethInfoM  f (MI o m t) = MI o       m <$> f t
 
+------------------------------------------------------------------------------------------
+efoldRType :: PPR r => (RTypeQ q r -> b) -> (F.SEnv b -> RTypeQ q r -> a -> a)
+                    -> F.SEnv b -> a -> RTypeQ q r -> a
+------------------------------------------------------------------------------------------
+efoldRType g f              = go
+  where
+    go γ z t@(TVar _ _)     = f γ t z
+    go γ z t@(TPrim _ _)    = f γ t z
+    go γ z t@(TRef n _)     = f γ t $ gos γ z $ g_args n
+    go γ z t@(TAll _ t')    = f γ t $ go γ z t'
+    go γ z t@(TFun xts τ _) = f γ t $ go γ' (gos γ' z $ map b_type xts) τ
+                              where γ' = foldr (efoldExt g) γ xts
+    go γ z t@(TAnd ts)      = f γ t $ gos γ z ts
+    go γ z t@(TOr ts)       = f γ t $ gos γ z ts
+    go γ z t@(TObj xts _)   = f γ t $ efoldRTypeTM g f xts γ z
+    go γ z t@(TClass n)     = f γ t $ gos γ z $ catMaybes $ btv_constr <$> b_args n
+    go γ z t@(TMod _)       = f γ t z
+    go _ _ t              = error $ "UNIMPLEMENTED[efoldRType]: " ++ ppshow t
+    gos γ z ts            = L.foldl' (go γ) z ts
 
--- XXX: TODO Restore
 ------------------------------------------------------------------------------------------
-efoldRType :: PPR r
-           => (RTypeQ q r -> b) -> (F.SEnv b -> RTypeQ q r -> a -> a)
-           -> F.SEnv b -> a -> RTypeQ q r -> a
+efoldRTypeTM :: PPR r => (RTypeQ q r -> b) -> (F.SEnv b -> RTypeQ q r -> a -> a)
+                      -> TypeMembersQ q r -> F.SEnv b -> a -> a
 ------------------------------------------------------------------------------------------
-efoldRType = undefined
--- efoldRType g f                 = go
---   where
---     go γ z t@(TVar _ _ )       = f γ t z
---     go γ z t@(TApp _ ts _)     = f γ t $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
---     go γ z t@(TRef _ ts _)     = f γ t $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
---     go γ z t@(TSelf m)         = f γ t $ go γ z m
---     go γ z t@(TAll _ t1)       = f γ t $ go γ z t1
---     go γ z t@(TFun s xts t1 _) = f γ t $ go γ' (gos γ' z (maybeToList s ++ map b_type xts)) t1
---                                    where γ' = foldr (efoldExt g) γ $ maybeToList thisBOpt ++ xts
---                                          thisBOpt = (B $ F.symbol $ builtinOpId BIThis) <$> s
---
---     go γ z   (TAnd ts)         = gos γ z ts
---
---     go γ z t@(TCons _ bs _ )   = f γ' t $ gos γ' z (f_type <$> M.elems bs)
---                                    where γ' = M.foldr (efoldExt' g) γ bs
---
---     go γ z t@(TClass _)        = f γ t z
---     go γ z t@(TModule _)       = f γ t z
---     go γ z t@(TEnum _)         = f γ t z
---     go _ _ t                   = error $ "Not supported in efoldRType: " ++ ppshow t
---
---     gos γ z ts                 = L.foldl' (go γ) z ts
---
+efoldRTypeTM g f (TM p m sp sm c k s n) γ z =
+    L.foldl' (efoldRType g f γ) z $ pl ++ ml ++ spl ++ sml ++ cl ++ kl ++ sl ++ nl
+  where
+    pl  = L.foldr (\(_, FI _ t t') -> ([t,t'] ++) ) [] $ F.toListSEnv p
+    ml  = L.foldr (\(_, MI _ _ t ) -> ([t]    ++) ) [] $ F.toListSEnv m
+    spl = L.foldr (\(_, FI _ t t') -> ([t,t'] ++) ) [] $ F.toListSEnv sp
+    sml = L.foldr (\(_, MI _ _ t ) -> ([t]    ++) ) [] $ F.toListSEnv sm
+    cl  = maybeToList c
+    kl  = maybeToList k
+    sl  = maybeToList s
+    nl  = maybeToList n
+
 
 ------------------------------------------------------------------------------------------
 isTrivialRefType :: RefType -> Bool
@@ -475,11 +458,6 @@ getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
 
 
 
-normalize t
-  | TPrim _ _ <- t = t
-  | TVar _ _  <- t = t
---  | TOr ts    <- t = TOr $ unionCheck $ normalize <$> ts
-
 -- NEW -- --------------------------------------------------------------------------------
 -- NEW -- unionCheck :: IsLocated l => l -> CGEnv -> RefType -> [RefType] -> Either [Error] [RefType]
 -- NEW -- --------------------------------------------------------------------------------
@@ -530,192 +508,10 @@ normalize t
 
 
 
---
--- -- | @zipType@ returns a type that is:
--- --
--- --  * semantically equivalent to @t1@
--- --
--- --  * structurally equivalent to @t2@
--- --
--- --------------------------------------------------------------------------------
--- zipType :: (F.Symbolic x, IsLocated x) => CGEnv -> x -> RefType -> RefType -> Maybe RefType
--- --------------------------------------------------------------------------------
--- --
--- -- Top type in LHS
--- --
--- zipType _ _ _ t2 | isTTop t2 = return t2
--- --
--- -- Unions
--- --
--- zipType γ _ (TOr t1s) (TOr t2s)  = mkUnionR <$> mapM rr t2s
---   where
---     rr               t2 = L.find (related γ t2) t1s `relate` t2
---     relate (Just t1) _  = return $ t1 `strengthen` noKVars r1
---     relate Nothing   t2 = return $ fmap F.bot t2
---
--- zipType γ x t1 t2@(TOr _) = zipType γ x (TOr [t1]) t2
---
--- zipType γ x (TOr t1s) t2 = L.find (related γ t2) t1s `relate` t2
---   where
---     relate (Just t1) t2 = zipType γ x (t1 `strengthen` noKVars r1) t2
---     relate Nothing   t2 = return (setRTypeR t, fromMaybe fTop $ rTypeROpt t) where t = fmap F.bot t2
---
--- --
--- -- No unions below this point
--- --
--- -- Class/interface types
--- --
--- --   C<Vi> extends C'<Wi>
--- --   --------------------------------
--- --   C<Si> || C'<Ti> = C'<Wi[Vi/Si]>
--- --
--- --   C </: C'
--- --   ------------------------------------------------------
--- --   C<Si> || C'<Ti> = toStruct(C<Si>) || toStruct(C<Ti>)
--- --
--- --
--- --   C<Si> || {F;M} = toStruct(C<Si>) || {F;M}
--- --
--- zipType γ x t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _)
---   | x1 == x2
---   = do  ts    <- zipWithM (\t t' -> appZ <$> zipType γ x t t') t1s t2s
---         return $ (TRef x2 (m2:ts), r1)
---   --
---   --    t1 <: t2
---   --
---   | Just (_, m1':t1s') <- weaken γ (x1,m1:t1s) x2
---   = zipType γ x (TRef x2 (m1':t1s') r1 `strengthen` rtExt t1 (F.symbol x1)) t2
---   --
---   --    t2 <: t1
---   --
---   --    Only support this limited case with NO type arguments
---   --
---   | Just (_, [m2']) <- weaken γ (x2,m2:t2s) x1
---   = return (TRef x2 [m2'], r1)
---
---   -- DO NOT UNFOLD TO STRUCTURES
---   --
---   -- DANGER OF INFINITE LOOPS BECAUSE OF RECURSIVE TYPES
---   --
---   where
---     rtExt t c           = F.reft (vv t) (raExt t c)
---     raExt t c           = F.PBexp $ F.EApp (sym t) [F.expr $ vv t, F.expr $ F.symbolText c]
---     vv                  = rTypeValueVar
---     sym t
---       | isClassType γ t = F.dummyLoc $ F.symbol "extends_class"
---       | otherwise       = F.dummyLoc $ F.symbol "extends_interface"
---
--- zipType _ _ t1@(TRef _ [] _) _ = error $ "zipType on " ++ ppshow t1  -- Invalid type
--- zipType _ _ _ t2@(TRef _ [] _) = error $ "zipType on " ++ ppshow t2  -- Invalid type
---
--- zipType γ x t1@(TRef _ _ _) t2 = do t1' <- expandTypeWithSub γ x t1
---                                     t2' <- expandTypeWithSub γ x t2
---                                     zipType γ x t1' t2'
---
--- zipType γ x t1 t2@(TRef _ _ _) = do t1' <- expandTypeWithSub γ x t1
---                                     t2' <- expandTypeWithSub γ x t2
---                                     zipType γ x t1' t2'
---
--- zipType γ x t1@(TClass x1) t2@(TClass x2)
---   | x2 `elem` allAncestors γ x1
---   = return $ (setRTypeR (TClass x2), fTop)
---   | otherwise
---   = do  t1' <- expandTypeWithSub γ x t1
---         t2' <- expandTypeWithSub γ x t2
---         zipType γ x t1' t2'
---
--- zipType γ x t1@(TClass _) t2 = do t1' <- expandTypeWithSub γ x t1
---                                   zipType γ x t1' t2
---
--- zipType γ x t1 t2@(TClass _) = do t2' <- expandTypeWithSub γ x t2
---                                   zipType γ x t1 t2'
---
--- zipType _ _ (TApp c [] r) (TApp c' [] _) | c == c'  = return (TApp c [], r)
---
--- zipType _ _ (TVar v r) (TVar v' _)       | v == v'  = return (TVar v, r)
--- --
--- -- Function types
--- --
--- -- (Si) => S # (Ti) => T  =  (Si#Ti) => S#T
--- --
--- -- * Keep the LHS binders as they might appear in the
--- --   refinements which will belong to the LHS
--- --
--- zipType γ x (TFun (Just s1) x1s t1 r1) (TFun (Just s2) x2s t2 _) = do
---   s   <- appZ <$> zipType γ x s1 s2
---   xs  <- zipWithM (zipBind γ x) x1s x2s
---   t   <- appZ <$> zipType γ x t1 t2
---   return (TFun (Just s) xs t, r1)
---
--- zipType γ x (TFun Nothing x1s t1 r1) (TFun Nothing x2s t2 _) = do
---   xs  <- zipWithM (zipBind γ x) x1s x2s
---   t   <- appZ <$> zipType γ x t1 t2
---   return (TFun Nothing xs t, r1)
---
--- zipType _ _ (TFun _ _ _ _ ) (TFun _ _ _ _) = Nothing
---
--- -- Object types
--- --
--- -- { F1,F2 } | { F1',F3' } = { F1|F1',top(F3) }, where disjoint F2 F3'
--- --
--- zipType γ x (TCons _ e1s r1) (TCons m2 e2s _) = do
---     common'            <- T.mapM (uncurry $ zipElts γ x) common
---     return              $ (TCons m2 (common' `M.union` disjoint'), r1)
---   where
---     common              = M.intersectionWith (,) e1s e2s
---     disjoint'           = M.map (fmap $ const fTop) $ e2s `M.difference` e1s
--- --
--- -- Intersection types
--- --
--- -- s1 /\ s2 .. /\ sn | t1 /\ t2 .. tm = s1'|t1' /\ .. sk'|tk' /\ .. top(tm')
--- --
--- zipType γ x (TAnd t1s) (TAnd t2s) =
---     case [ (pick t2, t2) | t2 <- t2s ] of
---       []              -> error $ "zipType: impossible intersection types"
---       [(t1,t2)]       -> zipType γ x t1 t2
---       ts              -> do ts' <- mapM (\(t,t') -> appZ <$> zipType γ x t t') ts
---                             return (setRTypeR $ TAnd ts', fTop)
---   where
---     pick t2            = fromCandidates [ t1 | t1 <- t1s, t1 `matches` t2 ]
---     t `matches` t'     = isSubtype γ t t' || isSubtype γ t' t
---
---     fromCandidates [ ] = die $ bug (srcPos x)
---                        $ "zipType: cannot match " ++ ppshow t2s ++ " with any of " ++ ppshow t1s
---     fromCandidates [t] = t
---     fromCandidates  _  = die $ bug (srcPos x)
---                        $ "zipType: multiple matches of " ++ ppshow t2s ++ " with " ++ ppshow t1s
---
--- zipType γ x t1 (TAnd t2s) = zipType γ x (TAnd [t1]) (TAnd t2s)
--- zipType γ x (TAnd t1s) t2 = zipType γ x (TAnd t1s) (TAnd [t2])
---
--- -- FIXME: preserve t1's ref in all occurences of TVar v1 in the LHS
--- zipType γ x (TAll v1 t1) (TAll v2 t2) =
---     (,fTop) . setRTypeR . TAll v1 . appZ <$> zipType γ x t1 (apply θ t2)
---   where
---     θ = fromList [(v2, tVar v1 :: RefType)]
---
--- zipType _ x t1 t2 = errorstar $ printf "BUG[zipType] Unsupported:\n\t%s\n\t%s\nand\n\t%s"
---                         (ppshow $ srcPos x) (ppshow t1) (ppshow t2)
---
---
--- zipBind γ x (B s1 t1) (B _ t2) = B s1 <$> appZ <$> zipType γ x t1 t2
---
--- ------------------------------------------------------------------------------------------
--- zipElts :: (F.Symbolic x, IsLocated x)
---         => CGEnv -> x -> TypeMember F.Reft -> TypeMember F.Reft -> Maybe (TypeMember F.Reft)
--- ------------------------------------------------------------------------------------------
--- zipElts γ x (CallSig t1)        (CallSig t2)           = CallSig           <$> appZ <$> zipType γ x t1 t2
--- zipElts γ x (ConsSig t1)        (ConsSig t2)           = ConsSig           <$> appZ <$> zipType γ x t1 t2
--- zipElts γ x (IndexSig _ _ t1)   (IndexSig x2 b2 t2)    = IndexSig x2 b2    <$> appZ <$> zipType γ x t1 t2
--- zipElts γ x (FieldSig _ _ _ t1) (FieldSig x2 o2 m2 t2) = FieldSig x2 o2 m2 <$> appZ <$> zipType γ x t1 t2
--- zipElts γ x (MethSig _  t1)     (MethSig x2 t2)        = MethSig  x2       <$> appZ <$> zipType γ x t1 t2
--- zipElts _ _ _                   _                      = Nothing
---
--- appZ (f,r) = f r
---
--- expandTypeWithSub g x t = substThis' g (x,t) <$> expandType Coercive g t
-
-substThis x t         = F.subst (F.mkSubst [(thisSym,F.expr x)]) t
+-------------------------------------------------------------------------------
+substThis :: (F.Expression x, F.Subable t) => x -> t -> t
+-------------------------------------------------------------------------------
+substThis x = F.subst (F.mkSubst [(thisSym,F.expr x)])
 
 -- substOffsetThis = emapReft (\_ -> V.trans vs () ()) []
 --   where

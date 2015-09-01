@@ -64,17 +64,18 @@ module Language.Rsc.Liquid.CGMonad (
   ) where
 
 import           Control.Applicative
-import           Control.Exception                (throw)
+import           Control.Exception               (throw)
 import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
-import qualified Data.HashMap.Strict              as HM
-import qualified Data.List                        as L
-import           Data.Maybe                       (catMaybes)
-import           Data.Monoid                      (mappend, mempty)
+import           Data.Function                   (on)
+import qualified Data.HashMap.Strict             as HM
+import qualified Data.List                       as L
+import           Data.Maybe                      (catMaybes)
+import           Data.Monoid                     (mappend, mempty)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types          as F
+import qualified Language.Fixpoint.Types         as F
 import           Language.Rsc.Annots
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
@@ -567,7 +568,7 @@ subType l err g t1 t2 =
       modify $ \st -> st { cg_cs = Sub g (ci err l) t1 t2 : cg_cs st }
 
 
--- FIXME: Restore this check !!!
+-- TODO: Restore this check !!!
 -- ---------------------------------------------------------------------------------------
 -- safeExtends :: SrcSpan -> CGEnv -> IfaceDef F.Reft -> CGM ()
 -- ---------------------------------------------------------------------------------------
@@ -693,25 +694,21 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
 
 -- | Unions
 --
-splitC (Sub g i (TOr t1s) (TOr t2s))
-  = concatMapM splitC (safeZipWith "splitc-3" (Sub g i) s1s s2s)
+splitC (Sub g c t1 t2)
+  | any isTUnion [t1, t2]
+  = do  mCs     <- concatMapM (\(_,t,t') -> splitC (Sub g c t t')) mts
+        nCs     <- concatMapM (splitIncompatC g c) t1s'
+        return   $ mCs ++ nCs
     where
-    -- TODO
-    --
-      s1s = undefined -- L.sortBy (compare `on` toType) t1s
-      s2s = undefined -- L.sortBy (compare `on` toType) t2s
-
--- -- TODO: Do the matching right
--- splitC (Sub g i t1@(TOr t1s _) t2)
---   | [t1] <- L.filter (on (==) toType t2) t1s
---   , t1s' <- L.filter (on (/=) toType t2) t1s
---   = (++) <$> splitC (Sub g i t1 t2) <*> concatMapM (splitIncompatC g i) t1s'
---   | otherwise
---   = splitIncompatC g i t1
+      (t1s, t2s) = mapPair bkUnion (t1, t2)
+      it1s       = ([0..]::[Int]) `zip` t1s
+      mts        = [ (i, τ1, τ2) | (i, τ1) <- it1s, τ2 <- t2s, τ1 ~~ τ2 ]
+      t1s'       = [ τ1          | (i, τ1) <- it1s, i `notElem` map fst3 mts ]
+      (~~)       = on (isConvertible (void g)) toType
 
 -- | Type references
 --
---  FIXME: restore co/contra-variance
+--  TODO: restore co/contra-variance
 --
 splitC (Sub g i t1@(TRef (Gen x1 (m1:t1s)) r1) t2@(TRef (Gen x2 (m2:t2s)) r2))
   --
@@ -870,7 +867,7 @@ splitW (W g i (TAnd ts))
 
 splitW (W g i t@(TObj ms _))
   = do let bws = bsplitW g t i
-       -- FIXME: add field bindings in g?
+       -- TODO: add field bindings in g?
        ws     <- concatMapM splitW [ W g i t' | t' <- typesOfTM ms ]
        return  $ bws ++ ws
 
@@ -957,7 +954,7 @@ unqualifyThis g t = F.subst $ F.mkSubst fieldSu
 -- --------------------------------------------------------------------------------
 -- -- | zipType wrapper
 -- --
--- --   FIXME: What is the purpose of this substitution ???
+-- --   TODO: What is the purpose of this substitution ???
 -- --
 -- zipTypeUpM g x t1 t2
 --   | Just (f, (F.Reft (s,ras))) <- zipType g x t1 t2

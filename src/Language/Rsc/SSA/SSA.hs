@@ -41,7 +41,7 @@ import           Language.Rsc.Visitor
 
 type FError = F.FixResult E.Error
 
--- FIXME : SSA needs a proper environment like TC & Liquid
+-- TODO : SSA needs a proper environment like TC & Liquid
 
 ----------------------------------------------------------------------------------
 ssaTransform :: (PP r, F.Reftable r, Data r)
@@ -417,7 +417,7 @@ ssaStmt (SwitchStmt l e xs)
 
 -- class A extends B implements I,J,... { ... }
 --
---  FIXME: fix env here.
+--  TODO: fix env here.
 --
 ssaStmt (ClassStmt l n e is bd)
   = (True,) <$> (ClassStmt l n e is <$> withinClass n (mapM ssaClassElt bd))

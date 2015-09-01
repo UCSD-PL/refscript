@@ -62,16 +62,28 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp (TExp e)        = pprint e
 
 instance (F.Reftable r, PP r) => PP (TypeMembersQ q r) where
-  pp (TM fs ms sfs sms cs cts sidx nidx) = ppProp fs  <+> ppMeth ms  <+>
-                                           ppProp sfs <+> ppMeth sms <+>
-                                           ppCall cs  <+> ppCtor cts <+>
-                                           ppIdx sidx <+> ppIdx nidx
+  pp (TM fs ms sfs sms cs cts sidx nidx)
+    = ppProp fs  <+> ppMeth ms  <+> ppSProp sfs <+> ppSMeth sms <+>
+      ppCall cs  <+> ppCtor cts <+> ppSIdx sidx <+> ppNIdx nidx
 
-ppProp  = undefined
-ppMeth  = undefined
-ppCall  = undefined
-ppCtor  = undefined
-ppIdx   = undefined
+ppProp  = vcat . map (\(x, f) -> pp x <> pp f) . F.toListSEnv
+ppMeth  = vcat . map (\(x, m) -> pp x <> pp m) . F.toListSEnv
+ppSProp = vcat . map (\(x, f) -> pp "static" <+> pp x <> pp f) . F.toListSEnv
+ppSMeth = vcat . map (\(x, m) -> pp "static" <+> pp x <> pp m) . F.toListSEnv
+ppCall optT | Just t <- optT = pp t              | otherwise = pp ""
+ppCtor optT | Just t <- optT = pp "new" <+> pp t | otherwise = pp ""
+ppSIdx t = pp "[x: string]:" <+> pp t
+ppNIdx t = pp "[x: number]:" <+> pp t
+
+instance PPR r => PP (FieldInfoQ q r) where
+  pp (FI o m t) = brackets (pp m) <> pp o <> colon <+> pp t
+
+instance PPR r => PP (MethodInfoQ q r) where
+  pp (MI o m t) = pp o <> brackets (pp m) <> pp t
+
+instance PP Optionality where
+  pp Opt = text "?"
+  pp Req = text ""
 
 instance (F.Reftable r, PP r) => PP (TGenQ q r) where
   pp (Gen x ts) = pp x <> ppArgs angles comma ts
@@ -110,14 +122,17 @@ instance PP Assignability where
   pp WriteGlobal  = text "WriteGlobal"
   pp ReturnVar    = text "ReturnVar"
 
+instance PP MutabilityMod where
+  pp Mutable       = text "MU"
+  pp Immutable     = text "IM"
+  pp AssignsFields = text "AF"
+  pp ReadOnly      = text "RO"
+
 instance (PP r, F.Reftable r) => PP (TypeDeclQ q r) where
   pp (TD s m) = pp s <+> lbrace $+$ nest 2 (pp m) $+$ rbrace
 
 instance (PP r, F.Reftable r) => PP (TypeSigQ q r) where
   pp (TS k n h) = pp k <+> pp n <+> ppHeritage h
-
-instance (PP r, F.Reftable r) => PP (MethodInfoQ q r) where
-  pp (MI _ _ t) = pp t
 
 instance PP TypeDeclKind where
   pp InterfaceTDK = text "interface"

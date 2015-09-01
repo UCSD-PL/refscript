@@ -23,8 +23,6 @@ import time, subprocess, optparse, sys, socket, os
 sys.path.append("../")
 import rtest as rtest
 
-# solve      = "nanojs".split()
-
 inputFileExt = "ts"
 
 null       = open("/dev/null", "w")

@@ -9,9 +9,9 @@
 
 module Language.Rsc.Liquid.Environment where
 
-import           Data.Maybe                    (catMaybes)
+import           Data.Maybe                   (catMaybes)
 import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types       as F
+import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annots          ()
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Core.Env
@@ -120,7 +120,7 @@ checkSyms m g ok x t = efoldRType h f F.emptySEnv [] t
 
     l          = srcPos x
     biReserved = map F.symbol ["func", "obj"]
-    -- FIXME: Check for this
+    -- TODO: Check for this
     biExtra    = map F.symbol ["bvor", "bvand", "builtin_BINumArgs", "offset", "this"]
     x_sym      = F.symbol x
     ok_syms    = map F.symbol ok

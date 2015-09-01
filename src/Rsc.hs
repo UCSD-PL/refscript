@@ -4,32 +4,31 @@
 {-# LANGUAGE OverlappingInstances      #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 
-import qualified Language.Rsc.Liquid.Checker    as LQ
-import qualified Language.Rsc.Liquid.Types      as L
-import qualified Language.Rsc.Typecheck.Checker as TC
-
-import           Control.Applicative             ((<$>), (<*>))
-import           Control.Exception               (catch)
+import           Control.Applicative            ((<$>), (<*>))
+import           Control.Exception              (catch)
 import           Control.Monad
-import           Data.Aeson                      (eitherDecode)
-import           Data.Aeson.Types                hiding (Error, Parser, parse)
-import qualified Data.ByteString.Lazy.Char8      as B
-import           Data.List                       (nub, sort)
+import           Data.Aeson                     (eitherDecode)
+import           Data.Aeson.Types               hiding (Error, Parser, parse)
+import qualified Data.ByteString.Lazy.Char8     as B
+import           Data.List                      (nub, sort)
 import           Data.Monoid
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Files
-import           Language.Fixpoint.Interface     (resultExit)
+import           Language.Fixpoint.Interface    (resultExit)
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types         as F
+import qualified Language.Fixpoint.Types        as F
 import           Language.Rsc.CmdLine
 import           Language.Rsc.Core.EitherIO
 import           Language.Rsc.Core.Files
 import           Language.Rsc.Errors
+import qualified Language.Rsc.Liquid.Checker    as LQ
+import qualified Language.Rsc.Liquid.Types      as L
 import           Language.Rsc.Misc              (mapi)
 import           Language.Rsc.Pretty
 import           Language.Rsc.SystemUtils
-import           System.Console.CmdArgs          hiding (Loud)
-import           System.Directory                (createDirectoryIfMissing, doesFileExist)
+import qualified Language.Rsc.Typecheck.Checker as TC
+import           System.Console.CmdArgs         hiding (Loud)
+import           System.Directory               (createDirectoryIfMissing, doesFileExist)
 import           System.Exit
 import           System.FilePath.Posix
 import           System.Process
@@ -47,7 +46,7 @@ verifier cfg f
       Left  e     -> return (NoAnn, e)
       Right jsons -> case cfg of
                        TC     {} -> TC.verifyFile cfg   jsons
-                       Liquid {} -> undefined -- LQ.verifyFile cfg f jsons
+                       Liquid {} -> LQ.verifyFile cfg f jsons
 
 -------------------------------------------------------------------------------
 json :: Config -> FilePath -> IO (Either (F.FixResult Error) [FilePath])

@@ -365,7 +365,7 @@ arrayLitTy _ _ = error "Bad Type for ArrayLit Constructor"
 -- | Object literal types
 ---------------------------------------------------------------------------------
 
--- FIXME: Avoid capture
+-- TODO: Avoid capture
 freshBTV l s b n  = (bv,t)
   where
     i             = F.intSymbol s n

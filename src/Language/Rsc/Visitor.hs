@@ -28,14 +28,14 @@ module Language.Rsc.Visitor
     , foldStmts
     ) where
 
-import           Control.Applicative           ((<$>), (<*>))
-import           Control.Exception             (throw)
-import           Control.Monad.Trans.Class     (lift)
-import           Control.Monad.Trans.State     (StateT, modify, runState, runStateT)
-import           Data.Functor.Identity         (Identity)
+import           Control.Applicative          ((<$>), (<*>))
+import           Control.Exception            (throw)
+import           Control.Monad.Trans.Class    (lift)
+import           Control.Monad.Trans.State    (StateT, execState, modify, runState, runStateT)
+import           Data.Functor.Identity        (Identity)
 import           Data.Monoid
-import qualified Data.Traversable              as T
-import qualified Language.Fixpoint.Types       as F
+import qualified Data.Traversable             as T
+import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annots          hiding (Annot, err)
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
@@ -130,7 +130,7 @@ foldRsc :: (IsLocated b, Monoid a) => Visitor a ctx b -> ctx -> a -> Rsc b r -> 
 foldRsc v c a p = snd $ execVisitM v c a p
 
 foldStmts :: (IsLocated b, Monoid a) => Visitor a ctx b -> ctx -> [Statement b] -> a
-foldStmts v c p = snd $ runState (visitStmtsM v c p) mempty
+foldStmts v c p = execState (visitStmtsM v c p) mempty
 
 visitRsc :: (IsLocated b, Monoid a) =>   Visitor a ctx b -> ctx -> Rsc b r -> Rsc b r
 visitRsc v c p = fst $ execVisitM v c mempty p
@@ -532,4 +532,3 @@ ntransRType f g         = go
 
 instance NameTransformable FAnnQ where
   ntrans f g (FA i s ys) = FA i s $ ntrans f g <$> ys
-

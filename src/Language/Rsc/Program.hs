@@ -63,7 +63,7 @@ data Rsc a r = Rsc {
   --
   -- | Predicate aliases
   --
-  , pAlias   :: !(PAliasEnv)
+  , pAlias   :: !PAliasEnv
   --
   -- | Qualifiers
   --
@@ -142,4 +142,3 @@ ssaStr     = "_SSA_"
 keysIdxStr = "_KEYS_IDX_"
 keysStr    = "_KEYS_"
 ctorStr    = "_CTOR_"
-

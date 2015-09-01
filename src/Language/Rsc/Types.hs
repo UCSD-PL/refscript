@@ -9,13 +9,13 @@
 module Language.Rsc.Types where
 
 import           Data.Default
-import           Data.Foldable            (Foldable ())
-import           Data.Generics            (Data)
+import           Data.Foldable           (Foldable ())
+import           Data.Generics           (Data)
 import           Data.Hashable
 import           Data.Monoid
-import           Data.Traversable         hiding (mapM, sequence)
-import           Data.Typeable            (Typeable)
-import qualified Language.Fixpoint.Types  as F
+import           Data.Traversable        hiding (mapM, sequence)
+import           Data.Typeable           (Typeable)
+import qualified Language.Fixpoint.Types as F
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Locations
@@ -347,7 +347,7 @@ instance F.Symbolic (TypeSigQ q r) where
 
 -- | Monoid
 
-instance Monoid (TypeMembers r) where
+instance Monoid (TypeMembersQ q r) where
   mempty = TM mempty mempty mempty mempty Nothing Nothing Nothing Nothing
   TM f1 m1 sf1 sm1 c1 ct1 s1 n1 `mappend` TM f2 m2 sf2 sm2 c2 ct2 s2 n2
     = TM (f1  `mappend` f2)  (m1  `mappend` m2)

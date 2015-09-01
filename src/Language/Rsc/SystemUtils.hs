@@ -38,12 +38,12 @@ import qualified Language.Fixpoint.Types   as F
 import           Language.Rsc.Locations
 import           Language.Rsc.Parser
 import           Language.Rsc.Pretty
-import           Language.Rsc.Types       ()
+import           Language.Rsc.Types        ()
 import           Text.Parsec.Pos
 import           Text.PrettyPrint.HughesPJ (nest, punctuate, render, text, vcat, ($+$), (<+>))
 
 ------------------------------------------------------------------------------
--- | Type Definitions For Annotations ----------------------------------------
+-- | Type Definitions For Annotations
 ------------------------------------------------------------------------------
 
 data AnnBind t      = AnnBind { ann_bind :: F.Symbol,
@@ -66,9 +66,10 @@ instance Monoid (UAnnInfo a) where
   mempty                  = AI M.empty
   mappend (AI m1) (AI m2) = AI (M.unionWith mappend m1 m2)
 
-------------------------------------------------------------------------
--- | PP Instance -------------------------------------------------------
-------------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+-- | PP Instance
+------------------------------------------------------------------------------
 
 instance PP a => PP (UAnnInfo a) where
   pp (AI m)  = vcatLn [pp sp $+$ nest 4 (vcatLn $ map ppB bs) | (sp, bs) <- M.toList m]
@@ -78,14 +79,14 @@ instance PP a => PP (UAnnInfo a) where
       nl     = text "\n"
 
 ------------------------------------------------------------------------------
--- | Adding New Annotations --------------------------------------------------
+-- | Adding New Annotations
 ------------------------------------------------------------------------------
 
 addAnnot :: (F.Symbolic x) => SrcSpan -> x -> a -> UAnnInfo a -> UAnnInfo a
 addAnnot l x t (AI m) = AI (inserts l (AnnBind (F.symbol x) t) m)
 
 ------------------------------------------------------------------------------
--- | Dumping Annotations To Disk ---------------------------------------------
+-- | Dumping Annotations To Disk
 ------------------------------------------------------------------------------
 
 -- writeAnnotations :: (PP t) => FilePath -> F.FixResult SrcSpan -> UAnnInfo t -> IO ()
@@ -100,7 +101,7 @@ annotVimString        :: PP a => F.FixResult Error -> UAnnInfo a -> String
 annotVimString res a  = toVim $ mkAnnMap res a
 
 ------------------------------------------------------------------------------
--- | Type Representing Inferred Annotations ----------------------------------
+-- | Type Representing Inferred Annotations
 ------------------------------------------------------------------------------
 
 data AnnMap  = AnnMap {
@@ -131,8 +132,7 @@ mkAnnMapTyp (AI m)
   $ groupWith (lineCol . fst)
   $ M.toList
   $ M.map head
-  $ M.filterWithKey validAnnot
-  $ m
+  $ M.filterWithKey validAnnot m
 
 validAnnot sp _ = sourceSpanSrcSpan sp /= dummySpan && oneLine sp
 oneLine l       = srcSpanStartLine l == srcSpanEndLine l
@@ -212,11 +212,9 @@ ins r c x (Asc m)   = Asc (M.insert r (Asc (M.insert c x rm)) m)
     Asc rm          = M.lookupDefault (Asc M.empty) r m
 
 
-
 ------------------------------------------------------------------------
 -- | VIM interface
 ------------------------------------------------------------------------
-
 
 toVim :: AnnMap -> String
 toVim (AnnMap _ ty _) = mconcat $ L.intersperse "\n" $ ss <$> lines

@@ -32,7 +32,7 @@ module Language.Rsc.Liquid.Types (
   , isTrivialRefType
 
   -- * Useful Operations
-  , foldReft, efoldReft
+  , foldReft, efoldReft, efoldRType
   , mapReftM, mapReftTM
   , mapTypeMembersM
 

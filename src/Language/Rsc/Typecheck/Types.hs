@@ -76,7 +76,7 @@ import qualified Language.Fixpoint.Bitvector as BV
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types     as F
 import           Language.Rsc.AST.Syntax
-import qualified Language.Rsc.Core.Env      as E
+import qualified Language.Rsc.Core.Env       as E
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Types
@@ -366,18 +366,21 @@ arrayLitTy _ _ = error "Bad Type for ArrayLit Constructor"
 ---------------------------------------------------------------------------------
 
 -- TODO: Avoid capture
+---------------------------------------------------------------------------------
+freshBTV :: (F.Reftable r, IsLocated l, Show a)
+         => l -> F.Symbol -> Maybe (RTypeQ q r) -> a -> (BTVarQ q r, RTypeQ q r)
+---------------------------------------------------------------------------------
 freshBTV l s b n  = (bv,t)
   where
     i             = F.intSymbol s n
     bv            = BTV i (srcPos l) b
     v             = TV i (srcPos l)
-    t             = TVar v ()
+    t             = TVar v fTop
 
--- TODO
 --------------------------------------------------------------------------------------------
 objLitTy         :: (F.Reftable r, IsLocated a) => a -> [Prop a] -> RType r
 --------------------------------------------------------------------------------------------
-objLitTy l ps     = mkFun (vs, bs, undefined) -- rt)
+objLitTy l ps     = mkFun (vs, bs, rt)
   where
     vs            = mvs ++ avs
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
@@ -396,7 +399,6 @@ instance F.Symbolic (LValue a) where
   symbol (LVar _ x) = F.symbol x
   symbol lv         = F.symbol "DummyLValue"
 
-
 instance F.Symbolic (Prop a) where
   symbol (PropId _ (Id _ x)) = F.symbol x -- TODO $ "propId_"     ++ x
   symbol (PropString _ s)    = F.symbol $ "propString_" ++ s
@@ -405,7 +407,6 @@ instance F.Symbolic (Prop a) where
 
 -- | @argBind@ returns a dummy type binding `arguments :: T `
 --   where T is an object literal containing the non-undefined `ts`.
---
 --------------------------------------------------------------------------------------------
 mkArgTy :: (F.Reftable r, IsLocated l) => l -> [RType r] -> VarInfo r
 --------------------------------------------------------------------------------------------

@@ -123,7 +123,7 @@ expandRefType te = everywhere $ mkT tx
     tx t = t
 
 applyTAlias l t _ ts_ r a
-  | (nt, ne) == (nα, nx) = {- tracePP "applyTAlias" $ -} (F.subst su $ S.apply θ $ al_body a) `strengthen` r
+  | (nt, ne) == (nα, nx) = {- tracePP "applyTAlias" $ -} F.subst su (S.apply θ $ al_body a) `strengthen` r
   | otherwise            = die $ errorBadTAlias l t nt ne nα nx
   where
     xs                   = al_syvars a

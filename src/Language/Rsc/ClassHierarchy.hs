@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
 
+
 module Language.Rsc.ClassHierarchy
     ( ClassHierarchy (..)
     , CoercionKind (..)
@@ -32,8 +33,7 @@ module Language.Rsc.ClassHierarchy
 
 import           Control.Applicative               hiding (empty)
 import           Control.Exception                 (throw)
-import           Control.Monad                     (liftM)
-import           Control.Monad.Trans.Class         (lift)
+import           Control.Monad                     (liftM, void)
 import           Data.Foldable                     (foldlM)
 import           Data.Generics
 import           Data.Graph.Inductive.Graph
@@ -119,7 +119,7 @@ mkCHA rsc = accumModules rsc >>= pure . fromModuleDef
 accumModules :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (QEnv (ModuleDef r))
 ------------------------------------------------------------------------------------
 accumModules (Rsc { code = Src stmts }) =
-    mapM mkMod (accumModuleStmts stmts) >>= return . qenvFromList . map toQEnvList
+    (qenvFromList . map toQEnvList) `liftM` mapM mkMod (accumModuleStmts stmts)
   where
     toQEnvList p = (m_path p, p)
     mkMod (p,s) = ModuleDef <$> varEnv p s <*> typeEnv s <*> enumEnv s <*> return p
@@ -152,7 +152,7 @@ accumModules (Rsc { code = Src stmts }) =
 
     tStmt c@ClassStmt{} = single <$> declOfStmt c
     tStmt c@IfaceStmt{} = single <$> declOfStmt c
-    tStmt _             = return $ [ ]
+    tStmt _             = return [ ]
 
     -- | Enumerations
     enumEnv = return . envFromList . eStmts
@@ -160,7 +160,7 @@ accumModules (Rsc { code = Src stmts }) =
 
     eStmt (EnumStmt _ n es)  = [(fmap srcPos n, EnumDef (F.symbol n) (envFromList $ sEnumElt <$> es))]
     eStmt _                  = []
-    sEnumElt (EnumElt _ s e) = (F.symbol s, fmap (const ()) e)
+    sEnumElt (EnumElt _ s e) = (F.symbol s, void e)
 
     ss                       = fmap fSrc
 
@@ -197,7 +197,7 @@ declOfStmt :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl
 ---------------------------------------------------------------------------------------
 declOfStmt (ClassStmt l c _ _ cs)
   | [ts] <- cas
-  = typeMembers cs >>= return . (cc,) . TD ts
+  =  liftM ((cc,) . TD ts) (typeMembers cs)
   | otherwise
   = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where
@@ -228,9 +228,9 @@ typeMembers cs = TM <$> ps <*> ms <*> sps <*> sms <*> call <*> ctor <*> sidx <*>
     ms         = meths $ methDefs ++ methDecls
     sps        = pure  $ F.fromListSEnv sprops
     sms        = meths $ smethDefs ++ smethDecls
-    call       = pure  $ Nothing
-    sidx       = pure  $ Nothing    -- XXX: This could be added
-    nidx       = pure  $ Nothing
+    call       = pure    Nothing
+    sidx       = pure    Nothing    -- XXX: This could be added
+    nidx       = pure    Nothing
 
     props      = [ (F.symbol x, f) | MemberVarDecl l False x _ <- cs, FieldAnn _ f <- fFact l ]
 
@@ -239,16 +239,15 @@ typeMembers cs = TM <$> ps <*> ms <*> sps <*> sms <*> call <*> ctor <*> sidx <*>
     meths m    = fmap (F.fromListSEnv . map (F.symbol >< val) . M.toList)
                $ T.sequence
                $ M.mapWithKey (\k v -> snd <$> join (prtn k v))
-               $ M.fromListWith (++)
-               $ m
+               $ M.fromListWith (++) m
 
     prtn k v   = (k,) . mapPair (map snd) $ partition ((== MemDef) . fst) v
 
     -- Allowed annotations include a single definition without any declarations,
     -- or two or more declarations (overloads)
-    join (k,([t],[])) = Right $ (k, t)                   -- Single definition
+    join (k,([t],[])) = Right (k, t)                   -- Single definition
     join (k,(ds ,ts)) | length ts > 1
-                      = Right $ (k,foldl1 joinMI ts)
+                      = Right (k,foldl1 joinMI ts)
                       | otherwise
                       = Left  $ F.Unsafe
                       $ map (\(Loc l v) -> err (sourceSpanSrcSpan l) $ msg k v) $ ds ++ ts
@@ -517,4 +516,3 @@ getSuperType cha (TRef (Gen nm ts) _)
     Just $ apply θ $ TRef p fTop
   | otherwise
   = Nothing
-

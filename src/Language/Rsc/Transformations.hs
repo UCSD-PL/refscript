@@ -1,6 +1,4 @@
 {-# LANGUAGE ConstraintKinds      #-}
-{-# LANGUAGE DeriveDataTypeable   #-}
-{-# LANGUAGE DeriveFunctor        #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -13,18 +11,19 @@ module Language.Rsc.Transformations (
 
   ) where
 
-import           Control.Applicative           hiding (empty)
-import           Control.Exception             (throw)
+import           Control.Applicative          hiding (empty)
+import           Control.Exception            (throw)
 import           Data.Default
 import           Data.Generics
-import qualified Data.HashSet                  as HS
-import qualified Data.IntMap.Strict            as I
-import           Data.Maybe                    (listToMaybe)
-import           Data.Monoid                   hiding ((<>))
-import           Data.Text                     (pack, splitOn)
-import           Language.Fixpoint.Names       (symSepName)
-import qualified Language.Fixpoint.Types       as F
-import qualified Language.Fixpoint.Visitor     as FV
+import qualified Data.HashSet                 as HS
+import qualified Data.IntMap.Strict           as I
+import           Data.Maybe                   (fromMaybe)
+import           Data.Maybe                   (listToMaybe)
+import           Data.Monoid                  hiding ((<>))
+import           Data.Text                    (pack, splitOn)
+import           Language.Fixpoint.Names      (symSepName)
+import qualified Language.Fixpoint.Types      as F
+import qualified Language.Fixpoint.Visitor    as FV
 import           Language.Rsc.Annots
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
@@ -47,7 +46,7 @@ import           Language.Rsc.Visitor
 -------------------------------------------------------------------------------
 convertTVars :: F.Reftable r => BareRelRsc r -> BareRelRsc r
 -------------------------------------------------------------------------------
-convertTVars a = visitRsc convertTvarVisitor [] a
+convertTVars = visitRsc convertTvarVisitor []
 
 ----------------------------------------------------------------------------------
 convertTVar    :: (F.Reftable r, Transformable t) => [TVar] -> t q r -> t q r
@@ -136,9 +135,8 @@ replaceAbsolute pgm@(Rsc { code = Src ss }) = pgm { code = Src $ (tr <$>) <$> ss
                         -- If it's a type alias, don't throw error
                         Nothing | isAlias a -> toAbsoluteName a
                                 | otherwise -> throw $ errorUnboundName (srcPos l) a
-    safeAbsPath l a = case absAct (absolutePath ps) l a of
-                        Just a' -> a'
-                        Nothing -> throw $ errorUnboundPath (srcPos l) a
+    safeAbsPath l a = fromMaybe (throw $ errorUnboundPath (srcPos l) a)
+                                (absAct (absolutePath ps) l a)
 
     isAlias (QN (QP RK_ _ []) s) = envMem s $ tAlias pgm
     isAlias (QN _ _) = False
@@ -239,4 +237,3 @@ fixFunBindersInType t | Just is <- bkFuns t = mkAnd $ map (mkFun . f) is
 --    f (VI a i t) = VI a i $ fixFunBindersInType t
 --    mt'          = envMap (trans g [] []) mt
 --    g _ _        = fixFunBindersInType
-

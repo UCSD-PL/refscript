@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverlappingInstances      #-}
@@ -201,4 +200,3 @@ errorUnionMergeTys l t a b    = mkErr l $ printf "In type '%s', cannot merge nam
 errorUnionMergeMods l t a b   = mkErr l $ printf "In type '%s', cannot merge module types '%s' and '%s'." (ppshow t) (ppshow a) (ppshow b)
 errorUnionMergeFuns l t       = mkErr l $ printf "In type '%s', cannot merge multiple function types." (ppshow t)
 bugUnionMergeExps l t         = mkErr l $ printf "[BUG] In type '%s', exp type cannot appear at this point." (ppshow t)
-

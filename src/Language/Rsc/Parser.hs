@@ -81,7 +81,7 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
     decodeOrDie s =
       case eitherDecode s :: Either String [Statement (SrcSpan, [RawSpec])] of
         Left msg -> Left  $ F.Crash [] $ "JSON decode error:\n" ++ msg
-        Right p  -> Right $ p
+        Right p  -> Right p
 
 
 --------------------------------------------------------------------------------------
@@ -92,7 +92,7 @@ parseIdFromJSON filename = decodeOrDie <$> getJSON filename
     decodeOrDie s =
       case eitherDecode s :: Either String [Id (SrcSpan, [RawSpec])] of
         Left msg -> Left  $ F.Crash [] $ "JSON decode error:\n" ++ msg
-        Right p  -> Right $ p
+        Right p  -> Right p
 
 ---------------------------------------------------------------------------------
 mkRsc :: [Statement (SrcSpan, [Spec])] -> RefScript
@@ -142,8 +142,8 @@ extractFact = go
     go (Class t)          = Just $ ClassAnn t
     go (Iface t)          = Just $ InterfaceAnn t
     go (CastSp _ t)       = Just $ UserCast t
-    go (Exported  _)      = Just $ ExportedElt
-    go (RdOnly _)         = Just $ ReadOnlyVar
+    go (Exported  _)      = Just   ExportedElt
+    go (RdOnly _)         = Just   ReadOnlyVar
     go (AnFunc t)         = Just $ FuncAnn t
     go _                  = Nothing
 
@@ -155,10 +155,10 @@ parseAnnots :: [Statement (SrcSpan, [RawSpec])] -> Either FError [Statement (Src
 --------------------------------------------------------------------------------------
 parseAnnots ss =
   case mapAccumL (mapAccumL f) (0,[]) ss of
-    ((_,[]),b) -> Right $ b
+    ((_,[]),b) -> Right b
     ((_,es),_) -> Left  $ F.Unsafe es
   where
-    f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
+    f st (ss,sp) = mapSnd (ss,) $ L.mapAccumL (parse ss) st sp
 
 --------------------------------------------------------------------------------------
 parse :: SrcSpan -> (PState, [Error]) -> RawSpec -> ((PState, [Error]), Spec)
@@ -169,10 +169,10 @@ parse _ (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
                   state <- getState
                   it    <- getInput
                   case it of
-                    ""  -> return $ (state, a)
+                    ""  -> return (state, a)
                     _   -> unexpected $ "trailing input: " ++ it
 
-    failLeft (Left err)      = ((st, (fromError err): errs), ErrorSpec)
+    failLeft (Left err)      = ((st, fromError err : errs), ErrorSpec)
     failLeft (Right (s, r))  = ((s, errs), r)
 
     -- Slight change from this one:
@@ -186,4 +186,3 @@ parse _ (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
                               ++ show (getSpecString c)
     ss = srcPos c
     f = sourceName $ sp_start ss
-

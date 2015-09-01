@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
@@ -111,12 +110,10 @@ mseq act k = do z <- act
                   Nothing -> return Nothing
                   Just x  -> k x
 
-
-
 -------------------------------------------------------------------------------
 maybeM :: (Monad m) => b -> (a -> m b) -> Maybe a -> m b
 -------------------------------------------------------------------------------
-maybeM d f a = maybe (return d) f a
+maybeM = maybe . return
 
 -------------------------------------------------------------------------------
 maybeM_ :: (Monad m) => (a -> m ()) -> Maybe a -> m ()
@@ -237,4 +234,3 @@ justM = (Just <$>)
 x & f = f x
 
 nths = repeat Nothing
-

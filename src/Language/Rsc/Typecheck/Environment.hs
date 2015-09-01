@@ -17,12 +17,12 @@ module Language.Rsc.Typecheck.Environment
     , tcEnvAddBounds
     ) where
 
-import           Data.Function                 (on)
-import           Data.List                     (sortBy)
+import           Data.Function                (on)
+import           Data.List                    (sortBy)
 import           Data.Monoid
-import           Language.Fixpoint.Errors      (die)
-import           Language.Fixpoint.Misc        (single)
-import qualified Language.Fixpoint.Types       as F
+import           Language.Fixpoint.Errors     (die)
+import           Language.Fixpoint.Misc       (single)
+import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annots
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
@@ -70,6 +70,7 @@ instance EnvLike r TCEnv where
   envPath   = tce_path
   envCtx    = tce_ctx
   envCHA    = tce_cha
+  envMut    = tce_mut
   envThis   = tce_this
 
 

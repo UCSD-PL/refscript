@@ -144,8 +144,8 @@ hoistBindings = snd . visitStmts vs ()
     acs _ (EnumStmt a x _)       = [(x, a { fFact = enumAnn x a }, EnumDefKind, Ambient, Initialized)]
     acs _ _                      = []
 
-    acv _ (VarDecl l n ii)       = [(n, l, VarDeclKind, varAsgn l, inited ii)] ++
-                                   [(n, l, VarDeclKind, WriteGlobal, inited ii) | AmbVarAnn _  <- fFact l]
+    acv _ (VarDecl l n ii)       =  (n, l, VarDeclKind, varAsgn l, inited ii)
+                                 : [(n, l, VarDeclKind, WriteGlobal, inited ii) | AmbVarAnn _  <- fFact l]
 
     inited (Just _) = Initialized
     inited _        = Uninitialized
@@ -153,4 +153,3 @@ hoistBindings = snd . visitStmts vs ()
 
     modAnn  n l = ModuleAnn (F.symbol n) : fFact l
     enumAnn n l = EnumAnn   (F.symbol n) : fFact l
-

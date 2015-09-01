@@ -1,8 +1,5 @@
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
-{-# LANGUAGE DeriveFoldable            #-}
-{-# LANGUAGE DeriveFunctor             #-}
-{-# LANGUAGE DeriveTraversable         #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE ImpredicativeTypes        #-}
@@ -11,7 +8,6 @@
 {-# LANGUAGE OverlappingInstances      #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE StandaloneDeriving        #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 
@@ -102,4 +98,3 @@ srcSpanEndLine   = snd3 . sourcePosElts . sp_stop  . sourceSpanSrcSpan
 srcSpanStartCol  = thd3 . sourcePosElts . sp_start . sourceSpanSrcSpan
 srcSpanEndCol    = thd3 . sourcePosElts . sp_stop  . sourceSpanSrcSpan
 srcSpanFile      = fst3 . sourcePosElts . sp_start . sourceSpanSrcSpan
-

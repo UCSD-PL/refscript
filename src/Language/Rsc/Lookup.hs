@@ -14,9 +14,11 @@ module Language.Rsc.Lookup (
   , AccessKind(..)
   ) where
 
-import           Control.Applicative           (pure, (<$>))
+import           Control.Applicative          (pure, (<$>))
+import           Control.Monad                (liftM)
 import           Data.Generics
-import qualified Language.Fixpoint.Types       as F
+import           Data.Maybe                   (catMaybes)
+import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Core.Env
@@ -72,7 +74,7 @@ getProp γ _ f t@(TRef (Gen n []) _)
       IntLit _ i -> return (t, tNum `strengthen` exprReft i)
       -- XXX : is 32-bit going to be enough ???
       -- XXX: Invalid BV values will be dropped
-      HexLit _ s -> bitVectorValue s >>= return . (t,) . (tBV32 `strengthen`)
+      HexLit _ s -> liftM ((t,) . (tBV32 `strengthen`)) (bitVectorValue s)
       _          -> Nothing
 
 getProp γ b f t@(TRef _ _)
@@ -89,7 +91,7 @@ getProp γ b f t@(TClass _)
 getProp γ _ f t@(TMod m)
   = do  m'        <- resolveModuleInEnv γ m
         VI _ _ t' <- envFindTy f $ m_variables m'
-        return     $ (t,t')
+        return       (t,t')
 
 getProp _ _ _ _ = Nothing
 
@@ -145,7 +147,7 @@ extractCall :: (EnvLike r g, PPRD r) => g r -> RType r -> [RType r]
 -------------------------------------------------------------------------------
 extractCall γ            = (uncurry mkAll <$>) . go []
   where
-    go αs t@(TFun _ _ _) = [(αs, t)]
+    go αs t@TFun{} = [(αs, t)]
     go αs   (TAnd ts)    = concatMap (go αs) ts
     go αs   (TAll α t)   = go (αs ++ [α]) t
     go αs t@(TRef _ _)   | Just t' <- expandType Coercive (envCHA γ) t
@@ -170,7 +172,7 @@ accessMember _ MethodAccess static m ms
 accessMember _ FieldAccess static f ms
   | Just (FI o _ t) <- F.lookupSEnv (F.symbol f) $ props ms
   = if o == Opt then Just $ orUndef t
-                else Just $ t
+                else Just t
   | Just t <- tm_sidx ms
   , validFieldName f
   = Just t
@@ -191,7 +193,7 @@ accessMember _ FieldAccess static f ms
 -------------------------------------------------------------------------------
 validFieldName  :: F.Symbolic f => f -> Bool
 -------------------------------------------------------------------------------
-validFieldName f = notElem (F.symbol f) excludedFieldSymbols
+validFieldName f = F.symbol f `notElem` excludedFieldSymbols
 
 -------------------------------------------------------------------------------
 lookupAmbientType :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s, PP f)
@@ -211,7 +213,7 @@ getPropUnion :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
              => g r -> AccessKind -> f -> [RType r] -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 getPropUnion γ b f ts =
-  case unzip [ ts' | Just ts' <- getProp γ b f <$> ts] of
+  case unzip (catMaybes $ getProp γ b f <$> ts) of
     ([],[]) -> Nothing
     (t1s,t2s) -> Just (mkUnion t1s, mkUnion t2s)
 
@@ -225,4 +227,3 @@ getFieldMutability cha t f | Just (TObj ms _) <- expandType Coercive cha t
                            = Just m
                            | otherwise
                            = Nothing
-

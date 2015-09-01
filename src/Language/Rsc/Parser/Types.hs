@@ -12,17 +12,18 @@
 
 module Language.Rsc.Parser.Types where
 
-import           Control.Applicative           ((*>), (<$>), (<*), (<*>))
+import           Control.Applicative          ((*>), (<$>), (<*), (<*>))
 import           Control.Monad
-import           Data.Char                     (isLower)
-import           Data.Generics                 hiding (Generic)
-import           Data.Monoid                   (mempty)
-import qualified Data.Text                     as DT
+import           Data.Char                    (isLower)
+import           Data.Generics                hiding (Generic)
+import           Data.List                    (foldl')
+import           Data.Monoid                  (mempty)
+import qualified Data.Text                    as DT
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc        (mapEither)
+import           Language.Fixpoint.Misc       (mapEither)
 import           Language.Fixpoint.Names
 import           Language.Fixpoint.Parse
-import           Language.Fixpoint.Types       hiding (Expression, Loc, quals)
+import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annots
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Names
@@ -31,12 +32,12 @@ import           Language.Rsc.Parser.Lexer
 import           Language.Rsc.Transformations
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Prelude                       hiding (mapM)
-import           Text.Parsec                   hiding (State, parse)
+import           Prelude                      hiding (mapM)
+import           Text.Parsec                  hiding (State, parse)
 
 
-type RRType = RTypeQ RK Reft
-type RMutability = RTypeQ RK Reft
+type RRType = RTypeQ RK F.Reft
+type RMutability = RTypeQ RK F.Reft
 
 ----------------------------------------------------------------------------------
 -- | Type Binders
@@ -99,58 +100,37 @@ aliasVarT (l, x)
 --
 optionP   = string "REALS" >> return RealOption
 
-interfaceP :: Parser (TypeDeclQ RK Reft)
+interfaceP :: Parser (TypeDeclQ RK F.Reft)
 interfaceP = TD <$> typeSignatureP InterfaceTDK <*> typeBodyP
 
 classDeclP = typeSignatureP ClassTDK
 
 -- Mutability parameter should be included here.
-typeSignatureP :: TypeDeclKind -> Parser (TypeSigQ RK Reft)
+typeSignatureP :: TypeDeclKind -> Parser (TypeSigQ RK F.Reft)
 typeSignatureP k = TS k <$> btgenP <*> heritageP
 
 btgenP = BGen <$> qnameP <*> option [] bTParP
 
 -- TODO: is convertTVar necessary here?
-typeBodyP = return $ TM undefined undefined undefined undefined undefined undefined undefined undefined
-  where
-    _ = braces propBindP
+typeBodyP :: Parser (TypeMembersQ RK F.Reft)
+typeBodyP = eltKindsToTypeMembers <$> braces propBindP
 
---     case as of
---       (m:_) -> do h <- heritageP
---                   withSpan (mkTm1 m) (braces propBindP) >>= \case
---                     Left err -> fail $ ppshow err
---                     Right es -> return undefined -- (name, convertTVar as $ TD (TS InterfaceKind  mkrn name) as h es)
---
---
---           -- The mutability here shouldn't matter
---       _ -> do h <- heritageP
---               withSpan mkTm2 (braces propBindP) >>= \case
---                 Left err -> fail $ ppshow err
---                 Right es -> return undefined -- (name, convertTVar as $ ID (mkrn name) InterfaceKind as h es)
---   where
---     mkTm1 m l = mkTypeMembers (TVar m fTop) . map (mkTup l)
---     mkTm2   l = mkTypeMembers defMut        . map (mkTup l)
---     mkTup l e = (l,symbol e,InstanceMember,MemDeclaration,e)
---     defMut = TRef (QN RK_ (srcPos dummySpan) [] (symbol "Immutable")) [] fTop
---     mkrn   = mkRelName [] . symbol
---
-
-extendsGenP :: String -> Parser [TGenQ RK Reft]
+extendsGenP :: String -> Parser [TGenQ RK F.Reft]
 extendsGenP s = option [] $ reserved s >> sepBy1 extendsGen1P comma
 
-extendsGen1P :: Parser (TGenQ RK Reft)
+extendsGen1P :: Parser (TGenQ RK F.Reft)
 extendsGen1P = do qn  <- qnameP
                   ts  <- option [] $ angles $ sepBy bareTypeP comma
                   return $ Gen qn ts
 
-extendsP :: Parser [TGenQ RK Reft]
+extendsP :: Parser [TGenQ RK F.Reft]
 extendsP = extendsGenP "extends"
 
-implementsP :: Parser [TGenQ RK Reft]
+implementsP :: Parser [TGenQ RK F.Reft]
 implementsP = extendsGenP "implements"
 
 
-heritageP :: Parser (HeritageQ RK Reft)
+heritageP :: Parser (HeritageQ RK F.Reft)
 heritageP = (,) <$> extendsP <*> implementsP
 
 
@@ -176,7 +156,7 @@ condIdP' chars f
   = do c  <- try letter <|> oneOf ['_']
        cs <- many (satisfy (`elem` chars))
        blanks
-       if f (c:cs) then return (undefined $ DT.pack $ c:cs) else parserZero
+       if f (c:cs) then return (F.symbol $ DT.pack $ c:cs) else parserZero
 
 
 -- | <A, B, C ...>
@@ -190,9 +170,7 @@ bTParP = angles $ sepBy btvarP comma
 ----------------------------------------------------------------------------------
 -- | `bareTypeP` parses top-level "bare" types. If no refinements are supplied,
 --    then "top" refinement is used.
-----------------------------------------------------------------------------------
 bareTypeP :: Parser RRType
-----------------------------------------------------------------------------------
 bareTypeP = bareAllP bUnP
 
 bUnP        = parenNullP (bareTypeNoUnionP `sepBy1` plus) toN >>= mkU
@@ -245,7 +223,7 @@ bareAtomP p
 
 
 ----------------------------------------------------------------------------------
-bbaseP :: Parser (Reft -> RRType)
+bbaseP :: Parser (F.Reft -> RRType)
 ----------------------------------------------------------------------------------
 bbaseP
   =  try (TObj  <$> typeBodyP)  -- {f1: T1; ... ; fn: Tn}
@@ -271,7 +249,7 @@ tvarP    :: Parser TVar
 tvarP    = withSpan tvar $ wordP isTvar
 
 ----------------------------------------------------------------------------------
-btvarP    :: Parser (BTVarQ RK Reft)
+btvarP    :: Parser (BTVarQ RK F.Reft)
 ----------------------------------------------------------------------------------
 btvarP   = withSpan btvar $ (,) <$> wordP isTvar
                                 <*> optionMaybe (reserved "extends" *> bareTypeP)
@@ -322,6 +300,21 @@ data EltKind = Prop Symbol StaticKind Optionality RMutability RRType
              | NIdx RRType
              deriving (Data, Typeable)
 
+----------------------------------------------------------------------------------
+eltKindsToTypeMembers :: [EltKind] -> TypeMembersQ RK F.Reft
+----------------------------------------------------------------------------------
+eltKindsToTypeMembers = foldl' go mempty
+  where
+    go ms (Prop f InstanceK o m t) = ms { tm_sprop = F.insertSEnv f (FI o m t) (tm_sprop ms) }
+    go ms (Prop f StaticK   o m t) = ms { tm_prop  = F.insertSEnv f (FI o m t) (tm_prop  ms) }
+    go ms (Meth n InstanceK o m t) = ms { tm_smeth = F.insertSEnv n (MI o m t) (tm_smeth ms) }
+    go ms (Meth n StaticK   o m t) = ms { tm_meth  = F.insertSEnv n (MI o m t) (tm_meth  ms) }
+    -- TODO: Multiple overloads are dropped
+    go ms (Call t) = ms { tm_call = Just t }
+    go ms (Ctor t) = ms { tm_ctor = Just t }
+    go ms (SIdx t) = ms { tm_sidx = Just t }
+    go ms (NIdx t) = ms { tm_nidx = Just t }
+
 -- | [f: string]: t
 -- | [f: number]: t
 idxP = do ((_, k), t) <- xyP (brackets indexP) colon bareTypeP
@@ -370,14 +363,14 @@ methMutabilityP =  try (reserved "Mutable" >> return Mutable)
                <|>     (reserved "AssignsFields" >> return AssignsFields)
 
 ----------------------------------------------------------------------------------
-dummyP ::  Parser (Reft -> b) -> Parser b
+dummyP ::  Parser (F.Reft -> b) -> Parser b
 ----------------------------------------------------------------------------------
 dummyP fm = fm `ap` topP
 
 ----------------------------------------------------------------------------------
-topP   :: Parser Reft
+topP   :: Parser F.Reft
 ----------------------------------------------------------------------------------
-topP   = (Reft . (, mempty) . vv . Just) <$> freshIntP'
+topP   = (F.Reft . (, mempty) . vv . Just) <$> freshIntP'
 
 -- Using a slightly changed version of `freshIntP`
 ----------------------------------------------------------------------------------
@@ -390,11 +383,11 @@ freshIntP' = do n <- stateUser <$> getParserState
 ----------------------------------------------------------------------------------
 -- | Parses refined types of the form: `{ kind | refinement }`
 ----------------------------------------------------------------------------------
-xrefP :: Parser (Reft -> a) -> Parser a
+xrefP :: Parser (F.Reft -> a) -> Parser a
 xrefP kindP
   = braces $ do
       t  <- kindP
       reserved "|"
       ra <- refaP
-      return $ t (Reft (symbol "v", ra))
+      return $ t (F.Reft (symbol "v", ra))
 

@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TupleSections         #-}
@@ -64,7 +63,7 @@ class EnvLike r t where
   --
   --   * Method Mutability
   --
-  envMut    :: t r -> Maybe (MutabilityMod)
+  envMut    :: t r -> Maybe MutabilityMod
   --
   --   * Type for this
   --
@@ -122,4 +121,3 @@ toFgn = envMap go
   where
     go (VI WriteLocal i t) = VI ForeignLocal i t
     go v = v
-

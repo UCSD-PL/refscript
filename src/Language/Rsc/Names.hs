@@ -228,4 +228,3 @@ undefinedId     = Id (srcPos dummySpan) "undefined"
 thisId          = Id (srcPos dummySpan) "this"
 thisSym         = F.symbol "this"
 protoSym        = F.symbol "__proto__"
-

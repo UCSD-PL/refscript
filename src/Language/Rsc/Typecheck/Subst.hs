@@ -24,12 +24,12 @@ module Language.Rsc.Typecheck.Subst (
 
   ) where
 
-import           Control.Applicative           ((<$>))
-import qualified Data.HashMap.Strict           as HM
-import qualified Data.HashSet                  as S
-import           Data.Monoid                   hiding ((<>))
-import           Language.Fixpoint.Misc        (intersperse)
-import qualified Language.Fixpoint.Types       as F
+import           Control.Applicative          ((<$>))
+import qualified Data.HashMap.Strict          as HM
+import qualified Data.HashSet                 as S
+import           Data.Monoid                  hiding ((<>))
+import           Language.Fixpoint.Misc       (intersperse)
+import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annots
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
@@ -125,12 +125,11 @@ instance Free (Fact r) where
   free (EltOverload _ t)    = free t
   free (Overload _ t)       = free t
   free (VarAnn  _ t )       = free t
-  free (AmbVarAnn t)        = free t
-  free (FieldAnn _ f)       = free f
-  free (MethAnn _ m)        = free m
-  free (ConsAnn c)          = free c
+  free (FieldAnn f)         = free f
+  free (MethAnn m)          = free m
+  free (CtorAnn c)          = free c
   free (UserCast t)         = free t
-  free (FuncAnn c)          = free c
+  free (SigAnn c)           = free c
   free (TCast _ c)          = free c
   free (ClassAnn t)         = free t --  foldr S.delete (free $ e ++ i) vs
   free (InterfaceAnn t)     = free t --  foldr S.delete (free $ e ++ i) vs
@@ -196,12 +195,11 @@ instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   apply θ (EltOverload ξ t) = EltOverload ξ   $ apply θ t
   apply θ (Overload ξ t)    = Overload ξ      $ apply θ t
   apply θ (VarAnn a t)      = VarAnn a        $ apply θ t
-  apply θ (AmbVarAnn t)     = AmbVarAnn       $ apply θ t
-  apply θ (FieldAnn s f)    = FieldAnn s      $ apply θ f
-  apply θ (MethAnn s t)     = MethAnn s       $ apply θ t
-  apply θ (ConsAnn t)       = ConsAnn         $ apply θ t
+  apply θ (FieldAnn f)      = FieldAnn        $ apply θ f
+  apply θ (MethAnn t)       = MethAnn         $ apply θ t
+  apply θ (CtorAnn t)       = CtorAnn         $ apply θ t
   apply θ (UserCast t)      = UserCast        $ apply θ t
-  apply θ (FuncAnn t)       = FuncAnn         $ apply θ t
+  apply θ (SigAnn t)        = SigAnn          $ apply θ t
   apply θ (TCast ξ t)       = TCast ξ         $ apply θ t
   apply θ (ClassAnn t)      = ClassAnn        $ apply θ t
   apply θ (InterfaceAnn t)  = InterfaceAnn    $ apply θ t

@@ -11,7 +11,7 @@ module Language.Rsc.Annots (
   , NodeId
   , UFact, FactQ (..), Fact, phiVarsAnnot
 
-  , SyntaxKind(..), MemberKind(..)
+  , SyntaxKind(..)
 
   , scrapeVarDecl
 
@@ -25,17 +25,14 @@ module Language.Rsc.Annots (
 
   , UAnnBare, UAnnSSA, UAnnTc, AnnInfo, UAnnInfo
 
-  -- Options
-  , RscOption (..)
-
 ) where
 
 import           Data.Default
 import           Data.Generics
-import qualified Data.IntMap.Strict            as I
+import qualified Data.IntMap.Strict           as I
 import           Data.Monoid
 import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types       as F
+import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.AST.Annotations
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Locations
@@ -85,6 +82,7 @@ instance Monoid SubTRes where
 -----------------------------------------------------------------------------
 
 data FactQ q r
+  -- ** ANALYSIS **
   -- SSA
   = PhiVar        [Var r]
   | PhiVarTC      (Var r)
@@ -94,30 +92,30 @@ data FactQ q r
   -- Unification
   | TypInst       Int IContext [RTypeQ q r]
 
+  -- Typechecking
+  | TCast         IContext (CastQ q r)
+
   -- Overloading
   | EltOverload   IContext (MethodInfoQ q r)
   | Overload      IContext (RTypeQ q r)
 
+  -- ** SPECIFICATIONS **
+
   -- Type annotations
+  | SigAnn        (RTypeQ q r)
   | VarAnn        Assignability (Maybe (RTypeQ q r))
-  | AmbVarAnn     (RTypeQ q r)
 
   -- Class member annotations
-  | FieldAnn      {- Is the staticKind needed ?? -}
-                  StaticKind (FieldInfoQ q r)  -- [MemberMod] (RTypeQ q r)
-  | MethAnn       StaticKind (MethodInfoQ q r) -- [MemberMod] (RTypeQ q r)
-  | ConsAnn       (RTypeQ q r)
+  | FieldAnn      (FieldInfoQ q r)
+  | MethAnn       (MethodInfoQ q r)
+  | CtorAnn       (RTypeQ q r)
 
   | UserCast      (RTypeQ q r)
-  | FuncAnn       (RTypeQ q r)
-  | TCast         IContext (CastQ q r)
 
   -- Named type annotation
   | ClassAnn      (TypeSigQ q r)
   | InterfaceAnn  (TypeDeclQ q r)
 
-  | ExportedElt
-  | ReadOnlyVar
   | ModuleAnn     (F.Symbol)
   | EnumAnn       (F.Symbol)
 
@@ -192,14 +190,5 @@ scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, Assignability, Maybe (RType
 ----------------------------------------------------------------------------------
 scrapeVarDecl (VarDecl l _ _)
   = [ (VarDeclKind, a, t) | VarAnn a t <- fFact l ]
- ++ [ (AmbVarDeclKind, Ambient, Just t) | AmbVarAnn t <- fFact l ]
- ++ [ (FieldDefKind, Ambient, Just t) | FieldAnn _ (FI _ _ t) <- fFact l ] -- Assignability value is dummy
-
-
------------------------------------------------------------------------------
--- | RSC Options
------------------------------------------------------------------------------
-
-data RscOption = RealOption
-    deriving (Eq, Show, Data, Typeable)
+ ++ [ (FieldDeclKind, Ambient, Just t) | FieldAnn (FI _ _ t) <- fFact l ] -- Assignability value is dummy
 

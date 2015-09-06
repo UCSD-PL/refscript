@@ -30,7 +30,6 @@ module Language.Rsc.AST.Syntax (
   , EnumElt(..)
   , BuiltinOp(..)
   , SyntaxKind (..)
-  , MemberKind (..)
   ) where
 
 import           Control.Applicative           ((<$>))
@@ -225,14 +224,9 @@ data Statement a
   | LabelledStmt a (Id a) (Statement a) -- ^ @lab: stmt@, spec 12.12
   | ForInStmt a (ForInInit a) (Expression a) (Statement a)
     -- ^ @for (x in o) stmt@, spec 12.6
-  | ForStmt a (ForInit a)
-              (Maybe (Expression a)) -- test
-              (Maybe (Expression a)) -- increment
-              (Statement a)          -- body
-    -- ^ @ForStmt a init test increment body@, @for (init; test,
-    -- increment) body@, spec 12.6
-  | TryStmt a (Statement a) {-body-} (Maybe (CatchClause a))
-      (Maybe (Statement a)) {-finally-}
+  | ForStmt a (ForInit a) (Maybe (Expression a)) (Maybe (Expression a)) (Statement a)
+    -- ^ @ForStmt a init test increment body@, @for (init; test, increment) body@, spec 12.6
+  | TryStmt a (Statement a) (Maybe (CatchClause a)) (Maybe (Statement a))
     -- ^ @try stmt catch(x) stmt finally stmt@, spec 12.14
   | ThrowStmt a (Expression a)
     -- ^ @throw expr;@, spec 12.13
@@ -242,46 +236,32 @@ data Statement a
     -- ^ @with (o) stmt@, spec 12.10
   | VarDeclStmt a [VarDecl a]
     -- ^ @var x, y=42;@, spec 12.2
-  | FunctionStmt a (Id a) {-name-} [Id a] {-args-} [Statement a] {-body-}
-    -- ^ @function f(x, y, z) {...}@, spec 13
-
-  -- ^ TypeScipt
-
-  | FuncAmbDecl a (Id a) {-name-} [Id a] {-args-}
-  | FuncOverload a (Id a) {-name-} [Id a] {-args-}
-    -- ^ @declare function f(x, y, z); @
+  | FunctionStmt a (Id a) [Id a] (Maybe [Statement a])
+    -- ^ @function f(x, y, z) [{...}]@, spec 13
   | ClassStmt a (Id a) (Maybe (Id a)) {-extends-} [Id a] {-implem-} [ClassElt a]
     -- ^ @class C<V> extends C'<T> {...}@
   | ModuleStmt a (Id a) [Statement a]
     -- ^ @module M {...}@
-  | IfaceStmt a (Id a)
+  | InterfaceStmt a (Id a)
     -- ^ @interface A {...}@ -- Placeholder for interface annotations
   | EnumStmt a (Id a) [EnumElt a]
 
   deriving (Show,Data,Typeable,Eq,Ord,Functor,Foldable,Traversable,Generic)
 
-
---------------------------------------------------------------------------------
--- | TypeScript
---------------------------------------------------------------------------------
---
--- http://www.typescriptlang.org/Content/TypeScript%20Language%20Specification.pdf
---
-
+-- | Class Elements
 data ClassElt a   -- Class element, spec 8.1.2
-  = Constructor     a                        [Id a] [Statement a]
+  = Constructor a [Id a] [Statement a]
+  | MemberVarDecl a Bool {-static-} (Id a) (Maybe (Expression a))
+  | MemberMethDecl a Bool {-static-} (Id a) [Id a] [Statement a]
+  deriving (Show, Data, Typeable, Eq, Ord, Functor, Foldable, Traversable, Generic)
 
-  | MemberVarDecl   a Bool {-static-} (Id a)        (Maybe (Expression a))
-
-  | MemberMethDecl  a Bool {-static-} (Id a) [Id a]
-
-  | MemberMethDef   a Bool {-static-} (Id a) [Id a] [Statement a]
-
-  deriving (Show,Data,Typeable,Eq,Ord,Functor,Foldable,Traversable, Generic)
-
+-- | Enumeration Elements
 data EnumElt a = EnumElt a (Id a) (Expression a)
-  deriving (Show,Data,Typeable,Eq,Ord,Functor,Foldable,Traversable, Generic)
+  deriving (Show, Data, Typeable, Eq, Ord, Functor, Foldable, Traversable, Generic)
 
+
+-- data Modifier = Export | Ambient | Public | Private | Protected | Static | Abstract | Default | Async
+--   deriving (Show, Data, Typeable, Eq, Ord, Generic)
 
 -- | Returns 'True' if the statement is an /IterationStatement/
 -- according to spec 12.6.
@@ -318,9 +298,6 @@ data BuiltinOp = BIUndefined
 
 
 
-data SyntaxKind = FuncDefKind | FuncAmbientKind | FuncOverloadKind | MethDefKind
-                | MethDeclKind | FieldDefKind | CtorDefKind | VarDeclKind
-                | AmbVarDeclKind | ClassDefKind | ModuleDefKind | EnumDefKind deriving ( Eq )
-
-data MemberKind = MemDef | MemDecl deriving ( Eq )
+data SyntaxKind = FuncDeclKind | MethDeclKind | FieldDeclKind | CtorDeclKind | VarDeclKind
+                | ClassDeclKind | ModuleDeclKind | EnumDeclKind deriving ( Eq )
 

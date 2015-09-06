@@ -128,30 +128,24 @@ accumModules (Rsc { code = Src stmts }) =
     varEnv p = return . mkVarEnv . vStmts p
     vStmts   = concatMap . vStmt
 
-    vStmt _ (VarDeclStmt _ vds) =
-         [(ss x, VarDeclKind, VI a Uninitialized t ) | VarDecl l x _ <- vds, VarAnn a (Just t) <- fFact l ]
-      ++ [(ss x, VarDeclKind, VI WriteGlobal Initialized t) | VarDecl l x _ <- vds, AmbVarAnn t <- fFact l ]
+    vStmt _ (VarDeclStmt _ vds)    = [(ss x, VarDeclKind  , VI a Uninitialized t )        | VarDecl l x _ <- vds
+                                                                                          , VarAnn a (Just t) <- fFact l ]
+    -- XXX: disabling this for now
+    -- ++ [(ss x, VarDeclKind  , VI WriteGlobal Initialized t) | VarDecl l x _ <- vds
+    --                                                         , AmbVarAnn t <- fFact l ]
     -- The Assignabilities below are overwitten to default values
-    vStmt _ (FunctionStmt l x _ _) =
-         [(ss x, FuncDefKind, VI Ambient Initialized t) | VarAnn _ (Just t) <- fFact l ]
-    vStmt _ (FuncAmbDecl l x _) =
-         [(ss x, FuncAmbientKind, VI Ambient Initialized t) | VarAnn _ (Just t) <- fFact l ]
-    vStmt _ (FuncOverload l x _) =
-         [(ss x, FuncOverloadKind, VI Ambient Initialized t) | VarAnn _ (Just t) <- fFact l ]
-    vStmt _ (ClassStmt l x _ _ _) =
-         [(ss x, ClassDefKind, VI Ambient Initialized $ TClass b) | ClassAnn (TS _ b _) <- fFact l ]
-    vStmt p (ModuleStmt l x _) =
-         [(ss x, ModuleDefKind, VI Ambient Initialized $ TMod $ pathInPath l p x)]
-    vStmt p (EnumStmt _ x _) =
-         [(ss x, EnumDefKind, VI Ambient Initialized $ TRef (Gen (QN p $ F.symbol x) []) fTop) ]
-    vStmt _ _ = []
+    vStmt _ (FunctionStmt l x _ _) = [(ss x, FuncDeclKind  , VI Ambient Initialized t)          | VarAnn _ (Just t) <- fFact l ]
+    vStmt _ (ClassStmt l x _ _ _)  = [(ss x, ClassDeclKind , VI Ambient Initialized $ TClass b) | ClassAnn (TS _ b _) <- fFact l ]
+    vStmt p (ModuleStmt l x _)     = [(ss x, ModuleDeclKind, VI Ambient Initialized $ TMod $ pathInPath l p x)]
+    vStmt p (EnumStmt _ x _)       = [(ss x, EnumDeclKind  , VI Ambient Initialized $ TRef (Gen (QN p $ F.symbol x) []) fTop) ]
+    vStmt _ _                      = []
 
     -- | Type Definitions
     typeEnv = liftM envFromList . tStmts
     tStmts  = concatMapM tStmt
 
     tStmt c@ClassStmt{} = single <$> declOfStmt c
-    tStmt c@IfaceStmt{} = single <$> declOfStmt c
+    tStmt c@InterfaceStmt{} = single <$> declOfStmt c
     tStmt _             = return [ ]
 
     -- | Enumerations
@@ -168,27 +162,22 @@ accumModules (Rsc { code = Src stmts }) =
 mkVarEnv :: F.Symbolic s => [(s, SyntaxKind, VarInfo r)] -> Env (VarInfo r)
 ---------------------------------------------------------------------------------------
 mkVarEnv = envMap snd
-              . envFromListWithKey mergeVarInfo
-              . concatMap f
-              . M.toList
-              . foldl merge M.empty
+         . envFromListWithKey mergeVarInfo
+         . concatMap f
+         . M.toList
+         . foldl merge M.empty
   where
     merge ms (x, k, v) = M.insertWith (++) (F.symbol x) [(k,v)] ms
 
-    f (s, vs)   = [ (s, (k, g v [ v' | (FuncOverloadKind, v') <- vs ])) | (k@FuncDefKind, v) <- vs ] ++
-                    ( (s,) . (FuncAmbientKind,) <$> amb [ v | (FuncAmbientKind, v) <- vs ] ) ++
-                  [ (s, (k, v)) | (k@VarDeclKind, v) <- vs ] ++
-                  [ (s, (k, v)) | (k@ClassDefKind, v) <- vs ] ++
-                  [ (s, (k, v)) | (k@ModuleDefKind, v) <- vs ] ++
-                  [ (s, (k, v)) | (k@EnumDefKind, v) <- vs ]
+    f (s, vs) = [(s, (k, v)) | (k@FuncDeclKind  , v) <- vs] ++
+                [(s, (k, v)) | (k@VarDeclKind   , v) <- vs] ++
+                [(s, (k, v)) | (k@ClassDeclKind , v) <- vs] ++
+                [(s, (k, v)) | (k@ModuleDeclKind, v) <- vs] ++
+                [(s, (k, v)) | (k@EnumDeclKind  , v) <- vs]
 
-    g v []                = v
-    g _ vs@(VI a i _ : _) = VI a i $ mkAnd $ v_type <$> vs
-
-    amb [ ] = [ ]
-    amb [v] = [v]
-    amb vs@(VI a i _ : _) = [ VI a i $ mkAnd $ v_type <$> vs ]
-
+    mergeVarInfo x (k1, VI a1 i1 t1) (k2, VI a2 i2 t2)
+      | k1 == k2, a1 == a2, i1 == i2
+      = (k1, VI a1 i1 $ mkAnd [t1, t2])
     mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
 
 
@@ -196,16 +185,14 @@ mkVarEnv = envMap snd
 declOfStmt :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
 ---------------------------------------------------------------------------------------
 declOfStmt (ClassStmt l c _ _ cs)
-  | [ts] <- cas
-  =  liftM ((cc,) . TD ts) (typeMembers cs)
-  | otherwise
-  = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
+  | [ts] <- cas = Right (cc, TD ts (typeMembers cs))
+  | otherwise   = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where
     cc     = fmap fSrc c
     cas    = [ ts | ClassAnn ts <- fFact l ]
     errMsg = "Invalid class annotation: " ++ show (intersperse P.comma (map pp cas))
 
-declOfStmt (IfaceStmt l c)
+declOfStmt (InterfaceStmt l c)
   | [t] <- ifaceAnns  = Right (fmap fSrc c,t)
   | otherwise         = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where
@@ -217,54 +204,20 @@ declOfStmt s         = Left $ F.Unsafe $ single
                       $ err (sourceSpanSrcSpan $ getAnnotation s)
                       $ "Statement\n" ++ ppshow s ++ "\ncannot have a type annotation."
 
-
 -- | Given a list of class elements, returns a @TypeMembers@ structure
 ---------------------------------------------------------------------------------------
-typeMembers :: PPR r => [ClassElt (AnnR r)] -> Either (F.FixResult Error) (TypeMembers r)
+typeMembers :: PPR r => [ClassElt (AnnR r)] -> TypeMembers r
 ---------------------------------------------------------------------------------------
-typeMembers cs = TM <$> ps <*> ms <*> sps <*> sms <*> call <*> ctor <*> sidx <*> nidx
+typeMembers cs = TM ps ms sps sms call ctor sidx nidx
   where
-    ps         = pure  $ F.fromListSEnv props
-    ms         = meths $ methDefs ++ methDecls
-    sps        = pure  $ F.fromListSEnv sprops
-    sms        = meths $ smethDefs ++ smethDecls
-    call       = pure    Nothing
-    sidx       = pure    Nothing    -- XXX: This could be added
-    nidx       = pure    Nothing
-
-    props      = [ (F.symbol x, f) | MemberVarDecl l False x _ <- cs, FieldAnn _ f <- fFact l ]
-
-    sprops     = [ (F.symbol x, f) | MemberVarDecl l True x _ <- cs, FieldAnn _ f <- fFact l ]
-
-    meths m    = fmap (F.fromListSEnv . map (F.symbol >< val) . M.toList)
-               $ T.sequence
-               $ M.mapWithKey (\k v -> snd <$> join (prtn k v))
-               $ M.fromListWith (++) m
-
-    prtn k v   = (k,) . mapPair (map snd) $ partition ((== MemDef) . fst) v
-
-    -- Allowed annotations include a single definition without any declarations,
-    -- or two or more declarations (overloads)
-    join (k,([t],[])) = Right (k, t)                   -- Single definition
-    join (k,(ds ,ts)) | length ts > 1
-                      = Right (k,foldl1 joinMI ts)
-                      | otherwise
-                      = Left  $ F.Unsafe
-                      $ map (\(Loc l v) -> err (sourceSpanSrcSpan l) $ msg k v) $ ds ++ ts
-
-    msg k v = printf "The following annotation for member '%s' is invalid:\n%s" (ppshow k) (ppshow v)
-
-    joinMI (Loc l (MI o m t)) (Loc _ (MI _ _ t')) = Loc l $ MI o m $ mkAnd [t, t']
-
-    methDefs   = [ (x, [(MemDef , Loc (fSrc l) m)]) | MemberMethDef  l False x _ _ <- cs, MethAnn _ m <- fFact l ]
-    methDecls  = [ (x, [(MemDecl, Loc (fSrc l) m)]) | MemberMethDecl l False x _   <- cs, MethAnn _ m <- fFact l ]
-    smethDefs  = [ (x, [(MemDef , Loc (fSrc l) m)]) | MemberMethDef  l True  x _ _ <- cs, MethAnn _ m <- fFact l ]
-    smethDecls = [ (x, [(MemDecl, Loc (fSrc l) m)]) | MemberMethDecl l True  x _   <- cs, MethAnn _ m <- fFact l ]
-
-    ctor       = pure $ listToMaybe [ t | Constructor l _ _ <- cs, ConsAnn t <- fFact l ]
-
-
-
+    ps         = F.fromListSEnv [(F.symbol x, f) | MemberVarDecl  l False x _   <- cs, FieldAnn f <- fFact l]
+    ms         = F.fromListSEnv [(F.symbol x, m) | MemberMethDecl l False x _ _ <- cs, MethAnn  m <- fFact l]
+    sps        = F.fromListSEnv [(F.symbol x, f) | MemberVarDecl  l True  x _   <- cs, FieldAnn f <- fFact l]
+    sms        = F.fromListSEnv [(F.symbol x, m) | MemberMethDecl l True  x _ _ <- cs, MethAnn  m <- fFact l]
+    call       = Nothing
+    ctor       = listToMaybe [ t | Constructor l _ _ <- cs, CtorAnn t <- fFact l ]
+    sidx       = Nothing    -- XXX: This could be added
+    nidx       = Nothing
 
 ---------------------------------------------------------------------------
 fromModuleDef :: QEnv (ModuleDef r) -> ClassHierarchy r

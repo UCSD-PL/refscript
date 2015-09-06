@@ -6,22 +6,22 @@
 
 module Language.Rsc.SSA.SSA (ssaTransform) where
 
-import           Control.Applicative           ((<$>), (<*>))
-import           Control.Arrow                 ((***))
+import           Control.Applicative          ((<$>), (<*>))
+import           Control.Arrow                ((***))
 import           Control.Monad
 import           Data.Data
 import           Data.Default
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
-import qualified Data.HashSet                  as S
-import qualified Data.IntMap.Strict            as IM
-import qualified Data.IntSet                   as I
-import qualified Data.List                     as L
-import           Data.Maybe                    (catMaybes, fromMaybe, listToMaybe)
-import           Data.Typeable                 ()
-import qualified Language.Fixpoint.Errors      as E
+import qualified Data.HashSet                 as S
+import qualified Data.IntMap.Strict           as IM
+import qualified Data.IntSet                  as I
+import qualified Data.List                    as L
+import           Data.Maybe                   (catMaybes, fromMaybe, listToMaybe)
+import           Data.Typeable                ()
+import qualified Language.Fixpoint.Errors     as E
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types       as F
+import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annots
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
@@ -81,8 +81,7 @@ writeGlobalVars           :: Data r => [Statement (AnnSSA r)] -> [Id (AnnSSA r)]
 writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
   where
     fromVD (VarDecl l x _) = [ x | VarAnn _ _  <- fFact l ]
-                          ++ [ x | AmbVarAnn _ <- fFact l ]
-
+                          -- ++ [ x | AmbVarAnn _ <- fFact l ]  -- TODO
 
 
 -- | Find all language level bindings in the scope of @s@.
@@ -101,18 +100,16 @@ varsInScope :: Data r => [Statement (AnnSSA r)] -> Env Assignability
 ----------------------------------------------------------------------------------
 varsInScope s = envFromList' [ (x,a) | (x,_,_,a,_) <- foldStmts vs () s ]
   where
-    vs = scopeVisitor { accStmt = accStmt', accVDec = accVDec' }
+    vs = scopeVisitor { accStmt = as, accVDec = av }
 
-    accStmt' _ (FunctionStmt l n _ _) = [(n, l, FuncDefKind, Ambient, Initialized)]
-    accStmt' _ (FuncAmbDecl l n _)    = [(n, l, FuncAmbientKind, Ambient, Initialized)]
-    accStmt' _ (FuncOverload l n _  ) = [(n, l, FuncOverloadKind, Ambient, Initialized)]
-    accStmt' _ (ClassStmt l n _ _ _ ) = [(n, l, ClassDefKind, Ambient, Initialized)]
-    accStmt' _ (ModuleStmt l n _)     = [(n, l { fFact = modAnn  n l }, ModuleDefKind, Ambient, Initialized)]
-    accStmt' _ (EnumStmt l n _)       = [(n, l { fFact = enumAnn n l }, EnumDefKind, Ambient, Initialized)]
-    accStmt' _ _                      = []
+    as _ (FunctionStmt l n _ _) = [(n, l, FuncDeclKind, Ambient, Initialized)]
+    as _ (ClassStmt l n _ _ _ ) = [(n, l, ClassDeclKind, Ambient, Initialized)]
+    as _ (ModuleStmt l n _)     = [(n, l { fFact = modAnn  n l }, ModuleDeclKind, Ambient, Initialized)]
+    as _ (EnumStmt l n _)       = [(n, l { fFact = enumAnn n l }, EnumDeclKind, Ambient, Initialized)]
+    as _ _                      = []
 
-    accVDec' _ (VarDecl l n init) = [(n, l, VarDeclKind, varAsgn l, fromInit init)] ++
-                                    [(n, l, VarDeclKind, WriteGlobal, fromInit init) | AmbVarAnn _ <- fFact l]
+    av _ (VarDecl l n init) = [(n, l, VarDeclKind, varAsgn l, fromInit init)]
+          --  ++ [(n, l, VarDeclKind, WriteGlobal, fromInit init) | AmbVarAnn _ <- fFact l] -- TODO
 
     fromInit (Just _) = Initialized
     fromInit _        = Uninitialized
@@ -180,15 +177,8 @@ ssaStmt :: Data r => Statement (AnnSSA r) -> SSAM r (Bool, Statement (AnnSSA r))
 ssaStmt s@(EmptyStmt _)
   = return (True, s)
 
--- declare function foo(...): T;
-ssaStmt s@(FuncAmbDecl _ _ _)
-  = return (True, s)
-
-ssaStmt s@(FuncOverload _ _ _)
-  = return (True, s)
-
 -- interface IA<V> extends IB<T> { ... }
-ssaStmt s@(IfaceStmt _ _)
+ssaStmt s@(InterfaceStmt _ _)
   = return (True, s)
 
 -- x = e
@@ -394,8 +384,11 @@ ssaStmt (ThrowStmt l e) = do
 
 
 -- function f(...){ s }
-ssaStmt (FunctionStmt l f xs bd)
-  = (True,) <$> FunctionStmt l f xs <$> (ssaFun l xs bd)
+ssaStmt (FunctionStmt l f xs (Just bd))
+  = (True,) <$> FunctionStmt l f xs <$> (Just <$> ssaFun l xs bd)
+
+ssaStmt s@(FunctionStmt _ _ _ Nothing)
+  = return (True, s)
 
 -- switch (e) { ... }
 ssaStmt (SwitchStmt l e xs)
@@ -567,10 +560,8 @@ ssaClassElt (MemberVarDecl l True x (Just e))
 ssaClassElt (MemberVarDecl l True x Nothing)
   = ssaError $ errorUninitStatFld (srcPos l) x
 
-ssaClassElt (MemberMethDef l s e xs body)
-  = MemberMethDef l s e xs <$> ssaFun l xs body
-
-ssaClassElt m@(MemberMethDecl _ _ _ _ ) = return m
+ssaClassElt (MemberMethDecl l s e xs body)
+  = MemberMethDecl l s e xs <$> ssaFun l xs body
 
 infOp OpAssign         _ _  = id
 infOp OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalExp lv)
@@ -834,8 +825,8 @@ ssaVarDecl (VarDecl l x (Just e)) = do
     return    (s, VarDecl l x' (Just e'))
 
 ssaVarDecl v@(VarDecl l x Nothing)
-  | not $ null [ () | (AmbVarDeclKind,_,_) <- scrapeVarDecl v ]
-  = return ([], VarDecl l x Nothing)
+  -- | not $ null [ () | (AmbVarDeclKind,_,_) <- scrapeVarDecl v ]
+  -- = return ([], VarDecl l x Nothing)
   | otherwise
   = ([],) <$> (VarDecl l <$> updSsaEnv l x
                          <*> justM (VarRef <$> fr_ l <*> freshenIdSSA undefinedId))

@@ -26,3 +26,8 @@ getPreludeTSPath   = getDataFileName "include/prelude.ts"
 getDomTSPath       = getDataFileName "include/ambient/dom.ts"
 getPreludeJSONPath = (`replaceExtension` ".json") <$> getPreludeTSPath
 getDomJSONPath     = (`replaceExtension` ".json") <$> getDomTSPath
+
+
+
+getPrimsTSPath     = getDataFileName "include/rsc/prims.ts"
+getPrimsJSONPath   = (`replaceExtension` ".json") <$> getPrimsTSPath

@@ -9,27 +9,26 @@
 {-# LANGUAGE UndecidableInstances      #-}
 
 
-module Language.Rsc.Parser.Common 
+module Language.Rsc.Parser.Common
     (
       xyP, axyP, withSpan, postP
     , dot, plus, question
     , withinSpacesP
     ) where
 
-import           Control.Applicative           ((<$>), (<*>))
-import qualified Data.HashSet                  as HS
-import           Data.Maybe                    (listToMaybe)
+import           Control.Applicative          ((<$>), (<*>))
+import qualified Data.HashSet                 as HS
+import           Data.Maybe                   (listToMaybe)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Parse
-import qualified Language.Fixpoint.Types       as F
+import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annots
 import           Language.Rsc.AST
 import           Language.Rsc.Locations       hiding (val)
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Language.Rsc.Visitor
-import           Text.Parsec                   hiding (State, parse)
-import qualified Text.Parsec.Token             as T
+import           Text.Parsec                  hiding (State, parse)
+import qualified Text.Parsec.Token            as T
 
 ----------------------------------------------------------------------------------
 dot :: Parser String

@@ -35,9 +35,8 @@ import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
+import           Language.Rsc.Options
 import           Language.Rsc.Types
-
--- import           Debug.Trace                        hiding (traceShow)
 
 
 ---------------------------------------------------------------------------------

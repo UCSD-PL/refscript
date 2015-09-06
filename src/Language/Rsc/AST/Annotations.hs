@@ -4,12 +4,12 @@ module Language.Rsc.AST.Annotations where
 
 import           Control.Applicative
 import           Control.Arrow
-import           Control.Monad.State      hiding (mapM)
+import           Control.Monad.State     hiding (mapM)
 import           Data.Traversable
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
-import           Prelude                  hiding (mapM)
+import           Prelude                 hiding (mapM)
 
 -- | Removes annotations from a tree
 removeAnnotations :: Traversable t => t a -> t ()
@@ -99,11 +99,9 @@ getAnnotationStmt = go
     go (WithStmt a _ _           ) = a
     go (VarDeclStmt a _          ) = a
     go (FunctionStmt a _ _ _     ) = a
-    go (FuncAmbDecl a _ _        ) = a
-    go (FuncOverload a _ _       ) = a
     go (ClassStmt a _ _ _ _      ) = a
     go (ModuleStmt a _ _         ) = a
-    go (IfaceStmt a _            ) = a
+    go (InterfaceStmt a _            ) = a
     go (EnumStmt a _ _           ) = a
 
 
@@ -135,10 +133,9 @@ instance Annotated Id where
 
 instance Annotated ClassElt where
   getAnnotation e = case e of
-    Constructor a _ _       -> a
-    MemberVarDecl a _ _ _   -> a
-    MemberMethDecl a _ _ _  -> a
-    MemberMethDef a _ _ _ _ -> a
+    Constructor a _ _ -> a
+    MemberVarDecl a _ _ _ -> a
+    MemberMethDecl a _ _ _ _ -> a
 
 instance (Annotated thing, IsLocated a) => IsLocated (thing a) where
   srcPos  = srcPos . getAnnotation

@@ -40,6 +40,7 @@ import           Language.Rsc.Locations
 import           Language.Rsc.Lookup
 import           Language.Rsc.Misc
 import           Language.Rsc.Names
+import           Language.Rsc.Options
 import           Language.Rsc.Parser
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
@@ -208,7 +209,9 @@ initCallableEnv l g f fty s
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement AnnLq -> CGM ()
 --------------------------------------------------------------------------------
-consFun g (FunctionStmt l f xs body)
+consFun g (FunctionStmt l f xs Nothing)
+  = return ()
+consFun g (FunctionStmt l f xs (Just body))
   = case envFindTy f (cge_names g) of
       Just (VI _ _ t) -> cgFunTys l f xs t >>= mapM_ (consCallable l g f body)
       Nothing   -> cgError $ errorMissingSpec (srcPos l) f
@@ -318,12 +321,6 @@ consStmt g (ReturnStmt l (Just e))
 consStmt g (ThrowStmt _ e)
   = consExpr g e Nothing >> return Nothing
 
--- (overload) function f(x1...xn);
-consStmt g (FuncOverload _ _ _ ) = return $ Just g
-
--- declare function f(x1...xn);
-consStmt g (FuncAmbDecl _ _ _ ) = return $ Just g
-
 -- function f(x1...xn){ s }
 consStmt g s@(FunctionStmt _ _ _ _)
   = consFun g s >> return (Just g)
@@ -342,7 +339,7 @@ consStmt g (ClassStmt l x _ _ ce)
   where
     nm = QN (cge_path g) (F.symbol x)
 
-consStmt g (IfaceStmt _ _)
+consStmt g (InterfaceStmt _ _)
   = return $ Just g
 
 consStmt g (EnumStmt _ _ _)
@@ -406,13 +403,13 @@ consVarDecl g v@(VarDecl l x (Just e))
 
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 
-consVarDecl g v@(VarDecl _ x Nothing)
-  = case scrapeVarDecl v of
-      -- special case ambient vars
-      [(AmbVarDeclKind, _, Just t)] ->
-        Just <$> cgEnvAdds "consVarDecl" [(x, VI Ambient Initialized t)] g
-      -- The rest should have fallen under the 'undefined' initialization case
-      _ -> error "LQ: consVarDecl this shouldn't happen"
+consVarDecl g v@(VarDecl _ x Nothing) = error "[consVarDecl] uninitialized var decl"
+--   = case scrapeVarDecl v of
+--       -- special case ambient vars
+--       [(AmbVarDeclKind, _, Just t)] ->
+--         Just <$> cgEnvAdds "consVarDecl" [(x, VI Ambient Initialized t)] g
+--       -- The rest should have fallen under the 'undefined' initialization case
+--       _ -> error "LQ: consVarDecl this shouldn't happen"
 
 ------------------------------------------------------------------------------------
 consExprT :: AnnLq -> CGEnv -> Expression AnnLq -> Maybe RefType
@@ -491,7 +488,7 @@ consClassElt _ _ (MemberVarDecl l False x _)
 
 -- | Static method
 --
-consClassElt g (TD sig ms) (MemberMethDef l True x xs body)
+consClassElt g (TD sig ms) (MemberMethDecl l True x xs body)
   | Just (MI _ _ t) <- F.lookupSEnv (F.symbol x) $ tm_smeth ms
   = do  its <- cgFunTys l x xs t
         mapM_ (consCallable l g x body) its
@@ -500,7 +497,7 @@ consClassElt g (TD sig ms) (MemberMethDef l True x xs body)
 
 -- | Instance method
 --
-consClassElt g (TD sig ms) (MemberMethDef l False x xs body)
+consClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
   | Just (MI _ m t) <- F.lookupSEnv (F.symbol x) (tm_meth ms)
   = do  let g0 = g
                & initClassInstanceEnv sig
@@ -510,8 +507,6 @@ consClassElt g (TD sig ms) (MemberMethDef l False x xs body)
 
   | otherwise
   = cgError $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
-
-consClassElt _ _  (MemberMethDecl _ _ _ _) = return ()
 
 
 --------------------------------------------------------------------------------
@@ -696,6 +691,7 @@ consExpr g (DotRef l e f) to
           | F.symbol "Array" == s && F.symbol "length" == F.symbol f ->
               consExpr g' (CallExpr l (DotRef l (vr x) (Id l "_get_length_")) []) to
 
+
         -- Do not nubstrengthen enumeration fields
         -- TODO: TEnum does not exist anymore - is this still ok?
         -- Just (TEnum _,t,_) -> Just <$> cgEnvAddFresh "1" l (t, Ambient, Initialized) g'
@@ -769,8 +765,8 @@ consExpr g (FuncExpr l fo xs body) tCxtO
                          forM_ fts  $  consCallable l g f body
                          Just      <$> cgEnvAddFresh "16" l (VI WriteLocal Initialized kft) g
 
-    anns            = [ t | FuncAnn t <- fFact l ]
-    f               = maybe (F.symbol "<anonymous>") F.symbol fo
+    anns = [ t | SigAnn t <- fFact l ]
+    f    = maybe (F.symbol "<anonymous>") F.symbol fo
 
 -- not handled
 consExpr _ e _ = cgError $ unimplemented l "consExpr" e where l = srcPos  e

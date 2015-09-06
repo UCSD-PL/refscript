@@ -8,12 +8,12 @@ module Language.Rsc.Pretty.Syntax (
   , renderExpression
 ) where
 
-import           Control.Applicative         ((<$>))
-import qualified Language.Fixpoint.Types     as F
+import           Control.Applicative        ((<$>))
+import qualified Language.Fixpoint.Types    as F
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty.Common
-import           Prelude                     hiding (maybe)
+import           Prelude                    hiding (maybe)
 import           Text.PrettyPrint.HughesPJ
 
 instance PP [Statement a] where
@@ -155,10 +155,13 @@ ppStatement s = case s of
   WithStmt _ e s -> text "with" <+> parens (ppExpression True e) $$ ppStatement s
   VarDeclStmt _ decls ->
     text "var" <+> cat (punctuate comma (map (ppVarDecl True) decls)) <> semi
-  FunctionStmt _ name args body ->
+  FunctionStmt _ name args (Just body) ->
     text "function" <+> ppId name <>
     parens (cat $ punctuate comma (map ppId args)) $$
     ssAsBlock body
+  FunctionStmt _ name args Nothing ->
+    text "function" <+> ppId name <>
+    parens (cat $ punctuate comma (map ppId args))
   ClassStmt _ name ext imp body ->
     text "class" <+> ppId name  <+>
     ( case ext of
@@ -169,15 +172,9 @@ ppStatement s = case s of
         is -> text "implements" <+> cat (punctuate comma (map ppId is))) $$
     classEltAsBlock body
 
-  FuncAmbDecl _ name args ->
-    text "declare function" <+> ppId name <>
-    parens (cat $ punctuate comma (map ppId args))
-  FuncOverload _ name args ->
-    text "function" <+> ppId name <>
-    parens (cat $ punctuate comma (map ppId args))
   ModuleStmt _ name body ->
     text "module" <+> ppId name $$ ssAsBlock body
-  IfaceStmt _ x -> text "// interface" <+> ppId x
+  InterfaceStmt _ x -> text "// interface" <+> ppId x
   EnumStmt _ name elts -> text "enumeration" <+> ppId name <+>
     braces (cat $ punctuate comma (map ppEnumElt elts))
 
@@ -188,17 +185,11 @@ ppClassElt (Constructor _ args body) =
   ssAsBlock body
 ppClassElt (MemberVarDecl a s name eo) =
   text (ite s " static " "") <> ppVarDecl True (VarDecl a name eo)
-ppClassElt (MemberMethDef _ s name args body) =
+ppClassElt (MemberMethDecl _ s name args body) =
   text ({-ite m "public" "private" ++ -}ite s " static" "") <+>
   ppId name <>
   parens (cat $ punctuate comma (map ppId args)) $$
   ssAsBlock body
-ppClassElt (MemberMethDecl _ s name args) =
-  text ({-ite m "public" "private" ++ -}ite s " static" "") <+>
-  ppId name <>
-  parens (cat $ punctuate comma (map ppId args))
-
-
 
 ite True a _  = a
 ite False _ a = a

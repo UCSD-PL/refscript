@@ -110,12 +110,12 @@ mkRelRsc :: [Statement (SrcSpan, [Spec])] -> RelRefScript
 ---------------------------------------------------------------------------------
 mkRelRsc ss = Rsc {
         code          = Src (checkTopStmt <$> ss')
-      , consts        = envFromList [ mapSnd (ntrans f g) t | Meas t <- anns ]
-      , tAlias        = envFromList [ t | TAlias t <- anns ]
-      , pAlias        = envFromList [ t | PAlias t <- anns ]
-      , pQuals        = scrapeQuals [ t | Qual   t <- anns ] ss'
-      , pOptions      =             [ t | Option t <- anns ]
-      , invts         = [Loc (srcPos l) (ntrans f g t) | Invt l t <- anns ]
+      , consts        = envFromList [ mapSnd (ntrans f g) t | MeasureSpec t <- anns ]
+      , tAlias        = envFromList [ t | TypeAliasSpec      t <- anns ]
+      , pAlias        = envFromList [ t | PredicateAliasSpec t <- anns ]
+      , pQuals        = scrapeQuals [ t | QualifierSpec      t <- anns ] ss'
+      , pOptions      =             [ t | OptionSpec         t <- anns ]
+      , invts         = [Loc (srcPos l) (ntrans f g t) | InvariantSpec l t <- anns ]
       , maxId         = endingId
     }
   where
@@ -132,20 +132,16 @@ extractFact :: PSpec t r -> Maybe (FactQ RK r)
 ---------------------------------------------------------------------------------
 extractFact = go
   where
-    go (Bind    (_,a,t))  = Just $ VarAnn a t
-    go (AmbBind (_,t)  )  = Just $ AmbVarAnn t
-
-    go (Constr  t)        = Just $ ConsAnn t
-    go (Field (s, f))     = Just $ FieldAnn s f
-    go (Method  (s, m))   = Just $ MethAnn s m
-
-    go (Class t)          = Just $ ClassAnn t
-    go (Iface t)          = Just $ InterfaceAnn t
-    go (CastSp _ t)       = Just $ UserCast t
-    go (Exported  _)      = Just   ExportedElt
-    go (RdOnly _)         = Just   ReadOnlyVar
-    go (AnFunc t)         = Just $ FuncAnn t
-    go _                  = Nothing
+    go (FunctionDeclarationSpec (_,t))     = Just $ SigAnn t
+    go (VariableDeclarationSpec (_, a, t)) = Just $ VarAnn a t
+    go (FunctionExpressionSpec t)          = Just $ SigAnn t
+    go (InterfaceSpec t)                   = Just $ InterfaceAnn t
+    go (ClassSpec t)                       = Just $ ClassAnn t
+    go (ConstructorSpec t)                 = Just $ CtorAnn t
+    go (CastSpec _ t)                      = Just $ UserCast t
+    go (FieldSpec f)                       = Just $ FieldAnn f
+    go (MethodSpec m)                      = Just $ MethAnn m
+    go _                                   = Nothing
 
 
 type PState = Integer
@@ -165,7 +161,7 @@ parse :: SrcSpan -> (PState, [Error]) -> RawSpec -> ((PState, [Error]), Spec)
 --------------------------------------------------------------------------------------
 parse _ (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
   where
-    parser s = do a     <- parseAnnot s
+    parser s = do a     <- parseSpec s
                   state <- getState
                   it    <- getInput
                   case it of

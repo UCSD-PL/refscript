@@ -22,7 +22,7 @@ import           Data.Traversable              (Traversable)
 import           GHC.Generics
 import           Language.Fixpoint.Misc        (errortext)
 import           Language.Fixpoint.PrettyPrint
-import           Language.Rsc.AST.Annotations ()
+import           Language.Rsc.AST.Annotations  ()
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
@@ -139,18 +139,15 @@ instance IsRsc (Statement a) where
   isRsc (SwitchStmt _ e cs)      = isRsc e && not (null cs) && isRsc cs
   isRsc (ClassStmt _ _ _ _  bd)  = all isRsc bd
   isRsc (ThrowStmt _ e)          = isRsc e
-  isRsc (FuncAmbDecl _ _ _)      = True
-  isRsc (FuncOverload _ _ _)     = True
-  isRsc (IfaceStmt _ _)          = True
+  isRsc (InterfaceStmt _ _)          = True
   isRsc (ModuleStmt _ _ s)       = all isRsc s
   isRsc (EnumStmt _ _ _)         = True
   isRsc e                        = errortext (text "Not Rsc Statement:" $$ pp e)
 
 instance IsRsc (ClassElt a) where
-  isRsc (Constructor _ _ ss)       = all isRsc ss
-  isRsc (MemberMethDecl _ _ _ _ )  = True
-  isRsc (MemberMethDef _ _ _ _ ss) = all isRsc ss
-  isRsc (MemberVarDecl _ _ _ eo)   = isRsc eo
+  isRsc (Constructor _ _ ss)        = all isRsc ss
+  isRsc (MemberMethDecl _ _ _ _ ss) = all isRsc ss
+  isRsc (MemberVarDecl _ _ _ eo)    = isRsc eo
 
 instance IsRsc a => IsRsc (Maybe a) where
   isRsc (Just x) = isRsc x

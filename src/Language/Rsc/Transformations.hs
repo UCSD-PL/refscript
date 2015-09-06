@@ -74,9 +74,7 @@ ctxStmtTvar as s = go s ++ as
   where
     go :: Statement (AnnRel r)  -> [TVar]
     go s@(FunctionStmt {}) = grab s
-    go s@(FuncAmbDecl {})  = grab s
-    go s@(FuncOverload {}) = grab s
-    go s@(IfaceStmt {})    = grab s
+    go s@(InterfaceStmt {})    = grab s
     go s@(ClassStmt {})    = grab s
     go s@(ModuleStmt {})   = grab s
     go _                   = []
@@ -87,9 +85,9 @@ ctxStmtTvar as s = go s ++ as
 ctxCEltTvar as s = go s ++ as
   where
     go :: ClassElt (AnnRel r)  -> [TVar]
-    go s@Constructor{}     = grab s
-    go s@MemberMethDef{}   = grab s
-    go _                   = []
+    go s@Constructor{}    = grab s
+    go s@MemberMethDecl{} = grab s
+    go _                  = []
 
     grab :: ClassElt (FAnnQ q r) -> [TVar]
     grab = concatMap factTVars . fFact . getAnnotation
@@ -109,10 +107,10 @@ factTVars = go
     foldUnions _      = HS.empty
 
     go (VarAnn _ (Just t))     = tvars t
-    go (FuncAnn t)             = tvars t
-    go (FieldAnn _ (FI _ _ t)) = tvars t
-    go (MethAnn _ (MI _ _ t))  = tvars t
-    go (ConsAnn t)             = tvars t
+    go (SigAnn t)              = tvars t
+    go (FieldAnn (FI _ _ t))   = tvars t
+    go (MethAnn (MI _ _ t))    = tvars t
+    go (CtorAnn t)             = tvars t
     go (ClassAnn (TS _ bs _))  = btvToTV <$> b_args bs
     go (InterfaceAnn (TD (TS _ bs _) _))
                                = btvToTV <$> b_args bs

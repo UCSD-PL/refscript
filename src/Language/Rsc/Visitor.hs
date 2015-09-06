@@ -114,10 +114,8 @@ scopeVisitor :: (Monoid acc, Functor m, Monad m) => VisitorM m acc ctx b
 scopeVisitor = defaultVisitor { endExpr = ee, endStmt = es }
   where
     es FunctionStmt{} = True
-    es FuncAmbDecl {} = True
-    es FuncOverload{} = True
     es ClassStmt   {} = True
-    es IfaceStmt   {} = True
+    es InterfaceStmt   {} = True
     es ModuleStmt  {} = True
     es _              = False
     ee _              = True
@@ -195,14 +193,12 @@ visitStmtM v = vS
     step c (ForInStmt l i e b)      = ForInStmt    l <$> (visitFIInit v c i) <*> (vE c e)     <*> (vS c b)
     step c (VarDeclStmt l ds)       = VarDeclStmt  l <$> (visitVarDecl v c <$$> ds)
     step c (ReturnStmt l e)         = ReturnStmt   l <$> (vE c <$$> e)
-    step c (FunctionStmt l f xs b)  = FunctionStmt l <$> (vI c f) <*> (vI c <$$> xs) <*> (vS c <$$> b)
+    step c (FunctionStmt l f xs b)  = FunctionStmt l <$> (vI c f) <*> (vI c <$$> xs) <*> ((vS c <$$>) <$$> b)
     step c (SwitchStmt l e cs)      = SwitchStmt   l <$> (vE c e) <*> (vC c <$$> cs)
     step c (ClassStmt l x xe xs es) = ClassStmt    l <$> (vI c x) <*> (vI c <$$> xe) <*> (vI c <$$> xs) <*> (visitClassElt v c <$$> es)
     step c (ThrowStmt l e)          = ThrowStmt    l <$> (vE c e)
-    step c (FuncAmbDecl l f xs)     = FuncAmbDecl  l <$> (vI c f) <*> (vI c <$$> xs)
-    step c (FuncOverload l f xs)    = FuncOverload l <$> (vI c f) <*> (vI c <$$> xs)
     step c (ModuleStmt l m ss)      = ModuleStmt   l <$> (vI c m) <*> (vS c <$$> ss)
-    step _ s@(IfaceStmt {})         = return s
+    step _ s@(InterfaceStmt {})         = return s
     step _ s@(EmptyStmt {})         = return s
     step c (EnumStmt l n es)        = EnumStmt     l <$> (vI c n) <*> (vEE c <$$> es)
     step _ s                        = throw $ unimplemented l "visitStatement" s  where l = srcPos s
@@ -256,10 +252,9 @@ visitClassElt v = vCE
     vCE c ce = accum acc >> step c' ce' where c'     = ctxCElt v c  ce
                                               ce'    = txCElt  v c' ce
                                               acc    = accCElt v c' ce
-    step c (Constructor l xs ss)       = Constructor    l   <$> (vI c <$$> xs) <*> (vS c <$$> ss)
-    step c (MemberVarDecl l b i e)     = MemberVarDecl  l b <$> (vI c i)       <*> (visitExpr v c <$$> e)
-    step c (MemberMethDecl l b f xs)   = MemberMethDecl l b <$> (vI c f)       <*> (vI c <$$> xs)
-    step c (MemberMethDef l b f xs ss) = MemberMethDef  l b <$> (vI c f)       <*> (vI c <$$> xs) <*> (vS c <$$> ss)
+    step c (Constructor l xs ss)        = Constructor l <$> (vI c <$$> xs) <*> (vS c <$$> ss)
+    step c (MemberVarDecl l b i e)      = MemberVarDecl l b <$> (vI c i) <*> (visitExpr v c <$$> e)
+    step c (MemberMethDecl l b f xs ss) = MemberMethDecl l b <$> (vI c f) <*> (vI c <$$> xs) <*> (vS c <$$> ss)
 
 visitFInit :: (Monad m, Functor m, Monoid a, IsLocated b)
            => VisitorM m a ctx b -> ctx -> ForInit b -> VisitT m a (ForInit b)
@@ -384,14 +379,13 @@ transFact f = go
     go αs xs (Overload x t)    = Overload x    $ trans f αs xs t
 
     go αs xs (VarAnn a t)      = VarAnn a      $ trans f αs xs <$> t
-    go αs xs (AmbVarAnn t)     = AmbVarAnn     $ trans f αs xs t
 
-    go αs xs (FieldAnn m t)    = FieldAnn m    $ trans f αs xs t
-    go αs xs (MethAnn m t)     = MethAnn m     $ trans f αs xs t
-    go αs xs (ConsAnn t)       = ConsAnn       $ trans f αs xs t
+    go αs xs (FieldAnn t)      = FieldAnn      $ trans f αs xs t
+    go αs xs (MethAnn t)       = MethAnn       $ trans f αs xs t
+    go αs xs (CtorAnn t)       = CtorAnn       $ trans f αs xs t
 
     go αs xs (UserCast t)      = UserCast      $ trans f αs xs t
-    go αs xs (FuncAnn t)       = FuncAnn       $ trans f αs xs t
+    go αs xs (SigAnn t)        = SigAnn        $ trans f αs xs t
     go αs xs (TCast x c)       = TCast x       $ trans f αs xs c
 
     go αs xs (ClassAnn ts)     = ClassAnn      $ trans f αs xs ts
@@ -490,17 +484,14 @@ ntransFact f g = go
     go (EltOverload x m) = EltOverload x $ ntrans f g m
     go (Overload x t)    = Overload x    $ ntrans f g t
     go (VarAnn a t)      = VarAnn a      $ ntrans f g <$> t
-    go (AmbVarAnn t)     = AmbVarAnn     $ ntrans f g t
-    go (FieldAnn m t)    = FieldAnn m    $ ntrans f g t
-    go (MethAnn m t)     = MethAnn m     $ ntrans f g t
-    go (ConsAnn t)       = ConsAnn       $ ntrans f g t
+    go (FieldAnn t)      = FieldAnn      $ ntrans f g t
+    go (MethAnn t)       = MethAnn       $ ntrans f g t
+    go (CtorAnn t)       = CtorAnn       $ ntrans f g t
     go (UserCast t)      = UserCast      $ ntrans f g t
-    go (FuncAnn  t)      = FuncAnn       $ ntrans f g t
+    go (SigAnn t)        = SigAnn        $ ntrans f g t
     go (TCast x c)       = TCast x       $ ntrans f g c
     go (ClassAnn t)      = ClassAnn      $ ntrans f g t
     go (InterfaceAnn t)  = InterfaceAnn  $ ntrans f g t
-    go (ExportedElt)     = ExportedElt
-    go (ReadOnlyVar)     = ReadOnlyVar
     go (ModuleAnn m)     = ModuleAnn     $ m
     go (EnumAnn e)       = EnumAnn       $ e
     go (BypassUnique)    = BypassUnique

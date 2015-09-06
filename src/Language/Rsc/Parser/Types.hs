@@ -27,6 +27,7 @@ import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annots
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Names
+import           Language.Rsc.Options
 import           Language.Rsc.Parser.Common
 import           Language.Rsc.Parser.Lexer
 import           Language.Rsc.Transformations
@@ -53,8 +54,8 @@ idBindP' = withinSpacesP $ axyP identifierP dcolon typeOrHashP
                <|>    (char '#' >> return Nothing)
 
 
-anonFuncP :: Parser RRType
-anonFuncP = funcSigP
+functionExpressionP :: Parser RRType
+functionExpressionP = funcSigP
 
 identifierP :: Parser (Id SrcSpan)
 identifierP = withSpan Id identifier

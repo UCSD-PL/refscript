@@ -146,11 +146,13 @@ patch fs
 tcFun :: Unif r => TCEnv r -> Statement (AnnTc r)
                  -> TCM r (Statement (AnnTc r), Maybe (TCEnv r))
 -------------------------------------------------------------------------------
-tcFun γ (FunctionStmt l f xs body)
+tcFun γ (FunctionStmt l f xs Nothing)
+  = return $ (FunctionStmt l f xs Nothing, Just γ)
+tcFun γ (FunctionStmt l f xs (Just body))
   | Just ft   <- tcEnvFindTy f γ
   = do  ts    <- tcFunTys l f xs ft
         body' <- foldM (tcCallable γ l f xs) body ts
-        return $ (FunctionStmt l f xs body', Just γ)
+        return $ (FunctionStmt l f xs (Just body'), Just γ)
   | otherwise
   = die $ errorMissingSpec (srcPos l) f
 
@@ -209,17 +211,9 @@ tcStmt  :: Unif r =>
 tcStmt γ s@(EmptyStmt _)
   = return (s, Just γ)
 
--- declare function foo(...): T;
--- this definitions will be hoisted
-tcStmt γ s@(FuncAmbDecl _ _ _)
-  = return (s, Just γ)
-
-tcStmt γ s@(FuncOverload _ _ _)
-  = return (s, Just γ)
-
 -- interface Foo;
 -- this definitions will be hoisted
-tcStmt γ s@(IfaceStmt _ _)
+tcStmt γ s@(InterfaceStmt _ _)
   = return (s, Just γ)
 
 -- x = e
@@ -367,13 +361,13 @@ tcVarDecl γ v@(VarDecl l x (Just e))
       c -> tcError $ unimplemented l "tcVarDecl" ("case: " ++ ppshow c)
 
 -- XXX: Not using Initilation status for the moment
-tcVarDecl γ v@(VarDecl _ x Nothing)
-  = case scrapeVarDecl v of
-      -- special case ambient vars
-      [(AmbVarDeclKind,_, Just t)] ->
-        return $ (v, Just $ tcEnvAdds [(x, VI Ambient Initialized t)] γ)
-      -- The rest should have fallen under the 'undefined' initialization case
-      _ -> error "TC-tcVarDecl: this shouldn't happen"
+tcVarDecl γ v@(VarDecl _ x Nothing) = error "[tcVarDecl] Uninitialized VarDecl"
+--   = case scrapeVarDecl v of
+--       -- special case ambient vars
+--       [(AmbVarDeclKind,_, Just t)] ->
+--         return $ (v, Just $ tcEnvAdds [(x, VI Ambient Initialized t)] γ)
+--       -- The rest should have fallen under the 'undefined' initialization case
+--       _ -> error "TC-tcVarDecl: this shouldn't happen"
 
 
 ---------------------------------------------------------------------------------------
@@ -416,11 +410,11 @@ tcClassElt _ _ (MemberVarDecl l False x _)
 -- | Static method: The classes type parameters should not be included in the
 -- environment
 --
-tcClassElt γ (TD sig ms) (MemberMethDef l True x xs body)
+tcClassElt γ (TD sig ms) (MemberMethDecl l True x xs body)
   | Just (MI _ _ t) <- F.lookupSEnv (F.symbol x) $ tm_smeth ms
   = do  its <- tcFunTys l x xs t
         body' <- foldM (tcCallable γ l x xs) body its
-        return $ MemberMethDef l True x xs body'
+        return $ MemberMethDecl l True x xs body'
   | otherwise
   = tcError $ errorClassEltAnnot (srcPos l) (sig) x
 
@@ -428,19 +422,16 @@ tcClassElt γ (TD sig ms) (MemberMethDef l True x xs body)
 --
 -- TODO: check method mutability
 --
-tcClassElt γ0 (TD sig ms) (MemberMethDef l False x xs bd)
+tcClassElt γ0 (TD sig ms) (MemberMethDecl l False x xs bd)
   | Just (MI _ m t) <- F.lookupSEnv (F.symbol x) (tm_meth ms)
   = do  let γ = γ0
               & initClassInstanceEnv sig    -- Adds class bounded type params
               & initClassMethEnv m sig      -- Adds method's mutability and type for 'this'
         its <- tcFunTys l x xs t
         bd' <- foldM (tcCallable γ l x xs) bd its
-        return $ MemberMethDef l False x xs bd'
+        return $ MemberMethDecl l False x xs bd'
   | otherwise
   = tcError $ errorClassEltAnnot (srcPos l) (sig) x
-
-tcClassElt _ _ m@(MemberMethDecl _ _ _ _ ) = return m
-
 
 
 -------------------------------------------------------------------------------
@@ -678,9 +669,12 @@ tcExpr γ (FuncExpr l fo xs body) tCtxO
   | otherwise
   = tcError $ errorNoFuncAnn $ srcPos l
   where
-    funTy | [ft]    <- [ t | FuncAnn t <- fFact l ] = Just ft
-          | Just ft <- tCtxO                           = Just ft
-          | otherwise                                  = Nothing
+    funTy | [ft] <- [ t | SigAnn t <- fFact l ]
+          = Just ft
+          | Just ft <- tCtxO
+          = Just ft
+          | otherwise
+          = Nothing
     f = maybe (F.symbol "<anonymous>") F.symbol fo
 
 tcExpr _ e _

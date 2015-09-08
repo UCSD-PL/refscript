@@ -11151,6 +11151,7 @@ var ts;
             getShorthandAssignmentValueSymbol: getShorthandAssignmentValueSymbol,
             getTypeAtLocation: getTypeOfNode,
             typeToString: typeToString,
+            typeToRscString: typeToRscString,
             signatureToString: signatureToString,
             getSymbolDisplayBuilder: getSymbolDisplayBuilder,
             symbolToString: symbolToString,
@@ -12234,6 +12235,9 @@ var ts;
                 result = result.substr(0, maxLength - "...".length) + "...";
             }
             return result;
+        }
+        function typeToRscString(type, enclosingDeclaration) {
+            return typeToString(type, enclosingDeclaration, 4 | 1);
         }
         function getTypeAliasForTypeLiteral(type) {
             if (type.symbol && type.symbol.flags & 2048) {
@@ -22152,7 +22156,7 @@ var ts;
             getSymbolLinks(argumentsSymbol).type = getGlobalType("IArguments");
             getSymbolLinks(unknownSymbol).type = unknownType;
             globals[undefinedSymbol.name] = undefinedSymbol;
-            globalArrayType = getGlobalType("Array", 1);
+            globalArrayType = getGlobalType("Array", 2);
             globalObjectType = getGlobalType("Object");
             globalFunctionType = getGlobalType("Function");
             globalStringType = getGlobalType("String");
@@ -24585,7 +24589,10 @@ var __extends = (this && this.__extends) || function (d, b) {
 var ts;
 (function (ts) {
     function aesonEncode(tag, content) {
-        return { "tag": tag, "contents": content };
+        return {
+            "tag": tag,
+            "contents": content
+        };
     }
     ts.aesonEncode = aesonEncode;
     (function (AesonCtor) {
@@ -25748,20 +25755,20 @@ var ts;
         return RsModuleStmt;
     })(RsStatement);
     ts.RsModuleStmt = RsModuleStmt;
-    var RsIfaceStmt = (function (_super) {
-        __extends(RsIfaceStmt, _super);
-        function RsIfaceStmt(span, ann, name) {
+    var RsInterfaceStmt = (function (_super) {
+        __extends(RsInterfaceStmt, _super);
+        function RsInterfaceStmt(span, ann, name) {
             _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.name = name;
         }
-        RsIfaceStmt.prototype.serialize = function () {
-            return this._toAeson("IfaceStmt", [this.name.serialize()], AesonCtor.WITH_CTOR);
+        RsInterfaceStmt.prototype.serialize = function () {
+            return this._toAeson("InterfaceStmt", [this.name.serialize()], AesonCtor.WITH_CTOR);
         };
-        return RsIfaceStmt;
+        return RsInterfaceStmt;
     })(RsStatement);
-    ts.RsIfaceStmt = RsIfaceStmt;
+    ts.RsInterfaceStmt = RsInterfaceStmt;
     var RsEnumElt = (function (_super) {
         __extends(RsEnumElt, _super);
         function RsEnumElt(span, ann, name, exp) {
@@ -25814,6 +25821,7 @@ var ts;
         AnnotationKind[AnnotationKind["QualifierRawSpec"] = 12] = "QualifierRawSpec";
         AnnotationKind[AnnotationKind["InvariantRawSpec"] = 13] = "InvariantRawSpec";
         AnnotationKind[AnnotationKind["OptionRawSpec"] = 14] = "OptionRawSpec";
+        AnnotationKind[AnnotationKind["TypeSignatureRawSpec"] = 15] = "TypeSignatureRawSpec";
     })(ts.AnnotationKind || (ts.AnnotationKind = {}));
     var AnnotationKind = ts.AnnotationKind;
     (function (AnnotContext) {
@@ -25825,39 +25833,52 @@ var ts;
     })(ts.AnnotContext || (ts.AnnotContext = {}));
     var AnnotContext = ts.AnnotContext;
     var Annotation = (function () {
-        function Annotation(sourceSpan, kind) {
+        function Annotation(sourceSpan, kind, content) {
             this.sourceSpan = sourceSpan;
             this.kind = kind;
+            this.content = content;
         }
         Annotation.prototype.serialize = function () {
-            throw new Error("[refscript] Method 'serialize' needs to be instantiated in a subclass of RsAnnotation.");
+            return ts.aesonEncode(AnnotationKind[this.kind], [this.sourceSpan.serialize(), this.content]);
+        };
+        Annotation.prototype.getContent = function () {
+            return this.content;
         };
         return Annotation;
     })();
     ts.Annotation = Annotation;
-    var SingleContentAnnotation = (function (_super) {
-        __extends(SingleContentAnnotation, _super);
-        function SingleContentAnnotation(sourceSpan, kind, content) {
-            _super.call(this, sourceSpan, kind);
-            this.content = content;
-        }
-        SingleContentAnnotation.prototype.serialize = function () {
-            return ts.aesonEncode(AnnotationKind[this.kind], [this.sourceSpan.serialize(), this.content]);
-        };
-        SingleContentAnnotation.prototype.getContent = function () {
-            return this.content;
-        };
-        return SingleContentAnnotation;
-    })(Annotation);
-    ts.SingleContentAnnotation = SingleContentAnnotation;
     var FunctionDeclarationAnnotation = (function (_super) {
         __extends(FunctionDeclarationAnnotation, _super);
         function FunctionDeclarationAnnotation(sourceSpan, content) {
             _super.call(this, sourceSpan, AnnotationKind.FunctionDeclarationRawSpec, content);
         }
         return FunctionDeclarationAnnotation;
-    })(SingleContentAnnotation);
+    })(Annotation);
     ts.FunctionDeclarationAnnotation = FunctionDeclarationAnnotation;
+    var TypeSignatureAnnotation = (function (_super) {
+        __extends(TypeSignatureAnnotation, _super);
+        function TypeSignatureAnnotation(sourceSpan, content) {
+            _super.call(this, sourceSpan, AnnotationKind.InterfaceRawSpec, content);
+        }
+        return TypeSignatureAnnotation;
+    })(Annotation);
+    ts.TypeSignatureAnnotation = TypeSignatureAnnotation;
+    var InterfaceDeclarationAnnotation = (function (_super) {
+        __extends(InterfaceDeclarationAnnotation, _super);
+        function InterfaceDeclarationAnnotation(sourceSpan, content) {
+            _super.call(this, sourceSpan, AnnotationKind.InterfaceRawSpec, content);
+        }
+        return InterfaceDeclarationAnnotation;
+    })(Annotation);
+    ts.InterfaceDeclarationAnnotation = InterfaceDeclarationAnnotation;
+    var TypeAliasAnnotation = (function (_super) {
+        __extends(TypeAliasAnnotation, _super);
+        function TypeAliasAnnotation(sourceSpan, content) {
+            _super.call(this, sourceSpan, AnnotationKind.TypeAliasRawSpec, content);
+        }
+        return TypeAliasAnnotation;
+    })(Annotation);
+    ts.TypeAliasAnnotation = TypeAliasAnnotation;
     var VariableDeclarationAnnotation = (function (_super) {
         __extends(VariableDeclarationAnnotation, _super);
         function VariableDeclarationAnnotation(sourceSpan, asgn, content) {
@@ -25889,7 +25910,7 @@ var ts;
             return s + _super.prototype.getContent.call(this);
         };
         return VariableDeclarationAnnotation;
-    })(SingleContentAnnotation);
+    })(Annotation);
     ts.VariableDeclarationAnnotation = VariableDeclarationAnnotation;
     var FunctionExpressionAnnotation = (function (_super) {
         __extends(FunctionExpressionAnnotation, _super);
@@ -25897,7 +25918,7 @@ var ts;
             _super.call(this, sourceSpan, AnnotationKind.FunctionExpressionRawSpec, content);
         }
         return FunctionExpressionAnnotation;
-    })(SingleContentAnnotation);
+    })(Annotation);
     ts.FunctionExpressionAnnotation = FunctionExpressionAnnotation;
     var InterfaceAnnotation = (function (_super) {
         __extends(InterfaceAnnotation, _super);
@@ -25905,7 +25926,7 @@ var ts;
             _super.call(this, sourceSpan, AnnotationKind.InterfaceRawSpec, content);
         }
         return InterfaceAnnotation;
-    })(SingleContentAnnotation);
+    })(Annotation);
     ts.InterfaceAnnotation = InterfaceAnnotation;
     var ClassAnnotation = (function (_super) {
         __extends(ClassAnnotation, _super);
@@ -25913,7 +25934,7 @@ var ts;
             _super.call(this, sourceSpan, AnnotationKind.ClassRawSpec, content);
         }
         return ClassAnnotation;
-    })(SingleContentAnnotation);
+    })(Annotation);
     ts.ClassAnnotation = ClassAnnotation;
     var FieldAnnotation = (function (_super) {
         __extends(FieldAnnotation, _super);
@@ -25939,7 +25960,7 @@ var ts;
             return "";
         };
         return FieldAnnotation;
-    })(SingleContentAnnotation);
+    })(Annotation);
     ts.FieldAnnotation = FieldAnnotation;
     var MethodAnnotation = (function (_super) {
         __extends(MethodAnnotation, _super);
@@ -25947,7 +25968,7 @@ var ts;
             _super.call(this, sourceSpan, AnnotationKind.MethodRawSpec, content);
         }
         return MethodAnnotation;
-    })(SingleContentAnnotation);
+    })(Annotation);
     ts.MethodAnnotation = MethodAnnotation;
     var ConstructorAnnotation = (function (_super) {
         __extends(ConstructorAnnotation, _super);
@@ -25955,7 +25976,7 @@ var ts;
             _super.call(this, sourceSpan, AnnotationKind.ConstructorRawSpec, content);
         }
         return ConstructorAnnotation;
-    })(SingleContentAnnotation);
+    })(Annotation);
     ts.ConstructorAnnotation = ConstructorAnnotation;
     var RsInferredClassAnnotation = (function (_super) {
         __extends(RsInferredClassAnnotation, _super);
@@ -26003,7 +26024,7 @@ var ts;
     var GlobalAnnotation = (function (_super) {
         __extends(GlobalAnnotation, _super);
         function GlobalAnnotation(sourceSpan, kind, content) {
-            _super.call(this, sourceSpan, kind);
+            _super.call(this, sourceSpan, kind, content);
             this.content = content;
         }
         return GlobalAnnotation;
@@ -26042,6 +26063,41 @@ var ts;
         return [new FunctionDeclarationAnnotation(srcSpan, s)];
     }
     ts.makeFunctionDeclarationAnnotation = makeFunctionDeclarationAnnotation;
+    function makeConstructorAnnotations(s, srcSpan) {
+        var tokens = stringTokens(s);
+        if (!tokens || tokens[0] !== "new")
+            throw new Error("[refscript] Invalid constructor annotation: " + s);
+        return [new ConstructorAnnotation(srcSpan, s)];
+    }
+    ts.makeConstructorAnnotations = makeConstructorAnnotations;
+    function makeMethodAnnotations(s, srcSpan) {
+        var tokens = stringTokens(s);
+        if (isReservedAnnotationPrefix(tokens[0]))
+            throw new Error("[refscript] Invalid method annotation: " + s);
+        return [new MethodAnnotation(srcSpan, s)];
+    }
+    ts.makeMethodAnnotations = makeMethodAnnotations;
+    function makeTypeSignatureAnnotation(s, srcSpan) {
+        var tokens = stringTokens(s);
+        if (!tokens || tokens.length < 2 || tokens[0] !== "interface")
+            return [];
+        return [new TypeSignatureAnnotation(srcSpan, s)];
+    }
+    ts.makeTypeSignatureAnnotation = makeTypeSignatureAnnotation;
+    function makeInterfaceDeclarationAnnotation(s, srcSpan) {
+        var tokens = stringTokens(s);
+        if (!tokens || tokens.length < 2 || tokens[0] !== "interface")
+            throw new Error("[refscript] Invalid interface annotation: " + s);
+        return [new InterfaceDeclarationAnnotation(srcSpan, s)];
+    }
+    ts.makeInterfaceDeclarationAnnotation = makeInterfaceDeclarationAnnotation;
+    function makeTypeAliasAnnotation(s, srcSpan) {
+        var tokens = stringTokens(s);
+        if (!tokens || tokens.length < 2 || tokens[0] !== "type")
+            return [];
+        return [new TypeAliasAnnotation(srcSpan, s)];
+    }
+    ts.makeTypeAliasAnnotation = makeTypeAliasAnnotation;
     function toSpecKind(s) {
         var ctx = undefined;
         switch (s) {
@@ -26080,9 +26136,423 @@ var ts;
     }
 })(ts || (ts = {}));
 //<reference path='..\typescript.ts' />
+var ts;
+(function (ts) {
+    var RsType = (function () {
+        function RsType() {
+        }
+        RsType.prototype.toString = function () {
+            throw new Error("BUG: Abstract in RsType toString()");
+        };
+        return RsType;
+    })();
+    ts.RsType = RsType;
+    var RsBind = (function () {
+        function RsBind(symbol, type) {
+            this.symbol = symbol;
+            this.type = type;
+        }
+        RsBind.prototype.toString = function () {
+            return this.symbol + ": " + this.type.toString();
+        };
+        return RsBind;
+    })();
+    ts.RsBind = RsBind;
+    var TError = (function (_super) {
+        __extends(TError, _super);
+        function TError(msg) {
+            _super.call(this);
+            this.msg = msg;
+        }
+        TError.prototype.toString = function () {
+            return "Error type: " + this.msg;
+        };
+        TError.prototype.message = function () {
+            return this.msg;
+        };
+        return TError;
+    })(RsType);
+    ts.TError = TError;
+    var TTopC = (function (_super) {
+        __extends(TTopC, _super);
+        function TTopC() {
+            _super.apply(this, arguments);
+        }
+        TTopC.prototype.toString = function () { return "top"; };
+        return TTopC;
+    })(RsType);
+    ts.TTopC = TTopC;
+    ts.TTop = new TTopC();
+    var TAnyC = (function (_super) {
+        __extends(TAnyC, _super);
+        function TAnyC() {
+            _super.apply(this, arguments);
+        }
+        TAnyC.prototype.toString = function () {
+            return "top";
+        };
+        return TAnyC;
+    })(RsType);
+    ts.TAnyC = TAnyC;
+    ts.TAny = new TAnyC();
+    var TNumberC = (function (_super) {
+        __extends(TNumberC, _super);
+        function TNumberC() {
+            _super.apply(this, arguments);
+        }
+        TNumberC.prototype.toString = function () {
+            return "number";
+        };
+        return TNumberC;
+    })(RsType);
+    ts.TNumberC = TNumberC;
+    ts.TNumber = new TNumberC();
+    var TStringC = (function (_super) {
+        __extends(TStringC, _super);
+        function TStringC() {
+            _super.apply(this, arguments);
+        }
+        TStringC.prototype.toString = function () {
+            return "string";
+        };
+        return TStringC;
+    })(RsType);
+    ts.TStringC = TStringC;
+    ts.TString = new TStringC();
+    var TStringLit = (function (_super) {
+        __extends(TStringLit, _super);
+        function TStringLit(literal) {
+            _super.call(this);
+            this.literal = literal;
+        }
+        TStringLit.prototype.toString = function () {
+            return "\"" + this.literal + "\"";
+        };
+        return TStringLit;
+    })(RsType);
+    ts.TStringLit = TStringLit;
+    var TBooleanC = (function (_super) {
+        __extends(TBooleanC, _super);
+        function TBooleanC() {
+            _super.apply(this, arguments);
+        }
+        TBooleanC.prototype.toString = function () {
+            return "boolean";
+        };
+        return TBooleanC;
+    })(RsType);
+    ts.TBooleanC = TBooleanC;
+    ts.TBoolean = new TBooleanC();
+    var TVoidC = (function (_super) {
+        __extends(TVoidC, _super);
+        function TVoidC() {
+            _super.apply(this, arguments);
+        }
+        TVoidC.prototype.toString = function () {
+            return "void";
+        };
+        return TVoidC;
+    })(RsType);
+    ts.TVoidC = TVoidC;
+    ts.TVoid = new TVoidC();
+    var TUndefinedC = (function (_super) {
+        __extends(TUndefinedC, _super);
+        function TUndefinedC() {
+            _super.apply(this, arguments);
+        }
+        TUndefinedC.prototype.toString = function () {
+            return "undefined";
+        };
+        return TUndefinedC;
+    })(RsType);
+    ts.TUndefinedC = TUndefinedC;
+    ts.TUndefined = new TUndefinedC();
+    var TObject = (function (_super) {
+        __extends(TObject, _super);
+        function TObject(fields) {
+            _super.call(this);
+            this.fields = fields;
+        }
+        TObject.prototype.toString = function () {
+            var s = "";
+            s += "{ ";
+            s += this.fields.map(function (f) { return f.toString(); }).join("; ");
+            s += " }";
+            return s;
+        };
+        return TObject;
+    })(RsType);
+    ts.TObject = TObject;
+    var TAll = (function (_super) {
+        __extends(TAll, _super);
+        function TAll(param, ty) {
+            _super.call(this);
+            this.param = param;
+            this.ty = ty;
+        }
+        TAll.prototype.toString = function () {
+            var s = "";
+            s += "forall ";
+            s += this.param;
+            s += " . ";
+            s += this.ty.toString();
+            return s;
+        };
+        return TAll;
+    })(RsType);
+    ts.TAll = TAll;
+    var RsFunctionLike = (function (_super) {
+        __extends(RsFunctionLike, _super);
+        function RsFunctionLike() {
+            _super.apply(this, arguments);
+        }
+        return RsFunctionLike;
+    })(RsType);
+    ts.RsFunctionLike = RsFunctionLike;
+    var RsTFun = (function (_super) {
+        __extends(RsTFun, _super);
+        function RsTFun(typeParameters, parameters, returnType) {
+            _super.call(this);
+            this.typeParameters = typeParameters;
+            this.parameters = parameters;
+            this.returnType = returnType;
+        }
+        RsTFun.prototype.toString = function () {
+            var s = "";
+            if (this.typeParameters.length > 0) {
+                s += angles(this.typeParameters.map(function (p) { return p.toString(); }).join(" "));
+            }
+            s += parens(this.parameters.map(function (b) { return b.toString(); }).join(", "));
+            s += " => ";
+            s += this.returnType.toString();
+            return s;
+        };
+        return RsTFun;
+    })(RsFunctionLike);
+    ts.RsTFun = RsTFun;
+    var RsMeth = (function (_super) {
+        __extends(RsMeth, _super);
+        function RsMeth(tParams, argTs, returnT) {
+            _super.call(this);
+            this.tParams = tParams;
+            this.argTs = argTs;
+            this.returnT = returnT;
+        }
+        RsMeth.prototype.toString = function () {
+            var s = "";
+            if (this.tParams.length > 0) {
+                s += angles(this.tParams.map(function (p) { return p.toString(); }).join(" "));
+            }
+            s += parens(this.argTs.map(function (b) { return b.toString(); }).join(", "));
+            s += ": ";
+            s += this.returnT.toString();
+            return s;
+        };
+        return RsMeth;
+    })(RsFunctionLike);
+    ts.RsMeth = RsMeth;
+    var RsTOr = (function (_super) {
+        __extends(RsTOr, _super);
+        function RsTOr(elements) {
+            _super.call(this);
+            this.elements = elements;
+        }
+        RsTOr.prototype.toString = function () {
+            if (!this.elements || this.elements.length === 0) {
+                return "Top";
+            }
+            return this.elements.map(function (t) { return t.toString(); }).join(" + ");
+        };
+        return RsTOr;
+    })(RsType);
+    ts.RsTOr = RsTOr;
+    var RsTAnd = (function (_super) {
+        __extends(RsTAnd, _super);
+        function RsTAnd(signatures) {
+            _super.call(this);
+            this.signatures = signatures;
+        }
+        RsTAnd.prototype.toString = function () {
+            if (this.signatures && this.signatures.length > 0) {
+                return (this.signatures.length == 1) ?
+                    this.signatures[0].toString() :
+                    ("\n" + this.signatures.map(function (s) { return "\t/\\ " + s.toString(); }).join("\n"));
+            }
+            else {
+                return new TError("RsTAnd").toString();
+            }
+        };
+        return RsTAnd;
+    })(RsFunctionLike);
+    ts.RsTAnd = RsTAnd;
+    var TArray = (function (_super) {
+        __extends(TArray, _super);
+        function TArray(eltT) {
+            _super.call(this);
+            this.eltT = eltT;
+        }
+        TArray.prototype.toString = function () { return "<" + this.eltT.toString() + ">"; };
+        return TArray;
+    })(RsType);
+    ts.TArray = TArray;
+    var TTypeReference = (function (_super) {
+        __extends(TTypeReference, _super);
+        function TTypeReference(name, _arguments) {
+            _super.call(this);
+            this.name = name;
+            this._arguments = _arguments;
+        }
+        TTypeReference.prototype.toString = function () {
+            var s = this.name;
+            if (this._arguments && this._arguments.length > 0) {
+                s += angles(this._arguments.map(function (t) { return t.toString(); }).join(", "));
+            }
+            return s;
+        };
+        return TTypeReference;
+    })(RsType);
+    ts.TTypeReference = TTypeReference;
+    var TInterface = (function () {
+        function TInterface(ref, type) {
+            this.ref = ref;
+            this.type = type;
+        }
+        TInterface.prototype.toString = function () {
+            return "type " + this.ref.toString() + " " + this.type.toString();
+        };
+        return TInterface;
+    })();
+    ts.TInterface = TInterface;
+    var TTVar = (function (_super) {
+        __extends(TTVar, _super);
+        function TTVar(name) {
+            _super.call(this);
+            this.name = name;
+        }
+        TTVar.prototype.toString = function () {
+            return this.name;
+        };
+        return TTVar;
+    })(RsType);
+    ts.TTVar = TTVar;
+    var RsTypeParam = (function () {
+        function RsTypeParam(name, constraint) {
+            this.name = name;
+            this.constraint = constraint;
+        }
+        RsTypeParam.prototype.toString = function () {
+            var s = this.name;
+            if (this.constraint) {
+                s += "extends ";
+                s += this.constraint;
+            }
+            return s;
+        };
+        return RsTypeParam;
+    })();
+    ts.RsTypeParam = RsTypeParam;
+    var TParentType = (function () {
+        function TParentType(name, targs) {
+            this.name = name;
+            this.targs = targs;
+        }
+        TParentType.prototype.toString = function () {
+            return this.name + " " + this.targs.map(function (a) { return a.toString(); }).join(", ");
+        };
+        return TParentType;
+    })();
+    ts.TParentType = TParentType;
+    var RsTypeMember = (function () {
+        function RsTypeMember() {
+        }
+        return RsTypeMember;
+    })();
+    ts.RsTypeMember = RsTypeMember;
+    var RsCallSig = (function (_super) {
+        __extends(RsCallSig, _super);
+        function RsCallSig(type) {
+            _super.call(this);
+            this.type = type;
+        }
+        RsCallSig.prototype.toString = function () {
+            return this.type.toString();
+        };
+        return RsCallSig;
+    })(RsTypeMember);
+    ts.RsCallSig = RsCallSig;
+    var RsConsSig = (function (_super) {
+        __extends(RsConsSig, _super);
+        function RsConsSig(type) {
+            _super.call(this);
+            this.type = type;
+        }
+        RsConsSig.prototype.toString = function () {
+            return "new " + this.type.toString();
+        };
+        return RsConsSig;
+    })(RsTypeMember);
+    ts.RsConsSig = RsConsSig;
+    var RsFieldSig = (function (_super) {
+        __extends(RsFieldSig, _super);
+        function RsFieldSig(name, opt, type) {
+            _super.call(this);
+            this.name = name;
+            this.opt = opt;
+            this.type = type;
+        }
+        RsFieldSig.prototype.toString = function () {
+            return this.name + (this.opt ? "?" : "") + ": " + this.type.toString();
+        };
+        return RsFieldSig;
+    })(RsTypeMember);
+    ts.RsFieldSig = RsFieldSig;
+    var RsMethSig = (function (_super) {
+        __extends(RsMethSig, _super);
+        function RsMethSig(name, type) {
+            _super.call(this);
+            this.name = name;
+            this.type = type;
+        }
+        RsMethSig.prototype.toString = function () {
+            return this.name + ": " + this.type.toString();
+        };
+        return RsMethSig;
+    })(RsTypeMember);
+    ts.RsMethSig = RsMethSig;
+    var RsRawStringMember = (function (_super) {
+        __extends(RsRawStringMember, _super);
+        function RsRawStringMember(str) {
+            _super.call(this);
+            this.str = str;
+        }
+        RsRawStringMember.prototype.toString = function () {
+            return this.str;
+        };
+        return RsRawStringMember;
+    })(RsTypeMember);
+    ts.RsRawStringMember = RsRawStringMember;
+    (function (MutabilityKind) {
+        MutabilityKind[MutabilityKind["MutableK"] = 0] = "MutableK";
+        MutabilityKind[MutabilityKind["ImmutableK"] = 1] = "ImmutableK";
+        MutabilityKind[MutabilityKind["ReadOnlyK"] = 2] = "ReadOnlyK";
+        MutabilityKind[MutabilityKind["ParametricK"] = 3] = "ParametricK";
+        MutabilityKind[MutabilityKind["PresetK"] = 4] = "PresetK";
+        MutabilityKind[MutabilityKind["DefaultK"] = 5] = "DefaultK";
+    })(ts.MutabilityKind || (ts.MutabilityKind = {}));
+    var MutabilityKind = ts.MutabilityKind;
+    function angles(s) {
+        return "<" + s + ">";
+    }
+    ts.angles = angles;
+    function parens(s) {
+        return "(" + s + ")";
+    }
+})(ts || (ts = {}));
+//<reference path='..\typescript.ts' />
 /// <reference path="./initializationStatistics.ts"/>
 /// <reference path="./syntax.ts"/>
 /// <reference path="./annotations.ts"/>
+/// <reference path="./types.ts"/>
 /// <reference path="../../../ext/json-stringify-pretty-compact/index.ts"/>
 var ts;
 (function (ts) {
@@ -26174,15 +26644,6 @@ var ts;
             this.errMsg = errMsg;
             this.errLoc = errLoc;
         }
-        FPError.mkFixError = function (diagnostic) {
-            var text1 = diagnostic.messageText;
-            var msg = typeof text1 === "string" ? text1 : text1.messageText;
-            var file = diagnostic.file;
-            var fileName = file.fileName;
-            var start = ts.getLineAndCharacterOfPosition(file, diagnostic.start);
-            var stop = ts.getLineAndCharacterOfPosition(file, diagnostic.start + dispatchEvent.length);
-            return new FPError(msg, new FPSrcSpan(new FPSrcPos(fileName, start.line, start.character), new FPSrcPos(fileName, stop.line, stop.character)));
-        };
         FPError.prototype.serialize = function () {
             return {
                 "errMsg": this.errMsg,
@@ -26192,6 +26653,16 @@ var ts;
         return FPError;
     })();
     ts.FPError = FPError;
+    function mkFixError(diagnostic) {
+        var text1 = diagnostic.messageText;
+        var msg = typeof text1 === "string" ? text1 : text1.messageText;
+        var file = diagnostic.file;
+        var fileName = file.fileName;
+        var start = ts.getLineAndCharacterOfPosition(file, diagnostic.start);
+        var stop = ts.getLineAndCharacterOfPosition(file, diagnostic.start + dispatchEvent.length);
+        return new FPError(msg, new FPSrcSpan(new FPSrcPos(fileName, start.line, start.character), new FPSrcPos(fileName, stop.line, stop.character)));
+    }
+    ts.mkFixError = mkFixError;
     var FRCrash = (function (_super) {
         __extends(FRCrash, _super);
         function FRCrash(errs, msg) {
@@ -26252,11 +26723,13 @@ var ts;
         var sourceMapDataList = compilerOptions.sourceMap || compilerOptions.inlineSourceMap ? [] : undefined;
         var diagnostics = [];
         var newLine = host.getNewLine();
+        var jsonFiles = [];
         if (targetSourceFile === undefined) {
-            ts.forEach(host.getSourceFiles(), function (sourceFile) {
+            jsonFiles = ts.map(host.getSourceFiles(), function (sourceFile) {
                 if (ts.shouldEmitToOwnFile(sourceFile, compilerOptions)) {
-                    var jsonFilePath = ts.getOwnEmitOutputFilePath(sourceFile, host, ".json");
+                    var jsonFilePath = ts.getNormalizedAbsolutePath(ts.getOwnEmitOutputFilePath(sourceFile, host, ".json"), host.getCurrentDirectory());
                     emitFile(jsonFilePath, sourceFile);
+                    return jsonFilePath;
                 }
             });
             if (compilerOptions.outFile || compilerOptions.out) {
@@ -26276,7 +26749,8 @@ var ts;
         return {
             emitSkipped: false,
             diagnostics: diagnostics,
-            sourceMaps: sourceMapDataList
+            sourceMaps: sourceMapDataList,
+            jsonFiles: jsonFiles
         };
         function emitFile(rscFilePath, sourceFile) {
             emitRefScript(rscFilePath, sourceFile);
@@ -26360,6 +26834,10 @@ var ts;
                         return blockToRsStmt(state, node);
                     case ts.SyntaxKind.ReturnStatement:
                         return returnStatementToRsStmt(state, node);
+                    case ts.SyntaxKind.InterfaceDeclaration:
+                        return interfaceDeclarationToRsStmt(state, node);
+                    case ts.SyntaxKind.TypeAliasDeclaration:
+                        return typeAliasDeclarationToRsStmt(state, node);
                 }
                 throw new Error("UNIMPLEMENTED nodeToRsStmt for " + ts.SyntaxKind[node.kind]);
                 return undefined;
@@ -26472,7 +26950,7 @@ var ts;
                 var idName = node.name;
                 if (!annotations.some(function (a) { return a instanceof ts.VariableDeclarationAnnotation; })) {
                     var type = checker.getTypeAtLocation(node);
-                    annotations = annotations.concat([new ts.VariableDeclarationAnnotation(nodeToSrcSpan(node), ts.Assignability.WriteGlobal, idName.text + " :: " + checker.typeToString(type))]);
+                    annotations = annotations.concat([new ts.VariableDeclarationAnnotation(nodeToSrcSpan(node), ts.Assignability.WriteGlobal, idName.text + " :: " + checker.typeToRscString(type, node))]);
                 }
                 return new ts.RsVarDecl(nodeToSrcSpan(node), annotations, nodeToRsId(state, node.name), (node.initializer) ? new ts.RsJust(nodeToRsExp(state, node.initializer)) : new ts.RsNothing());
             }
@@ -26489,6 +26967,65 @@ var ts;
             }
             function returnStatementToRsStmt(state, node) {
                 return new ts.RsReturnStmt(nodeToSrcSpan(node), [], (node.expression) ? new ts.RsJust(nodeToRsExp(state, node.expression)) : new ts.RsNothing());
+            }
+            function interfaceDeclarationToRsStmt(state, node) {
+                // TODO: Exported annotation?
+                var typeSignatureText = "";
+                var headerAnnotations = nodeAnnotations(node, ts.makeTypeSignatureAnnotation);
+                if (headerAnnotations && headerAnnotations.length > 0) {
+                    typeSignatureText += headerAnnotations[0].content;
+                }
+                else {
+                    var interfaceHeaderText = "interface ";
+                    interfaceHeaderText += ts.getTextOfNode(node.name);
+                    if (node.typeParameters) {
+                        interfaceHeaderText += ts.angles(node.typeParameters.map(function (typeParameter) { return ts.getTextOfNode(typeParameter); }).join(", "));
+                    }
+                    if (node.heritageClauses) {
+                        interfaceHeaderText += " " + node.heritageClauses.map(function (heritageClause) { return ts.getTextOfNode(heritageClause); }).join(", ");
+                    }
+                    typeSignatureText += interfaceHeaderText;
+                }
+                var bodyText = " { ";
+                if (node.members) {
+                    bodyText += ts.concat(node.members.map(function (member) {
+                        switch (member.kind) {
+                            case ts.SyntaxKind.ConstructSignature:
+                                var constructorAnnotations = nodeAnnotations(member, ts.makeConstructorAnnotations);
+                                if (constructorAnnotations.length > 0) {
+                                    return [constructorAnnotations[0].getContent()];
+                                }
+                                else {
+                                    var constructorSignature = checker.getSignatureFromDeclaration(member);
+                                    return ["new " + checker.signatureToString(constructorSignature)];
+                                }
+                            case ts.SyntaxKind.MethodSignature:
+                                var methodAnnotations = nodeAnnotations(member, ts.makeMethodAnnotations);
+                                if (methodAnnotations.length > 0) {
+                                    return [methodAnnotations[0].getContent()];
+                                }
+                                else {
+                                    var methodSignature = checker.getSignatureFromDeclaration(member);
+                                    return [ts.getTextOfNode(member.name) + checker.signatureToString(methodSignature)];
+                                }
+                            default:
+                                return [];
+                        }
+                    })).join(";\n");
+                }
+                bodyText += " }";
+                var interfaceAnnotations = ts.makeInterfaceDeclarationAnnotation(typeSignatureText + bodyText, nodeToSrcSpan(node));
+                return new ts.RsInterfaceStmt(nodeToSrcSpan(node), interfaceAnnotations, nodeToRsId(state, node.name));
+            }
+            function typeAliasDeclarationToRsStmt(state, node) {
+                var annotations = nodeAnnotations(node, ts.makeTypeAliasAnnotation);
+                if (!annotations || annotations.length < 1) {
+                    var annotationText = ts.getTextOfNode(node.name);
+                    annotationText += " = ";
+                    annotationText += checker.typeToRscString(checker.getTypeAtLocation(node.type), node);
+                    annotations = annotations.concat(ts.makeTypeAliasAnnotation(annotationText, nodeToSrcSpan(node)));
+                }
+                return new ts.RsEmptyStmt(nodeToSrcSpan(node), annotations);
             }
             function nodeAnnotations(node, creator) {
                 if (!node)
@@ -32459,6 +32996,7 @@ var ts;
         outDir: "built",
         rootDir: ".",
         sourceMap: false,
+        lib: ts.combinePaths(ts.getDirectoryPath(ts.normalizePath(ts.sys.getExecutingFilePath())), "lib.d.ts")
     };
     function createCompilerHost(options, setParentNodes) {
         var currentDirectory;
@@ -32517,7 +33055,12 @@ var ts;
         var newLine = ts.getNewLineCharacter(options);
         return {
             getSourceFile: getSourceFile,
-            getDefaultLibFileName: function (options) { return ts.combinePaths(ts.getDirectoryPath(ts.normalizePath(ts.sys.getExecutingFilePath())), ts.getDefaultLibFileName(options)); },
+            getDefaultLibFileName: function (options) {
+                if (options.lib) {
+                    return ts.combinePaths(ts.normalizePath(ts.sys.getCurrentDirectory()), options.lib);
+                }
+                return ts.combinePaths(ts.getDirectoryPath(ts.normalizePath(ts.sys.getExecutingFilePath())), ts.getDefaultLibFileName(options));
+            },
             writeFile: writeFile,
             getCurrentDirectory: function () { return currentDirectory || (currentDirectory = ts.sys.getCurrentDirectory()); },
             useCaseSensitiveFileNames: function () { return ts.sys.useCaseSensitiveFileNames; },
@@ -33231,6 +33774,10 @@ var ts;
             type: "boolean",
         },
         {
+            name: "lib",
+            type: "string",
+        },
+        {
             name: "noResolve",
             type: "boolean",
         },
@@ -33866,22 +34413,43 @@ var ts;
                     diagnostics = program.getSemanticDiagnostics();
                 }
             }
-            reportDiagnostics(diagnostics);
             if (compilerOptions.noEmit) {
                 return diagnostics.length
                     ? ts.ExitStatus.DiagnosticsPresent_OutputsSkipped
                     : ts.ExitStatus.Success;
             }
-            console.log("Emitting rsc ...");
-            var rscOutput = program.toRsc();
-            reportDiagnostics(rscOutput.diagnostics);
-            if (rscOutput.emitSkipped) {
+            if (diagnostics.length > 0) {
+                dumpRefScriptDiagnostics(diagnostics, []);
                 return ts.ExitStatus.DiagnosticsPresent_OutputsSkipped;
             }
-            if (diagnostics.length > 0 || rscOutput.diagnostics.length > 0) {
-                return ts.ExitStatus.DiagnosticsPresent_OutputsGenerated;
+            try {
+                var rscOutput = program.toRsc();
+                dumpRefScriptDiagnostics(rscOutput.diagnostics, rscOutput.jsonFiles);
+                return ts.ExitStatus.Success;
             }
-            return ts.ExitStatus.Success;
+            catch (e) {
+                dumpRefScriptUnknownError(e.stack);
+                throw e;
+            }
+        }
+        function dumpRefScriptDiagnostics(_diagnostics, rscOutputFiles) {
+            if (_diagnostics.length > 0) {
+                var errors = _diagnostics.map(ts.mkFixError);
+                var crashes = _diagnostics.filter(function (d) { return d.category === ts.DiagnosticCategory.Unimplemented; });
+                var fixResult = (crashes.length > 0) ? (new ts.FRCrash(errors, "UNIMPLEMENTED")) : (new ts.FRUnsafe(errors));
+                ts.sys.write(PrettyJSON.stringify(fixResult.serialize(), { maxLength: 120, indent: 2 }));
+                ts.sys.write("\n");
+                ts.sys.exit(1);
+            }
+            else {
+                ts.sys.write(PrettyJSON.stringify(rscOutputFiles, { maxLength: Number.POSITIVE_INFINITY, indent: 2 }));
+                ts.sys.write("\n");
+            }
+        }
+        function dumpRefScriptUnknownError(msg) {
+            var unknownError = new ts.FRUnknownError(msg);
+            ts.sys.write(PrettyJSON.stringify(unknownError.serialize(), { maxLength: Number.POSITIVE_INFINITY, indent: 2 }));
+            ts.sys.write("\n");
         }
     }
     function printVersion() {
@@ -34002,418 +34570,6 @@ var ts;
     }
 })(ts || (ts = {}));
 ts.executeCommandLine(ts.sys.args);
-//<reference path='..\typescript.ts' />
-var ts;
-(function (ts) {
-    var RsType = (function () {
-        function RsType() {
-        }
-        RsType.prototype.toString = function () {
-            throw new Error("BUG: Abstract in RsType toString()");
-        };
-        return RsType;
-    })();
-    ts.RsType = RsType;
-    var RsBind = (function () {
-        function RsBind(symbol, type) {
-            this.symbol = symbol;
-            this.type = type;
-        }
-        RsBind.prototype.toString = function () {
-            return this.symbol + ": " + this.type.toString();
-        };
-        return RsBind;
-    })();
-    ts.RsBind = RsBind;
-    var TError = (function (_super) {
-        __extends(TError, _super);
-        function TError(msg) {
-            _super.call(this);
-            this.msg = msg;
-        }
-        TError.prototype.toString = function () {
-            return "Error type: " + this.msg;
-        };
-        TError.prototype.message = function () {
-            return this.msg;
-        };
-        return TError;
-    })(RsType);
-    ts.TError = TError;
-    var TTopC = (function (_super) {
-        __extends(TTopC, _super);
-        function TTopC() {
-            _super.apply(this, arguments);
-        }
-        TTopC.prototype.toString = function () { return "top"; };
-        return TTopC;
-    })(RsType);
-    ts.TTopC = TTopC;
-    ts.TTop = new TTopC();
-    var TAnyC = (function (_super) {
-        __extends(TAnyC, _super);
-        function TAnyC() {
-            _super.apply(this, arguments);
-        }
-        TAnyC.prototype.toString = function () {
-            return "top";
-        };
-        return TAnyC;
-    })(RsType);
-    ts.TAnyC = TAnyC;
-    ts.TAny = new TAnyC();
-    var TNumberC = (function (_super) {
-        __extends(TNumberC, _super);
-        function TNumberC() {
-            _super.apply(this, arguments);
-        }
-        TNumberC.prototype.toString = function () {
-            return "number";
-        };
-        return TNumberC;
-    })(RsType);
-    ts.TNumberC = TNumberC;
-    ts.TNumber = new TNumberC();
-    var TStringC = (function (_super) {
-        __extends(TStringC, _super);
-        function TStringC() {
-            _super.apply(this, arguments);
-        }
-        TStringC.prototype.toString = function () {
-            return "string";
-        };
-        return TStringC;
-    })(RsType);
-    ts.TStringC = TStringC;
-    ts.TString = new TStringC();
-    var TStringLit = (function (_super) {
-        __extends(TStringLit, _super);
-        function TStringLit(literal) {
-            _super.call(this);
-            this.literal = literal;
-        }
-        TStringLit.prototype.toString = function () {
-            return "\"" + this.literal + "\"";
-        };
-        return TStringLit;
-    })(RsType);
-    ts.TStringLit = TStringLit;
-    var TBooleanC = (function (_super) {
-        __extends(TBooleanC, _super);
-        function TBooleanC() {
-            _super.apply(this, arguments);
-        }
-        TBooleanC.prototype.toString = function () {
-            return "boolean";
-        };
-        return TBooleanC;
-    })(RsType);
-    ts.TBooleanC = TBooleanC;
-    ts.TBoolean = new TBooleanC();
-    var TVoidC = (function (_super) {
-        __extends(TVoidC, _super);
-        function TVoidC() {
-            _super.apply(this, arguments);
-        }
-        TVoidC.prototype.toString = function () {
-            return "void";
-        };
-        return TVoidC;
-    })(RsType);
-    ts.TVoidC = TVoidC;
-    ts.TVoid = new TVoidC();
-    var TUndefinedC = (function (_super) {
-        __extends(TUndefinedC, _super);
-        function TUndefinedC() {
-            _super.apply(this, arguments);
-        }
-        TUndefinedC.prototype.toString = function () {
-            return "undefined";
-        };
-        return TUndefinedC;
-    })(RsType);
-    ts.TUndefinedC = TUndefinedC;
-    ts.TUndefined = new TUndefinedC();
-    var TObject = (function (_super) {
-        __extends(TObject, _super);
-        function TObject(fields) {
-            _super.call(this);
-            this.fields = fields;
-        }
-        TObject.prototype.toString = function () {
-            var s = "";
-            s += "{ ";
-            s += this.fields.map(function (f) { return f.toString(); }).join("; ");
-            s += " }";
-            return s;
-        };
-        return TObject;
-    })(RsType);
-    ts.TObject = TObject;
-    var TAll = (function (_super) {
-        __extends(TAll, _super);
-        function TAll(param, ty) {
-            _super.call(this);
-            this.param = param;
-            this.ty = ty;
-        }
-        TAll.prototype.toString = function () {
-            var s = "";
-            s += "forall ";
-            s += this.param;
-            s += " . ";
-            s += this.ty.toString();
-            return s;
-        };
-        return TAll;
-    })(RsType);
-    ts.TAll = TAll;
-    var RsFunctionLike = (function (_super) {
-        __extends(RsFunctionLike, _super);
-        function RsFunctionLike() {
-            _super.apply(this, arguments);
-        }
-        return RsFunctionLike;
-    })(RsType);
-    ts.RsFunctionLike = RsFunctionLike;
-    var RsTFun = (function (_super) {
-        __extends(RsTFun, _super);
-        function RsTFun(typeParameters, parameters, returnType) {
-            _super.call(this);
-            this.typeParameters = typeParameters;
-            this.parameters = parameters;
-            this.returnType = returnType;
-        }
-        RsTFun.prototype.toString = function () {
-            var s = "";
-            if (this.typeParameters.length > 0) {
-                s += angles(this.typeParameters.map(function (p) { return p.toString(); }).join(" "));
-            }
-            s += parens(this.parameters.map(function (b) { return b.toString(); }).join(", "));
-            s += " => ";
-            s += this.returnType.toString();
-            return s;
-        };
-        return RsTFun;
-    })(RsFunctionLike);
-    ts.RsTFun = RsTFun;
-    var RsMeth = (function (_super) {
-        __extends(RsMeth, _super);
-        function RsMeth(tParams, argTs, returnT) {
-            _super.call(this);
-            this.tParams = tParams;
-            this.argTs = argTs;
-            this.returnT = returnT;
-        }
-        RsMeth.prototype.toString = function () {
-            var s = "";
-            if (this.tParams.length > 0) {
-                s += angles(this.tParams.map(function (p) { return p.toString(); }).join(" "));
-            }
-            s += parens(this.argTs.map(function (b) { return b.toString(); }).join(", "));
-            s += ": ";
-            s += this.returnT.toString();
-            return s;
-        };
-        return RsMeth;
-    })(RsFunctionLike);
-    ts.RsMeth = RsMeth;
-    var RsTOr = (function (_super) {
-        __extends(RsTOr, _super);
-        function RsTOr(elements) {
-            _super.call(this);
-            this.elements = elements;
-        }
-        RsTOr.prototype.toString = function () {
-            if (!this.elements || this.elements.length === 0) {
-                return "Top";
-            }
-            return this.elements.map(function (t) { return t.toString(); }).join(" + ");
-        };
-        return RsTOr;
-    })(RsType);
-    ts.RsTOr = RsTOr;
-    var RsTAnd = (function (_super) {
-        __extends(RsTAnd, _super);
-        function RsTAnd(signatures) {
-            _super.call(this);
-            this.signatures = signatures;
-        }
-        RsTAnd.prototype.toString = function () {
-            if (this.signatures && this.signatures.length > 0) {
-                return (this.signatures.length == 1) ?
-                    this.signatures[0].toString() :
-                    ("\n" + this.signatures.map(function (s) { return "\t/\\ " + s.toString(); }).join("\n"));
-            }
-            else {
-                return new TError("RsTAnd").toString();
-            }
-        };
-        return RsTAnd;
-    })(RsFunctionLike);
-    ts.RsTAnd = RsTAnd;
-    var TArray = (function (_super) {
-        __extends(TArray, _super);
-        function TArray(eltT) {
-            _super.call(this);
-            this.eltT = eltT;
-        }
-        TArray.prototype.toString = function () { return "<" + this.eltT.toString() + ">"; };
-        return TArray;
-    })(RsType);
-    ts.TArray = TArray;
-    var TTypeReference = (function (_super) {
-        __extends(TTypeReference, _super);
-        function TTypeReference(name, _arguments) {
-            _super.call(this);
-            this.name = name;
-            this._arguments = _arguments;
-        }
-        TTypeReference.prototype.toString = function () {
-            var s = this.name;
-            if (this._arguments && this._arguments.length > 0) {
-                s += angles(this._arguments.map(function (t) { return t.toString(); }).join(", "));
-            }
-            return s;
-        };
-        return TTypeReference;
-    })(RsType);
-    ts.TTypeReference = TTypeReference;
-    var TInterface = (function () {
-        function TInterface(ref, type) {
-            this.ref = ref;
-            this.type = type;
-        }
-        TInterface.prototype.toString = function () {
-            return "type " + this.ref.toString() + " " + this.type.toString();
-        };
-        return TInterface;
-    })();
-    ts.TInterface = TInterface;
-    var TTVar = (function (_super) {
-        __extends(TTVar, _super);
-        function TTVar(name) {
-            _super.call(this);
-            this.name = name;
-        }
-        TTVar.prototype.toString = function () {
-            return this.name;
-        };
-        return TTVar;
-    })(RsType);
-    ts.TTVar = TTVar;
-    var RsTypeParam = (function () {
-        function RsTypeParam(name, constraint) {
-            this.name = name;
-            this.constraint = constraint;
-        }
-        RsTypeParam.prototype.toString = function () {
-            var s = this.name;
-            if (this.constraint) {
-                s += "extends ";
-                s += this.constraint;
-            }
-            return s;
-        };
-        return RsTypeParam;
-    })();
-    ts.RsTypeParam = RsTypeParam;
-    var TParentType = (function () {
-        function TParentType(name, targs) {
-            this.name = name;
-            this.targs = targs;
-        }
-        TParentType.prototype.toString = function () {
-            return this.name + " " + this.targs.map(function (a) { return a.toString(); }).join(", ");
-        };
-        return TParentType;
-    })();
-    ts.TParentType = TParentType;
-    var RsTypeMember = (function () {
-        function RsTypeMember() {
-        }
-        return RsTypeMember;
-    })();
-    ts.RsTypeMember = RsTypeMember;
-    var RsCallSig = (function (_super) {
-        __extends(RsCallSig, _super);
-        function RsCallSig(type) {
-            _super.call(this);
-            this.type = type;
-        }
-        RsCallSig.prototype.toString = function () {
-            return this.type.toString();
-        };
-        return RsCallSig;
-    })(RsTypeMember);
-    ts.RsCallSig = RsCallSig;
-    var RsConsSig = (function (_super) {
-        __extends(RsConsSig, _super);
-        function RsConsSig(type) {
-            _super.call(this);
-            this.type = type;
-        }
-        RsConsSig.prototype.toString = function () {
-            return "new " + this.type.toString();
-        };
-        return RsConsSig;
-    })(RsTypeMember);
-    ts.RsConsSig = RsConsSig;
-    var RsFieldSig = (function (_super) {
-        __extends(RsFieldSig, _super);
-        function RsFieldSig(name, opt, type) {
-            _super.call(this);
-            this.name = name;
-            this.opt = opt;
-            this.type = type;
-        }
-        RsFieldSig.prototype.toString = function () {
-            return this.name + (this.opt ? "?" : "") + ": " + this.type.toString();
-        };
-        return RsFieldSig;
-    })(RsTypeMember);
-    ts.RsFieldSig = RsFieldSig;
-    var RsMethSig = (function (_super) {
-        __extends(RsMethSig, _super);
-        function RsMethSig(name, type) {
-            _super.call(this);
-            this.name = name;
-            this.type = type;
-        }
-        RsMethSig.prototype.toString = function () {
-            return this.name + ": " + this.type.toString();
-        };
-        return RsMethSig;
-    })(RsTypeMember);
-    ts.RsMethSig = RsMethSig;
-    var RsRawStringMember = (function (_super) {
-        __extends(RsRawStringMember, _super);
-        function RsRawStringMember(str) {
-            _super.call(this);
-            this.str = str;
-        }
-        RsRawStringMember.prototype.toString = function () {
-            return this.str;
-        };
-        return RsRawStringMember;
-    })(RsTypeMember);
-    ts.RsRawStringMember = RsRawStringMember;
-    (function (MutabilityKind) {
-        MutabilityKind[MutabilityKind["MutableK"] = 0] = "MutableK";
-        MutabilityKind[MutabilityKind["ImmutableK"] = 1] = "ImmutableK";
-        MutabilityKind[MutabilityKind["ReadOnlyK"] = 2] = "ReadOnlyK";
-        MutabilityKind[MutabilityKind["ParametricK"] = 3] = "ParametricK";
-        MutabilityKind[MutabilityKind["PresetK"] = 4] = "PresetK";
-        MutabilityKind[MutabilityKind["DefaultK"] = 5] = "DefaultK";
-    })(ts.MutabilityKind || (ts.MutabilityKind = {}));
-    var MutabilityKind = ts.MutabilityKind;
-    function angles(s) {
-        return "<" + s + ">";
-    }
-    function parens(s) {
-        return "(" + s + ")";
-    }
-})(ts || (ts = {}));
 ///<reference path='annotations.ts' />
 ///<reference path='syntax.ts' />
 ///<reference path='types.ts' />

@@ -71,7 +71,7 @@ pAliasP = do name <- identifierP
              body <- predP
              return  (name, Alias name [] πs body)
 
-pAliasVarsP = try (parens $ sepBy symbolP comma)
+pAliasVarsP = try (parens $ symbolP `sepBy` comma)
            <|> many symbolP
 
 tAliasP :: Parser (Id SrcSpan, TAlias RRType)
@@ -102,9 +102,9 @@ aliasVarT (l, x)
 optionP   = string "REALS" >> return RealOption
 
 interfaceP :: Parser (TypeDeclQ RK F.Reft)
-interfaceP = TD <$> typeSignatureP InterfaceTDK <*> typeBodyP
+interfaceP = reserved "interface" >> TD <$> typeSignatureP InterfaceTDK <*> typeBodyP
 
-classDeclP = typeSignatureP ClassTDK
+classDeclP = reserved "class"     >> typeSignatureP ClassTDK
 
 -- Mutability parameter should be included here.
 typeSignatureP :: TypeDeclKind -> Parser (TypeSigQ RK F.Reft)
@@ -193,15 +193,15 @@ funcSigP =  try (bareAllP bareFunP)
   where
     intersectP p = mkAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
 
-methSigP =  try (bareAllP bareMethP)
-        <|> try (intersectP $ bareAllP bareMethP)
-  where
-    intersectP p = mkAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
+-- -- PV: disabling intersect here - instead use mutliple comments
+-- methSigP =  try (bareAllP bareMethP)
+--         <|> try (intersectP $ bareAllP bareMethP)
+--   where
+--     intersectP p = mkAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
 
---  (x:t, ...) => t
-bareFunP = bareArrowP $ reserved "=>"
---  (x:t, ...): t
-bareMethP = bareArrowP colon
+methSigP  = bareAllP bareMethP
+bareFunP  = bareArrowP (reserved "=>")    --  (x:t, ...) => t
+bareMethP = bareArrowP colon              --  (x:t, ...): t
 
 bareArrowP f = do args   <- parens $ sepBy bareArgP comma
                   _     <- f
@@ -209,11 +209,13 @@ bareArrowP f = do args   <- parens $ sepBy bareArgP comma
                   r     <- topP
                   return $ TFun args ret r
 
-bareArgP = try boundTypeP <|> (argBind <$> try bareTypeP)
+bareArgP     = try boundTypeP <|> (argBind <$> try bareTypeP)
 
-boundTypeP = do s <- symbol <$> identifierP
-                withinSpacesP colon
-                B s <$> bareTypeP
+-- TODO: Take the optional argument into account
+boundTypeP   = do s <- symbol <$> identifierP
+                  optional (char '?')
+                  withinSpacesP colon
+                  B s <$> bareTypeP
 
 argBind t = B (rTypeValueVar t) t
 
@@ -279,7 +281,8 @@ tPrimP =  try (reserved "number"      >> return TNumber)
       <|> try (reserved "bool"        >> return TFPBool)
 
 bareAllP p
-  = do tvs   <- optionMaybe (reserved "forall" *> many1 btvarP <* dot)
+  -- = do tvs   <- optionMaybe (reserved "forall" *> many1 btvarP <* dot)
+  = do tvs   <- optionMaybe $ angles $ btvarP `sepBy1` comma
        t     <- p
        return $ maybe t (`tAll` t) tvs
     where
@@ -344,7 +347,6 @@ methP = do  s     <- (reserved "static" >> return StaticK) <|> (return InstanceK
             m     <- methMutabilityP
             x     <- symbol <$> identifierP
             o     <- maybe Req (\_ -> Opt) <$> optionMaybe (withinSpacesP $ char '?')
-            _     <- colon
             t     <- methSigP
             return $ (x, s, o, m, t)
 
@@ -358,10 +360,11 @@ mutabilityP     =  try (reserved "Mutable" >> return trMut)
                <|> try (reserved "Immutable" >> return trImm)
                <|>     (reserved "ReadOnly" >> return trRO)
 
-methMutabilityP =  try (reserved "Mutable" >> return Mutable)
-               <|> try (reserved "Immutable" >> return Immutable)
-               <|> try (reserved "ReadOnly" >> return ReadOnly)
-               <|>     (reserved "AssignsFields" >> return AssignsFields)
+methMutabilityP =  try (reserved "Mutable"       >> return Mutable)
+               <|> try (reserved "Immutable"     >> return Immutable)
+               <|> try (reserved "ReadOnly"      >> return ReadOnly)
+               <|> try (reserved "AssignsFields" >> return AssignsFields)
+               <|>     (                            return Mutable)
 
 ----------------------------------------------------------------------------------
 dummyP ::  Parser (F.Reft -> b) -> Parser b

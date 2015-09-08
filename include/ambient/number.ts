@@ -1,17 +1,4 @@
 
-
-/**
- *  NUMBER 
- * 
- *  TODO: 
- *
- *    - NaN =/= NaN
- *
- *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L430
- *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L457
- *
- */
-
 /*@ measure numeric_nan               :: number */
 /*@ measure numeric_max_value         :: number */
 /*@ measure numeric_min_value         :: number */
@@ -21,88 +8,64 @@
 /*@  NaN :: { number | v = numeric_nan } */
 declare var NaN: number;
 
-/**
- * 
- *  All numberic values inherit from this type
- *
- */
 interface Number {
+    /**
+      * Returns a string representation of an object.
+      * @param radix Specifies a radix for converting numeric values to strings. This value is only used for numbers.
+      */
     toString(radix?: number): string;
 
+    /**
+      * Returns a string representing a number in fixed-point notation.
+      * @param fractionDigits Number of digits after the decimal point. Must be in the range 0 - 20, inclusive.
+      */
     toFixed(fractionDigits?: number): string;
 
+    /**
+      * Returns a string containing a number represented in exponential notation.
+      * @param fractionDigits Number of digits after the decimal point. Must be in the range 0 - 20, inclusive.
+      */
     toExponential(fractionDigits?: number): string;
 
+    /**
+      * Returns a string containing a number represented either in exponential or fixed-point notation with a specified number of digits.
+      * @param precision Number of significant digits. Must be in the range 1 - 21, inclusive.
+      */
     toPrecision(precision?: number): string;
+
+    /** Returns the primitive value of the specified object. */
+    valueOf(): number;
 }
 
-
-
-declare var Number: {
-    new (value: any): Number;						// new (value?: any): Number;
-    <A>(value: A): number;							// (value?: any): number;
+interface NumberConstructor {
+    new (value?: any): Number;
+    (value?: any): number;
     prototype: Number;
 
-    /*  MAX_VALUE: { number | v = numeric_max_value } */
+    /** The largest number that can be represented in JavaScript. Equal to approximately 1.79E+308. */
     MAX_VALUE: number;
 
-    /*  MIN_VALUE: { number | v = numeric_min_value } */
+    /** The closest number to zero that can be represented in JavaScript. Equal to approximately 5.00E-324. */
     MIN_VALUE: number;
 
-    /*  NaN: { number | v = numeric_nan } */
+    /**
+      * A value that is not a number.
+      * In equality comparisons, NaN does not equal any value, including itself. To test whether a value is equivalent to NaN, use the isNaN function.
+      */
     NaN: number;
 
-    /*  NEGATIVE_INFINITY: { number | v = numeric_negative_infinity } */
+    /**
+      * A value that is less than the largest negative number that can be represented in JavaScript.
+      * JavaScript displays NEGATIVE_INFINITY values as -infinity.
+      */
     NEGATIVE_INFINITY: number;
 
-    /*  POSITIVE_INFINITY: { number | v = numeric_positive_infinity } */
+    /**
+      * A value greater than the largest number that can be represented in JavaScript.
+      * JavaScript displays POSITIVE_INFINITY values as infinity.
+      */
     POSITIVE_INFINITY: number;
 }
 
-
-
-/**
- *  MATH
- *
- *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L487
- *
- */
-
-interface Math {
-    E: number;
-    LN10: number;
-    LN2: number;
-    LOG2E: number;
-    LOG10E: number;
-    PI: number;
-    SQRT1_2: number;
-    SQRT2: number;
-    abs(x: number): number;
-    acos(x: number): number;
-    asin(x: number): number;
-    atan(x: number): number;
-    atan2(y: number, x: number): number;
-    ceil(x: number): number;
-    cos(x: number): number;
-    exp(x: number): number;
-    /*@ floor : (x: number) : {number | x - 1 < v && v <= x} */
-    floor(x: number): number;
-    log(x: number): number;
-    /*@ max : (a:number, b:number) : {number | v = if (a < b) then b else a} */
-    max(a: number, b: number): number;
-    // max(...values: number[]): number;
-    /*@ min : (a:number, b:number) : {number | v = if (a < b) then a else b} */
-    min(a: number, b:number): number;
-    // min(...values: number[]): number;
-    pow(x: number, y: number): number;
-    random(): number;
-    round(x: number): number;
-    sin(x: number): number;
-    /*@ sqrt : (x:{number | v >= 0}) : {number | v = 0 <=> x = 0} */
-    sqrt(x: number): number;
-    tan(x: number): number;
-}
-
-declare var Math: Math;
-
-
+/** An object that represents a number of any kind. All JavaScript numbers are 64-bit floating-point numbers. */
+declare var Number: NumberConstructor;

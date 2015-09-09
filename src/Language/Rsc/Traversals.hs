@@ -8,7 +8,6 @@ module Language.Rsc.Traversals (
     scrapeQuals
   , accumNamesAndPaths
   , accumModuleStmts
-
   , accumVars
   ) where
 
@@ -27,6 +26,8 @@ import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Types
 import           Language.Rsc.Visitor
+
+import           Debug.Trace
 
 
 -- | Extracts all qualifiers from a RefScript program
@@ -104,15 +105,16 @@ accumAbsNames (QP AK_ _ ss)  = concatMap go
 
 -- TODO: Add modules as well?
 ---------------------------------------------------------------------------------------
-accumVars :: [Statement (AnnR r)] -> [(Id SrcSpan, SyntaxKind, VarInfo r)]
+accumVars :: PPR r => [Statement (AnnR r)] -> [(Id SrcSpan, SyntaxKind, VarInfo r)]
 ---------------------------------------------------------------------------------------
-accumVars s = [ (fSrc <$> n, k, VI a i t)  | (n,l,k,a,i) <- hoistBindings s
-                                         , f <- fFact l, t <- annToType a f ]
+accumVars s = [ (fSrc <$> n, k, VI a i t) | (n,l,k,a,i) <- hoistBindings s
+                                          , f           <- fFact l
+                                          , t           <- annToType f ]
   where
-    annToType _ (ClassAnn (TS _ b _)) = [TClass b]    -- Class
-    annToType _       (SigAnn t)      = [t]           -- Function
-    annToType Ambient (VarAnn _ t)    = maybeToList t -- Variables
-    annToType _       _               = [ ]
+    annToType (ClassAnn (TS _ b _)) = [TClass b]      -- Class
+    annToType (SigAnn t)            = [t]             -- Function
+    annToType (VarAnn _ t)          = maybeToList t   -- Variables
+    annToType _                     = [ ]
 
 type BindInfo a = (Id a, a, SyntaxKind, Assignability, Initialization)
 
@@ -130,14 +132,17 @@ hoistBindings = snd . visitStmts vs ()
     acs _ (EnumStmt a x _)       = [(x, a { fFact = enumAnn x a }, EnumDeclKind, Ambient, Initialized)]
     acs _ _                      = []
 
-    acv _ (VarDecl l n ii)       = [(n, l, VarDeclKind, varAsgn l, inited ii)]
+    acv _ (VarDecl l n ii)       = [(n, l, VarDeclKind, varAsgn l, tracePP (ppshow n) $ inited l ii)]
 
-    -- TODO: Add support for ambient variable declarations
-    --  : [(n, l, VarDeclKind, WriteGlobal, inited ii) | AmbVarAnn _  <- fFact l]
+    inited l _        | any isAmbient (fFact l)
+                      = Initialized
+    inited _ (Just _) = Initialized
+    inited _ _        = Uninitialized
 
-    inited (Just _) = Initialized
-    inited _        = Uninitialized
-    varAsgn l       = fromMaybe WriteLocal $ listToMaybe [ a | VarAnn a _ <- fFact l ]
+    isAmbient (VarAnn Ambient _) = True
+    isAmbient _                  = False
+
+    varAsgn l = fromMaybe WriteLocal $ listToMaybe [ a | VarAnn a _ <- fFact l ]
 
     modAnn  n l = ModuleAnn (F.symbol n) : fFact l
     enumAnn n l = EnumAnn   (F.symbol n) : fFact l

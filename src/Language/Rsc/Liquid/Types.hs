@@ -156,27 +156,28 @@ pSingleton t p  = t `strengthen` (F.propReft p)
 -- | Converting RType to Fixpoint
 ------------------------------------------------------------------------------
 
-rTypeSortedReft   ::  F.Reftable r => RTypeQ q r -> F.SortedReft
+-- rTypeSortedReft   ::  F.Reftable r => RTypeQ q r -> F.SortedReft
 rTypeSortedReft t = F.RR (rTypeSort t) (rTypeReft t)
 
-rTypeReft         :: (F.Reftable r) => RTypeQ q r -> F.Reft
+-- rTypeReft         :: (F.Reftable r) => RTypeQ q r -> F.Reft
 rTypeReft         = fromMaybe fTop . fmap F.toReft . stripRTypeBase
 
-rTypeValueVar     :: (F.Reftable r) => RTypeQ q r -> F.Symbol
+-- rTypeValueVar     :: (F.Reftable r) => RTypeQ q r -> F.Symbol
 rTypeValueVar t   = vv where F.Reft (vv,_) = rTypeReft t
 
 ------------------------------------------------------------------------------------------
-rTypeSort :: F.Reftable r => RTypeQ q r -> F.Sort
+-- rTypeSort :: F.Reftable r => RTypeQ q r -> F.Sort
 ------------------------------------------------------------------------------------------
 rTypeSort (TVar α _)          = F.FObj $ F.symbol α
 rTypeSort (TAll v t)          = rTypeSortForAll $ TAll v t
 rTypeSort (TFun xts t _)      = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TPrim c _)         = rTypeSortPrim c
+rTypeSort (TOr ts)            = F.FApp (rawStringFTycon $ F.symbol "union") $ L.sort $ rTypeSort <$> ts
 rTypeSort (TRef (Gen n ts) _) = F.FApp (rawStringFTycon $ F.symbol n) (rTypeSort <$> ts)
 rTypeSort (TObj _ _ )         = F.FApp (rawStringFTycon $ F.symbol "Object") []
 rTypeSort (TClass _)          = F.FApp (rawStringFTycon $ F.symbol "class" ) []
 rTypeSort (TMod _)            = F.FApp (rawStringFTycon $ F.symbol "module") []
-rTypeSort _                   = error $ render $ text "BUG: Unsupported in rTypeSort"
+rTypeSort t                   = error $ render $ text ("BUG: Unsupported in rTypeSort " ++ ppshow t)
 
 rTypeSortPrim TBV32      = BV.mkSort BV.S32
 rTypeSortPrim TNumber    = F.intSort
@@ -271,22 +272,23 @@ emapReftMI f γ (MI m n  t2) = MI m n (emapReft f γ t2)
 mapReftM :: (F.Reftable r, PP r, Applicative m, Monad m)
          => (r -> m r') -> RTypeQ q r -> m (RTypeQ q r')
 ------------------------------------------------------------------------------------------
-mapReftM f (TVar α r)      = TVar α <$> f r
+mapReftM f (TVar α r)      = TVar α  <$> f r
 mapReftM f (TPrim c r)     = TPrim c <$> f r
-mapReftM f (TRef n r)      = TRef <$> mapReftGenM f n <*> f r
-mapReftM f (TFun xts t r)  = TFun <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> f r
-mapReftM f (TAll α t)      = TAll <$> mapReftBTV f α <*> mapReftM f t
-mapReftM f (TAnd ts)       = TAnd <$> mapM (mapReftM f) ts
-mapReftM f (TOr ts)        = TOr <$> mapM (mapReftM f) ts
-mapReftM f (TObj xts r)    = TObj <$> mapReftTM f xts <*> f r
-mapReftM f (TClass n)      = TClass <$> mapReftBGenM f n
-mapReftM _ (TMod a)        = return $ TMod a
-mapReftM _ t               = error $ render $ text "Not supported in mapReftM: " <+> pp t
+mapReftM f (TRef n r)      = TRef    <$> mapReftGenM f n <*> f r
+mapReftM f (TFun xts t r)  = TFun    <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> f r
+mapReftM f (TAll α t)      = TAll    <$> mapReftBTV f α <*> mapReftM f t
+mapReftM f (TAnd ts)       = TAnd    <$> mapM (mapReftM f) ts
+mapReftM f (TOr ts)        = TOr     <$> mapM (mapReftM f) ts
+mapReftM f (TObj xts r)    = TObj    <$> mapReftTM f xts <*> f r
+mapReftM f (TClass n)      = TClass  <$> mapReftBGenM f n
+mapReftM _ (TMod a)        = TMod    <$> pure a
+mapReftM _ t               = error $ "Not supported in mapReftM: " ++ ppshow t
 
-mapReftBTV f (BTV s l c)   = BTV s l <$> T.mapM (mapReftM f) c
-mapReftGenM f (Gen n ts)   = Gen n <$> mapM (mapReftM f) ts
-mapReftBGenM f (BGen n ts) = BGen n <$> mapM (mapReftBTV f) ts
-mapReftBindM f (B x t)     = B x <$> mapReftM f t
+mapReftBTV   f (BTV s l c) = BTV s l <$> T.mapM (mapReftM f)   c
+mapReftGenM  f (Gen n ts)  = Gen n   <$>   mapM (mapReftM f)   ts
+mapReftBGenM f (BGen n ts) = BGen n  <$>   mapM (mapReftBTV f) ts
+mapReftBindM f (B x t)     = B x     <$>         mapReftM f    t
+
 mapReftTM f (TM p m sp sm c k s n)
   = TM <$> T.mapM (mapReftFI f) p
        <*> T.mapM (mapReftMI f) m
@@ -322,6 +324,7 @@ efoldReft g f = go
     go γ z (TAll _ t)     = go γ z t
     go γ z (TFun xts t r) = f γ r $ go γ' (gos γ' z $ map b_type xts) t
                             where γ' = foldr (efoldExt g) γ xts
+    go γ z (TOr ts)       = gos γ z ts
     go γ z (TAnd ts)      = gos γ z ts
     go γ z (TObj xts r)   = f γ r $ efoldReftTM g f xts γ z
     go γ z (TClass n)     = gos γ z $ catMaybes $ btv_constr <$> b_args n

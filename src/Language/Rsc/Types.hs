@@ -40,7 +40,7 @@ data BTVarQ q r   = BTV { btv_sym    :: F.Symbol              -- Parameter symbo
                     deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 
-data TPrim        = TString | TStrLit String | TNumber | TBoolean | TBV32 | TVoid | TUndefined | TNull
+data TPrim        = TString | TStrLit String | TNumber | TBoolean | TBV32 | TVoid | TUndefined | TNull | TAny
                   {- Internal -}
                   | TTop | TBot | TFPBool
                   deriving (Eq, Show, Data, Typeable)
@@ -244,21 +244,21 @@ instance Monoid (ModuleDefQ q r) where
 -- | Assignability
 ------------------------------------------------------------------------------------------
 {-
-   ___________________________________________________________
-  |               |              |                |           |
-  |     Kind      |    Comment   | In refinements |   SSA-ed  |
-  |_______________|______________|________________|___________|
-  |               |              |                |           |
-  | Ambient       | Imported/RO  |        Y       |     N     |
-  |               |              |                |           |
-  | WriteLocal    | Local scope  |        N       |     Y     |
-  |               |              |                |           |
-  | ForeignLocal  | Outer scope  |        N       |     N     |
-  |               |              |                |           |
-  | WriteGlobal   | WR anywhere  |        N       |     N     |
-  |               |              |                |           |
-  | ReturnVar     |  return var  |        _       |     N     |
-  |_______________|______________|________________|___________|
+   _________________________________________________________________________
+  |               |              |                |           |             |
+  |     Kind      |    Comment   | In refinements |   SSA-ed  | Initialized |
+  |_______________|______________|________________|___________|_____________|
+  |               |              |                |           |             |
+  | Ambient       | Imported/RO  |        Y       |     N     |      Y      |
+  |               |              |                |           |             |
+  | WriteLocal    | Local scope  |        N       |     Y     |             |
+  |               |              |                |           |             |
+  | ForeignLocal  | Outer scope  |        N       |     N     |             |
+  |               |              |                |           |             |
+  | WriteGlobal   | WR anywhere  |        N       |     N     |             |
+  |               |              |                |           |             |
+  | ReturnVar     |  return var  |        _       |     N     |             |
+  |_______________|______________|________________|___________|_____________|
 
 -}
 
@@ -323,6 +323,7 @@ instance Hashable TPrim where
   hashWithSalt i TTop        = i `hashWithSalt` (8 :: Int)
   hashWithSalt i TBot        = i `hashWithSalt` (9 :: Int)
   hashWithSalt i TFPBool     = i `hashWithSalt` (10 :: Int)
+  hashWithSalt i TAny        = i `hashWithSalt` (11 :: Int)
 
 -- | Symbolic
 

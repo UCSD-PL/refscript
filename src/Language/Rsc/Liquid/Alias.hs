@@ -2,14 +2,14 @@
 
 module Language.Rsc.Liquid.Alias (expandAliases) where
 
-import           Control.Applicative           ((<$>))
+import           Control.Applicative          ((<$>))
 import           Control.Monad
 import           Control.Monad.State
 import           Data.Generics
 import           Data.Maybe
 import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types       as F
-import qualified Language.Fixpoint.Visitor     as V
+import qualified Language.Fixpoint.Types      as F
+import qualified Language.Fixpoint.Visitor    as V
 import           Language.Rsc.Annots
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
@@ -21,6 +21,7 @@ import qualified Language.Rsc.Typecheck.Subst as S
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 
+import           Language.Rsc.Pretty
 
 -- pe'
 -- te' [using pe']
@@ -41,13 +42,11 @@ expandAliases p =  expandCodePred pe'
 expandCodeTAlias :: TAliasEnv (RTypeQ RK F.Reft) -> RelRefScript -> RelRefScript
 expandCodeTAlias te p@(Rsc { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
   where
-    patch :: AnnRel F.Reft -> AnnRel F.Reft
-    patch (FA i ss f) = FA i ss $ expandRefType te <$> f
+    patch (FA i ss f) = FA i ss (expandRefType te <$> f)
 
--- expandCodePred :: PAliasEnv -> RscRefType -> RscRefType
+expandCodePred :: PAliasEnv -> RelRefScript -> RelRefScript
 expandCodePred te p@(Rsc { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
   where
-    -- patch :: AnnType F.Reft -> AnnType F.Reft
     patch (FA i ss f) = FA i ss (expandPred te <$> f)
 
 
@@ -124,20 +123,20 @@ expandRefType te = everywhere $ mkT tx
 
 applyTAlias l t _ ts_ r a
   | (nt, ne) == (nα, nx) = {- tracePP "applyTAlias" $ -} F.subst su (S.apply θ $ al_body a) `strengthen` r
-  | otherwise            = die $ errorBadTAlias l t nt ne nα nx
+  | otherwise = die $ errorBadTAlias l t nt ne nα nx
   where
-    xs                   = al_syvars a
-    αs                   = al_tyvars a
-    nx                   = length xs
-    nα                   = length αs
-    ne                   = length es
-    nt                   = length ts
-    (ts, es)             = splitTsEs l t nα nx ts_
-    su                   = F.mkSubst  $ zip xs es
-    θ                    = S.fromList $ zip αs ts
+    xs        = al_syvars a
+    αs        = al_tyvars a
+    nx        = length xs
+    nα        = length αs
+    ne        = length es
+    nt        = length ts
+    (ts, es)  = splitTsEs l t nα nx ts_
+    su        = F.mkSubst  $ zip xs es
+    θ         = S.fromList $ zip αs ts
 
 splitTsEs l t na nx ts_
-  | na + nx /= n = die $ errorTAliasNumArgs l na nx n
+  | na + nx /= n = die $ errorTAliasNumArgs l t na nx n
   | otherwise    = (ts, rTypeExp l t <$> tes)
   where
     n            = length ts_

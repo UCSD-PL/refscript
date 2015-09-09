@@ -11153,6 +11153,7 @@ var ts;
             typeToString: typeToString,
             typeToRscString: typeToRscString,
             signatureToString: signatureToString,
+            signatureToRscString: signatureToRscString,
             getSymbolDisplayBuilder: getSymbolDisplayBuilder,
             symbolToString: symbolToString,
             getAugmentedPropertiesOfType: getAugmentedPropertiesOfType,
@@ -12224,6 +12225,9 @@ var ts;
             var result = writer.string();
             ts.releaseStringWriter(writer);
             return result;
+        }
+        function signatureToRscString(signature, enclosingDeclaration) {
+            return signatureToString(signature, enclosingDeclaration, 4 | 1);
         }
         function typeToString(type, enclosingDeclaration, flags) {
             var writer = ts.getSingleLineStringWriter();
@@ -25801,7 +25805,7 @@ var ts;
     (function (Assignability) {
         Assignability[Assignability["WriteLocal"] = 0] = "WriteLocal";
         Assignability[Assignability["WriteGlobal"] = 1] = "WriteGlobal";
-        Assignability[Assignability["ReadOnly"] = 2] = "ReadOnly";
+        Assignability[Assignability["Ambient"] = 2] = "Ambient";
         Assignability[Assignability["Error"] = 3] = "Error";
     })(ts.Assignability || (ts.Assignability = {}));
     var Assignability = ts.Assignability;
@@ -25814,14 +25818,15 @@ var ts;
         AnnotationKind[AnnotationKind["FieldRawSpec"] = 5] = "FieldRawSpec";
         AnnotationKind[AnnotationKind["MethodRawSpec"] = 6] = "MethodRawSpec";
         AnnotationKind[AnnotationKind["ConstructorRawSpec"] = 7] = "ConstructorRawSpec";
-        AnnotationKind[AnnotationKind["CastRawSpec"] = 8] = "CastRawSpec";
-        AnnotationKind[AnnotationKind["MeasureRawSpec"] = 9] = "MeasureRawSpec";
-        AnnotationKind[AnnotationKind["TypeAliasRawSpec"] = 10] = "TypeAliasRawSpec";
-        AnnotationKind[AnnotationKind["PredicateAliasRawSpec"] = 11] = "PredicateAliasRawSpec";
-        AnnotationKind[AnnotationKind["QualifierRawSpec"] = 12] = "QualifierRawSpec";
-        AnnotationKind[AnnotationKind["InvariantRawSpec"] = 13] = "InvariantRawSpec";
-        AnnotationKind[AnnotationKind["OptionRawSpec"] = 14] = "OptionRawSpec";
-        AnnotationKind[AnnotationKind["TypeSignatureRawSpec"] = 15] = "TypeSignatureRawSpec";
+        AnnotationKind[AnnotationKind["CallRawSpec"] = 8] = "CallRawSpec";
+        AnnotationKind[AnnotationKind["CastRawSpec"] = 9] = "CastRawSpec";
+        AnnotationKind[AnnotationKind["MeasureRawSpec"] = 10] = "MeasureRawSpec";
+        AnnotationKind[AnnotationKind["TypeAliasRawSpec"] = 11] = "TypeAliasRawSpec";
+        AnnotationKind[AnnotationKind["PredicateAliasRawSpec"] = 12] = "PredicateAliasRawSpec";
+        AnnotationKind[AnnotationKind["QualifierRawSpec"] = 13] = "QualifierRawSpec";
+        AnnotationKind[AnnotationKind["InvariantRawSpec"] = 14] = "InvariantRawSpec";
+        AnnotationKind[AnnotationKind["OptionRawSpec"] = 15] = "OptionRawSpec";
+        AnnotationKind[AnnotationKind["TypeSignatureRawSpec"] = 16] = "TypeSignatureRawSpec";
     })(ts.AnnotationKind || (ts.AnnotationKind = {}));
     var AnnotationKind = ts.AnnotationKind;
     (function (AnnotContext) {
@@ -25840,9 +25845,6 @@ var ts;
         }
         Annotation.prototype.serialize = function () {
             return ts.aesonEncode(AnnotationKind[this.kind], [this.sourceSpan.serialize(), this.content]);
-        };
-        Annotation.prototype.getContent = function () {
-            return this.content;
         };
         return Annotation;
     })();
@@ -25881,34 +25883,9 @@ var ts;
     ts.TypeAliasAnnotation = TypeAliasAnnotation;
     var VariableDeclarationAnnotation = (function (_super) {
         __extends(VariableDeclarationAnnotation, _super);
-        function VariableDeclarationAnnotation(sourceSpan, asgn, content) {
-            _super.call(this, sourceSpan, AnnotationKind.VariableDeclarationRawSpec, content);
-            this.asgn = asgn;
+        function VariableDeclarationAnnotation(sourceSpan, name, asgn, type) {
+            _super.call(this, sourceSpan, AnnotationKind.VariableDeclarationRawSpec, [assignabilityToString(asgn), name, "::", type].join(" "));
         }
-        VariableDeclarationAnnotation.prototype.getName = function (node, state) {
-            if (this.name)
-                return this.name;
-            var bs = this.getContent().split("::");
-            if (bs && bs.length > 1) {
-                var lhss = bs[0].split(" ").filter(function (s) { return s.length > 0; });
-                if (lhss && lhss.length === 1) {
-                    this.name = lhss[0];
-                    return this.name;
-                }
-            }
-            state.postDiagnostic(node, ts.Diagnostics.Invalid_RefScript_annotation_0_Perhaps_you_need_to_replace_Colon_with_Colon_Colon, [this.getContent()]);
-            return "";
-        };
-        VariableDeclarationAnnotation.prototype.getContent = function () {
-            var s = "";
-            if (this.asgn === Assignability.ReadOnly)
-                s += "readonly ";
-            else if (this.asgn === Assignability.WriteGlobal)
-                s += "global ";
-            else if (this.asgn === Assignability.WriteLocal)
-                s += "local ";
-            return s + _super.prototype.getContent.call(this);
-        };
         return VariableDeclarationAnnotation;
     })(Annotation);
     ts.VariableDeclarationAnnotation = VariableDeclarationAnnotation;
@@ -25941,24 +25918,6 @@ var ts;
         function FieldAnnotation(sourceSpan, content) {
             _super.call(this, sourceSpan, AnnotationKind.FieldRawSpec, content);
         }
-        FieldAnnotation.prototype.getName = function (node, state) {
-            if (this.name)
-                return this.name;
-            var bs = this.getContent().split(":");
-            if (bs && bs.length > 1) {
-                var lhss = bs[0].split(" ").filter(function (s) { return s.length > 0; });
-                if (lhss && lhss.length === 1) {
-                    this.name = lhss[0];
-                    return this.name;
-                }
-                if (lhss && lhss.length === 2) {
-                    this.name = lhss[1];
-                    return this.name;
-                }
-            }
-            state.postDiagnostic(node, ts.Diagnostics.Invalid_RefScript_annotation_0_Perhaps_you_need_to_replace_Colon_with_Colon_Colon, [this.getContent()]);
-            return "";
-        };
         return FieldAnnotation;
     })(Annotation);
     ts.FieldAnnotation = FieldAnnotation;
@@ -25970,6 +25929,22 @@ var ts;
         return MethodAnnotation;
     })(Annotation);
     ts.MethodAnnotation = MethodAnnotation;
+    var CallAnnotation = (function (_super) {
+        __extends(CallAnnotation, _super);
+        function CallAnnotation(sourceSpan, content) {
+            _super.call(this, sourceSpan, AnnotationKind.CallRawSpec, content);
+        }
+        return CallAnnotation;
+    })(Annotation);
+    ts.CallAnnotation = CallAnnotation;
+    var PropertyAnnotation = (function (_super) {
+        __extends(PropertyAnnotation, _super);
+        function PropertyAnnotation(sourceSpan, content) {
+            _super.call(this, sourceSpan, AnnotationKind.FieldRawSpec, content);
+        }
+        return PropertyAnnotation;
+    })(Annotation);
+    ts.PropertyAnnotation = PropertyAnnotation;
     var ConstructorAnnotation = (function (_super) {
         __extends(ConstructorAnnotation, _super);
         function ConstructorAnnotation(sourceSpan, content) {
@@ -26005,11 +25980,8 @@ var ts;
     var ExplicitClassAnnotation = (function (_super) {
         __extends(ExplicitClassAnnotation, _super);
         function ExplicitClassAnnotation(sourceSpan, content) {
-            _super.call(this, sourceSpan, content);
+            _super.call(this, sourceSpan, ["class", content].join(" "));
         }
-        ExplicitClassAnnotation.prototype.getContent = function () {
-            return "class " + _super.prototype.getContent.call(this);
-        };
         return ExplicitClassAnnotation;
     })(ClassAnnotation);
     ts.ExplicitClassAnnotation = ExplicitClassAnnotation;
@@ -26034,27 +26006,66 @@ var ts;
         return a instanceof GlobalAnnotation;
     }
     ts.isGlobalAnnotation = isGlobalAnnotation;
-    function makeVariableDeclarationAnnotation(s, srcSpan) {
+    function makeVariableDeclarationAnnotationFromString(s, srcSpan, node) {
         var tokens = stringTokens(s);
         if (!tokens || tokens.length <= 0)
-            throw new Error("RsAnnotation could not parse string tag: " + s);
-        var asgn = stringToAssignability(tokens[0]);
-        var content = tokens.slice(1).join(" ");
-        return [new VariableDeclarationAnnotation(srcSpan, asgn, content)];
-        function stringToAssignability(str) {
-            switch (str) {
-                case "readonly":
-                    return Assignability.ReadOnly;
-                case "local":
-                    return Assignability.WriteLocal;
-                case "global":
-                    return Assignability.WriteGlobal;
-                default:
-                    return Assignability.WriteGlobal;
+            throw new Error("[refscript] RsAnnotation could not parse string tag: " + s);
+        if (isReservedAnnotationPrefix(tokens[0]))
+            return [];
+        var assignability = stringToAssignability();
+        var name = stringToName();
+        var type = stringToType();
+        return makeVariableDeclarationAnnotation(srcSpan, name, assignability, type, node);
+        function stringToAssignability() {
+            if (tokens[0] && (ts.indexOfEq(["[readonly]", "[local]", "[global]"], tokens[0]) === -1)) {
+                switch (tokens[0]) {
+                    case "[readonly]":
+                        return Assignability.Ambient;
+                    case "[local]":
+                        return Assignability.WriteLocal;
+                    case "global":
+                        return Assignability.WriteGlobal;
+                    default:
+                        return Assignability.WriteGlobal;
+                }
             }
+            return Assignability.WriteGlobal;
+        }
+        function stringToName() {
+            var dcolonIdx = ts.indexOfEq(tokens, "::");
+            if (dcolonIdx > 0) {
+                return tokens[dcolonIdx - 1];
+            }
+            throw new Error("[refscript] Invalid annotation: " + tokens.join(" "));
+        }
+        function stringToType() {
+            var dcolonIdx = ts.indexOfEq(tokens, "::");
+            if (dcolonIdx > 0) {
+                return tokens.slice(dcolonIdx + 1).join(" ");
+            }
+            throw new Error("[refscript] Invalid annotation: " + tokens.join(" "));
         }
     }
+    ts.makeVariableDeclarationAnnotationFromString = makeVariableDeclarationAnnotationFromString;
+    function makeVariableDeclarationAnnotation(srcSpan, name, assignability, type, node) {
+        if (node && (ts.getCombinedNodeFlags(node) & 2)) {
+            return [new VariableDeclarationAnnotation(srcSpan, name, Assignability.Ambient, type)];
+        }
+        return [new VariableDeclarationAnnotation(srcSpan, name, assignability, type)];
+    }
     ts.makeVariableDeclarationAnnotation = makeVariableDeclarationAnnotation;
+    function assignabilityToString(assignability) {
+        switch (assignability) {
+            case Assignability.Ambient:
+                return "ambient";
+            case Assignability.WriteGlobal:
+                return "global";
+            case Assignability.WriteLocal:
+                return "local";
+            default:
+                return "global";
+        }
+    }
     function makeFunctionDeclarationAnnotation(s, srcSpan) {
         var tokens = stringTokens(s);
         if (isReservedAnnotationPrefix(tokens[0])) {
@@ -26077,6 +26088,20 @@ var ts;
         return [new MethodAnnotation(srcSpan, s)];
     }
     ts.makeMethodAnnotations = makeMethodAnnotations;
+    function makePropertyAnnotations(s, srcSpan) {
+        var tokens = stringTokens(s);
+        if (isReservedAnnotationPrefix(tokens[0]))
+            throw new Error("[refscript] Invalid property annotation: " + s);
+        return [new PropertyAnnotation(srcSpan, s)];
+    }
+    ts.makePropertyAnnotations = makePropertyAnnotations;
+    function makeCallAnnotations(s, srcSpan) {
+        var tokens = stringTokens(s);
+        if (isReservedAnnotationPrefix(tokens[0]))
+            throw new Error("[refscript] Invalid call annotation: " + s);
+        return [new CallAnnotation(srcSpan, s)];
+    }
+    ts.makeCallAnnotations = makeCallAnnotations;
     function makeTypeSignatureAnnotation(s, srcSpan) {
         var tokens = stringTokens(s);
         if (!tokens || tokens.length < 2 || tokens[0] !== "interface")
@@ -26093,9 +26118,10 @@ var ts;
     ts.makeInterfaceDeclarationAnnotation = makeInterfaceDeclarationAnnotation;
     function makeTypeAliasAnnotation(s, srcSpan) {
         var tokens = stringTokens(s);
-        if (!tokens || tokens.length < 2 || tokens[0] !== "type")
-            return [];
-        return [new TypeAliasAnnotation(srcSpan, s)];
+        if (tokens && tokens.length > 0 && tokens[0] === "type") {
+            return [new TypeAliasAnnotation(srcSpan, s)];
+        }
+        return [];
     }
     ts.makeTypeAliasAnnotation = makeTypeAliasAnnotation;
     function toSpecKind(s) {
@@ -26107,7 +26133,7 @@ var ts;
                 return AnnotationKind.QualifierRawSpec;
             case "interface":
                 return AnnotationKind.InterfaceRawSpec;
-            case "alias":
+            case "type":
                 return AnnotationKind.TypeAliasRawSpec;
             case "class":
                 return AnnotationKind.ClassRawSpec;
@@ -26659,7 +26685,7 @@ var ts;
         var file = diagnostic.file;
         var fileName = file.fileName;
         var start = ts.getLineAndCharacterOfPosition(file, diagnostic.start);
-        var stop = ts.getLineAndCharacterOfPosition(file, diagnostic.start + dispatchEvent.length);
+        var stop = ts.getLineAndCharacterOfPosition(file, diagnostic.start + diagnostic.length);
         return new FPError(msg, new FPSrcSpan(new FPSrcPos(fileName, start.line, start.character), new FPSrcPos(fileName, stop.line, stop.character)));
     }
     ts.mkFixError = mkFixError;
@@ -26706,7 +26732,7 @@ var ts;
             this.msg = msg;
         }
         FRUnknownError.prototype.serialize = function () {
-            return { "UnknownError": this.msg };
+            return ts.aesonEncode("UnknownError", this.msg);
         };
         return FRUnknownError;
     })(FixResult);
@@ -26815,6 +26841,8 @@ var ts;
                         return propertyAccessExpressionToRsExp(state, node);
                     case ts.SyntaxKind.StringLiteral:
                         return stringLiteralToRsExp(state, node);
+                    case ts.SyntaxKind.NewExpression:
+                        return newExpressionToRsExp(state, node);
                 }
                 throw new Error("UNIMPLEMENTED nodeToRsExp for " + ts.SyntaxKind[node.kind]);
                 return undefined;
@@ -26838,8 +26866,10 @@ var ts;
                         return interfaceDeclarationToRsStmt(state, node);
                     case ts.SyntaxKind.TypeAliasDeclaration:
                         return typeAliasDeclarationToRsStmt(state, node);
+                    case ts.SyntaxKind.ThrowStatement:
+                        return throwStatementToRsStmt(state, node);
                 }
-                throw new Error("UNIMPLEMENTED nodeToRsStmt for " + ts.SyntaxKind[node.kind]);
+                throw new Error("[refscript] Unimplemented nodeToRsStmt for " + ts.SyntaxKind[node.kind]);
                 return undefined;
             }
             function sourceFileNodeToRsAST(state, node) {
@@ -26877,7 +26907,7 @@ var ts;
                     var sourceSpan = nodeToSrcSpan(signatureDeclaration);
                     var binderAnnotations = nodeAnnotations(signatureDeclaration, ts.makeFunctionDeclarationAnnotation);
                     if (binderAnnotations.length === 0) {
-                        return [new ts.FunctionDeclarationAnnotation(sourceSpan, nameText + " :: " + checker.signatureToString(signature, signatureDeclaration, 4))];
+                        return [new ts.FunctionDeclarationAnnotation(sourceSpan, nameText + " :: " + checker.signatureToRscString(signature, signatureDeclaration))];
                     }
                     else {
                         return binderAnnotations;
@@ -26903,6 +26933,9 @@ var ts;
             }
             function stringLiteralToRsExp(state, node) {
                 return new ts.RsStringLit(nodeToSrcSpan(node), [], node.text);
+            }
+            function newExpressionToRsExp(state, node) {
+                return new ts.RsNewExpr(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression), nodeArrayToRsAST(state, node.arguments, nodeToRsExp));
             }
             function expressionStatementToRsStmt(state, node) {
                 return new ts.RsExprStmt(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression));
@@ -26939,18 +26972,17 @@ var ts;
                 if (node.declarationList.declarations.length !== 1)
                     throw new Error("[refscript] Currently only supporting one declaration per declaration statement");
                 var declaration = node.declarationList.declarations[0];
-                var annotations = nodeAnnotations(node, ts.makeVariableDeclarationAnnotation);
-                var modifiers = (node.modifiers) ? node.modifiers : [];
+                var annotations = nodeAnnotations(node, ts.makeVariableDeclarationAnnotationFromString);
                 var varDeclList = new ts.RsList([variableDeclarationToRsVarDecl(state, declaration, annotations)]);
                 return new ts.RsVarDeclStmt(nodeToSrcSpan(node), [], varDeclList);
             }
             function variableDeclarationToRsVarDecl(state, node, annotations) {
                 if (node.name.kind === ts.SyntaxKind.ObjectBindingPattern || node.name.kind === ts.SyntaxKind.ArrayBindingPattern)
                     throw new Error("[refscript] Object and array binding patterns are not supported.");
-                var idName = node.name;
                 if (!annotations.some(function (a) { return a instanceof ts.VariableDeclarationAnnotation; })) {
-                    var type = checker.getTypeAtLocation(node);
-                    annotations = annotations.concat([new ts.VariableDeclarationAnnotation(nodeToSrcSpan(node), ts.Assignability.WriteGlobal, idName.text + " :: " + checker.typeToRscString(type, node))]);
+                    var idName = node.name;
+                    var type = checker.typeToString(checker.getTypeAtLocation(node));
+                    annotations = annotations.concat(ts.makeVariableDeclarationAnnotation(nodeToSrcSpan(node), idName.text, ts.Assignability.WriteGlobal, type, node));
                 }
                 return new ts.RsVarDecl(nodeToSrcSpan(node), annotations, nodeToRsId(state, node.name), (node.initializer) ? new ts.RsJust(nodeToRsExp(state, node.initializer)) : new ts.RsNothing());
             }
@@ -26993,21 +27025,41 @@ var ts;
                             case ts.SyntaxKind.ConstructSignature:
                                 var constructorAnnotations = nodeAnnotations(member, ts.makeConstructorAnnotations);
                                 if (constructorAnnotations.length > 0) {
-                                    return [constructorAnnotations[0].getContent()];
+                                    return [constructorAnnotations[0].content];
                                 }
                                 else {
                                     var constructorSignature = checker.getSignatureFromDeclaration(member);
-                                    return ["new " + checker.signatureToString(constructorSignature)];
+                                    return ["new " + checker.signatureToRscString(constructorSignature, member)];
                                 }
                             case ts.SyntaxKind.MethodSignature:
                                 var methodAnnotations = nodeAnnotations(member, ts.makeMethodAnnotations);
                                 if (methodAnnotations.length > 0) {
-                                    return [methodAnnotations[0].getContent()];
+                                    return [methodAnnotations[0].content];
                                 }
                                 else {
                                     var methodSignature = checker.getSignatureFromDeclaration(member);
-                                    return [ts.getTextOfNode(member.name) + checker.signatureToString(methodSignature)];
+                                    return [ts.getTextOfNode(member.name) + checker.signatureToRscString(methodSignature, member)];
                                 }
+                            case ts.SyntaxKind.PropertySignature:
+                                var propertyAnnotations = nodeAnnotations(member, ts.makePropertyAnnotations);
+                                if (propertyAnnotations.length > 0) {
+                                    return [propertyAnnotations[0].content];
+                                }
+                                else {
+                                    var propertyType = checker.getTypeAtLocation(member);
+                                    var optionText = (member.questionToken) ? "?" : "";
+                                    return [ts.getTextOfNode(member.name) + ": " + checker.typeToRscString(propertyType, member)];
+                                }
+                            case ts.SyntaxKind.CallSignature:
+                                var callAnnotations = nodeAnnotations(member, ts.makeCallAnnotations);
+                                if (callAnnotations.length > 0) {
+                                    return [callAnnotations[0].content];
+                                }
+                                else {
+                                    var callSignature = checker.getSignatureFromDeclaration(member);
+                                    return [checker.signatureToRscString(callSignature, member)];
+                                }
+                            case ts.SyntaxKind.IndexSignature:
                             default:
                                 return [];
                         }
@@ -27019,13 +27071,20 @@ var ts;
             }
             function typeAliasDeclarationToRsStmt(state, node) {
                 var annotations = nodeAnnotations(node, ts.makeTypeAliasAnnotation);
-                if (!annotations || annotations.length < 1) {
-                    var annotationText = ts.getTextOfNode(node.name);
+                if (annotations.length < 1) {
+                    var annotationText = "type ";
+                    annotationText += ts.getTextOfNode(node.name);
+                    if (node.typeParameters && node.typeParameters.length > 0) {
+                        annotationText += ts.angles(node.typeParameters.map(function (a) { return a.name.text; }).join(", "));
+                    }
                     annotationText += " = ";
                     annotationText += checker.typeToRscString(checker.getTypeAtLocation(node.type), node);
-                    annotations = annotations.concat(ts.makeTypeAliasAnnotation(annotationText, nodeToSrcSpan(node)));
+                    annotations = ts.makeTypeAliasAnnotation(annotationText, nodeToSrcSpan(node));
                 }
                 return new ts.RsEmptyStmt(nodeToSrcSpan(node), annotations);
+            }
+            function throwStatementToRsStmt(state, node) {
+                return new ts.RsThrowStatement(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression));
             }
             function nodeAnnotations(node, creator) {
                 if (!node)
@@ -27033,7 +27092,7 @@ var ts;
                 var currentSourceFile = ts.getSourceFileOfNode(node);
                 var comments = ts.emptyFromUndefined(ts.getLeadingCommentRangesOfNode(node, currentSourceFile));
                 var match = comments.map(extractBinderAndAnnotation);
-                return ts.concat(match.filter(function (t) { return t !== null; }).map(function (t) { return creator(t.cstring, t.ss); }));
+                return ts.concat(match.filter(function (t) { return t !== null; }).map(function (t) { return creator(t.cstring, t.ss, node); }));
                 function extractBinderAndAnnotation(commentRange) {
                     var commentText = currentSourceFile.text.substring(commentRange.pos, commentRange.end);
                     var matchStr = commentText.match(/\/\*@([^]*)\*\//g);

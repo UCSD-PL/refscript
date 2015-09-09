@@ -21,7 +21,7 @@ import           Data.Function                (on)
 import           Data.List                    (sortBy)
 import           Data.Monoid
 import           Language.Fixpoint.Errors     (die)
-import           Language.Fixpoint.Misc       (single)
+import           Language.Fixpoint.Misc       (fst3, single)
 import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annots
 import           Language.Rsc.AST
@@ -40,11 +40,14 @@ import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
 
+import           Debug.Trace
+
+
 type Unif r = (PP r, F.Reftable r, ExprReftable Int r, ExprReftable F.Symbol r, Free (Fact r))
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Typecheck Environment
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 data TCEnv r  = TCE {
     tce_names  :: Env (EnvEntry r)
@@ -74,17 +77,18 @@ instance EnvLike r TCEnv where
   envThis   = tce_this
 
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Environment initialization
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initGlobalEnv :: Unif r => TcRsc r -> ClassHierarchy r -> TCEnv r
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initGlobalEnv pgm@(Rsc { code = Src ss }) cha
   = TCE nms bnds ctx pth cha mut tThis
   where
-    nms   = mkVarEnv (accumVars ss)    -- modules ?
+    nms   = tracePP "GLOB ENV" $ mkVarEnv vars    -- modules ?
+    vars  = accumVars ss
     bnds  = mempty
     ctx   = emptyContext
     pth   = emptyPath
@@ -93,13 +97,13 @@ initGlobalEnv pgm@(Rsc { code = Src ss }) cha
 
 -- This will be called *last* on every contructor, method, function.
 -- It is transparent to the incoming environment's: path, cha, mut, this
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initCallableEnv :: (IsLocated l, Unif r)
                 => AnnTc r -> TCEnv r -> l
                 -> IOverloadSig r
                 -> [Statement (AnnTc r)]
                 -> TCEnv r
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initCallableEnv l γ f fty s
   = TCE nms bnds ctx pth cha mut tThis
   where
@@ -124,24 +128,24 @@ initCallableEnv l γ f fty s
     ts    = map b_type xts
     αs    = map btvToTV bs
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initClassInstanceEnv :: TypeSig r -> TCEnv r -> TCEnv r
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initClassInstanceEnv (TS _ (BGen _ bs) _) γ =
   γ { tce_bounds = envAdds bts (tce_bounds γ) }
   where
     bts = [(s,t) | BTV s _ (Just t) <- bs]
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initClassMethEnv :: Unif r => MutabilityMod -> TypeSig r -> TCEnv r -> TCEnv r
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initClassMethEnv m (TS _ (BGen nm bs) _) γ
   = γ { tce_mut  = Just m
       , tce_this = Just $ TRef (Gen nm (map btVar bs)) fTop }
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initModuleEnv :: (Unif r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnTc r)] -> TCEnv r
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initModuleEnv γ n s = TCE nms bnds ctx pth cha mut tThis
   where
     nms   = mkVarEnv (accumVars s)
@@ -153,9 +157,9 @@ initModuleEnv γ n s = TCE nms bnds ctx pth cha mut tThis
     tThis = Nothing
 
 -- initCallable will be called later on the result
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initClassCtorEnv :: Unif r => TypeSigQ AK r -> TCEnv r -> TCEnv r
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initClassCtorEnv (TS _ (BGen nm bs) _) γ
   = γ { tce_names = addExit (envNames γ)
       , tce_mut   = Just AssignsFields
@@ -181,22 +185,22 @@ initClassCtorEnv (TS _ (BGen nm bs) _) γ
     tThis    = TRef (Gen nm (map btVar bs)) fTop
 
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Environment wrappers
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 tcEnvAdds xs γ = γ { tce_names = envAdds xs $ tce_names γ }
 
 tcEnvAdd x t γ = γ { tce_names = envAdd x t $ tce_names γ }
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 tcEnvFindTy :: (Unif r, F.Symbolic x, IsLocated x) => x -> TCEnv r -> Maybe (RType r)
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 tcEnvFindTy x γ = fmap v_type (tcEnvFindTyWithAgsn x γ)
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 tcEnvFindTyWithAgsn :: (Unif r, F.Symbolic x) => x -> TCEnv r -> Maybe (EnvEntry r)
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 tcEnvFindTyWithAgsn x γ | Just t <- envFindTy x $ tce_names γ
                         = Just $ adjustInit t
                         | otherwise
@@ -207,9 +211,9 @@ tcEnvFindTyWithAgsn x γ | Just t <- envFindTy x $ tce_names γ
 
 -- This is a variant of the above that doesn't add the ' + undefined' for
 -- non-initialized variables.
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 tcEnvFindTyForAsgn    :: (Unif r, F.Symbolic x) => x -> TCEnv r -> Maybe (EnvEntry r)
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 tcEnvFindTyForAsgn x γ = envFindTy x $ tce_names γ
 
 safeTcEnvFindTy l γ x | Just t <- tcEnvFindTy x γ = return t
@@ -222,9 +226,9 @@ resolveTypeM l γ x
       Just t  -> return t
       Nothing -> die $ bugClassDefNotFound (srcPos l) x
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 tcEnvAddBounds :: [BTVar r] -> TCEnv r -> TCEnv r
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 tcEnvAddBounds = flip $ foldr go
   where
     go (BTV α _ (Just t)) γ = γ { tce_bounds = envAdd α t $ tce_bounds γ }

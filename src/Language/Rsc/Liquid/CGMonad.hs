@@ -240,9 +240,8 @@ envGetContextTypArgs :: Int -> CGEnv -> AnnLq -> [TVar] -> [RefType]
 -- (i.e. might be there for a separate instantiation).
 envGetContextTypArgs _ _ _ [] = []
 envGetContextTypArgs n g a αs
-  = case tys of
-      [i] | length i == length αs -> i
-      _ -> die $ bugMissingTypeArgs $ srcPos a
+  | [i] <- tys, length i == length αs = i
+  | otherwise = die $ bugMissingTypeArgs $ srcPos a
   where
     tys = [i | TypInst m ξ' i <- fFact a
              , ξ' == cge_ctx g
@@ -491,7 +490,7 @@ freshenType _ g l t
 
 -- | Instantiate Fresh Type (at Call-site)
 freshTyInst l g αs τs tbody
-  = do ts    <- mapM (freshTy "freshTyInst") τs
+  = do ts    <- mapM (freshTy "freshTyInst") (tracePP "freshTyInst" τs)
        _     <- mapM (wellFormed l g) ts
        return $ apply (fromList $ zip αs ts) tbody
 
@@ -618,8 +617,8 @@ instance Freshable String where
   fresh = F.symbolString <$> fresh
 
 -- | Freshen up
-freshTy :: RefTypable a => s -> a -> CGM RefType
-freshTy _ τ = refresh $ rType τ
+-- freshTy :: RefTypable a => s -> a -> CGM RefType
+freshTy _ τ = tracePP "After refresh" <$> refresh (tracePP "before refresh" $ rType τ)
 
 instance Freshable F.Refa where
   fresh = F.Refa . (`F.PKVar` mempty) . F.intKvar <$> fresh

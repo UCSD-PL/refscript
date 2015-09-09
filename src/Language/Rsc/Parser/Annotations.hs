@@ -86,6 +86,24 @@ data PSpec l r
 
 type Spec = PSpec SrcSpan Reft
 
+instance PP Spec where
+  pp FunctionDeclarationSpec{} = text "FunctionDeclarationSpec"
+  pp VariableDeclarationSpec{} = text "VariableDeclarationSpec"
+  pp FunctionExpressionSpec{}  = text "FunctionExpressionSpec"
+  pp InterfaceSpec{}           = text "InterfaceSpec"
+  pp ClassSpec  {}             = text "ClassSpec"
+  pp FieldSpec{}               = text "FieldSpec"
+  pp MethodSpec{}              = text "MethodSpec"
+  pp ConstructorSpec{}         = text "ConstructorSpec"
+  pp CastSpec{}                = text "CastSpec"
+  pp MeasureSpec{}             = text "MeasureSpec"
+  pp TypeAliasSpec{}           = text "TypeAliasSpec"
+  pp PredicateAliasSpec{}      = text "PredicateAliasSpec"
+  pp QualifierSpec{}           = text "QualifierSpec"
+  pp InvariantSpec{}           = text "InvariantSpec"
+  pp OptionSpec{}              = text "OptionSpec"
+  pp ErrorSpec{}               = text "ErrorSpec"
+
 parseSpec :: RawSpec -> Parser Spec
 parseSpec = go
   where

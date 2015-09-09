@@ -7,8 +7,8 @@ interface Array<M extends ReadOnly, T> {
     /**
       * Returns a string representation of an array.
       */
-    toString(): string;
-    toLocaleString(): string;
+    // toString(): string;
+    // toLocaleString(): string;
     /**
       * Appends new elements to an array, and returns the new length of the array.
       * @param items New elements of the Array.
@@ -152,7 +152,9 @@ interface Array<M extends ReadOnly, T> {
     [n: number]: T;
 }
 
-type IArray<T> = Array<Immutable, T>
+type IArray<T>  = Array<Immutable,T>;
+type MArray<T>  = Array<Mutable,T>;
+type ROArray<T> = Array<ReadOnly,T>;
 
 // interface ArrayConstructor {
 //     new (arrayLength?: number): any[];

@@ -1,6 +1,6 @@
-// <reference path="./rsc/prims.ts"/>
-
+/// <reference path="./rsc/prims.ts"/>
 /// <reference path="./rsc/mutability.ts"/>
+/// <reference path="./rsc/aliases.ts"/>
 
 /// <reference path="./ambient/object.ts"/>
 /// <reference path="./ambient/array.ts"/>
@@ -10,3 +10,4 @@
 /// <reference path="./ambient/number.ts"/>
 /// <reference path="./ambient/iarguments.ts"/>
 /// <reference path="./ambient/regexp.ts"/>
+/// <reference path="./ambient/error.ts"/>

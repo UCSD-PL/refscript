@@ -128,13 +128,10 @@ accumModules (Rsc { code = Src stmts }) =
     varEnv p = return . mkVarEnv . vStmts p
     vStmts   = concatMap . vStmt
 
-    vStmt _ (VarDeclStmt _ vds)    = [(ss x, VarDeclKind  , VI a Uninitialized t )        | VarDecl l x _ <- vds
-                                                                                          , VarAnn a (Just t) <- fFact l ]
-    -- XXX: disabling this for now
-    -- ++ [(ss x, VarDeclKind  , VI WriteGlobal Initialized t) | VarDecl l x _ <- vds
-    --                                                         , AmbVarAnn t <- fFact l ]
+    vStmt _ (VarDeclStmt _ vds)    = [(ss x, VarDeclKind  , VI a Uninitialized t ) | VarDecl l x _ <- vds
+                                                                                   , VarAnn a (Just t) <- fFact l ]
     -- The Assignabilities below are overwitten to default values
-    vStmt _ (FunctionStmt l x _ _) = [(ss x, FuncDeclKind  , VI Ambient Initialized t)          | VarAnn _ (Just t) <- fFact l ]
+    vStmt _ (FunctionStmt l x _ _) = [(ss x, FuncDeclKind  , VI Ambient Initialized t) | VarAnn _ (Just t) <- fFact l ]
     vStmt _ (ClassStmt l x _ _ _)  = [(ss x, ClassDeclKind , VI Ambient Initialized $ TClass b) | ClassAnn (TS _ b _) <- fFact l ]
     vStmt p (ModuleStmt l x _)     = [(ss x, ModuleDeclKind, VI Ambient Initialized $ TMod $ pathInPath l p x)]
     vStmt p (EnumStmt _ x _)       = [(ss x, EnumDeclKind  , VI Ambient Initialized $ TRef (Gen (QN p $ F.symbol x) []) fTop) ]
@@ -144,9 +141,9 @@ accumModules (Rsc { code = Src stmts }) =
     typeEnv = liftM envFromList . tStmts
     tStmts  = concatMapM tStmt
 
-    tStmt c@ClassStmt{} = single <$> declOfStmt c
-    tStmt c@InterfaceStmt{} = single <$> declOfStmt c
-    tStmt _             = return [ ]
+    tStmt c@ClassStmt{}     = single <$> declOfStmt c
+    tStmt c@InterfaceStmt{} = single <$> tracePP "TDecl" <$> declOfStmt c
+    tStmt _                 = return [ ]
 
     -- | Enumerations
     enumEnv = return . envFromList . eStmts
@@ -177,7 +174,7 @@ mkVarEnv = envMap snd
 
     mergeVarInfo x (k1, VI a1 i1 t1) (k2, VI a2 i2 t2)
       | k1 == k2, a1 == a2, i1 == i2
-      = (k1, VI a1 i1 $ mkAnd [t1, t2])
+      = (k1, VI a1 i1 $ mkAnd $ bkAnd t1 ++ bkAnd t2)
     mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
 
 

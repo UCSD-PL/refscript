@@ -38,7 +38,7 @@ module Language.Rsc.Typecheck.Types (
   -- * Primitive Types
 
   --   # Constructors
-  , tNum, tBV32, tBool, tString, tTop, tVoid, tErr, tVar, btVar, tUndef, tNull, tBot
+  , tNum, tBV32, tBool, tString, tTop, tVoid, tErr, tVar, btVar, tUndef, tNull, tBot, tAny
 
   --   # Tests
   , isTPrim, isTTop, isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
@@ -163,11 +163,9 @@ bkFuns :: RTypeQ q r -> Maybe [([BTVarQ q r], [BindQ q r], RTypeQ q r)]
 bkFuns = sequence . fmap bkFun . bkAnd
 
 bkFun :: RTypeQ q r -> Maybe ([BTVarQ q r], [BindQ q r], RTypeQ q r)
-bkFun t =
+bkFun t | (αs, t')   <- bkAll t =
   do  (xts, t'')     <- bkArr t'
       return          $ (αs, xts, t'')
-  where
-    (αs, t')          = bkAll t
 
 bkFunNoBinds :: RTypeQ q r -> Maybe ([BTVarQ q r], [RTypeQ q r], RTypeQ q r)
 bkFunNoBinds = fmap (mapSnd3 $ map b_type) . bkFun
@@ -254,6 +252,7 @@ isTPrim t  | TPrim _ _ <- t = True | otherwise = False
 isTTop    = isPrim TTop
 isTUndef  = isPrim TUndefined
 isTNull   = isPrim TNull
+isTAny    = isPrim TAny
 isTVoid   = isPrim TVoid
 isTStr    = isPrim TString
 isTNum    = isPrim TNumber
@@ -331,7 +330,7 @@ tVar = (`TVar` fTop)
 btVar :: (F.Reftable r) => BTVar r -> RType r
 btVar = tVar . btvToTV
 
-tNum, tBV32, tBool, tString, tTop, tVoid, tBot, tUndef, tNull, tErr :: F.Reftable r => RTypeQ q r
+tNum, tBV32, tBool, tString, tTop, tVoid, tBot, tUndef, tNull, tAny, tErr :: F.Reftable r => RTypeQ q r
 tPrim   = (`TPrim` fTop)
 tNum    = tPrim TNumber
 tBV32   = tPrim TBV32
@@ -341,6 +340,7 @@ tTop    = tPrim TTop
 tVoid   = tPrim TVoid
 tBot    = tPrim TBot
 tUndef  = tPrim TUndefined
+tAny    = tPrim TAny
 tNull   = tPrim TNull
 tErr    = tVoid
 

@@ -12,7 +12,7 @@
 
 module Language.Rsc.Parser.Types where
 
-import           Control.Applicative          ((*>), (<$>), (<*), (<*>))
+import           Control.Applicative          ((*>), (<$>), (<*>))
 import           Control.Monad
 import           Data.Char                    (isLower)
 import           Data.Generics                hiding (Generic)
@@ -24,7 +24,6 @@ import           Language.Fixpoint.Misc       (mapEither)
 import           Language.Fixpoint.Names
 import           Language.Fixpoint.Parse
 import qualified Language.Fixpoint.Types      as F
-import           Language.Rsc.Annots
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Names
 import           Language.Rsc.Options
@@ -36,13 +35,15 @@ import           Language.Rsc.Types
 import           Prelude                      hiding (mapM)
 import           Text.Parsec                  hiding (State, parse)
 
+-- import           Language.Rsc.Pretty
+
 
 type RRType = RTypeQ RK F.Reft
 type RMutability = RTypeQ RK F.Reft
 
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Type Binders
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 idBindP :: Parser (Id SrcSpan, RRType)
 idBindP = withinSpacesP $ xyP identifierP dcolon bareTypeP
@@ -75,11 +76,12 @@ pAliasVarsP = try (parens $ symbolP `sepBy` comma)
            <|> many symbolP
 
 tAliasP :: Parser (Id SrcSpan, TAlias RRType)
-tAliasP = do name      <- identifierP
+tAliasP = do withinSpacesP $ reserved "type"
+             name      <- identifierP
              (αs, πs)  <- mapEither aliasVarT <$> aliasVarsP
              reservedOp "="
              body      <- convertTVar αs <$> bareTypeP
-             return      (name, Alias name αs πs body)
+             return (name, Alias name αs πs body)
 
 aliasVarsP =  try (brackets avarsP)
           <|> try (angles   avarsP)
@@ -166,9 +168,9 @@ tParP  = angles $ sepBy tvarP comma
 -- | <A extends T, B extends S, ...>
 bTParP = angles $ sepBy btvarP comma
 
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | RefTypes
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | `bareTypeP` parses top-level "bare" types. If no refinements are supplied,
 --    then "top" refinement is used.
 bareTypeP :: Parser RRType
@@ -180,14 +182,17 @@ bUnP        = parenNullP (bareTypeNoUnionP `sepBy1` plus) toN >>= mkU
     mkU xs  = return $ TOr xs -- flattenUnions . TOr xs
     toN     = (tNull:)
 
--- | `bareTypeNoUnionP` parses a type that does not contain a union at the top-level.
+-- | `bareTypeNoUnionP` parses a type that does not contain a union at the
+-- top-level.
 bareTypeNoUnionP = try funcSigP <|> bareAllP (bareAtomP bbaseP)
 
--- | `parenNullP p f` optionally parses "( `a` )?", where `a` is parsed by the input parser @p@.
+-- | `parenNullP p f` optionally parses "( `a` )?", where `a` is parsed by the
+-- input parser @p@.
 parenNullP p f =  try (f <$> postP p question) <|> p
 
 
--- | `funcSigP` parses a function type that is possibly generic and/or an intersection.
+-- | `funcSigP` parses a function type that is possibly generic and/or an
+-- intersection.
 funcSigP =  try (bareAllP bareFunP)
         <|> try (intersectP $ bareAllP bareFunP)
   where
@@ -225,9 +230,9 @@ bareAtomP p
  <|>     (dummyP p)
 
 
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 bbaseP :: Parser (F.Reft -> RRType)
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 bbaseP
   =  try (TObj  <$> typeBodyP)  -- {f1: T1; ... ; fn: Tn}
  <|> try (TPrim <$> tPrimP)     -- number, boolean, etc...
@@ -246,14 +251,14 @@ bareTyArgP
   = try bareTypeP
  <|> (TExp <$> exprP)
 
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 tvarP    :: Parser TVar
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 tvarP    = withSpan tvar $ wordP isTvar
 
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 btvarP    :: Parser (BTVarQ RK F.Reft)
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 btvarP   = withSpan btvar $ (,) <$> wordP isTvar
                                 <*> optionMaybe (reserved "extends" *> bareTypeP)
 
@@ -267,9 +272,9 @@ wordP  = condIdP ok
   where
     ok = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 tPrimP :: Parser TPrim
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 tPrimP =  try (reserved "number"      >> return TNumber)
       <|> try (reserved "bitvector32" >> return TBV32)
       <|> try (reserved "boolean"     >> return TBoolean)
@@ -279,6 +284,7 @@ tPrimP =  try (reserved "number"      >> return TNumber)
       <|> try (reserved "string"      >> return TString)
       <|> try (reserved "null"        >> return TNull)
       <|> try (reserved "bool"        >> return TFPBool)
+      <|> try (reserved "any"         >> return TAny)
 
 bareAllP p
   -- = do tvs   <- optionMaybe (reserved "forall" *> many1 btvarP <* dot)
@@ -290,11 +296,12 @@ bareAllP p
 
 propBindP   = sepEndBy memberP semi
   where
+    unc     = \f (a,b,c,d,e) -> f a b c d e
     memberP =  try idxP
-           <|> try (propP >>= \(x,s,o,m,t) -> return $ Prop x s o m t)
-           <|> try (methP >>= \(x,s,o,m,t) -> return $ Meth x s o m t)
-           <|> try callP
-           <|>     (Ctor <$> ctorP)
+           <|> try (    Ctor <$> ctorP) -- Ctor needs to be before Meth
+           <|> try (unc Prop <$> propP)
+           <|> try (unc Meth <$> methP)
+           <|>     (    Call <$> callP)
 
 data EltKind = Prop Symbol StaticKind Optionality RMutability RRType
              | Meth Symbol StaticKind Optionality MutabilityMod RRType
@@ -304,15 +311,15 @@ data EltKind = Prop Symbol StaticKind Optionality RMutability RRType
              | NIdx RRType
              deriving (Data, Typeable)
 
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 eltKindsToTypeMembers :: [EltKind] -> TypeMembersQ RK F.Reft
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 eltKindsToTypeMembers = foldl' go mempty
   where
-    go ms (Prop f InstanceK o m t) = ms { tm_sprop = F.insertSEnv f (FI o m t) (tm_sprop ms) }
-    go ms (Prop f StaticK   o m t) = ms { tm_prop  = F.insertSEnv f (FI o m t) (tm_prop  ms) }
-    go ms (Meth n InstanceK o m t) = ms { tm_smeth = F.insertSEnv n (MI o m t) (tm_smeth ms) }
-    go ms (Meth n StaticK   o m t) = ms { tm_meth  = F.insertSEnv n (MI o m t) (tm_meth  ms) }
+    go ms (Prop f InstanceK o m t) = ms { tm_prop  = F.insertSEnv f (FI o m t) (tm_prop  ms) }
+    go ms (Prop f StaticK   o m t) = ms { tm_sprop = F.insertSEnv f (FI o m t) (tm_sprop ms) }
+    go ms (Meth n InstanceK o m t) = ms { tm_meth  = F.insertSEnv n (MI o m t) (tm_meth  ms) }
+    go ms (Meth n StaticK   o m t) = ms { tm_smeth = F.insertSEnv n (MI o m t) (tm_smeth ms) }
     -- TODO: Multiple overloads are dropped
     go ms (Call t) = ms { tm_call = Just t }
     go ms (Ctor t) = ms { tm_ctor = Just t }
@@ -333,32 +340,34 @@ indexP = xyP id colon sn
     id = symbol <$> (try lowerIdP <|> upperIdP)
     sn = withinSpacesP (string "string" <|> string "number")
 
--- | [STATIC] [MUTABILITY] f[?]: t     (Default value for [MUTABILITY] is Mutable)
-propP = do  s     <- (reserved "static" >> return StaticK) <|> (return InstanceK)
-            m     <- option trMut mutabilityP
+-- | [STATIC] f[?]: [MUTABILITY] t
+--
+--    Default value for [MUTABILITY] is Mutable
+--
+propP = do  s     <- option InstanceK (reserved "static" *> return StaticK)
             x     <- symbol <$> binderP
             o     <- option Req (withinSpacesP (char '?') *> return Opt)
             _     <- colon
+            m     <- option trMut mutabilityP
             t     <- bareTypeP
             return $ (x, s, o, m, t)
 
 -- | [STATIC] [MUTABILITY] m[<A..>](x:t,..): t
-methP = do  s     <- (reserved "static" >> return StaticK) <|> (return InstanceK)
+methP = do  s     <- option InstanceK (reserved "static" *> return StaticK)
             m     <- methMutabilityP
             x     <- symbol <$> identifierP
-            o     <- maybe Req (\_ -> Opt) <$> optionMaybe (withinSpacesP $ char '?')
+            o     <- option Req (withinSpacesP (char '?') *> return Opt)
             t     <- methSigP
             return $ (x, s, o, m, t)
 
--- | [<A..>](t..) => t
-callP = Call <$> withinSpacesP funcSigP
+-- | [<A..>](t..): t
+callP           = withinSpacesP methSigP
 
--- | new [<A..>](t..) => t
-ctorP = reserved "new" >> withinSpacesP funcSigP
+-- | new [<A..>](t..): t
+ctorP           = withinSpacesP (reserved "new")
+               *> withinSpacesP methSigP
 
-mutabilityP     =  try (reserved "Mutable" >> return trMut)
-               <|> try (reserved "Immutable" >> return trImm)
-               <|>     (reserved "ReadOnly" >> return trRO)
+mutabilityP     =  brackets bareTypeP
 
 methMutabilityP =  try (reserved "Mutable"       >> return Mutable)
                <|> try (reserved "Immutable"     >> return Immutable)
@@ -366,27 +375,27 @@ methMutabilityP =  try (reserved "Mutable"       >> return Mutable)
                <|> try (reserved "AssignsFields" >> return AssignsFields)
                <|>     (                            return Mutable)
 
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 dummyP ::  Parser (F.Reft -> b) -> Parser b
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 dummyP fm = fm `ap` topP
 
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 topP   :: Parser F.Reft
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 topP   = (F.Reft . (, mempty) . vv . Just) <$> freshIntP'
 
 -- Using a slightly changed version of `freshIntP`
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 freshIntP' :: Parser Integer
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 freshIntP' = do n <- stateUser <$> getParserState
                 putState $ n+1
                 return n
 
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Parses refined types of the form: `{ kind | refinement }`
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 xrefP :: Parser (F.Reft -> a) -> Parser a
 xrefP kindP
   = braces $ do
@@ -394,4 +403,3 @@ xrefP kindP
       reserved "|"
       ra <- refaP
       return $ t (F.Reft (symbol "v", ra))
-

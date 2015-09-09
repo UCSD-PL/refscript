@@ -66,17 +66,21 @@ instance (F.Reftable r, PP r) => PP (TypeMembersQ q r) where
     = ppProp fs  <+> ppMeth ms  <+> ppSProp sfs <+> ppSMeth sms <+>
       ppCall cs  <+> ppCtor cts <+> ppSIdx sidx <+> ppNIdx nidx
 
-ppProp  = vcat . map (\(x, f) -> pp x <> pp f) . F.toListSEnv
-ppMeth  = vcat . map (\(x, m) -> pp x <> pp m) . F.toListSEnv
-ppSProp = vcat . map (\(x, f) -> pp "static" <+> pp x <> pp f) . F.toListSEnv
-ppSMeth = vcat . map (\(x, m) -> pp "static" <+> pp x <> pp m) . F.toListSEnv
-ppCall optT | Just t <- optT = pp t              | otherwise = pp ""
-ppCtor optT | Just t <- optT = pp "new" <+> pp t | otherwise = pp ""
-ppSIdx t = pp "[x: string]:" <+> pp t
-ppNIdx t = pp "[x: number]:" <+> pp t
+ppProp  = vcat . map (\(x, f) -> pp x <> pp f <> semi) . F.toListSEnv
+ppMeth  = vcat . map (\(x, m) -> pp x <> pp m <> semi) . F.toListSEnv
+ppSProp = vcat . map (\(x, f) -> pp "static" <+> pp x <> pp f <> semi) . F.toListSEnv
+ppSMeth = vcat . map (\(x, m) -> pp "static" <+> pp x <> pp m <> semi) . F.toListSEnv
+
+ppCall optT | Just t <- optT = pp t              <> semi | otherwise = pp ""
+ppCtor optT | Just t <- optT = pp "new" <+> pp t <> semi | otherwise = pp ""
+
+ppSIdx (Just t) = pp "[x: string]:" <+> pp t <> semi
+ppSIdx _        = pp ""
+ppNIdx (Just t) = pp "[x: number]:" <+> pp t <> semi
+ppNIdx _        = pp ""
 
 instance PPR r => PP (FieldInfoQ q r) where
-  pp (FI o m t) = brackets (pp m) <> pp o <> colon <+> pp t
+  pp (FI o m t) = pp o <> colon <+> brackets (ppMut m) <+> pp t
 
 instance PPR r => PP (MethodInfoQ q r) where
   pp (MI o m t) = pp o <> brackets (pp m) <> pp t
@@ -86,16 +90,19 @@ instance PP Optionality where
   pp Req = text ""
 
 instance (F.Reftable r, PP r) => PP (TGenQ q r) where
+  pp (Gen x []) = pp x
   pp (Gen x ts) = pp x <> ppArgs angles comma ts
 
 instance (F.Reftable r, PP r) => PP (BTGenQ q r) where
+  pp (BGen x []) = pp x
   pp (BGen x ts) = pp x <> ppArgs angles comma ts
 
 instance PP TVar where
   pp = pprint . F.symbol
 
 instance (F.Reftable r, PP r) => PP (BTVarQ q r) where
-  pp (BTV v t _) = pprint v <+> text "<:" <+> pp t
+  pp (BTV v _ (Just t)) = pprint v <+> text "<:" <+> pp t
+  pp (BTV v _ _       ) = pprint v
 
 instance PP TPrim where
   pp TString     = text "string"
@@ -108,6 +115,8 @@ instance PP TPrim where
   pp TNull       = text "null"
   pp TBot        = text "_|_"
   pp TTop        = text " T "
+  pp TAny        = text "any"
+  pp TFPBool     = text "_bool_"
 
 instance (PP r, F.Reftable r) => PP (BindQ q r) where
   pp (B x t) = pp x <> colon <> pp t

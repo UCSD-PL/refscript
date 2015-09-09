@@ -226,12 +226,10 @@ consFun _ s
 consCallable l g f body ift
   = initCallableEnv l g f ift body >>= (`consStmts` body)
 
-
 --------------------------------------------------------------------------------
 consStmts :: CGEnv -> [Statement AnnLq]  -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
-consStmts g stmts = consFold consStmt g stmts
-
+consStmts = consFold consStmt
 
 --------------------------------------------------------------------------------
 consStmt :: CGEnv -> Statement AnnLq -> CGM (Maybe CGEnv)
@@ -834,7 +832,6 @@ consCall :: PP a
 
 consCall g l fn ets ft0
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      -- ts <- ltracePP l ("LQ " ++ ppshow fn) <$> T.mapM (`cgSafeEnvFindTyM` g') xes
       ts <- T.mapM (`cgSafeEnvFindTyM` g') xes
       case ol of
         -- If multiple are valid, pick the first one
@@ -859,7 +856,6 @@ consInstantiate :: PP a
 consInstantiate l g fn ft ts xes
   = do  (_,its1,ot) <- instantiateFTy l g fn ft
         ts1         <- zipWithM (instantiateTy l g) [1..] ts
-        -- let (ts2, its2)  = balance ts1 its1
         (ts3, ot')  <- subNoCapture l its1 xes ot
         _           <- zipWithM_ (subType l err g) ts1 (map b_type ts3)
         Just       <$> cgEnvAddFresh "5" l (VI WriteLocal Initialized ot') g
@@ -895,7 +891,7 @@ instantiateFTy l g fn ft
   = do  t'   <- freshTyInst l g αs ts t
         maybe err return $ bkFun t'
     where
-      (αs, t) = mapFst (map btvToTV) $ bkAll t
+      (αs, t) = mapFst (map btvToTV) $ bkAll ft
       ts      = envGetContextTypArgs 0 g l αs
       err     = cgError $ errorNonFunction (srcPos l) fn ft
 

@@ -1,49 +1,31 @@
 
-/*************************************************************************
- *
- *  TYPES FOR BUILTIN OPERATORS
- *
- ************************************************************************/
+ /*  builtin_BIBracketRef :: <M,A>(x: Array<M,A>, n: number + undefined) => A + undefined */
+ /*  builtin_BIBracketRef :: <M,A>(x: Array<M,A>, n: undefined) => undefined */
+ /*  builtin_BIBracketRef :: <A>  (o: [Immutable] {[y: string]: A }, x: string) => { A | has Property(x,o) } + { undefined | not (hasProperty(x,o)) } */
 
-/*@ builtin_BIBracketRef ::
-    /\ forall   A . (x: IArray<A>, { number | [ 0 <= v; v < len x ] }) => A
-    /\ forall   A . (MArray<A> , idx: number) => A + undefined
-    /\ forall M A . (Array<M,A>, idx: number + undefined) => A + undefined
-    /\ forall M A . (Array<M,A>, idx: undefined) => undefined
-    /\ forall   A . (o: [Immutable] {[y: string]: A }, x: string) => { A | hasProperty(x,o) } + { undefined | not (hasProperty(x,o)) }
-    /\ forall M A . ([M] {[y: string]: A }, string) => A + undefined
-    /\              ({ }, string) => top
- */
+/*@ builtin_BIBracketRef :: <A>(x: IArray<A> , n: idx<x>)  => A */
+/*@ builtin_BIBracketRef :: <A>(x: MArray<A> , n: number)  => A + undefined */
+/*@ builtin_BIBracketRef :: <A>({[y: string]: A }, string) => A + undefined */
 declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 
 // TODO : add case for A<AssignsFields> or A<Unique>
 
-/*@ builtin_BIBracketAssign ::
-    /\ forall   A . (x: IArray<A>, { number | (0 <= v && v < (len x))}, val: A) => void
-    /\ forall M A . (Array<M,A>, number, A) => void
-    /\ forall M A . ([M] {[y: string]: A }, string, A) => void
- */
-declare function builtin_BIBracketAssign<A>(a: A[], n: number, v: A): void;
+/*@ builtin_BIBracketAssign :: <A>(x: IArray<A> , n: idx<x>, v: A) => void */
+/*@ builtin_BIBracketAssign :: <M extends ReadOnly,A>(x: Array<M,A>, n: number, v: A) => void */
+/*@ builtin_BIBracketAssign :: <A>(a: {[y: string]: A}, s: string, v: A) => void */
+declare function builtin_BIBracketAssign<A>(a: any, s: any, v: A): void;
 
-/*@ builtin_BISetProp ::
-    /\ forall A M. ([UniqueMutable] { f ? : [M] A }, A) => { A | true }
-    /\ forall A M. ([M] { f ? : [Mutable] A }      , A) => { A | true }
- */
+/*@ builtin_BISetProp :: <A,M>({ f?: [M] A }      , A) => { A | true } */    // XXX: UniqueMutable ??
+/*@ builtin_BISetProp :: <A>  ({ f?: [Mutable] A }, A) => { A | true } */
 declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
-/*@ builtin_BIArrayLit ::
-    forall M A. (A) => {v: Array<M,A> | (len v) = builtin_BINumArgs }
- */
+/*@ builtin_BIArrayLit :: <M,A>(A) => {v: Array<M,A> | (len v) = builtin_BINumArgs } */
 declare function builtin_BIArrayLit<A>(a: A): A[];
 
-/*@ builtin_BICondExpr ::
-    forall C T . (c: C, t: T, x: T, y: T) => { v: T | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) }
- */
+/*@ builtin_BICondExpr :: <C,T>(c: C, t: T, x: T, y: T) => { v: T | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) } */
 declare function builtin_BICondExpr<C, T>(c: C, t: T, x: T, y: T): T;
 
-/*@ builtin_BICastExpr ::
-    forall T . (c: T, x: T) => { v: T | v ~~ x }
- */
+/*@ builtin_BICastExpr :: <T>(c: T, x: T) => { v: T | v ~~ x } */
 declare function builtin_BICastExpr<T>(c: T, x: T): T;
 
 // /*@ builtin_OpLT ::

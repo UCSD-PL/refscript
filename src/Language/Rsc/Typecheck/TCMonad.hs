@@ -431,20 +431,21 @@ checkTypes cha = mapM_ (\(_,ts) -> mapM_ (safeExtends cha) ts) types
 --------------------------------------------------------------------------------
 safeExtends :: (IsLocated l, Unif r) => ClassHierarchy r -> (l, TypeDecl r) -> TCM r ()
 --------------------------------------------------------------------------------
-safeExtends cha (l, t@(TD (TS k (BGen c bvs) ([p],_)) _))
-  = safeExtends1 cha l c (typeMemersOfTDecl cha t) p
-
-safeExtends1 cha l c ms (Gen n ts)
-  | Just td <- resolveType cha n
-  -- , Just ns <- expand' γ td ts
-  = return ()
-  -- = if isSubtype γ (mkTCons tImm ms) (mkTCons tImm ns)
-  --     then return ()
-  --     else tcError $ errorClassExtends (srcPos l) c p (mkTCons ms) (mkTCons ns)
-  | otherwise
-  = tcError $ bugExpandType (srcPos l) n
-  where
-    mkTCons m es = TObj es fTop
+safeExtends _ _ = return ()
+-- safeExtends cha (l, t@(TD (TS k (BGen c bvs) ([p],_)) _))
+--   = safeExtends1 cha l c (typeMemersOfTDecl cha t) p
+--
+-- safeExtends1 cha l c ms (Gen n ts)
+--   | Just td <- resolveType cha n
+--   -- , Just ns <- expand' γ td ts
+--   = return ()
+--   -- = if isSubtype γ (mkTCons tImm ms) (mkTCons tImm ns)
+--   --     then return ()
+--   --     else tcError $ errorClassExtends (srcPos l) c p (mkTCons ms) (mkTCons ns)
+--   | otherwise
+--   = tcError $ bugExpandType (srcPos l) n
+--   where
+--     mkTCons m es = TObj es fTop
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

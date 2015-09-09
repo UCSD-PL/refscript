@@ -50,6 +50,7 @@ import           Text.Parsec                      hiding (State, parse)
 import           Text.Parsec.Error                (errorMessages, showErrorMessages)
 
 -- import           Debug.Trace                             ( trace, traceShow)
+import           Language.Rsc.Pretty
 
 
 type FError = F.FixResult Error

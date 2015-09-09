@@ -25,8 +25,8 @@ interface ObjectConstructor<M extends ReadOnly> {
       * Returns the prototype of an object.
       * @param o The object that references the prototype.
       */
+     
     /*@ getPrototypeOf(o: string): { string | v = "" }  */
-
     getPrototypeOf(o: any): any;
 
     /**

@@ -50,9 +50,9 @@ xyP lP sepP rP
 
 
 assignabilityP
-  =  try (withinSpacesP (reserved "global"  ) >> return WriteGlobal)
- <|> try (withinSpacesP (reserved "local"   ) >> return WriteLocal )
- <|> try (withinSpacesP (reserved "readonly") >> return Ambient    )
+  =  try (withinSpacesP (reserved "global" ) >> return WriteGlobal)
+ <|> try (withinSpacesP (reserved "local"  ) >> return WriteLocal )
+ <|> try (withinSpacesP (reserved "ambient") >> return Ambient    )
  <|>     (return WriteGlobal)
 
 axyP lP sepP rP

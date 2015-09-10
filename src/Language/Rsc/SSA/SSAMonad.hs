@@ -53,15 +53,15 @@ module Language.Rsc.SSA.SSAMonad (
 
    ) where
 
-import           Control.Applicative          ((<$>), (<*>))
+import           Control.Applicative         ((<$>), (<*>))
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
-import qualified Data.HashSet                 as S
-import qualified Data.IntMap.Strict           as IM
-import qualified Data.IntSet                  as I
-import           Data.Maybe                   (fromMaybe)
+import qualified Data.HashSet                as S
+import qualified Data.IntMap.Strict          as IM
+import qualified Data.IntSet                 as I
+import           Data.Maybe                  (fromMaybe)
 import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types      as F
+import qualified Language.Fixpoint.Types     as F
 import           Language.Rsc.Annots
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
@@ -214,10 +214,10 @@ getAssignability x = fromMaybe WriteLocal . envFindTy x . assign <$> get
 -------------------------------------------------------------------------------------
 initSsaEnv   :: AnnSSA r -> Var r -> SSAM r (Var r)
 -------------------------------------------------------------------------------------
-initSsaEnv ll x       = getAssignability x >>= go
+initSsaEnv l x = getAssignability x >>= go
   where
-    go Ambient        = return x
-    go _              = updSsaEnv ll x
+    go Ambient = return x
+    go _       = updSsaEnv l x
 
 -------------------------------------------------------------------------------------
 updSsaEnv   :: AnnSSA r -> Var r -> SSAM r (Var r)

@@ -142,7 +142,7 @@ accumModules (Rsc { code = Src stmts }) =
     tStmts  = concatMapM tStmt
 
     tStmt c@ClassStmt{}     = single <$> declOfStmt c
-    tStmt c@InterfaceStmt{} = single <$> tracePP "TDecl" <$> declOfStmt c
+    tStmt c@InterfaceStmt{} = single <$> declOfStmt c
     tStmt _                 = return [ ]
 
     -- | Enumerations

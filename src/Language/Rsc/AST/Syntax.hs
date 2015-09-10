@@ -32,18 +32,12 @@ module Language.Rsc.AST.Syntax (
   , SyntaxKind (..)
   ) where
 
-import           Control.Applicative           ((<$>))
 import           Data.Default
-import           Data.Foldable                 (Foldable)
-import           Data.Generics                 (Data, Typeable)
-import           Data.Hashable
-import           Data.Traversable              (Traversable)
+import           Data.Foldable      (Foldable)
+import           Data.Generics      (Data, Typeable)
+import           Data.Traversable   (Traversable)
 import           GHC.Generics
-import           Language.Fixpoint.Misc        (errortext)
-import           Language.Fixpoint.PrettyPrint
-import qualified Language.Fixpoint.Types       as F
 import           Language.Rsc.Names
-import           Text.PrettyPrint.HughesPJ
 
 data JavaScript a   -- | A script in \<script\> ... \</script\> tags.
   = Script a [Statement a]
@@ -140,10 +134,7 @@ data Expression a
   | ArrayLit a [Expression a] -- ^ @[1,2,3]@, spec 11.1.4
   | ObjectLit a [(Prop a, Expression a)] -- ^ @{foo:\"bar\", baz: 42}@, spec 11.1.5
 
-  --
-  -- RefScript Hex literal -- Used as BitVector
-  --
-  | HexLit a String
+  | HexLit a String -- ^ RefScript Hex literal -- Used as BitVector
 
   | ThisRef a -- ^ @this@, spec 11.1.1
   | VarRef a (Id a) -- ^ @foo@, spec 11.1.2

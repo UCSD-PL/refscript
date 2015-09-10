@@ -825,8 +825,8 @@ ssaVarDecl (VarDecl l x (Just e)) = do
     return    (s, VarDecl l x' (Just e'))
 
 ssaVarDecl v@(VarDecl l x Nothing)
-  -- | not $ null [ () | (AmbVarDeclKind,_,_) <- scrapeVarDecl v ]
-  -- = return ([], VarDecl l x Nothing)
+  | Ambient `elem` map snd3 (scrapeVarDecl v)
+  = return ([], VarDecl l x Nothing)
   | otherwise
   = ([],) <$> (VarDecl l <$> updSsaEnv l x
                          <*> justM (VarRef <$> fr_ l <*> freshenIdSSA undefinedId))

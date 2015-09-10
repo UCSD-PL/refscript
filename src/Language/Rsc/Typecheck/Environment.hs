@@ -40,7 +40,7 @@ import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
 
-import           Debug.Trace
+-- import           Debug.Trace
 
 
 type Unif r = (PP r, F.Reftable r, ExprReftable Int r, ExprReftable F.Symbol r, Free (Fact r))
@@ -87,7 +87,7 @@ initGlobalEnv :: Unif r => TcRsc r -> ClassHierarchy r -> TCEnv r
 initGlobalEnv pgm@(Rsc { code = Src ss }) cha
   = TCE nms bnds ctx pth cha mut tThis
   where
-    nms   = tracePP "GLOB ENV" $ mkVarEnv vars    -- modules ?
+    nms   = mkVarEnv vars    -- modules ?
     vars  = accumVars ss
     bnds  = mempty
     ctx   = emptyContext

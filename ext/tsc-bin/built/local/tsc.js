@@ -26609,24 +26609,6 @@ var ts;
         RsTranslationState.prototype.diagnostics = function () {
             return this._diagnostics;
         };
-        RsTranslationState.prototype.getParentNode = function () {
-            if (this._parentNode && this._parentNode.length > 0) {
-                return this._parentNode[this._parentNode.length - 1];
-            }
-            return null;
-        };
-        RsTranslationState.prototype.pushParentNode = function (p) {
-            if (!this._parentNode) {
-                this._parentNode = [];
-            }
-            this._parentNode.push(p);
-        };
-        RsTranslationState.prototype.popParentNode = function () {
-            if (this._parentNode && this._parentNode.length > 0) {
-                this._parentNode.pop();
-            }
-            return null;
-        };
         return RsTranslationState;
     })();
     ts.RsTranslationState = RsTranslationState;
@@ -26847,6 +26829,13 @@ var ts;
                 throw new Error("UNIMPLEMENTED nodeToRsExp for " + ts.SyntaxKind[node.kind]);
                 return undefined;
             }
+            function nodeToRsLval(state, node) {
+                switch (node.kind) {
+                    case ts.SyntaxKind.Identifier:
+                        return new ts.RsLVar(nodeToSrcSpan(node), [], node.text);
+                }
+                throw new Error("[refscript] Unimplemented nodeToRsLval for " + ts.SyntaxKind[node.kind]);
+            }
             function nodeToRsStmt(state, node) {
                 switch (node.kind) {
                     case ts.SyntaxKind.FunctionDeclaration:
@@ -26870,7 +26859,6 @@ var ts;
                         return throwStatementToRsStmt(state, node);
                 }
                 throw new Error("[refscript] Unimplemented nodeToRsStmt for " + ts.SyntaxKind[node.kind]);
-                return undefined;
             }
             function sourceFileNodeToRsAST(state, node) {
                 return nodeArrayToRsAST(state, node.statements, nodeToRsStmt);
@@ -26886,7 +26874,6 @@ var ts;
                         return new ts.RsId(nodeToSrcSpan(node), [], ts.getTextOfNode(node.name));
                 }
                 throw new Error("UNIMPLEMENTED nodeToRsId for " + ts.SyntaxKind[node.kind]);
-                return undefined;
             }
             function functionDeclarationToRsStmt(state, node) {
                 var isAmbient = !!(node.flags & 2);
@@ -26950,6 +26937,9 @@ var ts;
                     case ts.SyntaxKind.PlusToken:
                     case ts.SyntaxKind.MinusToken:
                         return new ts.RsInfixExpr(nodeToSrcSpan(node), [], new ts.RsInfixOp(ts.getTextOfNode(node.operatorToken)), nodeToRsExp(state, node.left), nodeToRsExp(state, node.right));
+                    case ts.SyntaxKind.EqualsToken:
+                        state;
+                        return new ts.RsAssignExpr(nodeToSrcSpan(node), [], new ts.RsAssignOp(ts.getTextOfNode(node.operatorToken)), nodeToRsLval(state, node.left), nodeToRsExp(state, node.right));
                     default:
                         throw new Error("[refscript] BinaryExpression toRsExp Expression for: " + ts.SyntaxKind[node.operatorToken.kind]);
                 }

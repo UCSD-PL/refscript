@@ -490,7 +490,7 @@ freshenType _ g l t
 
 -- | Instantiate Fresh Type (at Call-site)
 freshTyInst l g αs τs tbody
-  = do ts    <- mapM (freshTy "freshTyInst") (tracePP "freshTyInst" τs)
+  = do ts    <- mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
        return $ apply (fromList $ zip αs ts) tbody
 
@@ -617,8 +617,8 @@ instance Freshable String where
   fresh = F.symbolString <$> fresh
 
 -- | Freshen up
--- freshTy :: RefTypable a => s -> a -> CGM RefType
-freshTy _ τ = tracePP "After refresh" <$> refresh (tracePP "before refresh" $ rType τ)
+freshTy :: RefTypable a => s -> a -> CGM RefType
+freshTy _ τ = refresh $ rType τ
 
 instance Freshable F.Refa where
   fresh = F.Refa . (`F.PKVar` mempty) . F.intKvar <$> fresh

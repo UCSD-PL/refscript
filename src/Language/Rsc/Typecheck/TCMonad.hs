@@ -346,8 +346,11 @@ castM :: Unif r => TCEnv r -> Expression (AnnSSA r) -> RType r -> RType r -> TCM
 --------------------------------------------------------------------------------
 castM γ e t1 t2
   = case convert (srcPos e) γ t1 t2 of
-      CNo -> return e
-      c   -> addCast (tce_ctx γ) e c
+      CNo   -> return e
+      CUp{} -> return e
+      CDn{} -> return e
+      -- Only deadcasts add annotation now
+      -- c   -> addCast (tce_ctx γ) e c
 
 -- | Run the monad `a` in the current state. This action will not alter the
 -- state.
@@ -380,14 +383,13 @@ addCast ξ e c = addAnn i fact >> wrapCast loc fact e
     fact      = TCast ξ c
 
 wrapCast _ f (Cast_ (FA i l fs) e) = Cast_ <$> freshenAnn (FA i l (f:fs)) <*> return e
-wrapCast l f e                      = Cast_ <$> freshenAnn (FA (-1) l [f]) <*> return e
+wrapCast l f e                     = Cast_ <$> freshenAnn (FA (-1) l [f]) <*> return e
 
 freshenAnn :: AnnSSA r -> TCM r (AnnSSA r)
 freshenAnn (FA _ l a)
   = do n     <- tc_ast_cnt <$> get
        modify $ \st -> st {tc_ast_cnt = 1 + n}
        return $ FA n l a
-
 
 -- | tcFunTys: "context-sensitive" function signature
 --------------------------------------------------------------------------------

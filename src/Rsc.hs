@@ -59,12 +59,12 @@ json cfg f = do
 withExistingFile cfg f
   | ext `elem` oks
   = do  libs              <- getIncludeLibs cfg
-        (code, stdOut, _) <- readProcessWithExitCode tsCmd (tracePP "tsc command" $ mkArgs libs) ""
+        (code, stdOut, _) <- readProcessWithExitCode tsCmd (mkArgs libs) ""
         case code of
-          ExitSuccess     -> case eitherDecode (B.pack $ tracePP "tsc output" stdOut) :: Either String [String] of
+          ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
                                 Left  s  -> return $ Left  $ F.UnknownError $ "withExistingFile1: " ++ s
                                 Right fs -> return $ Right fs
-          ExitFailure _   -> case eitherDecode (B.pack $ tracePP "tsc output" stdOut) :: Either String (F.FixResult Error) of
+          ExitFailure _   -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
                                 Left  s  -> return $ Left $ F.UnknownError $ "withExistingFile2: " ++ s
                                 Right e  -> return $ Left e
   | otherwise

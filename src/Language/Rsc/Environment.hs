@@ -105,11 +105,11 @@ instance (PP r, F.Reftable r, EnvLike r t) => PP (t r) where
 --------------------------------------------------------------------------------
 ppTCEnv :: (EnvLike r t, PP r, F.Reftable r) => t r -> Doc
 --------------------------------------------------------------------------------
-ppTCEnv g
-  =   text "******************** Environment ************************"
-  $+$ pp (envNames g)
-  $+$ text "******************** Absolute path **********************"
-  $+$ pp (envPath g)
+ppTCEnv g = pp (envNames g)
+--   =   text "******************** Environment ************************"
+--   $+$ pp (envNames g)
+--   $+$ text "******************** Absolute path **********************"
+--   $+$ pp (envPath g)
 
 
 --------------------------------------------------------------------------------
@@ -119,3 +119,4 @@ toFgn = envMap go
   where
     go (VI WriteLocal i t) = VI ForeignLocal i t
     go v = v
+

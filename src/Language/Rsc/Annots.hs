@@ -190,5 +190,6 @@ scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, Assignability, Maybe (RType
 ----------------------------------------------------------------------------------
 scrapeVarDecl (VarDecl l _ _)
   = [ (VarDeclKind, a, t) | VarAnn a t <- fFact l ]
- ++ [ (FieldDeclKind, Ambient, Just t) | FieldAnn (FI _ _ t) <- fFact l ] -- Assignability value is dummy
+ ++ [ (FieldDeclKind, Ambient, Just t) | FieldAnn (FI _ _ t) <- fFact l ]
+ -- Assignability value is dummy
 

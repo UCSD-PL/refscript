@@ -25,8 +25,11 @@ declare function builtin_BIArrayLit<A>(a: A): A[];
 /*@ builtin_BICondExpr :: <C,T>(c: C, t: T, x: T, y: T) => { v: T | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) } */
 declare function builtin_BICondExpr<C, T>(c: C, t: T, x: T, y: T): T;
 
-/*@ builtin_BICastExpr :: <T>(c: T, x: T) => { v: T | v ~~ x } */
-declare function builtin_BICastExpr<T>(c: T, x: T): T;
+type CAST_T = any
+
+/*  builtin_BICastExpr :: <V extends CAST_T>(x: V) => { v: V | v = x } */
+/*@ builtin_BICastExpr :: <V extends CAST_T>(x: V) => V */
+declare function builtin_BICastExpr<V extends CAST_T>(x: V): V;
 
 // /*@ builtin_OpLT ::
 //     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }

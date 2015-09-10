@@ -355,7 +355,7 @@ consStmt _ s
 consVarDecl :: CGEnv -> VarDecl AnnLq -> CGM (Maybe CGEnv)
 ------------------------------------------------------------------------------------
 consVarDecl g v@(VarDecl l x (Just e))
-  = case scrapeVarDecl v of
+  = case ltracePP l "VarDecl" $ scrapeVarDecl v of
       -- | Local
       [ ] ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
@@ -374,8 +374,9 @@ consVarDecl g v@(VarDecl l x (Just e))
 
       -- | Global
       [(_, WriteGlobal, Just t)] ->
-        mseq (consExpr g e $ Just t) $ \(y, gy) -> do
-          ty      <- cgSafeEnvFindTyM y gy
+        mseq (consExpr g (ltracePP l "var decl exp" e) $ Just t) $ \(y, gy) -> do
+          ty      <- ltracePP l "Global inited type" <$> cgSafeEnvFindTyM y gy
+          -- XXX: Freshen again?
           fta     <- freshenType WriteGlobal gy l t
           _       <- subType l (errorLiquid' l) gy ty  fta
           _       <- subType l (errorLiquid' l) gy fta t
@@ -410,12 +411,12 @@ consVarDecl g v@(VarDecl _ x Nothing) = error "[consVarDecl] uninitialized var d
 --       _ -> error "LQ: consVarDecl this shouldn't happen"
 
 ------------------------------------------------------------------------------------
-consExprT :: AnnLq -> CGEnv -> Expression AnnLq -> Maybe RefType
+consExprT :: CGEnv -> Expression AnnLq -> Maybe RefType
           -> CGM (Maybe (Id AnnLq, CGEnv))
 ------------------------------------------------------------------------------------
-consExprT _ g e Nothing  = consExpr g e Nothing
-consExprT l g e (Just t) = consCall  g l "consExprT" [(e, Nothing)]
-                         $ TFun [B (F.symbol "x") t] tVoid fTop
+consExprT g e Nothing  = consExpr g e Nothing
+consExprT g e (Just t) = consCall  g (getAnnotation e) "consExprT" [(e, Nothing)]
+                       $ TFun [B (F.symbol "x") t] tVoid fTop
 
 -- ------------------------------------------------------------------------------------
 -- consClassElts :: IsLocated l => l -> CGEnv -> TypeDecl F.Reft -> [ClassElt AnnLq] -> CGM ()
@@ -515,16 +516,16 @@ consAsgn l g x e =
     -- This is the first time we initialize this variable
     Just (VI WriteGlobal Uninitialized t) ->
       do  t' <- freshenType WriteGlobal g l t
-          mseq (consExprT l g e $ Just t') $ \(_, g') -> do
+          mseq (consExprT g e $ Just t') $ \(_, g') -> do
             g'' <- cgEnvAdds "consAsgn-0" [(x, VI WriteGlobal Initialized t')] g'
             return $ Just g''
 
-    Just (VI WriteGlobal _ t) -> mseq (consExprT l g e $ Just t) $ \(_, g') ->
+    Just (VI WriteGlobal _ t) -> mseq (consExprT g e $ Just t) $ \(_, g') ->
                                    return $ Just g'
-    Just (VI a i t)           -> mseq (consExprT l g e $ Just t) $ \(x', g') -> do
+    Just (VI a i t)           -> mseq (consExprT g e $ Just t) $ \(x', g') -> do
                                    t      <- cgSafeEnvFindTyM x' g'
                                    Just  <$> cgEnvAdds "consAsgn-1" [(x, VI a i t)] g'
-    Nothing                   -> mseq (consExprT l g e Nothing) $ \(x', g') -> do
+    Nothing                   -> mseq (consExprT g e Nothing) $ \(x', g') -> do
                                    t      <- cgSafeEnvFindTyM x' g'
                                    Just  <$> cgEnvAdds "consAsgn-1" [(x, VI WriteLocal Initialized t)] g'
 
@@ -536,7 +537,7 @@ consAsgn l g x e =
 consExpr :: CGEnv -> Expression AnnLq -> Maybe RefType -> CGM (Maybe (Id AnnLq, CGEnv))
 ------------------------------------------------------------------------------------
 consExpr g (Cast_ l e) tCtx =
-  case envGetContextCast g l of
+  case ltracePP l "CAST" $ envGetContextCast g l of
     CDead e' t' -> consDeadCode g l e' t'
     _           -> consExpr g e tCtx
 
@@ -828,7 +829,8 @@ consCall :: PP a
 --      to use @freshTyInst@)
 --   2. Use @consExpr@ to determine types for arguments @es@
 --   3. Use @subType@ to add constraints between the types from (step 2) and (step 1)
---   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in output type of callee.
+--   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in
+--      output type of callee.
 
 consCall g l fn ets ft0
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
@@ -836,9 +838,10 @@ consCall g l fn ets ft0
       case ol of
         -- If multiple are valid, pick the first one
         (ft:_) -> consInstantiate l g' fn ft ts xes
-        _      -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
+        _      -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts)
+                              (toType <$> callSigs)
   where
-    ol = [ lt | Overload cx t <- fFact l
+    ol = [ lt | Overload cx t <- ltracePP l ("Facts for id: " ++ ppshow (fId l)) $ fFact l
               , cge_ctx g == cx
               , lt <- callSigs
               , arg_type (toType t) == arg_type (toType lt) ]

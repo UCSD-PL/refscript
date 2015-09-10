@@ -12,9 +12,10 @@
 module Language.Rsc.Typecheck.Checker (verifyFile, typeCheck) where
 
 import           Control.Applicative                (pure, (<$>), (<*>))
-import           Control.Arrow                      ((***))
+import           Control.Arrow                      (first, (***))
 import           Control.Exception                  (throw)
 import           Control.Monad
+import qualified Data.Foldable                      as FD
 import           Data.Function                      (on)
 import           Data.Generics
 import qualified Data.IntMap.Strict                 as I
@@ -52,7 +53,7 @@ import           Language.Rsc.Typecheck.Unify
 import           Language.Rsc.Types
 import           Language.Rsc.Visitor
 
--- import           Debug.Trace                        hiding (traceShow)
+import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity   as V
 
@@ -119,23 +120,25 @@ tcRsc p@(Rsc {code = Src fs}) cha
 
 
 -- | Patch annotation on the AST
---
 --------------------------------------------------------------------------------
 patch :: Unif r => [Statement (AnnTc r)] -> TCM r [Statement (AnnTc r)]
 --------------------------------------------------------------------------------
 patch fs
-  = do  (m,θ) <- (,) <$> getAnns <*> getSubst
+  = do  (m, θ) <- (,) <$> getAnns <*> getSubst
         -- patch code with annotations gathered in `m`
-        return $ (pa m <$>) <$> apply θ <$> fs
+        return $ map ((fmap (pa m)) . (apply θ)) fs
   where
-    pa m (FA i l fs) = FA i l {- $ nub -} $ fs ++ filter accepted (I.findWithDefault [] i m)
-    accepted (TypInst _ _ _  ) = True
-    accepted (Overload _ _   ) = True
-    accepted (EltOverload _ _) = True
-    accepted (PhiVarTy _     ) = True
-    accepted (PhiVarTC _     ) = True
-    accepted (PhiVar _       ) = True
-    accepted _                 = False
+    pa m (FA i l f)   = FA i l $ f ++ filter vld (I.findWithDefault [] i m)
+    vld TypInst{}     = True
+    vld Overload{}    = True
+    vld EltOverload{} = True
+    vld PhiVarTy{}    = True
+    vld PhiVarTC{}    = True
+    vld PhiVar{}      = True
+    vld _             = False
+
+-- accumNodeIds :: Unif r => Statement (AnnTc r) -> [(Int, [Fact r])]
+-- accumNodeIds = FD.foldl (\b (FA i _ f) -> (i, f): b) []
 
 
 --------------------------------------------------------------------------------
@@ -202,7 +205,6 @@ tcStmts :: Unif r =>
 --------------------------------------------------------------------------------
 tcStmts = tcSeq tcStmt
 
-
 --------------------------------------------------------------------------------
 tcStmt  :: Unif r =>
   TCEnv r -> Statement (AnnTc r) -> TCM r (Statement (AnnTc r), TCEnvO r)
@@ -219,7 +221,7 @@ tcStmt γ s@(InterfaceStmt _ _)
 -- x = e
 tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
   = do (e', g) <- tcAsgn l1 γ (Id lx x) e
-       return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
+       return $ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
 -- e1.f = e2
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
@@ -342,8 +344,10 @@ tcVarDecl γ v@(VarDecl l x (Just e))
 
       -- | Global
       [(_, WriteGlobal, Just t)] ->
-        do  (e',t') <- tcCast γ l e t
-            return $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, VI WriteGlobal Initialized t')] γ)
+        -- PV: the global variable should be in scope already,
+        --     since it is being hoisted to the beginning of the
+        --     scope.
+        first (VarDecl l x . Just) <$> tcAsgn l γ x e
 
       [(_, WriteGlobal, Nothing)] ->
         do  (e',to) <- tcExprW γ e
@@ -360,21 +364,17 @@ tcVarDecl γ v@(VarDecl l x (Just e))
 
       c -> tcError $ unimplemented l "tcVarDecl" ("case: " ++ ppshow c)
 
--- XXX: Not using Initilation status for the moment
-tcVarDecl γ v@(VarDecl _ x Nothing) = error "[tcVarDecl] Uninitialized VarDecl"
---   = case scrapeVarDecl v of
---       -- special case ambient vars
---       [(AmbVarDeclKind,_, Just t)] ->
---         return $ (v, Just $ tcEnvAdds [(x, VI Ambient Initialized t)] γ)
---       -- The rest should have fallen under the 'undefined' initialization case
---       _ -> error "TC-tcVarDecl: this shouldn't happen"
+tcVarDecl γ v@(VarDecl _ x Nothing)
+  | [(_, Ambient, Just t)] <- scrapeVarDecl v
+  = return $ (v, Just $ tcEnvAdds [(x, VI Ambient Initialized t)] γ)
+  | otherwise   -- The rest should have fallen under the 'undefined' initialization case
+  = error "TC-tcVarDecl: this shouldn't happen"
 
 
 --------------------------------------------------------------------------------
 tcClassElt :: Unif r => TCEnv r -> TypeDecl r -> ClassElt (AnnTc r) -> TCM r (ClassElt (AnnTc r))
 --------------------------------------------------------------------------------
 -- | Constructor
---
 tcClassElt γ (TD sig@(TS _ (BGen _ bs) _) ms) (Constructor l xs body)
   = do  its    <- tcFunTys l ctor xs ctorTy
         body'  <- foldM (tcCallable γ' l ctor xs) body its
@@ -389,7 +389,6 @@ tcClassElt γ (TD sig@(TS _ (BGen _ bs) _) ms) (Constructor l xs body)
            | otherwise = die $ unsupportedNonSingleConsTy (srcPos l)
 
 -- | Static field
---
 tcClassElt γ (TD sig ms) (MemberVarDecl l True x (Just e))
   | Just (FI _ _ t) <- F.lookupSEnv (F.symbol x) $ tm_sprop ms
   = do  ([e'],_) <- tcNormalCall γ l "field init" [(e, Just t)] $ mkInitFldTy t
@@ -401,7 +400,6 @@ tcClassElt _ _ (MemberVarDecl l True x Nothing)
   = tcError $ unsupportedStaticNoInit (srcPos l) x
 
 -- | Instance variable
---
 tcClassElt _ _ m@(MemberVarDecl _ False _ Nothing)
   = return m
 tcClassElt _ _ (MemberVarDecl l False x _)
@@ -409,7 +407,6 @@ tcClassElt _ _ (MemberVarDecl l False x _)
 
 -- | Static method: The classes type parameters should not be included in the
 -- environment
---
 tcClassElt γ (TD sig ms) (MemberMethDecl l True x xs body)
   | Just (MI _ _ t) <- F.lookupSEnv (F.symbol x) $ tm_smeth ms
   = do  its <- tcFunTys l x xs t
@@ -439,10 +436,10 @@ tcAsgn :: Unif r
        => AnnTc r -> TCEnv r -> Id (AnnTc r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 --------------------------------------------------------------------------------
 tcAsgn l γ x e
-  = do (e', to) <-  tcExprTW γ e rhsT
+  = do (e', to) <-  tcExprTW γ e tRHS
        return $ (e', tcEnvAddo γ x $ VI asgn init <$> to)
     where
-       (rhsT, asgn, init) = case tcEnvFindTyForAsgn x γ of
+       (tRHS, asgn, init) = case tcEnvFindTyForAsgn x γ of
                               Just (VI a _ t) -> (Just t, a, Initialized)
                               Nothing         -> (Nothing, WriteLocal, Initialized)
 
@@ -463,7 +460,6 @@ tcExprW γ e = (tcWrap $ tcExpr γ e Nothing) >>= tcEW γ e
 tcExprWD γ e t = (tcWrap $ tcExpr γ e t) >>= tcEW γ e >>= \case
                    (e, Just t) -> return (e, t)
                    (e, _     ) -> return (e, tNull)
-
 
 tcNormalCallW γ l o es t
   = (tcWrap $ tcNormalCall γ l o (es `zip` nths) t) >>= \case
@@ -503,7 +499,10 @@ tcRetW' γ l Nothing
   = do (_, _) <- tcNormalCall γ l "return" [] $ returnTy (tcEnvFindReturn γ) False
        return  $ (ReturnStmt l Nothing, Nothing)
 
-tcEW :: Unif r => TCEnv r -> ExprSSAR r -> Either Error ((ExprSSAR r), b) -> TCM r ((ExprSSAR r), Maybe b)
+--------------------------------------------------------------------------------
+tcEW :: Unif r => TCEnv r -> ExprSSAR r -> Either Error ((ExprSSAR r), b)
+               -> TCM r ((ExprSSAR r), Maybe b)
+--------------------------------------------------------------------------------
 tcEW _ _ (Right (e', t')) = return $  (e', Just t')
 tcEW γ e (Left err)       = (, Nothing) <$> deadcastM (tce_ctx γ) err e
 
@@ -576,9 +575,9 @@ tcExpr γ e@(VarRef l x) _
 --    * The second conditional expression
 --
 tcExpr γ (CondExpr l e e1 e2) to
-  = do  opTy <- mkTy to <$> safeTcEnvFindTy l γ (builtinOpId BICondExpr)
-        (sv,v) <- dup F.symbol (VarRef l) <$> freshCastId l
-        let γ' = tcEnvAdd sv (VI WriteLocal Initialized tt) γ
+  = do  opTy    <- mkTy to <$> safeTcEnvFindTy l γ (builtinOpId BICondExpr)
+        (sv,v)  <- dup F.symbol (VarRef l) <$> freshCastId l
+        let γ'   = tcEnvAdd sv (VI WriteLocal Initialized tt) γ
         ([e',_,e1',e2'], t') <- tcNormalCall γ' l BICondExpr (args v) opTy
         return (CondExpr l e' e1' e2', t')
   where
@@ -680,7 +679,6 @@ tcExpr γ (FuncExpr l fo xs body) tCtxO
 tcExpr _ e _
   = convertError "tcExpr" e
 
-
 -- | @tcCast@ emulating a simplified version of a function call
 --------------------------------------------------------------------------------
 tcCast :: Unif r => TCEnv r -> AnnTc r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
@@ -691,7 +689,6 @@ tcCast γ l e tc
         let γ'       = tcEnvAdd (F.symbol cid) (VI WriteLocal Initialized tc) γ
         ([_,e'],t') <- tcNormalCall γ' l "user-cast" [(VarRef l cid, Nothing),(e, Just tc)] opTy
         return       $ (e', t')
-
 
 --------------------------------------------------------------------------------
 tcCall :: Unif r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
@@ -764,7 +761,7 @@ tcCall γ (ObjectLit l bs)
 
 -- | `new e(e1,...,en)`
 tcCall γ (NewExpr l e es)
-  = do (e',t) <- ltracePP l (ppshow e) <$> tcExpr γ e Nothing
+  = do (e',t) <- tcExpr γ e Nothing
        case extractCtor γ t of
          Just ct ->
             do (es', t) <- tcNormalCall γ l "new" (es `zip` nths) ct
@@ -772,7 +769,6 @@ tcCall γ (NewExpr l e es)
          _ -> tcError $ errorConstrMissing (srcPos l) t
 
 -- | e.f
---
 tcCall γ ef@(DotRef l e f)
   = runFailM (tcExpr γ e Nothing) >>= \case
       Right (_, te) ->
@@ -861,13 +857,12 @@ tcNormalCall :: (Unif r, PP a)
              -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
 tcNormalCall γ l fn etos ft0
-  -- = do ets <- ltracePP l (ppshow fn ++ "  " ++ ppshow etos)
-  -- <$> T.mapM (uncurry $ tcExprWD γ) etos
-  = do ets <- T.mapM (uncurry $ tcExprWD γ) etos
+  = do ets <- ltracePP l ("[tcNormalCall] " ++ ppshow fn) <$> T.mapM (uncurry $ tcExprWD γ) etos
+-- = do ets <- T.mapM (uncurry $ tcExprWD γ) etos
        z <- resolveOverload γ l fn ets ft0
        case z of
          Just (θ, ft) ->
-             do addAnn (fId l) $ Overload (tce_ctx γ) ft
+             do addAnn (fId l) (Overload (tce_ctx γ) ft)
                 addSubst l θ
                 tcWrap (tcCallCase γ l fn ets ft) >>= \case
                   Right ets' -> return ets'
@@ -962,7 +957,7 @@ tcCallCase γ l fn ets ft
        es'             <- zipWith3M (castM γ) es ts3 its3
        return           $ (es', apply θ ot)
   where
-    (es, ts)            = (fst <$> ets, snd <$> ets)
+    (es, ts)            = unzip ets
 
 --
 -- TODO: Add check on polymorphic bounds

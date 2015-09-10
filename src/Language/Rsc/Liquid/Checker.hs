@@ -355,7 +355,7 @@ consStmt _ s
 consVarDecl :: CGEnv -> VarDecl AnnLq -> CGM (Maybe CGEnv)
 ------------------------------------------------------------------------------------
 consVarDecl g v@(VarDecl l x (Just e))
-  = case ltracePP l "VarDecl" $ scrapeVarDecl v of
+  = case scrapeVarDecl v of
       -- | Local
       [ ] ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
@@ -374,9 +374,8 @@ consVarDecl g v@(VarDecl l x (Just e))
 
       -- | Global
       [(loc, _, WriteGlobal, Just t)] ->
-        mseq (consExpr g (ltracePP l "var decl exp" e) $ Just t) $ \(y, gy) -> do
-          ty      <- ltracePP l "Global inited type" <$> cgSafeEnvFindTyM y gy
-          -- XXX: Freshen again?
+        mseq (consExpr g e $ Just t) $ \(y, gy) -> do
+          ty      <- cgSafeEnvFindTyM y gy
           fta     <- freshenType WriteGlobal gy l t
           _       <- subType l (errorLiquid' l) gy ty  fta
           _       <- subType l (errorLiquid' l) gy fta t
@@ -535,7 +534,7 @@ consAsgn l g x e =
 consExpr :: CGEnv -> Expression AnnLq -> Maybe RefType -> CGM (Maybe (Id AnnLq, CGEnv))
 ------------------------------------------------------------------------------------
 consExpr g (Cast_ l e) tCtx =
-  case ltracePP l "CAST" $ envGetContextCast g l of
+  case envGetContextCast g l of
     CDead e' t' -> consDeadCode g l e' t'
     _           -> consExpr g e tCtx
 
@@ -839,7 +838,7 @@ consCall g l fn ets ft0
         _      -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts)
                               (toType <$> callSigs)
   where
-    ol = [ lt | Overload cx t <- ltracePP l ("Facts for id: " ++ ppshow (fId l)) $ fFact l
+    ol = [ lt | Overload cx t <- fFact l
               , cge_ctx g == cx
               , lt <- callSigs
               , arg_type (toType t) == arg_type (toType lt) ]

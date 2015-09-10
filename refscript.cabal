@@ -13,9 +13,9 @@ category:            Language
 cabal-version:       >=1.18
 
 data-files:          README.md, 
-                     include/ambient/*.ts,
-                     include/rsc/*.ts,
-                     include/*.ts
+                     include/ambient/*.d.ts,
+                     include/rsc/*.d.ts,
+                     include/*.d.ts
 
 Source-Repository this
   Tag:         0.1

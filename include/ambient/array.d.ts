@@ -152,9 +152,9 @@ interface Array<M extends ReadOnly, T> {
     [n: number]: T;
 }
 
-type IArray<T>  = Array<Immutable,T>;
-type MArray<T>  = Array<Mutable,T>;
-type ROArray<T> = Array<ReadOnly,T>;
+declare type IArray<T>  = Array<Immutable,T>;
+declare type MArray<T>  = Array<Mutable,T>;
+declare type ROArray<T> = Array<ReadOnly,T>;
 
 // interface ArrayConstructor {
 //     new (arrayLength?: number): any[];

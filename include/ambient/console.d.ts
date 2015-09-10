@@ -27,5 +27,3 @@ declare var Console: {
     new(): Console;
 }
 declare var console: Console;
-
-

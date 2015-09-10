@@ -25,83 +25,65 @@ declare function builtin_BIArrayLit<A>(a: A): A[];
 /*@ builtin_BICondExpr :: <C,T>(c: C, t: T, x: T, y: T) => { v: T | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) } */
 declare function builtin_BICondExpr<C, T>(c: C, t: T, x: T, y: T): T;
 
-type CAST_T = any
+// type CAST_T = any
 
 /*  builtin_BICastExpr :: <V extends CAST_T>(x: V) => { v: V | v = x } */
-/*@ builtin_BICastExpr :: <V extends CAST_T>(x: V) => V */
-declare function builtin_BICastExpr<V extends CAST_T>(x: V): V;
+/*  builtin_BICastExpr :: <V extends CAST_T>(x: V) => V */
+// declare function builtin_BICastExpr<V extends CAST_T>(x: V): V;
 
-// /*@ builtin_OpLT ::
-//     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
-//     /\ forall T. (x:T, y:T) => {boolean | true}
-//  */
-// declare function builtin_OpLT(a: any, b: any): boolean;
-//
-// /*@ builtin_OpLEq ::
-//     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <= y)) }
-//     /\ forall T. (x:T, y:T) => {boolean | true}
-//  */
-// declare function builtin_OpLEq(a: any, b: any): boolean;
-//
-// /*@ builtin_OpGT ::
-//     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >  y)) }
-//     /\ forall T. (x:T, y:T) => {boolean | true}
-//  */
-// declare function builtin_OpGT(a: any, b: any): boolean;
-//
-// /*@ builtin_OpGEq ::
-//     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >= y)) }
-//     /\ forall T. (x:T, y:T) => {boolean | true}
-//  */
-// declare function builtin_OpGEq(a: any, b: any): boolean;
-//
-// /*@ builtin_OpAdd ::
-//     /\ (x:number, y:number) => {number | v = x + y}
-//     /\ (x:bitvector32, y:bitvector32) => { bitvector32 | true }
-//     /\ (x:number, y:string) => {string | true}
-//     /\ (x:string, y:number) => {string | true}
-//     /\ (x:string, y:string) => {string | true}
-//     /\ (x:string, y:boolean) => {string | true}
-//     /\ (x:boolean, y:string) => {string | true}
-//  */
-// declare function builtin_OpAdd(a: any, b: any): any;
-//
-// /*@ builtin_OpSub ::
-//     (x:number, y:number)  => {v:number | v ~~ x - y}
-// */
-// declare function builtin_OpSub(a: number, b: number): number;
-//
-// /*@ builtin_OpMul ::
-//     (x: number, y: number) => { v:number | [ v = x * y ;
-//                                              (x > 0 && y > 0) => v > 0 ;
-//                                              (x < 0 && y < 0) => v > 0 ;
-//                                              (x = 0 || y = 0) => v = 0 ] }
-//  */
-// declare function builtin_OpMul(a: number, b: number): number;
-//
-// /*@ builtin_OpDiv ::
-//     (x: number, {y: number | y != 0}) => {v:number | (x > 0 && y > 1) => (0 <= v && v < x)}
-//  */
-// declare function builtin_OpDiv(a: number, b: number): number;
-//
-// declare function builtin_OpMod(a: number, b: number): number;
-//
-// /*@ builtin_PrefixPlus ::
-//     (x:number) => {v:number  | v ~~ x}
-//  */
-// declare function builtin_PrefixPlus(a: number): number;
+/*@ builtin_OpLT :: (x:number, y:number) => {v:boolean | Prop v <=> x < y } */
+/*@ builtin_OpLT :: <T>(x:T, y:T) => boolean */
+declare function builtin_OpLT(a: any, b: any): boolean;
 
-/*@ builtin_PrefixMinus ::
-    (x:number) => {v:number  | v ~~ (0 - x)}
+/*@ builtin_OpLEq ::    (x:number, y:number) => {v:boolean | Prop v <=> x <= y } */
+/*@ builtin_OpLEq :: <T>(x:T, y:T) => boolean */
+declare function builtin_OpLEq(a: any, b: any): boolean;
+
+/*@ builtin_OpGT ::    (x:number, y:number) => {v:boolean | Prop v <=> x > y } */
+/*@ builtin_OpGT :: <T>(x:T, y:T) => boolean */
+declare function builtin_OpGT(a: any, b: any): boolean;
+
+/*@ builtin_OpGEq :: (x:number, y:number) => {v:boolean | Prop v <=> x >= y } */
+/*@ builtin_OpGEq :: <T>(x:T, y:T) => boolean */
+declare function builtin_OpGEq(a: any, b: any): boolean;
+
+/*@ builtin_OpAdd :: (x: number, y: number) => {number | v = x + y} */
+/*@ builtin_OpAdd :: (x: bitvector32, y: bitvector32) => bitvector32 */
+/*@ builtin_OpAdd :: (x: number, y: string) => string */
+/*@ builtin_OpAdd :: (x: string, y: number) => string */
+/*@ builtin_OpAdd :: (x: string, y: string) => string */
+/*@ builtin_OpAdd :: (x: string, y: boolean) => string */
+/*@ builtin_OpAdd :: (x: boolean, y: string) => string */
+declare function builtin_OpAdd(a: any, b: any): any;
+
+/*@ builtin_OpSub :: (x:number, y:number)  => {v:number | v ~~ x - y} */
+declare function builtin_OpSub(a: number, b: number): number;
+
+/*@ builtin_OpMul ::
+    (x: number, y: number) => { v:number | [ v = x * y ;
+                                            (x > 0 && y > 0) => v > 0 ;
+                                            (x < 0 && y < 0) => v > 0 ;
+                                            (x = 0 || y = 0) => v = 0 ] }
  */
+declare function builtin_OpMul(a: number, b: number): number;
+
+/*@ builtin_OpDiv ::
+    (x: number, {y: number | y != 0}) => {v:number | (x > 0 && y > 1) => (0 <= v && v < x)}
+ */
+declare function builtin_OpDiv(a: number, b: number): number;
+
+declare function builtin_OpMod(a: number, b: number): number;
+
+/*@ builtin_PrefixPlus :: (x:number) => {v:number  | v ~~ x} */
+declare function builtin_PrefixPlus(a: number): number;
+
+/*@ builtin_PrefixMinus :: (x :number) => {v:number  | v = 0 - x} */
 declare function builtin_PrefixMinus(a: number): number;
 
-// /*@ builtin_OpSEq ::
-//     /\ forall A   . (x:A, y:A) => {v:boolean | ((Prop v) <=> (x ~~ y)) }
-//     /\ forall A B . (x:A, y:B) => {v:boolean | (not (Prop v)) }
-//  */
-// declare function builtin_OpSEq<A,B>(x: A, y: B): boolean;
-//
+/*@ builtin_OpSEq :: <A>  (x:A, y:A) => {v:boolean | Prop v <=> x ~~ y } */
+/*@ builtin_OpSEq :: <A,B>(x:A, y:B) => {v:boolean | not (Prop v) } */
+declare function builtin_OpSEq<A,B>(x: A, y: B): boolean;
+
 // /*@ builtin_OpSNEq ::
 //     /\ forall A   . (x:A, y:A) => {v:boolean | ((Prop v) <=> (not (x ~~ y))) }
 //     /\ forall A B . (x:A, y:B) => {v:boolean | (Prop v) }
@@ -248,86 +230,27 @@ declare function builtin_PrefixMinus(a: number): number;
 //     /\            (s: string, o: { }      ) => { v: boolean | ((Prop v) <=> hasProperty(s,o)) }
 //  */
 // declare function builtin_OpIn(s: string, obj: Object): boolean;
-//
-//
-//
-//
-// /* ************************************************************************
-//  *
-//  *        ERROR HANDLING
-//  *
-//  * ***********************************************************************/
-// //
-// // // NOTE: types that are defined in lib.d.ts need to be in comment to pass
-// // // through the TS compilation phase.
-// //
-// // interface Error {
-// //     name: string;
-// //     message: string;
-// // }
-// //
-// // declare var Error: {
-// //     new (message?: string): Error;
-// //     (message?: string): Error;
-// //     prototype: Error;
-// // }
-//
-//
-//
-// /*************************************************************************
-//  *
-//  *      MUTABILITY
-//  *
-//  *      Do not include type parameters here
-//  *
-//  ************************************************************************/
-//
-// // /*@ interface ReadOnly */
-// // interface ReadOnly { }
-// //
-// // /*@ interface Immutable extends ReadOnly */
-// // interface Immutable extends ReadOnly {
-// //     immutable__: void;
-// // }
-// //
-// // /*@ interface Mutable extends ReadOnly */
-// // interface Mutable extends ReadOnly {
-// //     mutable__: void;
-// // }
-// //
-// // /*@ interface UniqueMutable extends Mutable */
-// // interface UniqueMutable extends Mutable {
-// //     unique_mutable__: void;
-// // }
-// //
-// // /*@ interface AnyMutability extends ReadOnly */
-// // interface AnyMutability extends ReadOnly {
-// //     defaultMut__: void;
-// // }
-//
-//
-// /*************************************************************************
-//  *
-//  *  GENERAL PURPOSE AUXILIARY DEFINITIONS
-//  *
-//  ************************************************************************/
-//
-// /*@ crash :: forall A. () => A */
-// declare function crash(): any;
-//
-// /*@ assume :: forall A . (x:A) => {v:void | Prop x} */
-// declare function assume<A>(x: A): void;
-//
-// /*@ assert :: forall A . ({x:A|(Prop x)}) => void */
-// declare function assert<A>(x: A): void;
-//
-// /*@ random :: () => {v:number | true} */
-// declare function random(): number;
-//
-// /*@ pos :: () => {v:number | v > 0} */
-// declare function pos(): number;
-//
-// declare function alert(s: string): void;
+
+
+/*************************************************************************
+ *
+ *  GENERAL PURPOSE AUXILIARY DEFINITIONS
+ *
+ ************************************************************************/
+
+declare function crash<A>(): A;
+
+/*@ assume :: <A>(x:A) => {v:void | Prop x} */
+declare function assume<A>(x: A): void;
+
+/*@ assert :: <A>({x:A|(Prop x)}) => void */
+declare function assert<A>(x: A): void;
+
+declare function random(): number;
+
+declare function pos(): posint;
+
+declare function alert(s: string): void;
 //
 // /*@ isNaN :: (x:undefined + number) => {v:boolean | Prop v <=> (ttag(v) != "number")} */
 // declare function isNaN(x:any) : boolean;

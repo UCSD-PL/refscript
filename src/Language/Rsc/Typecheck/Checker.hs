@@ -325,7 +325,7 @@ tcStmt _ s
 
 
 --------------------------------------------------------------------------------
-tcVarDecl ::  Unif r => TCEnv r -> VarDecl (AnnTc r) -> TCM r (VarDecl (AnnTc r), TCEnvO r)
+tcVarDecl :: Unif r => TCEnv r -> VarDecl (AnnTc r) -> TCM r (VarDecl (AnnTc r), TCEnvO r)
 --------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e))
   = case scrapeVarDecl v of
@@ -857,8 +857,8 @@ tcNormalCall :: (Unif r, PP a)
              -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
 tcNormalCall γ l fn etos ft0
-  = do ets <- ltracePP l ("[tcNormalCall] " ++ ppshow fn) <$> T.mapM (uncurry $ tcExprWD γ) etos
--- = do ets <- T.mapM (uncurry $ tcExprWD γ) etos
+--   = do ets <- ltracePP l ("[tcNormalCall] " ++ ppshow fn) <$> T.mapM (uncurry $ tcExprWD γ) etos
+  = do ets <- T.mapM (uncurry $ tcExprWD γ) etos
        z <- resolveOverload γ l fn ets ft0
        case z of
          Just (θ, ft) ->

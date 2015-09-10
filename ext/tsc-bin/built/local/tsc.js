@@ -25802,7 +25802,6 @@ var ts;
     })(RsAnnotatedAST);
     ts.RsEnumElt = RsEnumElt;
 })(ts || (ts = {}));
-//<reference path='..\ts.ts' />
 var ts;
 (function (ts) {
     var Pair = (function () {
@@ -26776,11 +26775,9 @@ var ts;
         var jsonFiles = [];
         if (targetSourceFile === undefined) {
             jsonFiles = ts.map(host.getSourceFiles(), function (sourceFile) {
-                if (ts.shouldEmitToOwnFile(sourceFile, compilerOptions)) {
-                    var jsonFilePath = ts.getNormalizedAbsolutePath(ts.getOwnEmitOutputFilePath(sourceFile, host, ".json"), host.getCurrentDirectory());
-                    emitFile(jsonFilePath, sourceFile);
-                    return jsonFilePath;
-                }
+                var jsonFilePath = ts.getNormalizedAbsolutePath(ts.getOwnEmitOutputFilePath(sourceFile, host, ".json"), host.getCurrentDirectory());
+                emitFile(jsonFilePath, sourceFile);
+                return jsonFilePath;
             });
             if (compilerOptions.outFile || compilerOptions.out) {
                 emitFile(compilerOptions.outFile || compilerOptions.out);
@@ -27001,9 +26998,9 @@ var ts;
                     case ts.SyntaxKind.LessThanEqualsToken:
                     case ts.SyntaxKind.PlusToken:
                     case ts.SyntaxKind.MinusToken:
+                    case ts.SyntaxKind.EqualsEqualsEqualsToken:
                         return new ts.RsInfixExpr(nodeToSrcSpan(node), [], new ts.RsInfixOp(ts.getTextOfNode(node.operatorToken)), nodeToRsExp(state, node.left), nodeToRsExp(state, node.right));
                     case ts.SyntaxKind.EqualsToken:
-                        state;
                         return new ts.RsAssignExpr(nodeToSrcSpan(node), [], new ts.RsAssignOp(ts.getTextOfNode(node.operatorToken)), nodeToRsLval(state, node.left), nodeToRsExp(state, node.right));
                     default:
                         throw new Error("[refscript] BinaryExpression toRsExp Expression for: " + ts.SyntaxKind[node.operatorToken.kind]);

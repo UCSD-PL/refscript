@@ -1,6 +1,13 @@
-/*@ [global] glob :: posint */
-var glob = 20;
 
-export function zog() {
-    glob = -3;
+/*@ [global] glob :: posint */
+var glob = 4;
+
+function bar() {
+    glob = 7;
+    return;
+}
+
+export function zoo() {
+    bar();
+    assert(glob > 10);
 }

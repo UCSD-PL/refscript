@@ -225,3 +225,12 @@ toVim (AnnMap _ ty _) = mconcat $ L.intersperse "\n" $ ss <$> lines
                            ++ show l2 ++ ":"
                            ++ show c2 ++ "::"
                            ++ show s
+
+
+------------------------------------------------------------------------
+-- | File predicates
+------------------------------------------------------------------------
+
+isDeclarationFile :: IsLocated a => a -> Bool
+isDeclarationFile = L.isSuffixOf ".d.ts" . sourceName . sp_start . srcPos
+

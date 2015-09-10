@@ -20,7 +20,8 @@ refTypeQualifiers γ0 (l, t) = efoldRType rTypeSort addQs γ0 [] t
   where
     addQs γ t qs  = mkQuals l γ t ++ qs
 
-mkQuals l γ t     = [ mkQual l γ v so pa | let (RR so (Reft (v, ra))) = rTypeSortedReft t
+mkQuals l γ t     = [ mkQual l γ v so pa | False
+                                         , let (RR so (Reft (v, ra))) = rTypeSortedReft t
                                          , pa                        <- conjuncts $ raPred ra
                     ]
 
@@ -30,7 +31,7 @@ mkQual l γ v so p = Q (symbol "Auto") ((v, so) : yts) (subst θ p) l0
     θ             = mkSubst [(x, eVar y)   | (x, y) <- xys]
     xys           = zipWith (\x i -> (x, symbol ("~A" ++ show i))) xs [0..]
     xs            = delete v $ orderedFreeVars γ p
-    l0            = dummyPos "RSC.Qualifiers.mkQual"
+    l0            = sourcePos l
 
 lookupSort l  x γ = fromMaybe errorMsg $ lookupSEnv x γ
   where

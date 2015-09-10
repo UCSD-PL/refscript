@@ -1,4 +1,4 @@
-/// <reference path="../rsc/mutability.ts"/>
+/// <reference path="../rsc/mutability.d.ts"/>
 
 interface Object {}
 
@@ -25,7 +25,7 @@ interface ObjectConstructor<M extends ReadOnly> {
       * Returns the prototype of an object.
       * @param o The object that references the prototype.
       */
-     
+
     /*@ getPrototypeOf(o: string): { string | v = "" }  */
     getPrototypeOf(o: any): any;
 

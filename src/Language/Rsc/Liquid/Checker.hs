@@ -402,13 +402,11 @@ consVarDecl g v@(VarDecl l x (Just e))
 
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 
-consVarDecl g v@(VarDecl _ x Nothing) = error "[consVarDecl] uninitialized var decl"
---   = case scrapeVarDecl v of
---       -- special case ambient vars
---       [(AmbVarDeclKind, _, Just t)] ->
---         Just <$> cgEnvAdds "consVarDecl" [(x, VI Ambient Initialized t)] g
---       -- The rest should have fallen under the 'undefined' initialization case
---       _ -> error "LQ: consVarDecl this shouldn't happen"
+consVarDecl g v@(VarDecl _ x Nothing)
+  | [(_, Ambient, Just t)] <- scrapeVarDecl v
+  = Just <$> cgEnvAdds "consVarDecl" [(x, VI Ambient Initialized t)] g
+  | otherwise   -- The rest should have fallen under the 'undefined' initialization case
+  = error "LQ: consVarDecl this shouldn't happen"
 
 ------------------------------------------------------------------------------------
 consExprT :: CGEnv -> Expression AnnLq -> Maybe RefType

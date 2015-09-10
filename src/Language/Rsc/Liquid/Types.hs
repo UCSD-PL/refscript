@@ -187,7 +187,7 @@ rTypeSortPrim TVoid      = F.FApp (rawStringFTycon "void") []
 rTypeSortPrim TTop       = F.FApp (rawStringFTycon "top") []
 rTypeSortPrim TNull      = F.FApp (rawStringFTycon "null") []
 rTypeSortPrim TUndefined = F.FApp (rawStringFTycon "undefined") []
--- rTypeSortPrim TFPBool _ = F.boolSort
+rTypeSortPrim TFPBool    = F.boolSort
 rTypeSortPrim c          = error $ "impossible: rTypeSortPrim " ++ show c
 
 rTypeSortForAll t        = genSort n θ $ rTypeSort tbody

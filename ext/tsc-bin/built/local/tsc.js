@@ -24649,6 +24649,9 @@ var ts;
         RsList.prototype.serialize = function () {
             return this.members.map(function (m) { return m.serialize(); });
         };
+        RsList.prototype.prefixElement = function (element) {
+            this.members.push(element);
+        };
         return RsList;
     })(RsAST);
     ts.RsList = RsList;
@@ -26116,14 +26119,34 @@ var ts;
         return [new InterfaceDeclarationAnnotation(srcSpan, s)];
     }
     ts.makeInterfaceDeclarationAnnotation = makeInterfaceDeclarationAnnotation;
-    function makeTypeAliasAnnotation(s, srcSpan) {
+    function makeTypeAliasAnnotations(s, srcSpan) {
         var tokens = stringTokens(s);
         if (tokens && tokens.length > 0 && tokens[0] === "type") {
             return [new TypeAliasAnnotation(srcSpan, s)];
         }
         return [];
     }
-    ts.makeTypeAliasAnnotation = makeTypeAliasAnnotation;
+    ts.makeTypeAliasAnnotations = makeTypeAliasAnnotations;
+    function makeGlobalAnnotations(s, srcSpan) {
+        var tokens = stringTokens(s);
+        if (tokens && tokens.length > 0) {
+            var content = tokens.slice(1).join(" ");
+            switch (tokens[0]) {
+                case "measure":
+                    return [new GlobalAnnotation(srcSpan, AnnotationKind.MeasureRawSpec, content)];
+                case "qualif":
+                    return [new GlobalAnnotation(srcSpan, AnnotationKind.QualifierRawSpec, content)];
+                case "predicate":
+                    return [new GlobalAnnotation(srcSpan, AnnotationKind.PredicateAliasRawSpec, content)];
+                case "invariant":
+                    return [new GlobalAnnotation(srcSpan, AnnotationKind.InvariantRawSpec, content)];
+                case "option":
+                    return [new GlobalAnnotation(srcSpan, AnnotationKind.OptionRawSpec, content)];
+            }
+        }
+        return [];
+    }
+    ts.makeGlobalAnnotations = makeGlobalAnnotations;
     function toSpecKind(s) {
         var ctx = undefined;
         switch (s) {
@@ -26805,6 +26828,18 @@ var ts;
                 }
                 throw new Error("UNIMPLEMENTED nodeToRsAST for " + ts.SyntaxKind[node.kind]);
             }
+            function accumulateGlobalAnnotations(node) {
+                var annotations = [];
+                ts.forEachChild(node, function (currentNode) {
+                    annotations = ts.concatenate(annotations, nodeAnnotations(currentNode, ts.makeGlobalAnnotations));
+                    return false;
+                });
+                return annotations;
+            }
+            function prefixGlobalAnnotations(srcSpan, node, ast) {
+                var globalAnnotations = accumulateGlobalAnnotations(node);
+                return new ts.RsList([new ts.RsEmptyStmt(srcSpan, globalAnnotations), ast]);
+            }
             function nodeToRsExp(state, node) {
                 switch (node.kind) {
                     case ts.SyntaxKind.BinaryExpression:
@@ -26861,7 +26896,10 @@ var ts;
                 throw new Error("[refscript] Unimplemented nodeToRsStmt for " + ts.SyntaxKind[node.kind]);
             }
             function sourceFileNodeToRsAST(state, node) {
-                return nodeArrayToRsAST(state, node.statements, nodeToRsStmt);
+                var globalAnnotations = accumulateGlobalAnnotations(node);
+                var astList = nodeArrayToRsAST(state, node.statements, nodeToRsStmt);
+                astList.prefixElement(new ts.RsEmptyStmt(nodeToSrcSpan(node), globalAnnotations));
+                return astList;
             }
             function nodeArrayToRsAST(state, node, mapper) {
                 return new ts.RsList(node.map(function (n) { return mapper(state, n); }));
@@ -27060,7 +27098,7 @@ var ts;
                 return new ts.RsInterfaceStmt(nodeToSrcSpan(node), interfaceAnnotations, nodeToRsId(state, node.name));
             }
             function typeAliasDeclarationToRsStmt(state, node) {
-                var annotations = nodeAnnotations(node, ts.makeTypeAliasAnnotation);
+                var annotations = nodeAnnotations(node, ts.makeTypeAliasAnnotations);
                 if (annotations.length < 1) {
                     var annotationText = "type ";
                     annotationText += ts.getTextOfNode(node.name);
@@ -27069,7 +27107,7 @@ var ts;
                     }
                     annotationText += " = ";
                     annotationText += checker.typeToRscString(checker.getTypeAtLocation(node.type), node);
-                    annotations = ts.makeTypeAliasAnnotation(annotationText, nodeToSrcSpan(node));
+                    annotations = ts.makeTypeAliasAnnotations(annotationText, nodeToSrcSpan(node));
                 }
                 return new ts.RsEmptyStmt(nodeToSrcSpan(node), annotations);
             }

@@ -1,6 +1,8 @@
 /// <reference path="./rsc/prims.ts"/>
 /// <reference path="./rsc/mutability.ts"/>
 /// <reference path="./rsc/aliases.ts"/>
+/// <reference path="./rsc/qualifiers.ts"/>
+/// <reference path="./rsc/measures.ts"/>
 
 /// <reference path="./ambient/object.ts"/>
 /// <reference path="./ambient/array.ts"/>

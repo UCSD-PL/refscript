@@ -2,6 +2,6 @@
 var glob = 20;
 
 /*@ zog :: () => {void | true} */
-function zog(){
+function zog() {
   glob = 3;
 }

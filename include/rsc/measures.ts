@@ -8,12 +8,12 @@
  *  traversal.
  */
 
-/*@ measure hasProperty         :: forall A   . (string, A) => bool     */
-/*@ measure hasDirectProperty   :: forall A   . (string, A) => bool     */
-/*@ measure enumProp            :: forall A   . (string, A) => bool     */
-/*@ measure ttag                :: forall A   . (A) => string           */
-/*@ measure Prop                :: forall A   . (A) => bool             */
-/*@ measure extends_class       :: forall A   . (A,string) => bool      */
-/*@ measure extends_interface   :: forall A   . (A,string) => bool      */
-/*@ measure offset              :: forall A B . (x:A, y:string) => B    */
-/*@ measure len                 :: forall M A . (Array<M,A>) => number  */
+/*@ measure hasProperty         :: <A>  (string, A) => bool     */
+/*@ measure hasDirectProperty   :: <A>  (string, A) => bool     */
+/*@ measure enumProp            :: <A>  (string, A) => bool     */
+/*@ measure ttag                :: <A>  (A) => string           */
+/*@ measure Prop                :: <A>  (A) => bool             */
+/*@ measure extends_class       :: <A>  (A,string) => bool      */
+/*@ measure extends_interface   :: <A>  (A,string) => bool      */
+/*@ measure offset              :: <A,B>(x:A, y:string) => B    */
+/*@ measure len                 :: <M,A>(Array<M,A>) => number  */

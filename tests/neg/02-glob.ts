@@ -1,7 +1,6 @@
-/*@ glob :: { number | v > 10 } */
+/*@ [global] glob :: posint */
 var glob = 20;
 
-/*@ zog :: () => {void | true} */
-function zog() {
-  glob = 3;
+export function zog() {
+    glob = -3;
 }

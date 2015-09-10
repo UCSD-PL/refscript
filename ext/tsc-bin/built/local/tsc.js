@@ -25014,9 +25014,15 @@ var ts;
     var RsPrefixOpKind = ts.RsPrefixOpKind;
     var RsPrefixOp = (function (_super) {
         __extends(RsPrefixOp, _super);
-        function RsPrefixOp(opKind) {
+        function RsPrefixOp(kind) {
             _super.call(this);
-            this.opKind = opKind;
+            switch (kind) {
+                case ts.SyntaxKind.MinusToken:
+                    this.opKind = RsPrefixOpKind.PrefixMinus;
+                    break;
+                default:
+                    throw new Error("[refscript] unsupported prefix kind: " + ts.SyntaxKind[kind]);
+            }
         }
         RsPrefixOp.prototype.serialize = function () {
             return RsPrefixOpKind[this.opKind];
@@ -26873,6 +26879,8 @@ var ts;
                         return stringLiteralToRsExp(state, node);
                     case ts.SyntaxKind.NewExpression:
                         return newExpressionToRsExp(state, node);
+                    case ts.SyntaxKind.PrefixUnaryExpression:
+                        return prefixUnaryExpressionToRsExp(state, node);
                 }
                 throw new Error("UNIMPLEMENTED nodeToRsExp for " + ts.SyntaxKind[node.kind]);
                 return undefined;
@@ -26977,6 +26985,9 @@ var ts;
             }
             function newExpressionToRsExp(state, node) {
                 return new ts.RsNewExpr(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression), nodeArrayToRsAST(state, node.arguments, nodeToRsExp));
+            }
+            function prefixUnaryExpressionToRsExp(state, node) {
+                return new ts.RsPrefixExpr(nodeToSrcSpan(node), [], new ts.RsPrefixOp(node.operator), nodeToRsExp(state, node.operand));
             }
             function expressionStatementToRsStmt(state, node) {
                 return new ts.RsExprStmt(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression));

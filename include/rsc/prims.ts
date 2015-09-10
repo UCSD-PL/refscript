@@ -90,12 +90,12 @@ declare function builtin_BICastExpr<V extends CAST_T>(x: V): V;
 //     (x:number) => {v:number  | v ~~ x}
 //  */
 // declare function builtin_PrefixPlus(a: number): number;
-//
-// /*@ builtin_PrefixMinus ::
-//     (x:number) => {v:number  | v ~~ (0 - x)}
-//  */
-// declare function builtin_PrefixMinus(a: number): number;
-//
+
+/*@ builtin_PrefixMinus ::
+    (x:number) => {v:number  | v ~~ (0 - x)}
+ */
+declare function builtin_PrefixMinus(a: number): number;
+
 // /*@ builtin_OpSEq ::
 //     /\ forall A   . (x:A, y:A) => {v:boolean | ((Prop v) <=> (x ~~ y)) }
 //     /\ forall A B . (x:A, y:B) => {v:boolean | (not (Prop v)) }

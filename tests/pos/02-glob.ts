@@ -1,4 +1,4 @@
-/*@ [global] glob :: { number | v > 0 } */
+/*@ [global] glob :: posint */
 var glob = 12;
 
 export function bar() {

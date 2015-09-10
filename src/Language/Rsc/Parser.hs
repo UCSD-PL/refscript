@@ -44,6 +44,7 @@ import           Language.Rsc.Parser.Declarations ()
 import           Language.Rsc.Program
 import           Language.Rsc.Transformations
 import           Language.Rsc.Traversals
+import           Language.Rsc.Types
 import           Language.Rsc.Visitor
 import           Prelude                          hiding (mapM)
 import           Text.Parsec                      hiding (State, parse)
@@ -55,28 +56,28 @@ import           Language.Rsc.Pretty
 
 type FError = F.FixResult Error
 
---------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Parse File and Type Signatures
---------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 -- | Parse the contents of a FilePath list into a program structure with relative
 -- qualified names.
---------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 parseRscFromFiles :: [FilePath] -> IO (Either FError RefScript)
---------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 parseRscFromFiles fs =
   partitionEithers <$> mapM parseScriptFromJSON fs >>= \case
     ([],ps) -> return $ mkRsc <$> parseAnnots (concat ps)
     (es,_ ) -> return $ Left $ mconcat es
 
---------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 getJSON :: MonadIO m => FilePath -> m B.ByteString
---------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 getJSON = liftIO . B.readFile
 
---------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 parseScriptFromJSON :: FilePath -> IO (Either (F.FixResult a) [Statement (SrcSpan, [RawSpec])])
---------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
   where
     decodeOrDie s =
@@ -85,9 +86,9 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
         Right p  -> Right p
 
 
---------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 parseIdFromJSON :: FilePath -> IO (Either (F.FixResult a) [Id (SrcSpan, [RawSpec])])
---------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 parseIdFromJSON filename = decodeOrDie <$> getJSON filename
   where
     decodeOrDie s =
@@ -95,9 +96,9 @@ parseIdFromJSON filename = decodeOrDie <$> getJSON filename
         Left msg -> Left  $ F.Crash [] $ "JSON decode error:\n" ++ msg
         Right p  -> Right p
 
----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 mkRsc :: [Statement (SrcSpan, [Spec])] -> RefScript
----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 mkRsc ss = ss
          & mkRelRsc
          & convertTVars
@@ -106,9 +107,9 @@ mkRsc ss = ss
          & replaceDotRef
          & fixFunBinders
 
----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 mkRelRsc :: [Statement (SrcSpan, [Spec])] -> RelRefScript
----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 mkRelRsc ss = Rsc {
         code          = Src (checkTopStmt <$> ss')
       , consts        = envFromList [ mapSnd (ntrans f g) t | MeasureSpec t <- anns ]
@@ -121,23 +122,27 @@ mkRelRsc ss = Rsc {
     }
   where
     toBare           :: Int -> (SrcSpan, [Spec]) -> AnnRel F.Reft
-    toBare n (l,αs)   = FA n l $ catMaybes $ extractFact <$> αs
+    toBare n (l,αs)   = FA n l $ catMaybes $ extractFact αs
     f (QN p s)        = QN (g p) s
     g (QP RK_ l s)    = QP AK_ l s
     starting_id       = 0
     (endingId, ss')   = mapAccumL (mapAccumL (\n -> (n+1,) . toBare n)) starting_id ss
     anns              = concatMap (FO.foldMap snd) ss
 
----------------------------------------------------------------------------------
-extractFact :: PSpec t r -> Maybe (FactQ RK r)
----------------------------------------------------------------------------------
-extractFact = go
+--------------------------------------------------------------------------------
+extractFact :: [PSpec t r] -> [Maybe (FactQ RK r)]
+--------------------------------------------------------------------------------
+extractFact fs = map go fs
   where
-    go (FunctionDeclarationSpec (_,t))     = Just $ SigAnn t
-    go (VariableDeclarationSpec (_, a, t)) = Just $ VarAnn a t
-    go (FunctionExpressionSpec t)          = Just $ SigAnn t
+    exprt ExportedSpec = True
+    exprt _  = False
+    loc | any exprt fs = Exported
+        | otherwise = Local
+    go (FunctionDeclarationSpec (_,t))     = Just $ SigAnn loc t
+    go (VariableDeclarationSpec (_, a, t)) = Just $ VarAnn loc a t
+    go (FunctionExpressionSpec t)          = Just $ SigAnn loc t
     go (InterfaceSpec t)                   = Just $ InterfaceAnn t
-    go (ClassSpec t)                       = Just $ ClassAnn t
+    go (ClassSpec t)                       = Just $ ClassAnn loc t
     go (ConstructorSpec t)                 = Just $ CtorAnn t
     go (CastSpec _ t)                      = Just $ UserCast t
     go (FieldSpec f)                       = Just $ FieldAnn f
@@ -147,9 +152,9 @@ extractFact = go
 
 type PState = Integer
 
---------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 parseAnnots :: [Statement (SrcSpan, [RawSpec])] -> Either FError [Statement (SrcSpan, [Spec])]
---------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 parseAnnots ss =
   case mapAccumL (mapAccumL f) (0,[]) ss of
     ((_,[]),b) -> Right b
@@ -157,9 +162,9 @@ parseAnnots ss =
   where
     f st (ss,sp) = mapSnd (ss,) $ L.mapAccumL (parse ss) st sp
 
---------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 parse :: SrcSpan -> (PState, [Error]) -> RawSpec -> ((PState, [Error]), Spec)
---------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 parse _ (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
   where
     parser s = do a     <- parseSpec s

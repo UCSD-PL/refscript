@@ -38,8 +38,9 @@ scrapeQuals qs ss = qs ++ qualifiers (mkUq $ foldStmts tbv [] ss)
   where
     tbv = defaultVisitor { accStmt = gos, accCElt = goe }
 
-    gos _ (FunctionStmt l f _ _) = [(f, t) | SigAnn t <- fFact l]
-    gos _ (VarDeclStmt _ vds)    = [(x, t) | VarDecl l x _ <- vds, VarAnn _ (Just t) <- fFact l]
+    gos _ (FunctionStmt l f _ _) = [(f, t) | SigAnn _ t <- fFact l]
+    gos _ (VarDeclStmt _ vds)    = [(x, t) | VarDecl l x _ <- vds
+                                           , VarAnn _ _ (Just t) <- fFact l]
     gos _ _                      = []
 
     goe _ (Constructor l _ _)        = [(x, t) | CtorAnn  t <- fFact l, let x = Id l "ctor" ]
@@ -107,14 +108,14 @@ accumAbsNames (QP AK_ _ ss)  = concatMap go
 ---------------------------------------------------------------------------------------
 accumVars :: PPR r => [Statement (AnnR r)] -> [(Id SrcSpan, SyntaxKind, VarInfo r)]
 ---------------------------------------------------------------------------------------
-accumVars s = [ (fSrc <$> n, k, VI a i t) | (n,l,k,a,i) <- hoistBindings s
-                                          , f           <- fFact l
-                                          , t           <- annToType f ]
+accumVars s = [ (fSrc <$> n, k, VI loc a i t) | (n,l,k,a,i) <- hoistBindings s
+                                              , fact        <- fFact l
+                                              , (loc, t)    <- annToType fact ]
   where
-    annToType (ClassAnn (TS _ b _)) = [TClass b]      -- Class
-    annToType (SigAnn t)            = [t]             -- Function
-    annToType (VarAnn _ t)          = maybeToList t   -- Variables
-    annToType _                     = [ ]
+    annToType (ClassAnn l (TS _ b _)) = [(l, TClass b)]       -- Class
+    annToType (SigAnn   l t)          = [(l, t)]              -- Function
+    annToType (VarAnn   l _ (Just t)) = [(l, t)]              -- Variables
+    annToType _                       = [ ]
 
 type BindInfo a = (Id a, a, SyntaxKind, Assignability, Initialization)
 
@@ -139,10 +140,10 @@ hoistBindings = snd . visitStmts vs ()
     inited _ (Just _) = Initialized
     inited _ _        = Uninitialized
 
-    isAmbient (VarAnn Ambient _) = True
-    isAmbient _                  = False
+    isAmbient (VarAnn _ Ambient _) = True
+    isAmbient _                    = False
 
-    varAsgn l = fromMaybe WriteLocal $ listToMaybe [ a | VarAnn a _ <- fFact l ]
+    varAsgn l = fromMaybe WriteLocal $ listToMaybe [ a | VarAnn _ a _ <- fFact l ]
 
     modAnn  n l = ModuleAnn (F.symbol n) : fFact l
     enumAnn n l = EnumAnn   (F.symbol n) : fFact l

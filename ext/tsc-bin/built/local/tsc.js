@@ -11153,7 +11153,8 @@ var ts;
             typeToString: typeToString,
             typeToRscString: typeToRscString,
             signatureToString: signatureToString,
-            signatureToRscString: signatureToRscString,
+            methodToRscString: methodToRscString,
+            functionToRscString: functionToRscString,
             getSymbolDisplayBuilder: getSymbolDisplayBuilder,
             symbolToString: symbolToString,
             getAugmentedPropertiesOfType: getAugmentedPropertiesOfType,
@@ -12226,8 +12227,11 @@ var ts;
             ts.releaseStringWriter(writer);
             return result;
         }
-        function signatureToRscString(signature, enclosingDeclaration) {
+        function methodToRscString(signature, enclosingDeclaration) {
             return signatureToString(signature, enclosingDeclaration, 4 | 1);
+        }
+        function functionToRscString(signature, enclosingDeclaration) {
+            return signatureToString(signature, enclosingDeclaration, 4 | 1 | 8);
         }
         function typeToString(type, enclosingDeclaration, flags) {
             var writer = ts.getSingleLineStringWriter();
@@ -25823,13 +25827,14 @@ var ts;
         AnnotationKind[AnnotationKind["ConstructorRawSpec"] = 7] = "ConstructorRawSpec";
         AnnotationKind[AnnotationKind["CallRawSpec"] = 8] = "CallRawSpec";
         AnnotationKind[AnnotationKind["CastRawSpec"] = 9] = "CastRawSpec";
-        AnnotationKind[AnnotationKind["MeasureRawSpec"] = 10] = "MeasureRawSpec";
-        AnnotationKind[AnnotationKind["TypeAliasRawSpec"] = 11] = "TypeAliasRawSpec";
-        AnnotationKind[AnnotationKind["PredicateAliasRawSpec"] = 12] = "PredicateAliasRawSpec";
-        AnnotationKind[AnnotationKind["QualifierRawSpec"] = 13] = "QualifierRawSpec";
-        AnnotationKind[AnnotationKind["InvariantRawSpec"] = 14] = "InvariantRawSpec";
-        AnnotationKind[AnnotationKind["OptionRawSpec"] = 15] = "OptionRawSpec";
-        AnnotationKind[AnnotationKind["TypeSignatureRawSpec"] = 16] = "TypeSignatureRawSpec";
+        AnnotationKind[AnnotationKind["ExportRawSpec"] = 10] = "ExportRawSpec";
+        AnnotationKind[AnnotationKind["MeasureRawSpec"] = 11] = "MeasureRawSpec";
+        AnnotationKind[AnnotationKind["TypeAliasRawSpec"] = 12] = "TypeAliasRawSpec";
+        AnnotationKind[AnnotationKind["PredicateAliasRawSpec"] = 13] = "PredicateAliasRawSpec";
+        AnnotationKind[AnnotationKind["QualifierRawSpec"] = 14] = "QualifierRawSpec";
+        AnnotationKind[AnnotationKind["InvariantRawSpec"] = 15] = "InvariantRawSpec";
+        AnnotationKind[AnnotationKind["OptionRawSpec"] = 16] = "OptionRawSpec";
+        AnnotationKind[AnnotationKind["TypeSignatureRawSpec"] = 17] = "TypeSignatureRawSpec";
     })(ts.AnnotationKind || (ts.AnnotationKind = {}));
     var AnnotationKind = ts.AnnotationKind;
     (function (AnnotContext) {
@@ -25940,6 +25945,14 @@ var ts;
         return CallAnnotation;
     })(Annotation);
     ts.CallAnnotation = CallAnnotation;
+    var ExportedAnnotation = (function (_super) {
+        __extends(ExportedAnnotation, _super);
+        function ExportedAnnotation(sourceSpan) {
+            _super.call(this, sourceSpan, AnnotationKind.ExportRawSpec, "");
+        }
+        return ExportedAnnotation;
+    })(Annotation);
+    ts.ExportedAnnotation = ExportedAnnotation;
     var PropertyAnnotation = (function (_super) {
         __extends(PropertyAnnotation, _super);
         function PropertyAnnotation(sourceSpan, content) {
@@ -26925,6 +26938,9 @@ var ts;
                 });
                 var nameText = node.name.text;
                 var annotations = [];
+                if (node.modifiers && node.modifiers.some(function (modifier) { return modifier.kind === ts.SyntaxKind.ExportKeyword; })) {
+                    annotations = ts.concatenate(annotations, [new ts.ExportedAnnotation(nodeToSrcSpan(node))]);
+                }
                 var type = checker.getTypeAtLocation(node);
                 var signatures = checker.getSignaturesOfType(type, 0);
                 var functionDeclarationAnnotations = ts.concat(signatures.map(function (signature) {
@@ -26932,7 +26948,7 @@ var ts;
                     var sourceSpan = nodeToSrcSpan(signatureDeclaration);
                     var binderAnnotations = nodeAnnotations(signatureDeclaration, ts.makeFunctionDeclarationAnnotation);
                     if (binderAnnotations.length === 0) {
-                        return [new ts.FunctionDeclarationAnnotation(sourceSpan, nameText + " :: " + checker.signatureToRscString(signature, signatureDeclaration))];
+                        return [new ts.FunctionDeclarationAnnotation(sourceSpan, nameText + " :: " + checker.functionToRscString(signature, signatureDeclaration))];
                     }
                     else {
                         return binderAnnotations;
@@ -27057,7 +27073,7 @@ var ts;
                                 }
                                 else {
                                     var constructorSignature = checker.getSignatureFromDeclaration(member);
-                                    return ["new " + checker.signatureToRscString(constructorSignature, member)];
+                                    return ["new " + checker.methodToRscString(constructorSignature, member)];
                                 }
                             case ts.SyntaxKind.MethodSignature:
                                 var methodAnnotations = nodeAnnotations(member, ts.makeMethodAnnotations);
@@ -27066,7 +27082,7 @@ var ts;
                                 }
                                 else {
                                     var methodSignature = checker.getSignatureFromDeclaration(member);
-                                    return [ts.getTextOfNode(member.name) + checker.signatureToRscString(methodSignature, member)];
+                                    return [ts.getTextOfNode(member.name) + checker.methodToRscString(methodSignature, member)];
                                 }
                             case ts.SyntaxKind.PropertySignature:
                                 var propertyAnnotations = nodeAnnotations(member, ts.makePropertyAnnotations);
@@ -27085,7 +27101,7 @@ var ts;
                                 }
                                 else {
                                     var callSignature = checker.getSignatureFromDeclaration(member);
-                                    return [checker.signatureToRscString(callSignature, member)];
+                                    return [checker.methodToRscString(callSignature, member)];
                                 }
                             case ts.SyntaxKind.IndexSignature:
                             default:

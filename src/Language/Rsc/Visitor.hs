@@ -355,7 +355,7 @@ instance Transformable ModuleDefQ where
   trans f αs xs (ModuleDef v t e p) = ModuleDef (envMap (trans f αs xs) v) (envMap (trans f αs xs) t) e p
 
 instance Transformable VarInfoQ where
-  trans f αs xs (VI a i t) = VI a i $ trans f αs xs t
+  trans f αs xs (VI l a i t) = VI l a i $ trans f αs xs t
 
 instance Transformable FAnnQ where
   trans f αs xs (FA i s ys) = FA i s $ trans f αs xs <$> ys
@@ -378,17 +378,17 @@ transFact f = go
     go αs xs (EltOverload x m) = EltOverload x $ trans f αs xs m
     go αs xs (Overload x t)    = Overload x    $ trans f αs xs t
 
-    go αs xs (VarAnn a t)      = VarAnn a      $ trans f αs xs <$> t
+    go αs xs (VarAnn l a t)    = VarAnn l a    $ trans f αs xs <$> t
 
     go αs xs (FieldAnn t)      = FieldAnn      $ trans f αs xs t
     go αs xs (MethAnn t)       = MethAnn       $ trans f αs xs t
     go αs xs (CtorAnn t)       = CtorAnn       $ trans f αs xs t
 
     go αs xs (UserCast t)      = UserCast      $ trans f αs xs t
-    go αs xs (SigAnn t)        = SigAnn        $ trans f αs xs t
+    go αs xs (SigAnn l t)      = SigAnn l      $ trans f αs xs t
     go αs xs (TCast x c)       = TCast x       $ trans f αs xs c
 
-    go αs xs (ClassAnn ts)     = ClassAnn      $ trans f αs xs ts
+    go αs xs (ClassAnn l ts)   = ClassAnn l    $ trans f αs xs ts
     go αs xs (InterfaceAnn td) = InterfaceAnn  $ trans f αs xs td
 
     go _ _   t                 = t
@@ -483,14 +483,14 @@ ntransFact f g = go
     go (TypInst x y ts)  = TypInst x y   $ ntrans f g <$> ts
     go (EltOverload x m) = EltOverload x $ ntrans f g m
     go (Overload x t)    = Overload x    $ ntrans f g t
-    go (VarAnn a t)      = VarAnn a      $ ntrans f g <$> t
+    go (VarAnn l a t)    = VarAnn l a    $ ntrans f g <$> t
     go (FieldAnn t)      = FieldAnn      $ ntrans f g t
     go (MethAnn t)       = MethAnn       $ ntrans f g t
     go (CtorAnn t)       = CtorAnn       $ ntrans f g t
     go (UserCast t)      = UserCast      $ ntrans f g t
-    go (SigAnn t)        = SigAnn        $ ntrans f g t
+    go (SigAnn l t)      = SigAnn l      $ ntrans f g t
     go (TCast x c)       = TCast x       $ ntrans f g c
-    go (ClassAnn t)      = ClassAnn      $ ntrans f g t
+    go (ClassAnn l t)    = ClassAnn l    $ ntrans f g t
     go (InterfaceAnn t)  = InterfaceAnn  $ ntrans f g t
     go (ModuleAnn m)     = ModuleAnn     $ m
     go (EnumAnn e)       = EnumAnn       $ e

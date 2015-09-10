@@ -277,7 +277,7 @@ tcStmt γ (WhileStmt l c b)
       (c', Just t)  ->
         do unifyTypeM (srcPos l) γ t tBool
            phiTys   <- mapM (safeTcEnvFindTy l γ) phis
-           (b', γl) <- tcStmt (tcEnvAdds (zip xs (VI WriteLocal Initialized <$> phiTys)) γ) b
+           (b', γl) <- tcStmt (tcEnvAdds (zip xs (VI Local WriteLocal Initialized <$> phiTys)) γ) b
            tcWA γ dummyExpr (envLoopJoin l γ γl) >>= \case
              Left e     -> return $ (ExprStmt  l e    , γl)
              Right γout -> return $ (WhileStmt l c' b', γout)
@@ -332,41 +332,41 @@ tcVarDecl γ v@(VarDecl l x (Just e))
       -- | Local
       [ ] ->
         do  (e', to) <- tcExprW γ e
-            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ VI WriteLocal Initialized <$> to)
+            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ VI Local WriteLocal Initialized <$> to)
 
-      [(_, WriteLocal, Just t)] ->
+      [(loc, _, WriteLocal, Just t)] ->
         do  ([e'], Just t') <- tcNormalCallW γ l "VarDecl-WL" [e] (localTy t)
-            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (VI WriteLocal Initialized t') γ)
+            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (VI loc WriteLocal Initialized t') γ)
 
-      [(_, WriteLocal, Nothing)] ->
+      [(loc, _, WriteLocal, Nothing)] ->
         do  (e', to)   <- tcExprW γ e
-            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ VI WriteLocal Initialized <$> to)
+            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ VI loc WriteLocal Initialized <$> to)
 
       -- | Global
-      [(_, WriteGlobal, Just t)] ->
+      [(_, _, WriteGlobal, Just t)] ->
         -- PV: the global variable should be in scope already,
         --     since it is being hoisted to the beginning of the
         --     scope.
         first (VarDecl l x . Just) <$> tcAsgn l γ x e
 
-      [(_, WriteGlobal, Nothing)] ->
+      [(loc, _, WriteGlobal, Nothing)] ->
         do  (e',to) <- tcExprW γ e
-            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ VI WriteGlobal Initialized <$> to)
+            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ VI loc WriteGlobal Initialized <$> to)
 
       -- | Ambient
-      [(_, Ambient, Just t)]   ->
+      [(loc, _, Ambient, Just t)]   ->
         do  ([e'], Just t') <- tcNormalCallW γ l "VarDecl-RO" [e] (localTy t)
-            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (VI Ambient Initialized t') γ)
+            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (VI loc Ambient Initialized t') γ)
 
-      [(_, Ambient, Nothing)] ->
+      [(loc, _, Ambient, Nothing)] ->
         do  (e', to)   <- tcExprW γ e
-            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ VI Ambient Initialized <$> to)
+            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ VI loc Ambient Initialized <$> to)
 
       c -> tcError $ unimplemented l "tcVarDecl" ("case: " ++ ppshow c)
 
 tcVarDecl γ v@(VarDecl _ x Nothing)
-  | [(_, Ambient, Just t)] <- scrapeVarDecl v
-  = return $ (v, Just $ tcEnvAdds [(x, VI Ambient Initialized t)] γ)
+  | [(loc, _, Ambient, Just t)] <- scrapeVarDecl v
+  = return $ (v, Just $ tcEnvAdds [(x, VI loc Ambient Initialized t)] γ)
   | otherwise   -- The rest should have fallen under the 'undefined' initialization case
   = error "TC-tcVarDecl: this shouldn't happen"
 
@@ -437,11 +437,11 @@ tcAsgn :: Unif r
 --------------------------------------------------------------------------------
 tcAsgn l γ x e
   = do (e', to) <-  tcExprTW γ e tRHS
-       return $ (e', tcEnvAddo γ x $ VI asgn init <$> to)
+       return $ (e', tcEnvAddo γ x $ VI Local asgn init <$> to)
     where
        (tRHS, asgn, init) = case tcEnvFindTyForAsgn x γ of
-                              Just (VI a _ t) -> (Just t, a, Initialized)
-                              Nothing         -> (Nothing, WriteLocal, Initialized)
+                              Just (VI _ a _ t) -> (Just t, a, Initialized)
+                              Nothing           -> (Nothing, WriteLocal, Initialized)
 
 tcEnvAddo _ _ Nothing  = Nothing
 tcEnvAddo γ x (Just t) = Just $ tcEnvAdds [(x, t)] γ
@@ -480,7 +480,7 @@ tcRetW γ l (Just e@(VarRef _ x))
       _ -> die $ errorUqMutSubtyping (srcPos l) e t retTy
   where
     retTy    = tcEnvFindReturn γ
-    newEnv t = tcEnvAdd fn (VI Ambient Initialized $ finalizeTy t) γ
+    newEnv t = tcEnvAdd fn (VI Local Ambient Initialized $ finalizeTy t) γ
     fn       = Id l "__finalize__"
     e'       = fmap (\a -> a { fFact = BypassUnique : fFact a }) e
     needsCall (TRef (Gen _ (m:_)) _) = isUM m
@@ -577,7 +577,7 @@ tcExpr γ e@(VarRef l x) _
 tcExpr γ (CondExpr l e e1 e2) to
   = do  opTy    <- mkTy to <$> safeTcEnvFindTy l γ (builtinOpId BICondExpr)
         (sv,v)  <- dup F.symbol (VarRef l) <$> freshCastId l
-        let γ'   = tcEnvAdd sv (VI WriteLocal Initialized tt) γ
+        let γ'   = tcEnvAdd sv (VI Local WriteLocal Initialized tt) γ
         ([e',_,e1',e2'], t') <- tcNormalCall γ' l BICondExpr (args v) opTy
         return (CondExpr l e' e1' e2', t')
   where
@@ -668,7 +668,7 @@ tcExpr γ (FuncExpr l fo xs body) tCtxO
   | otherwise
   = tcError $ errorNoFuncAnn $ srcPos l
   where
-    funTy | [ft] <- [ t | SigAnn t <- fFact l ]
+    funTy | [ft] <- [ t | SigAnn _ t <- fFact l ]
           = Just ft
           | Just ft <- tCtxO
           = Just ft
@@ -686,7 +686,7 @@ tcCast :: Unif r => TCEnv r -> AnnTc r -> ExprSSAR r -> RType r -> TCM r (ExprSS
 tcCast γ l e tc
   = do  opTy        <- safeTcEnvFindTy l γ (builtinOpId BICastExpr)
         cid         <- freshCastId l
-        let γ'       = tcEnvAdd (F.symbol cid) (VI WriteLocal Initialized tc) γ
+        let γ'       = tcEnvAdd (F.symbol cid) (VI Local WriteLocal Initialized tc) γ
         ([_,e'],t') <- tcNormalCall γ' l "user-cast" [(VarRef l cid, Nothing),(e, Just tc)] opTy
         return       $ (e', t')
 
@@ -1000,7 +1000,7 @@ envJoin l γ (Just γ1) (Just γ2) =
 
 envJoinStep l γ1 γ2 next (γ, st01, st02) xt =
   case xt of
-    (v, ta@(VI WriteLocal _ t)) ->
+    (v, ta@(VI _ WriteLocal _ t)) ->
       case find ((v ==) . snd3) next of
         Just (_,va, vb) -> do
           st1     <- mkVdStmt l γ1 va vb t          -- FIRST BRANCH
@@ -1032,7 +1032,7 @@ envLoopJoin :: Unif r => AnnTc r -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
 envLoopJoin _ γ Nothing   = return $ Just γ
 envLoopJoin l γ (Just γl) =
   do  xts      <- toXts <$> mapM (getLoopNextPhiType l γ γl) xs
-      _        <- mapM_ mkPhiAnn $ (\(x, VI _ _ t) -> (x, t)) <$> xts
+      _        <- mapM_ mkPhiAnn $ (\(x, VI _ _ _ t) -> (x, t)) <$> xts
       Just . tcEnvAdds xts . (`substNames` γ) <$> getSubst
   where
       xs             = phiVarsAnnot l
@@ -1049,10 +1049,10 @@ getPhiType :: Unif r => AnnTc r -> TCEnv r -> TCEnv r -> Var r -> TCM r (Maybe (
 --------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (tcEnvFindTyForAsgn x γ1, tcEnvFindTyForAsgn x γ2) of
-    (Just (VI a1 i1 t1), Just (VI _ i2 t2)) ->
+    (Just (VI l1 a1 i1 t1), Just (VI _ _ i2 t2)) ->
         do  θ     <- getSubst
             t     <- unifyPhiTypes l γ1 x t1 t2 θ
-            return $ Just $ VI a1 (i1 `mappend` i2) t
+            return $ Just $ VI l1 a1 (i1 `mappend` i2) t
     (_, _) -> return Nothing
     -- bindings that are not in both environments are discarded
 
@@ -1061,10 +1061,10 @@ getLoopNextPhiType :: Unif r => AnnTc r -> TCEnv r -> TCEnv r -> Var r -> TCM r 
 --------------------------------------------------------------------------------
 getLoopNextPhiType l γ γl x =
   case (tcEnvFindTyForAsgn x γ, tcEnvFindTyForAsgn (mkNextId x) γl) of
-    (Just (VI a1 i1 t1), Just (VI _ i2 t2)) ->
+    (Just (VI l1 a1 i1 t1), Just (VI _ _ i2 t2)) ->
         do  θ <- getSubst
             t <- unifyPhiTypes l γ x t1 t2 θ
-            return $ Just $ VI a1 (i1 `mappend` i2) t
+            return $ Just $ VI l1 a1 (i1 `mappend` i2) t
     _ -> return Nothing
     -- bindings that are not in both environments are discarded
 

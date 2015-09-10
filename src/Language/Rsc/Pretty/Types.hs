@@ -124,6 +124,10 @@ instance (PP r, F.Reftable r) => PP (BindQ q r) where
 instance (PP s, PP t) => PP (M.Map s t) where
   pp m = vcat $ pp <$> M.toList m
 
+instance PP Locality where
+  pp Exported     = text "Exported"
+  pp Local        = text "Local"
+
 instance PP Assignability where
   pp Ambient      = text "Ambient"
   pp WriteLocal   = text "WriteLocal"
@@ -171,7 +175,7 @@ instance PP EnumDef where
   pp (EnumDef n m) = pp n <+> braces (pp m)
 
 instance (F.Reftable r, PP r) => PP (VarInfo r) where
-  pp (VI _ _ t) = pp t
+  pp (VI _ _ _ t) = pp t
 
 instance (PP r, F.Reftable r) => PP (ModuleDef r) where
   pp (ModuleDef vars tys enums path) =

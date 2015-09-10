@@ -51,6 +51,7 @@ data RawSpec
   | MethodRawSpec              (SrcSpan, String)
   | ConstructorRawSpec         (SrcSpan, String)
   | CastRawSpec                (SrcSpan, String)
+  | ExportRawSpec              (SrcSpan, String)
   -- Global
   | MeasureRawSpec             (SrcSpan, String)
   | TypeAliasRawSpec           (SrcSpan, String)
@@ -73,6 +74,7 @@ data PSpec l r
   | MethodSpec              (MethodInfoQ RK r)
   | ConstructorSpec         (RTypeQ RK r)
   | CastSpec                l (RTypeQ RK r)
+  | ExportedSpec
   -- Global
   | MeasureSpec             (Id l, RTypeQ RK r)
   | TypeAliasSpec           (Id l, TAlias (RTypeQ RK r))
@@ -96,6 +98,7 @@ instance PP Spec where
   pp MethodSpec{}              = text "MethodSpec"
   pp ConstructorSpec{}         = text "ConstructorSpec"
   pp CastSpec{}                = text "CastSpec"
+  pp ExportedSpec{}            = text "ExportedSpec"
   pp MeasureSpec{}             = text "MeasureSpec"
   pp TypeAliasSpec{}           = text "TypeAliasSpec"
   pp PredicateAliasSpec{}      = text "PredicateAliasSpec"
@@ -109,22 +112,23 @@ parseSpec = go
   where
     go (FunctionDeclarationRawSpec (ss, _)) = FunctionDeclarationSpec <$> patch2 ss <$> idBindP
     go (VariableDeclarationRawSpec (ss, _)) = VariableDeclarationSpec <$> patch3 ss <$> idBindP'
-    go (FunctionExpressionRawSpec  (ss, _)) = FunctionExpressionSpec  <$> functionExpressionP
-    go (InterfaceRawSpec           (ss, _)) = InterfaceSpec           <$> interfaceP
-    go (ClassRawSpec               (ss, _)) = ClassSpec               <$> classDeclP
-    go (FieldRawSpec               (ss, _)) = FieldSpec               <$> (propP >>= \(_,_,o,m,t) -> return (FI o m t))
-    go (MethodRawSpec              (ss, _)) = MethodSpec              <$> (methP >>= \(_,_,o,m,t) -> return (MI o m t))
-    go (ConstructorRawSpec         (ss, _)) = ConstructorSpec         <$> ctorP
+    go (FunctionExpressionRawSpec  (_ , _)) = FunctionExpressionSpec  <$> functionExpressionP
+    go (InterfaceRawSpec           (_ , _)) = InterfaceSpec           <$> interfaceP
+    go (ClassRawSpec               (_ , _)) = ClassSpec               <$> classDeclP
+    go (FieldRawSpec               (_ , _)) = FieldSpec               <$> (propP >>= \(_,_,o,m,t) -> return (FI o m t))
+    go (MethodRawSpec              (_ , _)) = MethodSpec              <$> (methP >>= \(_,_,o,m,t) -> return (MI o m t))
+    go (ConstructorRawSpec         (_ , _)) = ConstructorSpec         <$> ctorP
     go (CastRawSpec                (ss, _)) = CastSpec ss             <$> bareTypeP
+    go (ExportRawSpec              (_ , _)) = return ExportedSpec
     go (MeasureRawSpec             (ss, _)) = MeasureSpec             <$> patch2 ss <$> idBindP
     go (TypeAliasRawSpec           (ss, _)) = TypeAliasSpec           <$> patch2 ss <$> tAliasP
     go (PredicateAliasRawSpec      (ss, _)) = PredicateAliasSpec      <$> patch2 ss <$> pAliasP
-    go (QualifierRawSpec           (ss, _)) = QualifierSpec           <$> qualifierP sortP
+    go (QualifierRawSpec           (_ , _)) = QualifierSpec           <$> qualifierP sortP
     go (InvariantRawSpec           (ss, _)) = InvariantSpec ss        <$> bareTypeP
-    go (OptionRawSpec              (ss, _)) = OptionSpec              <$> optionP
+    go (OptionRawSpec              (_ , _)) = OptionSpec              <$> optionP
 
-    patch2 ss (id,t)   = (fmap (const ss) id ,t)
-    patch3 ss (id,a,t) = (fmap (const ss) id ,a,t)
+    patch2 ss (i,t)   = (fmap (const ss) i,t)
+    patch3 ss (i,a,t) = (fmap (const ss) i,a,t)
 
 getSpecString :: RawSpec -> String
 getSpecString = go
@@ -138,6 +142,7 @@ getSpecString = go
     go (MethodRawSpec              (_, s)) = s
     go (ConstructorRawSpec         (_, s)) = s
     go (CastRawSpec                (_, s)) = s
+    go (ExportRawSpec              (_, s)) = s
     go (MeasureRawSpec             (_, s)) = s
     go (TypeAliasRawSpec           (_, s)) = s
     go (PredicateAliasRawSpec      (_, s)) = s
@@ -155,6 +160,7 @@ instance IsLocated RawSpec where
   srcPos (MethodRawSpec              (s,_)) = s
   srcPos (ConstructorRawSpec         (s,_)) = s
   srcPos (CastRawSpec                (s,_)) = s
+  srcPos (ExportRawSpec              (s,_)) = s
   srcPos (MeasureRawSpec             (s,_)) = s
   srcPos (TypeAliasRawSpec           (s,_)) = s
   srcPos (PredicateAliasRawSpec      (s,_)) = s

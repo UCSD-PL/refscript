@@ -112,11 +112,11 @@ initCallableEnv l γ f fty s
           & envAdds arg
           & envAdds varBs
           & envAdds tyBs
-          & envAddReturn f (VI ReturnVar Initialized t)
+          & envAddReturn f (VI Local ReturnVar Initialized t)
     -- tyBs  = [(tVarId α, VI Ambient Initialized $ tVar α) | α <- αs]
     -- tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
-    tyBs  = [(Loc (srcPos l) α, VI Ambient Initialized $ tVar α) | α <- αs]
-    varBs = [(x, VI WriteLocal Initialized t) | B x t <- xts]
+    tyBs  = [(Loc (srcPos l) α, VI Local Ambient Initialized $ tVar α) | α <- αs]
+    varBs = [(x, VI Local WriteLocal Initialized t) | B x t <- xts]
     arg   = single (argId $ srcPos l, mkArgTy l ts)
     bnds  = envAdds [(s,t) | BTV s _ (Just t) <- bs] $ envBounds γ
     ctx   = pushContext i (envCtx γ)
@@ -171,7 +171,7 @@ initClassCtorEnv (TS _ (BGen nm bs) _) γ
     --          | otherwise
     --          = id
     -- super    = builtinOpId BISuper
-    addExit  = envAdd ctorExit (VI Ambient Initialized exitTy)
+    addExit  = envAdd ctorExit (VI Local Ambient Initialized exitTy)
     ctorExit = builtinOpId BICtorExit
     -- XXX: * Keep the right order of fields
     --      * Make the return object immutable to avoid contra-variance
@@ -206,8 +206,8 @@ tcEnvFindTyWithAgsn x γ | Just t <- envFindTy x $ tce_names γ
                         | otherwise
                         = Nothing
   where
-    adjustInit s@(VI _ Initialized _) = s
-    adjustInit (VI a _ t) = VI a Uninitialized $ orUndef t
+    adjustInit s@(VI _ _ Initialized _) = s
+    adjustInit (VI loc a _ t) = VI loc a Uninitialized $ orUndef t
 
 -- This is a variant of the above that doesn't add the ' + undefined' for
 -- non-initialized variables.

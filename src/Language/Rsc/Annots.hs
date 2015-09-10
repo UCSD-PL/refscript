@@ -102,8 +102,8 @@ data FactQ q r
   -- ** SPECIFICATIONS **
 
   -- Type annotations
-  | SigAnn        (RTypeQ q r)
-  | VarAnn        Assignability (Maybe (RTypeQ q r))
+  | SigAnn        Locality (RTypeQ q r)
+  | VarAnn        Locality Assignability (Maybe (RTypeQ q r))
 
   -- Class member annotations
   | FieldAnn      (FieldInfoQ q r)
@@ -113,7 +113,7 @@ data FactQ q r
   | UserCast      (RTypeQ q r)
 
   -- Named type annotation
-  | ClassAnn      (TypeSigQ q r)
+  | ClassAnn      Locality (TypeSigQ q r)
   | InterfaceAnn  (TypeDeclQ q r)
 
   | ModuleAnn     (F.Symbol)
@@ -186,10 +186,10 @@ phiVarsAnnot l = concat [xs | PhiVar xs <- fFact l]
 
 -- | scrapeVarDecl: Scrape a variable declaration for annotations
 ----------------------------------------------------------------------------------
-scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, Assignability, Maybe (RType r))]
+scrapeVarDecl :: VarDecl (AnnSSA r) -> [(Locality, SyntaxKind, Assignability, Maybe (RType r))]
 ----------------------------------------------------------------------------------
 scrapeVarDecl (VarDecl l _ _)
-  = [ (VarDeclKind, a, t) | VarAnn a t <- fFact l ]
- ++ [ (FieldDeclKind, Ambient, Just t) | FieldAnn (FI _ _ t) <- fFact l ]
- -- Assignability value is dummy
+  = [ (loc, VarDeclKind, a, t)                | VarAnn loc a t      <- fFact l ]
+ ++ [ (Local, FieldDeclKind, Ambient, Just t) | FieldAnn (FI _ _ t) <- fFact l ]
+ -- PV: Assignability & Locality values are default for the field case
 

@@ -23,7 +23,7 @@ import           Language.Rsc.Core.Files
 import           Language.Rsc.Errors
 import qualified Language.Rsc.Liquid.Checker    as LQ
 import qualified Language.Rsc.Liquid.Types      as L
-import           Language.Rsc.Misc              (mapi)
+import           Language.Rsc.Misc              (mapi, (<//>))
 import           Language.Rsc.Pretty
 import           Language.Rsc.SystemUtils
 import qualified Language.Rsc.Typecheck.Checker as TC
@@ -59,13 +59,13 @@ json cfg f = do
 withExistingFile cfg f
   | ext `elem` oks
   = do  libs              <- getIncludeLibs cfg
-        (code, stdOut, _) <- readProcessWithExitCode tsCmd (mkArgs libs) ""
+        (code, stdOut, _) <- readProcessWithExitCode tsCmd (tracePP "" $ mkArgs libs) ""
         case code of
           ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
-                                Left  s  -> return $ Left  $ F.UnknownError $ "withExistingFile1: " ++ s
+                                Left  s  -> return $ Left  $ F.UnknownError $ s <//> stdOut
                                 Right fs -> return $ Right fs
           ExitFailure _   -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
-                                Left  s  -> return $ Left $ F.UnknownError $ "withExistingFile2: " ++ s
+                                Left  s  -> return $ Left $ F.UnknownError $ s <//> stdOut
                                 Right e  -> return $ Left e
   | otherwise
   = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
@@ -73,10 +73,11 @@ withExistingFile cfg f
     ext            = takeExtension f
     tsCmd          = "tsc"
     oks            = [".ts", ".js"]
-    mkArgs libs    = [ "--outDir", tempDirectory f] ++
-                     -- , "--refscript"] ++
-                     concatMap (("--lib":) . single) libs ++
+    mkArgs libs    = [ "--outDir", tempDirectory f
+                     , "--module", moduleKind ] ++
+                     concat [ ["--lib", lib] | lib <- libs ] ++
                      [ f ]
+    moduleKind      = "commonjs" -- also 'amd', 'system', 'umd'
 
 getIncludeLibs :: Config -> IO [FilePath]
 getIncludeLibs cfg = case prelude cfg of

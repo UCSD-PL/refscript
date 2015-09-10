@@ -64,8 +64,8 @@ envFindTyWithAsgn :: (EnvKey x, F.Expression x) => x -> CGEnv -> Maybe CGEnvEntr
 ---------------------------------------------------------------------------------------
 envFindTyWithAsgn x (envNames -> γ) = fmap singleton (envFindTy x γ)
   where
-    singleton v@(VI WriteGlobal Initialized   _) = v
-    singleton v@(VI WriteGlobal Uninitialized t) = v { v_type = orUndef t }
+    singleton v@(VI _ WriteGlobal Initialized   _) = v
+    singleton v@(VI _ WriteGlobal Uninitialized t) = v { v_type = orUndef t }
     singleton v = v { v_type = eSingleton (v_type v) x }
 
 ---------------------------------------------------------------------------------------
@@ -112,7 +112,7 @@ checkSyms m g ok x t = efoldRType h f F.emptySEnv [] t
                = Nothing
                | s `elem` biExtra
                = Nothing
-               | Just (VI a _ _) <- envLikeFindTy' s g
+               | Just (VI _ a _ _) <- envLikeFindTy' s g
                = if a `elem` validAsgn then Nothing
                                          else Just $ errorAsgnInRef l x t a
                | otherwise

@@ -124,14 +124,14 @@ instance Free (Fact r) where
   free (TypInst _ _ ts)     = free ts
   free (EltOverload _ t)    = free t
   free (Overload _ t)       = free t
-  free (VarAnn  _ t )       = free t
+  free (VarAnn _ _ t )      = free t
   free (FieldAnn f)         = free f
   free (MethAnn m)          = free m
   free (CtorAnn c)          = free c
   free (UserCast t)         = free t
-  free (SigAnn c)           = free c
+  free (SigAnn _ c)         = free c
   free (TCast _ c)          = free c
-  free (ClassAnn t)         = free t --  foldr S.delete (free $ e ++ i) vs
+  free (ClassAnn _ t)       = free t --  foldr S.delete (free $ e ++ i) vs
   free (InterfaceAnn t)     = free t --  foldr S.delete (free $ e ++ i) vs
   free _                    = S.empty
 
@@ -181,7 +181,7 @@ instance SubstitutableQ q r t => SubstitutableQ q r (Located t) where
   apply θ (Loc s v)         = Loc s $ apply θ v
 
 instance F.Reftable r => SubstitutableQ q r (VarInfoQ q r) where
-  apply θ (VI a i t)        = VI a i $ apply θ t
+  apply θ (VI l a i t)      = VI l a i $ apply θ t
 
 instance F.Reftable r => SubstitutableQ q r (CastQ q r) where
   apply _ CNo         = CNo
@@ -194,14 +194,14 @@ instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   apply θ (TypInst i ξ ts)  = TypInst i ξ     $ apply θ ts
   apply θ (EltOverload ξ t) = EltOverload ξ   $ apply θ t
   apply θ (Overload ξ t)    = Overload ξ      $ apply θ t
-  apply θ (VarAnn a t)      = VarAnn a        $ apply θ t
+  apply θ (VarAnn l a t)    = VarAnn l a      $ apply θ t
   apply θ (FieldAnn f)      = FieldAnn        $ apply θ f
   apply θ (MethAnn t)       = MethAnn         $ apply θ t
   apply θ (CtorAnn t)       = CtorAnn         $ apply θ t
   apply θ (UserCast t)      = UserCast        $ apply θ t
-  apply θ (SigAnn t)        = SigAnn          $ apply θ t
+  apply θ (SigAnn l t)      = SigAnn l        $ apply θ t
   apply θ (TCast ξ t)       = TCast ξ         $ apply θ t
-  apply θ (ClassAnn t)      = ClassAnn        $ apply θ t
+  apply θ (ClassAnn l t)    = ClassAnn l      $ apply θ t
   apply θ (InterfaceAnn t)  = InterfaceAnn    $ apply θ t
   apply _ a                 = a
 
@@ -258,6 +258,9 @@ instance (F.Reftable r, SubstitutableQ q r a) => SubstitutableQ q r (Statement a
   apply θ s                 = fmap (apply θ) s
 
 instance SubstitutableQ q r Assignability where
+  apply _ s                 = s
+
+instance SubstitutableQ q r Locality where
   apply _ s                 = s
 
 instance SubstitutableQ q r Initialization where

@@ -290,15 +290,15 @@ envAddGroup :: String -> [F.Symbol] -> CGEnv
 ---------------------------------------------------------------------------------------
 envAddGroup msg ks g (x, xts)
   = do  mapM_ cgError $ concat $ zipWith (checkSyms msg g ks) xs ts
-        es    <- L.zipWith3 VI as is <$> zipWithM inv is ts
+        es    <- L.zipWith4 VI ls as is <$> zipWithM inv is ts
         ids   <- toIBindEnv . catMaybes <$> zipWithM addFixpointBind xs es
         return $ g { cge_names = envAdds (zip xs es) $ cge_names g
                    , cge_fenv  = F.insertSEnv x ids  $ cge_fenv  g }
   where
-    (xs,as,is,ts)   = L.unzip4 [(x,a,i,t) | (x, VI a i t) <- xts ]
-    inv Initialized = addInvariant g
-    inv _           = return
-    toIBindEnv      = (`F.insertsIBindEnv` F.emptyIBindEnv)
+    (xs,ls,as,is,ts) = L.unzip5 [(x,loc,a,i,t) | (x, VI loc a i t) <- xts ]
+    inv Initialized  = addInvariant g
+    inv _            = return
+    toIBindEnv       = (`F.insertsIBindEnv` F.emptyIBindEnv)
 
 -------------------------------------------------------------------------------
 resolveTypeM :: IsLocated a => a -> CGEnv -> AbsName -> CGM (TypeDecl F.Reft)
@@ -312,7 +312,7 @@ resolveTypeM l γ x
 ---------------------------------------------------------------------------------------
 objFields :: EnvKey x => CGEnv -> (x, CGEnvEntry) -> (F.Symbol, [(F.Symbol,CGEnvEntry)])
 ---------------------------------------------------------------------------------------
-objFields g (x, e@(VI a _ t))
+objFields g (x, e@(VI loc a _ t))
               | a `elem` [WriteGlobal,ReturnVar] = (x_sym, [(x_sym,e)])
               | otherwise = (x_sym, (x_sym,e):xts)
   where
@@ -320,8 +320,8 @@ objFields g (x, e@(VI a _ t))
     xts       = [(mkQualSym x f, vi f o ft) | (f, FI o m ft) <- fs, isImm m ]
 
     -- This should remain as is: x.f bindings are not going to change
-    vi f Opt tf = VI a Initialized $ orUndef $ ty tf f
-    vi f Req tf = VI a Initialized $           ty tf f
+    vi f Opt tf = VI loc a Initialized $ orUndef $ ty tf f
+    vi f Req tf = VI loc a Initialized $           ty tf f
     -- v = offset(x,"f")
     ty t f = substThis x t `eSingleton` mkOffset x f
 
@@ -333,9 +333,9 @@ objFields g (x, e@(VI a _ t))
 addFixpointBind :: EnvKey x => x -> CGEnvEntry -> CGM (Maybe F.BindId)
 ---------------------------------------------------------------------------------------
 -- No binding for globals or RetVal: shouldn't appear in refinements
-addFixpointBind _ (VI WriteGlobal _ _) = return Nothing
-addFixpointBind _ (VI ReturnVar _ _) = return Nothing
-addFixpointBind x (VI _ _ t)
+addFixpointBind _ (VI _ WriteGlobal _ _) = return Nothing
+addFixpointBind _ (VI _ ReturnVar _ _) = return Nothing
+addFixpointBind x (VI _ _ _ t)
   = do  bs           <- cg_binds <$> get
         let (i, bs')  = F.insertBindEnv (F.symbol x) r bs
         modify        $ \st -> st { cg_binds = bs' }
@@ -469,13 +469,17 @@ freshTyFun g l t
   | isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g
   | otherwise          = return t
 
-freshenVI g l v@(VI a@WriteGlobal i t)
-  | isTrivialRefType t = freshTy "freshenVI" (toType t) >>= (VI a i <$>) . wellFormed l g
+freshenVI _ _ v@(VI Exported _ _ _)
+                       = return v
+freshenVI g l v@(VI loc a@WriteGlobal i t)
+  | isTrivialRefType t = freshTy "freshenVI" (toType t)
+                     >>= (VI loc a i <$>) . wellFormed l g
   | otherwise          = return v
 
-freshenVI g l v@(VI a i t)
+freshenVI g l v@(VI loc a i t)
   | not (isTFun t)     = return v
-  | isTrivialRefType t = freshTy "freshenVI" (toType t) >>= (VI a i <$>) . wellFormed l g
+  | isTrivialRefType t = freshTy "freshenVI" (toType t)
+                     >>= (VI loc a i <$>) . wellFormed l g
   | otherwise          = return v
 
 freshenType WriteGlobal g l t
@@ -500,7 +504,7 @@ freshTyPhis :: AnnLq -> CGEnv -> [Id AnnLq] -> [Type] -> CGM (CGEnv, [RefType])
 ---------------------------------------------------------------------------------------
 freshTyPhis l g xs τs
   = do ts <- mapM (freshTy "freshTyPhis") τs
-       g' <- cgEnvAdds "freshTyPhis" (zip xs (VI WriteLocal Initialized <$> ts)) g
+       g' <- cgEnvAdds "freshTyPhis" (zip xs (VI Local WriteLocal Initialized <$> ts)) g
        _  <- mapM (wellFormed l g') ts
        return (g', ts)
 
@@ -511,11 +515,11 @@ freshTyPhis' :: AnnLq -> CGEnv -> [Id AnnLq] -> [EnvEntry ()] -> CGM (CGEnv, [Re
 ---------------------------------------------------------------------------------------
 freshTyPhis' l g xs es
   = do ts' <- mapM (freshTy "freshTyPhis") ts
-       g'  <- cgEnvAdds "freshTyPhis" (zip xs (L.zipWith3 VI as is ts')) g
+       g'  <- cgEnvAdds "freshTyPhis" (zip xs (L.zipWith4 VI ls as is ts')) g
        _   <- mapM (wellFormed l g') ts'
        return (g', ts')
   where
-    (as,is,ts) = L.unzip3 [ (a,i,t) | VI a i t <- es ]
+    (ls,as,is,ts) = L.unzip4 [ (l,a,i,t) | VI l a i t <- es ]
 
 
 -- | Fresh Object Type
@@ -534,7 +538,7 @@ freshenCGEnvM g@(CGE { cge_names = nms, cge_cha = CHA gr n m })
         return $ g { cge_names = nms'
                    , cge_cha   = cha' }
   where
-    go (x, VI a i v@TVar{}) = return (x, VI a i v)
+    go (x, VI loc a i v@TVar{}) = return (x, VI loc a i v)
     go (x, v) = (x,) <$> freshenVI g (srcPos x) v
 
 ---------------------------------------------------------------------------------------
@@ -753,7 +757,7 @@ splitC (Sub g i@(Ci _ l) t1@(TObj m1 r1) t2@(TObj m2 _))
   = return []
   | otherwise
   = do  cs     <- bsplitC g i t1 t2
-        (x,g') <- cgEnvAddFresh "" l (VI Ambient Initialized t1) g
+        (x,g') <- cgEnvAddFresh "" l (VI Local Ambient Initialized t1) g
         cs'    <- splitTM g' (F.symbol x) i m1 m2
         return $ cs ++ cs'
 
@@ -890,7 +894,7 @@ bsplitW g t i
 
 envTyAdds msg l xts g
   = cgEnvAdds (msg ++ " - envTyAdds " ++ ppshow (srcPos l))
-      [(symbolId l x, VI WriteLocal Initialized t) | B x t <- xts] g
+      [(symbolId l x, VI Local WriteLocal Initialized t) | B x t <- xts] g
     where
       symbolId l x = Id l $ F.symbolString $ F.symbol x
 

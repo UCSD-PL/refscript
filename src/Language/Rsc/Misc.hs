@@ -47,6 +47,7 @@ module Language.Rsc.Misc (
   , case1, case2, case3
   , (<##>), (<###>)
   , (&)
+  , (<//>)
 
 ) where
 
@@ -234,3 +235,5 @@ justM = (Just <$>)
 x & f = f x
 
 nths = repeat Nothing
+
+s1 <//> s2 = s1 ++ "\n" ++ s2

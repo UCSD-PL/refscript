@@ -80,7 +80,7 @@ writeGlobalVars           :: Data r => [Statement (AnnSSA r)] -> [Id (AnnSSA r)]
 -------------------------------------------------------------------------------
 writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
   where
-    fromVD (VarDecl l x _) = [ x | VarAnn _ _  <- fFact l ]
+    fromVD (VarDecl l x _) = [ x | VarAnn _ _ _  <- fFact l ]
                           -- ++ [ x | AmbVarAnn _ <- fFact l ]  -- TODO
 
 
@@ -114,7 +114,7 @@ varsInScope s = envFromList' [ (x,a) | (x,_,_,a,_) <- foldStmts vs () s ]
     fromInit (Just _) = Initialized
     fromInit _        = Uninitialized
     varAsgn l         = fromMaybe WriteLocal
-                      $ listToMaybe [ a | VarAnn a _ <- fFact l ]
+                      $ listToMaybe [ a | VarAnn _ a _ <- fFact l ]
 
     modAnn  n l = ModuleAnn (F.symbol n) : fFact l
     enumAnn n l = EnumAnn   (F.symbol n) : fFact l
@@ -825,7 +825,7 @@ ssaVarDecl (VarDecl l x (Just e)) = do
     return    (s, VarDecl l x' (Just e'))
 
 ssaVarDecl v@(VarDecl l x Nothing)
-  | Ambient `elem` map snd3 (scrapeVarDecl v)
+  | Ambient `elem` map thd4 (scrapeVarDecl v)
   = return ([], VarDecl l x Nothing)
   | otherwise
   = ([],) <$> (VarDecl l <$> updSsaEnv l x

@@ -183,7 +183,7 @@ initCallableEnv l g f fty s
     nms    = toFgn (envNames g)
            & envUnion (mkVarEnv (accumVars s))
            & envAdds tyBs
-           & envAddReturn f (VI ReturnVar Initialized t)
+           & envAddReturn f (VI Local ReturnVar Initialized t)
     bnds   = envAdds [(v,tv) | BTV v _ (Just tv) <- bs] $ cge_bounds g
     ctx    = pushContext i (cge_ctx g)
     pth    = cge_path g
@@ -194,8 +194,8 @@ initCallableEnv l g f fty s
     mut    = cge_mut g
     thisT  = cge_this g
 
-    tyBs   = [(Loc (srcPos l) α, VI Ambient Initialized $ tVar α) | α <- αs]
-    params = [(x, VI WriteLocal Initialized tx) | B x tx <- xts ]
+    tyBs   = [(Loc (srcPos l) α, VI Local Ambient Initialized $ tVar α) | α <- αs]
+    params = [(x, VI Local WriteLocal Initialized tx) | B x tx <- xts ]
     arg    = single (argId $ srcPos l, mkArgTy l ts)
     ts     = map b_type xts
     αs     = map btvToTV bs
@@ -213,7 +213,7 @@ consFun g (FunctionStmt l f xs Nothing)
   = return ()
 consFun g (FunctionStmt l f xs (Just body))
   = case envFindTy f (cge_names g) of
-      Just (VI _ _ t) -> cgFunTys l f xs t >>= mapM_ (consCallable l g f body)
+      Just (VI _ _ _ t) -> cgFunTys l f xs t >>= mapM_ (consCallable l g f body)
       Nothing   -> cgError $ errorMissingSpec (srcPos l) f
 
 consFun _ s
@@ -299,7 +299,7 @@ consStmt g (ReturnStmt l Nothing)
 -- return e
 consStmt g (ReturnStmt l (Just e@(VarRef lv x)))
   | Just t <- cgEnvFindTy x g, needsCall t
-  = do  g' <- cgEnvAdds "Return" [(fn, VI Ambient Initialized $ finalizeTy t)] g
+  = do  g' <- cgEnvAdds "Return" [(fn, VI Local Ambient Initialized $ finalizeTy t)] g
         consStmt g' (ReturnStmt l (Just (CallExpr l (VarRef lv fn) [e])))
   | otherwise
   = do  _ <- consCall g l "return" [(e, Just retTy)] $ returnTy retTy True
@@ -360,51 +360,51 @@ consVarDecl g v@(VarDecl l x (Just e))
       [ ] ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           t       <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI WriteLocal Initialized t)] gy
+          Just   <$> cgEnvAdds "consVarDecl" [(x, VI Local WriteLocal Initialized t)] gy
 
-      [(_, WriteLocal, Just t)] ->
+      [(loc, _, WriteLocal, Just t)] ->
         mseq (consCall g l "consVarDecl" [(e, Nothing)] $ localTy t) $ \(y,gy) -> do
           declT   <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI WriteLocal Initialized declT)] gy
+          Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc WriteLocal Initialized declT)] gy
 
-      [(_, WriteLocal, Nothing)] ->
+      [(loc, _, WriteLocal, Nothing)] ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           declT   <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI WriteLocal Initialized declT)] gy
+          Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc WriteLocal Initialized declT)] gy
 
       -- | Global
-      [(_, WriteGlobal, Just t)] ->
+      [(loc, _, WriteGlobal, Just t)] ->
         mseq (consExpr g (ltracePP l "var decl exp" e) $ Just t) $ \(y, gy) -> do
           ty      <- ltracePP l "Global inited type" <$> cgSafeEnvFindTyM y gy
           -- XXX: Freshen again?
           fta     <- freshenType WriteGlobal gy l t
           _       <- subType l (errorLiquid' l) gy ty  fta
           _       <- subType l (errorLiquid' l) gy fta t
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI WriteGlobal Initialized fta)] gy
+          Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc WriteGlobal Initialized fta)] gy
 
-      [(_, WriteGlobal, Nothing)] ->
+      [(loc, _, WriteGlobal, Nothing)] ->
         mseq (consExpr g e Nothing) $ \(y, gy) -> do
           ty      <- cgSafeEnvFindTyM y gy
           fta     <- refresh ty >>= wellFormed l g
           _       <- subType l (errorLiquid' l) gy ty fta
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI WriteGlobal Initialized fta)] gy
+          Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc WriteGlobal Initialized fta)] gy
 
       -- | ReadOnly
-      [(_, Ambient, Just t)] ->
+      [(loc, _, Ambient, Just t)] ->
         mseq (consCall g l "consVarDecl" [(e, Nothing)] $ localTy t) $ \(y,gy) -> do
           declT   <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI Ambient Initialized declT)] gy
+          Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc Ambient Initialized declT)] gy
 
-      [(_, Ambient, Nothing)] ->
+      [(loc, _, Ambient, Nothing)] ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           t       <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI Ambient Initialized t)] gy
+          Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc Ambient Initialized t)] gy
 
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 
 consVarDecl g v@(VarDecl _ x Nothing)
-  | [(_, Ambient, Just t)] <- scrapeVarDecl v
-  = Just <$> cgEnvAdds "consVarDecl" [(x, VI Ambient Initialized t)] g
+  | [(loc, _, Ambient, Just t)] <- scrapeVarDecl v
+  = Just <$> cgEnvAdds "consVarDecl" [(x, VI loc Ambient Initialized t)] g
   | otherwise   -- The rest should have fallen under the 'undefined' initialization case
   = error "LQ: consVarDecl this shouldn't happen"
 
@@ -443,7 +443,7 @@ consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) _) (Constructor l xs body)
   = do  let g = g0
               & initClassInstanceEnv sig
               & initClassCtorEnv sig
-        g'   <- cgEnvAdds "ctor"  exitP g
+        g'   <- cgEnvAdds "ctor" exitP g
         ts   <- cgFunTys l ctor xs ctorT
         mapM_ (consCallable l g' ctor body) ts
   where
@@ -452,7 +452,7 @@ consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) _) (Constructor l xs body)
     ctor  = builtinOpId BICtor
     cExit = builtinOpId BICtorExit
     -- substOffsetThis exitTy ???
-    exitP = [(cExit, VI Ambient Initialized $ mkFun (bs, xts, ret))]
+    exitP = [(cExit, VI Local Ambient Initialized $ mkFun (bs, xts, ret))]
     ret   = thisT `strengthen` F.reft (F.vv Nothing) (F.pAnd $ bnd <$> out)
     xts   = sortBy c_sym [ B x t' | (x, FI _ _ t) <- F.toListSEnv (tm_prop ms)
                                   , let t' = unqualifyThis g0 thisT t ]
@@ -512,20 +512,20 @@ consAsgn :: AnnLq -> CGEnv -> Id AnnLq -> Expression AnnLq -> CGM (Maybe CGEnv)
 consAsgn l g x e =
   case envFindTyWithAsgn x g of
     -- This is the first time we initialize this variable
-    Just (VI WriteGlobal Uninitialized t) ->
+    Just (VI loc WriteGlobal Uninitialized t) ->
       do  t' <- freshenType WriteGlobal g l t
           mseq (consExprT g e $ Just t') $ \(_, g') -> do
-            g'' <- cgEnvAdds "consAsgn-0" [(x, VI WriteGlobal Initialized t')] g'
+            g'' <- cgEnvAdds "consAsgn-0" [(x, VI loc WriteGlobal Initialized t')] g'
             return $ Just g''
 
-    Just (VI WriteGlobal _ t) -> mseq (consExprT g e $ Just t) $ \(_, g') ->
-                                   return $ Just g'
-    Just (VI a i t)           -> mseq (consExprT g e $ Just t) $ \(x', g') -> do
-                                   t      <- cgSafeEnvFindTyM x' g'
-                                   Just  <$> cgEnvAdds "consAsgn-1" [(x, VI a i t)] g'
-    Nothing                   -> mseq (consExprT g e Nothing) $ \(x', g') -> do
-                                   t      <- cgSafeEnvFindTyM x' g'
-                                   Just  <$> cgEnvAdds "consAsgn-1" [(x, VI WriteLocal Initialized t)] g'
+    Just (VI _ WriteGlobal _ t) -> mseq (consExprT g e $ Just t) $ \(_, g') ->
+                                     return $ Just g'
+    Just (VI loc a i t) -> mseq (consExprT g e $ Just t) $ \(x', g') -> do
+                             t      <- cgSafeEnvFindTyM x' g'
+                             Just  <$> cgEnvAdds "consAsgn-1" [(x, VI loc a i t)] g'
+    Nothing -> mseq (consExprT g e Nothing) $ \(x', g') -> do
+                 t      <- cgSafeEnvFindTyM x' g'
+                 Just  <$> cgEnvAdds "consAsgn-1" [(x, VI Local WriteLocal Initialized t)] g'
 
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh,
@@ -551,23 +551,23 @@ consExpr g ex@(Cast l e) _
   = die $ bugNoCasts (srcPos l) ex
 
 consExpr g (IntLit l i) _
-  = Just <$> cgEnvAddFresh "8" l (VI WriteLocal Initialized $ tNum `eSingleton` i) g
+  = Just <$> cgEnvAddFresh "8" l (VI Local WriteLocal Initialized $ tNum `eSingleton` i) g
 
 -- Assuming by default 32-bit BitVector
 consExpr g (HexLit l x) _
   | Just e <- bitVectorValue x
-  = Just <$> cgEnvAddFresh "9" l (VI WriteLocal Initialized $ tBV32 `nubstrengthen` e) g
+  = Just <$> cgEnvAddFresh "9" l (VI Local WriteLocal Initialized $ tBV32 `nubstrengthen` e) g
   | otherwise
-  = Just <$> cgEnvAddFresh "10" l (VI WriteLocal Initialized tBV32) g
+  = Just <$> cgEnvAddFresh "10" l (VI Local WriteLocal Initialized tBV32) g
 
 consExpr g (BoolLit l b) _
-  = Just <$> cgEnvAddFresh "11" l (VI WriteLocal Initialized $ pSingleton tBool b) g
+  = Just <$> cgEnvAddFresh "11" l (VI Local WriteLocal Initialized $ pSingleton tBool b) g
 
 consExpr g (StringLit l s) _
-  = Just <$> cgEnvAddFresh "12" l (VI WriteLocal Initialized $ tString `eSingleton` T.pack s) g
+  = Just <$> cgEnvAddFresh "12" l (VI Local WriteLocal Initialized $ tString `eSingleton` T.pack s) g
 
 consExpr g (NullLit l) _
-  = Just <$> cgEnvAddFresh "13" l (VI WriteLocal Initialized tNull) g
+  = Just <$> cgEnvAddFresh "13" l (VI Local WriteLocal Initialized tNull) g
 
 consExpr g (ThisRef l) _
   = case envFindTyWithAsgn this g of
@@ -577,9 +577,9 @@ consExpr g (ThisRef l) _
     this = Id l "this"
 
 consExpr g (VarRef l x) _
-  | Just (VI WriteGlobal i t) <- tInfo
-  = Just <$> cgEnvAddFresh "0" l (VI WriteLocal i t) g
-  | Just (VI _ _ t) <- tInfo
+  | Just (VI loc WriteGlobal i t) <- tInfo
+  = Just <$> cgEnvAddFresh "0" l (VI loc WriteLocal i t) g
+  | Just (VI _ _ _ t) <- tInfo
   = addAnnot (srcPos l) x t >> return (Just (x, g))
   | otherwise
   = cgError $ errorUnboundId (fSrc l) x
@@ -609,7 +609,7 @@ consExpr g (InfixExpr l o e1 e2) _
 consExpr g (CondExpr l e e1 e2) to
   = do  opTy    <- mkTy to <$> cgSafeEnvFindTyM (builtinOpId BICondExpr) g
         tt'     <- freshTyFun g l (rType tt)
-        (v,g')  <- mapFst (VarRef l) <$> cgEnvAddFresh "14" l (VI WriteLocal Initialized tt') g
+        (v,g')  <- mapFst (VarRef l) <$> cgEnvAddFresh "14" l (VI Local WriteLocal Initialized tt') g
         consCallCondExpr g' l BICondExpr
           [(e,Nothing), (v,Nothing), (e1,rType <$> to), (e2,rType <$> to)]
           opTy
@@ -695,11 +695,11 @@ consExpr g (DotRef l e f) to
 
         -- TODO: this is the only place where we need the information of whether
         --       f is an immutable field
-        Just (tE,t) -> Just <$> cgEnvAddFresh "2" l (VI WriteLocal Initialized $ mkTy x t) g'
+        Just (tE,t) -> Just <$> cgEnvAddFresh "2" l (VI Local WriteLocal Initialized $ mkTy x t) g'
 
         Nothing     -> cgError $  errorMissingFld (srcPos l) f te
   where
-    vr         = VarRef $ getAnnotation e
+    vr       = VarRef $ getAnnotation e
 
     mkTy x t | Just m <- getFieldMutability (envCHA g) t (F.symbol f)
              , isImm m
@@ -745,7 +745,7 @@ consExpr g (NewExpr l e es) _
 consExpr g (SuperRef l) _
   | Just thisT  <- cge_this g
   , Just tSuper <- getSuperType (envCHA g) thisT
-  = Just <$> cgEnvAddFresh "15" l (VI WriteGlobal Initialized tSuper) g
+  = Just <$> cgEnvAddFresh "15" l (VI Local WriteGlobal Initialized tSuper) g
   | otherwise
   = cgError $ errorSuper (fSrc l)
 
@@ -760,9 +760,9 @@ consExpr g (FuncExpr l fo xs body) tCxtO
     consFuncExpr ft = do kft       <-  freshTyFun g l ft
                          fts       <-  cgFunTys l f xs kft
                          forM_ fts  $  consCallable l g f body
-                         Just      <$> cgEnvAddFresh "16" l (VI WriteLocal Initialized kft) g
+                         Just      <$> cgEnvAddFresh "16" l (VI Local WriteLocal Initialized kft) g
 
-    anns = [ t | SigAnn t <- fFact l ]
+    anns = [ t | SigAnn _ t <- fFact l ]
     f    = maybe (F.symbol "<anonymous>") F.symbol fo
 
 -- not handled
@@ -859,7 +859,7 @@ consInstantiate l g fn ft ts xes
         ts1         <- zipWithM (instantiateTy l g) [1..] ts
         (ts3, ot')  <- subNoCapture l its1 xes ot
         _           <- zipWithM_ (subType l err g) ts1 (map b_type ts3)
-        Just       <$> cgEnvAddFresh "5" l (VI WriteLocal Initialized ot') g
+        Just       <$> cgEnvAddFresh "5" l (VI Local WriteLocal Initialized ot') g
   where
     err              = errorLiquid' l
 
@@ -935,14 +935,14 @@ consCondExprArgs l g [(c,tc),(t,tt),(x,tx),(y,ty)]
                 Nothing ->
                     do ttx       <- cgSafeEnvFindTyM x_ gx
                        let tty    = fromMaybe ttx ty    -- Dummy type if ty is Nothing
-                       (y_, gy') <- cgEnvAddFresh "6" l (VI WriteLocal Initialized tty) gx
+                       (y_, gy') <- cgEnvAddFresh "6" l (VI Local WriteLocal Initialized tty) gx
                        return    $ Just ([c_,t_,x_,y_], gy')
           Nothing ->
               withGuard gt c_ False y ty >>= \case
                 Just (y_, gy) ->
                     do tty       <- cgSafeEnvFindTyM y_ gy
                        let ttx    = fromMaybe tty tx    -- Dummy type if tx is Nothing
-                       (x_, gx') <- cgEnvAddFresh "7" l (VI WriteLocal Initialized ttx) gy
+                       (x_, gx') <- cgEnvAddFresh "7" l (VI Local WriteLocal Initialized ttx) gy
                        return     $ Just ([c_,t_,x_,y_], gx')
                 Nothing       -> return $ Nothing
   where
@@ -1055,7 +1055,7 @@ envJoin' l g g1 g2
         -- up that one.
         -- TODO: Add a raw type check on t1 and t2
         --
-        (g',ls)   <- freshTyPhis' l g xls $ (\(VI a i t) -> VI a i $ toType t) <$> l1s
+        (g',ls)   <- freshTyPhis' l g xls $ (\(VI loc a i t) -> VI loc a i $ toType t) <$> l1s
         l1s'      <- mapM (`cgSafeEnvFindTyM` g1') xls
         l2s'      <- mapM (`cgSafeEnvFindTyM` g2') xls
         _         <- zipWithM_ (subType l err g1') l1s' ls
@@ -1064,7 +1064,7 @@ envJoin' l g g1 g2
         -- GLOBALS:
         --
         let (xgs, gl1s, _) = unzip3 $ globals (zip3 xs t1s t2s)
-        (g'',gls) <- freshTyPhis' l g' xgs $ (\(VI a i t) -> VI a i $ toType t) <$> gl1s
+        (g'',gls) <- freshTyPhis' l g' xgs $ (\(VI loc a i t) -> VI loc a i $ toType t) <$> gl1s
         gl1s'     <- mapM (`cgSafeEnvFindTyM` g1') xgs
         gl2s'     <- mapM (`cgSafeEnvFindTyM` g2') xgs
         _         <- zipWithM_ (subType l err g1') gl1s' gls
@@ -1091,11 +1091,11 @@ getPhiTypes _ g1 g2 x =
     (_      , _      ) -> Nothing
 
 
-locals  ts = [(x,s1,s2) | (x, s1@(VI WriteLocal _ _),
-                              s2@(VI WriteLocal _ _)) <- ts ]
+locals  ts = [(x,s1,s2) | (x, s1@(VI Local WriteLocal _ _),
+                              s2@(VI Local WriteLocal _ _)) <- ts ]
 
-globals ts = [(x,s1,s2) | (x, s1@(VI WriteGlobal Initialized _),
-                              s2@(VI WriteGlobal Initialized _)) <- ts ]
+globals ts = [(x,s1,s2) | (x, s1@(VI Local WriteGlobal Initialized _),
+                              s2@(VI Local WriteGlobal Initialized _)) <- ts ]
 
 -- partial ts = [(x,s2)    | (x, s2@(_, WriteGlobal, Uninitialized)) <- ts]
 --           ++ [(x,s1)    | (x, s1@(_, WriteGlobal, Uninitialized)) <- ts]

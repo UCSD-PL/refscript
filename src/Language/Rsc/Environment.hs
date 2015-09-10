@@ -117,6 +117,6 @@ toFgn :: Env (VarInfoQ q r) -> Env (VarInfoQ q r)
 --------------------------------------------------------------------------------
 toFgn = envMap go
   where
-    go (VI WriteLocal i t) = VI ForeignLocal i t
+    go (VI loc WriteLocal i t) = VI loc ForeignLocal i t
     go v = v
 

@@ -128,14 +128,20 @@ accumModules (Rsc { code = Src stmts }) =
     varEnv p = return . mkVarEnv . vStmts p
     vStmts   = concatMap . vStmt
 
-    vStmt _ (VarDeclStmt _ vds)    = [(ss x, VarDeclKind  , VI a Uninitialized t ) | VarDecl l x _ <- vds
-                                                                                   , VarAnn a (Just t) <- fFact l ]
+    vStmt _ (VarDeclStmt _ vds)
+      = [(ss x, VarDeclKind  , VI loc a Uninitialized t ) | VarDecl l x _ <- vds
+                                                          , VarAnn loc a (Just t) <- fFact l ]
     -- The Assignabilities below are overwitten to default values
-    vStmt _ (FunctionStmt l x _ _) = [(ss x, FuncDeclKind  , VI Ambient Initialized t) | VarAnn _ (Just t) <- fFact l ]
-    vStmt _ (ClassStmt l x _ _ _)  = [(ss x, ClassDeclKind , VI Ambient Initialized $ TClass b) | ClassAnn (TS _ b _) <- fFact l ]
-    vStmt p (ModuleStmt l x _)     = [(ss x, ModuleDeclKind, VI Ambient Initialized $ TMod $ pathInPath l p x)]
-    vStmt p (EnumStmt _ x _)       = [(ss x, EnumDeclKind  , VI Ambient Initialized $ TRef (Gen (QN p $ F.symbol x) []) fTop) ]
-    vStmt _ _                      = []
+    vStmt _ (FunctionStmt l x _ _)
+      = [(ss x, FuncDeclKind  , VI loc Ambient Initialized t) | VarAnn loc _ (Just t) <- fFact l ]
+    vStmt _ (ClassStmt l x _ _ _)
+      = [(ss x, ClassDeclKind , VI loc Ambient Initialized $ TClass b) | ClassAnn loc (TS _ b _) <- fFact l ]
+    -- TODO: Fix the Locality in the following two
+    vStmt p (ModuleStmt l x _)
+      = [(ss x, ModuleDeclKind, VI Local Ambient Initialized $ TMod $ pathInPath l p x)]
+    vStmt p (EnumStmt _ x _)
+      = [(ss x, EnumDeclKind  , VI Local Ambient Initialized $ TRef (Gen (QN p $ F.symbol x) []) fTop) ]
+    vStmt _ _ = []
 
     -- | Type Definitions
     typeEnv = liftM envFromList . tStmts
@@ -172,11 +178,10 @@ mkVarEnv = envMap snd
                 [(s, (k, v)) | (k@ModuleDeclKind, v) <- vs] ++
                 [(s, (k, v)) | (k@EnumDeclKind  , v) <- vs]
 
-    mergeVarInfo x (k1, VI a1 i1 t1) (k2, VI a2 i2 t2)
-      | k1 == k2, a1 == a2, i1 == i2
-      = (k1, VI a1 i1 $ mkAnd $ bkAnd t1 ++ bkAnd t2)
+    mergeVarInfo x (k1, VI l1 a1 i1 t1) (k2, VI l2 a2 i2 t2)
+      | l1 == l2, k1 == k2, a1 == a2, i1 == i2
+      = (k1, VI l1 a1 i1 $ mkAnd $ bkAnd t1 ++ bkAnd t2)
     mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
-
 
 ---------------------------------------------------------------------------------------
 declOfStmt :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
@@ -186,7 +191,7 @@ declOfStmt (ClassStmt l c _ _ cs)
   | otherwise   = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where
     cc     = fmap fSrc c
-    cas    = [ ts | ClassAnn ts <- fFact l ]
+    cas    = [ ts | ClassAnn _ ts <- fFact l ]
     errMsg = "Invalid class annotation: " ++ show (intersperse P.comma (map pp cas))
 
 declOfStmt (InterfaceStmt l c)
@@ -336,7 +341,7 @@ expandType _ cha (TMod n)
                    .  m_variables
                   <$> resolveModule cha n
   where
-    toFieldInfo (val -> VI _ _ t) = FI Req tImm t
+    toFieldInfo (val -> VI _ _ _ t) = FI Req tImm t
 
 -- Common cases end here. The rest are only valid if non-coercive
 expandType NonCoercive _ _ = Nothing

@@ -89,9 +89,9 @@ getProp γ b f t@(TClass _)
       _         -> Nothing
 
 getProp γ _ f t@(TMod m)
-  = do  m'        <- resolveModuleInEnv γ m
-        VI _ _ t' <- envFindTy f $ m_variables m'
-        return       (t,t')
+  = do  m'          <- resolveModuleInEnv γ m
+        VI _ _ _ t' <- envFindTy f $ m_variables m'
+        return         (t,t')
 
 getProp _ _ _ _ = Nothing
 

@@ -747,9 +747,7 @@ splitC (Sub g i t1@(TRef (Gen x1 (m1:t1s)) r1) t2@(TRef (Gen x2 (m2:t2s)) r2))
   = splitIncompatC g i t1
 
 splitC (Sub g i t1@(TPrim c1 _) t2@(TPrim c2 _))
-  | c1 == c2
-  = do cs <- bsplitC g i t1 t2
-       return $ ltracePP i (ppshow t1 ++ " SUB " ++ ppshow t2 ++ " caused " ++ ppshow (length cs)) cs
+  | c1 == c2  = bsplitC g i t1 t2
   | otherwise = splitIncompatC g i t1
 
 -- | TObj
@@ -824,11 +822,8 @@ bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivial r2
   -- = F.subC (cge_fenv g) F.PTrue (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
   = F.subC bs p (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
-
   | F.isNonTrivial r2
-  -- = tracePP (ppshow r1 ++ " BSPLITC " ++ ppshow r2) <$>
   = F.subC bs p r1 r2 Nothing [] ci
-
   | otherwise
   = []
   where

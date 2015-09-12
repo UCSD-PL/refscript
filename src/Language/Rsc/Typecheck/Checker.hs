@@ -330,47 +330,36 @@ tcStmt _ s
 tcVarDecl :: Unif r => TCEnv r -> VarDecl (AnnTc r) -> TCM r (VarDecl (AnnTc r), TCEnvO r)
 --------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e))
-  = case scrapeVarDecl v of
+  = case envFindTy x (tce_names γ) of
       -- | Local
-      [ ] ->
+      Nothing ->
         do  (e', to) <- tcExprW γ e
             return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ VI Local WriteLocal Initialized <$> to)
 
-      [(loc, _, WriteLocal, Just t)] ->
+      Just (VI loc WriteLocal _ t) ->
         do  ([e'], Just t') <- tcNormalCallWCtx γ l "VarDecl-WL" [(e, Just t)] (localTy t)
             return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (VI loc WriteLocal Initialized t') γ)
 
-      [(loc, _, WriteLocal, Nothing)] ->
-        do  (e', to)   <- tcExprW γ e
-            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ VI loc WriteLocal Initialized <$> to)
-
       -- | Global
-      [(_, _, WriteGlobal, Just t)] ->
+      Just (VI _ WriteGlobal _ t) ->
         -- PV: the global variable should be in scope already,
         --     since it is being hoisted to the beginning of the
         --     scope.
         first (VarDecl l x . Just) <$> tcAsgn l γ x e
 
-      [(loc, _, WriteGlobal, Nothing)] ->
-        do  (e',to) <- tcExprW γ e
-            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ VI loc WriteGlobal Initialized <$> to)
-
       -- | Ambient
-      [(loc, _, Ambient, Just t)]   ->
+      Just (VI loc Ambient _ t) ->
         do  ([e'], Just t') <- tcNormalCallWCtx γ l "VarDecl-RO" [(e, Just t)] (localTy t)
             return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (VI loc Ambient Initialized t') γ)
-
-      [(loc, _, Ambient, Nothing)] ->
-        do  (e', to)   <- tcExprW γ e
-            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ VI loc Ambient Initialized <$> to)
 
       c -> fatal (unimplemented l "tcVarDecl" ("case: " ++ ppshow c)) (v, Just γ)
 
 tcVarDecl γ v@(VarDecl _ x Nothing)
-  | [(loc, _, Ambient, Just t)] <- scrapeVarDecl v
-  = return $ (v, Just $ tcEnvAdds [(x, VI loc Ambient Initialized t)] γ)
-  | otherwise   -- The rest should have fallen under the 'undefined' initialization case
-  = error "TC-tcVarDecl: this shouldn't happen"
+  = case envFindTy x (tce_names γ) of
+      Just (VI loc Ambient _ t) ->
+          return $ (v, Just $ tcEnvAdds [(x, VI loc Ambient Initialized t)] γ)
+      _ ->  -- The rest should have fallen under the 'undefined' initialization case
+          error "TC-tcVarDecl: this shouldn't happen"
 
 
 --------------------------------------------------------------------------------

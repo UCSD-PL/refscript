@@ -127,7 +127,7 @@ consRsc p@(Rsc {code = Src fs}) cha
 --------------------------------------------------------------------------------
 initGlobalEnv :: RefScript -> ClassHierarchy F.Reft -> CGM CGEnv
 --------------------------------------------------------------------------------
-initGlobalEnv pgm@(Rsc { code = Src ss }) cha = tracePP "" <$> freshenCGEnvM g
+initGlobalEnv pgm@(Rsc { code = Src ss }) cha = freshenCGEnvM g
   where
     g     = CGE nms bnds ctx pth cha fenv grd cst mut thisT
     nms   = mkVarEnv (accumVars ss)    -- modules ?
@@ -358,25 +358,20 @@ consStmt _ s
 consVarDecl :: CGEnv -> VarDecl AnnLq -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
 consVarDecl g v@(VarDecl l x (Just e))
-  = case scrapeVarDecl v of
+  = case envFindTy x (cge_names g) of
       -- | Local
-      [ ] ->
+      Nothing ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           t       <- cgSafeEnvFindTyM y gy
           Just   <$> cgEnvAdds "consVarDecl" [(x, VI Local WriteLocal Initialized t)] gy
 
-      [(loc, _, WriteLocal, Just t)] ->
+      Just (VI loc  WriteLocal _ t) ->
         mseq (consCall g l "consVarDecl" [(e, Just t)] $ localTy t) $ \(y,gy) -> do
           declT   <- cgSafeEnvFindTyM y gy
           Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc WriteLocal Initialized declT)] gy
 
-      [(loc, _, WriteLocal, Nothing)] ->
-        mseq (consExpr g e Nothing) $ \(y,gy) -> do
-          declT   <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc WriteLocal Initialized declT)] gy
-
       -- | Global
-      [(loc, _, WriteGlobal, Just t)] ->
+      Just (VI loc WriteGlobal _ t) ->
         mseq (consExpr g e $ Just t) $ \(y, gy) -> do
           ty      <- cgSafeEnvFindTyM y gy
           fta     <- freshenType WriteGlobal gy l t
@@ -384,31 +379,20 @@ consVarDecl g v@(VarDecl l x (Just e))
           _       <- subType l (errorLiquid' l) gy fta t
           Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc WriteGlobal Initialized fta)] gy
 
-      [(loc, _, WriteGlobal, Nothing)] ->
-        mseq (consExpr g e Nothing) $ \(y, gy) -> do
-          ty      <- cgSafeEnvFindTyM y gy
-          fta     <- refresh ty >>= wellFormed l g
-          _       <- subType l (errorLiquid' l) gy ty fta
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc WriteGlobal Initialized fta)] gy
-
       -- | ReadOnly
-      [(loc, _, Ambient, Just t)] ->
+      Just (VI loc Ambient _ t) ->
         mseq (consCall g l "consVarDecl" [(e, Just t)] $ localTy t) $ \(y,gy) -> do
           declT   <- cgSafeEnvFindTyM y gy
           Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc Ambient Initialized declT)] gy
 
-      [(loc, _, Ambient, Nothing)] ->
-        mseq (consExpr g e Nothing) $ \(y,gy) -> do
-          t       <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc Ambient Initialized t)] gy
-
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 
 consVarDecl g v@(VarDecl _ x Nothing)
-  | [(loc, _, Ambient, Just t)] <- scrapeVarDecl v
-  = Just <$> cgEnvAdds "consVarDecl" [(x, VI loc Ambient Initialized t)] g
-  | otherwise   -- The rest should have fallen under the 'undefined' initialization case
-  = error "LQ: consVarDecl this shouldn't happen"
+  = case envFindTy x (cge_names g) of
+      Just (VI loc Ambient _ t) ->
+          Just <$> cgEnvAdds "consVarDecl" [(x, VI loc Ambient Initialized t)] g
+      _ ->   -- The rest should have fallen under the 'undefined' initialization case
+          error "LQ: consVarDecl this shouldn't happen"
 
 --------------------------------------------------------------------------------
 consExprT :: CGEnv -> Expression AnnLq -> Maybe RefType
@@ -668,7 +652,7 @@ consExpr g c@(CallExpr l em@(DotRef _ e f) es) _
 --
 consExpr g (CallExpr l e es) _
   = mseq (consExpr g e Nothing) $ \(x, g') ->
-      cgSafeEnvFindTyM x (ltracePP l "env at call" g') >>= consCall g' l e (es `zip` nths)
+      cgSafeEnvFindTyM x g' >>= consCall g' l e (es `zip` nths)
 
 -- | e.f
 --
@@ -753,7 +737,7 @@ consExpr g (SuperRef l) _
 
 -- | function(xs) { }
 consExpr g (FuncExpr l fo xs body) tCtxO
-  | Just ft       <- funTy
+  | Just ft       <-  funTy
   = do  kft       <-  freshTyFun g l ft
         fts       <-  cgFunTys l f xs kft
         forM_ fts  $  consCallable l g f xs body
@@ -836,7 +820,7 @@ consCall g l fn ets ft0
       ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case ol of
         -- If multiple are valid, pick the first one
-        (ft:_) -> traceTypePP l "CONSCALL" $ consInstantiate l g' fn ft ts xes
+        (ft:_) -> consInstantiate l g' fn ft ts xes
         _      -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts)
                               (toType <$> callSigs)
   where
@@ -844,7 +828,7 @@ consCall g l fn ets ft0
               , cge_ctx g == cx
               , lt <- callSigs
               , arg_type (toType t) == arg_type (toType lt) ]
-    callSigs  = ltracePP l "FUNTY" $ extractCall g ft0
+    callSigs  = extractCall g ft0
     arg_type t = (\(a,b,_) -> (a,b)) <$> bkFun t
 
 --------------------------------------------------------------------------------

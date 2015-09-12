@@ -59,7 +59,7 @@ json cfg f = do
 withExistingFile cfg f
   | ext `elem` oks
   = do  libs              <- getIncludeLibs cfg
-        (code, stdOut, _) <- readProcessWithExitCode tsCmd (tracePP "" $ mkArgs libs) ""
+        (code, stdOut, _) <- readProcessWithExitCode tsCmd (mkArgs libs) ""
         case code of
           ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
                                 Left  s  -> return $ Left  $ F.UnknownError $ s <//> stdOut

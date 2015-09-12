@@ -1,6 +1,8 @@
+
+/*@ qualif CmpZ(v:int): v = 20 */
+
 var glob = 20;
 
-/*@ zog :: () => void */
 function zog(){
   glob = 3;
 }

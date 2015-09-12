@@ -67,9 +67,7 @@ declare function builtin_OpSub(a: number, b: number): number;
  */
 declare function builtin_OpMul(a: number, b: number): number;
 
-/*@ builtin_OpDiv ::
-    (x: number, {y: number | y != 0}) => {v:number | (x > 0 && y > 1) => (0 <= v && v < x)}
- */
+/*@ builtin_OpDiv :: (x: number, {y: number | y != 0}) => {v:number | (x > 0 && y > 1) => (0 <= v && v < x)} */
 declare function builtin_OpDiv(a: number, b: number): number;
 
 declare function builtin_OpMod(a: number, b: number): number;
@@ -84,19 +82,15 @@ declare function builtin_PrefixMinus(a: number): number;
 /*@ builtin_OpSEq :: <A,B>(x:A, y:B) => {v:boolean | not (Prop v) } */
 declare function builtin_OpSEq<A,B>(x: A, y: B): boolean;
 
-// /*@ builtin_OpSNEq ::
-//     /\ forall A   . (x:A, y:A) => {v:boolean | ((Prop v) <=> (not (x ~~ y))) }
-//     /\ forall A B . (x:A, y:B) => {v:boolean | (Prop v) }
-//  */
-// declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
-//
-// /*@ builtin_OpLAnd ::
-//     /\ forall B. (x: undefined, y:B) => {undefined | true}
-//     /\ forall B. (x: null     , y:B) => {null | true}
-//     /\ forall A. (x:A, y:A) => { v:A | (if (Prop(x)) then (v = y) else (v = x)) }
-//     /\ forall A B. (x:A, y:B) => { v:top | (Prop(v) <=> (Prop(x) && Prop(y))) }
-//  */
-// declare function builtin_OpLAnd(x: any, y: any): any;
+/*@ builtin_OpSNEq :: <A>  (x:A, y:A) => {v:boolean | Prop v <=> not (x ~~ y) } */
+/*@ builtin_OpSNEq :: <Α,B>(x:A, y:B) => {v:boolean | Prop v } */
+declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
+
+/*@ builtin_OpLAnd :: <B>  (x: undefined, y:B) => undefined */
+/*@ builtin_OpLAnd :: <B>  (x: null, y:B) => null */
+/*@ builtin_OpLAnd :: <A>  (x: A, y: A) => { v: A   | if (Prop x) then v = y else v = x } */
+/*@ builtin_OpLAnd :: <A,B>(x: A, y: B) => { v: top | Prop v <=> (Prop x && Prop y) } */
+declare function builtin_OpLAnd(x: any, y: any): any;
 //
 // /*@ builtin_OpLOr ::
 //     /\ forall A. (x: undefined, y:A) => { v:A | v ~~ y }
@@ -173,28 +167,20 @@ declare function builtin_OpSEq<A,B>(x: A, y: B): boolean;
 //     forall A. (x:A) => {v:string | (ttag x) = v }
 //  */
 // declare function builtin_PrefixTypeof<A>(x: A): string;
-//
-// /*@ builtin_BITruthy ::
-//     /\ (b: bitvector32) => { v: boolean | ((Prop v) <=> (b /= (lit "#x00000000" (BitVec (Size32 obj))))) }
-//     /\ forall A. (x:A)  => { v: boolean | ((Prop v) <=> Prop(x)) }
-// */
-// declare function builtin_BITruthy<A>(x: A): boolean;
-//
-// /*@ builtin_BIFalsy ::
-//     forall A. (x:A) => { v:boolean | ((Prop v) <=> (not Prop(x))) }
-// */
-// declare function builtin_BIFalsy<A>(x: A): boolean;
-//
+
+/*@ builtin_BITruthy :: (b: bitvector32) => { v: boolean | Prop v <=> b /= lit "#x00000000" (BitVec (Size32 obj)) } */
+/*@ builtin_BITruthy :: <A>(x:A)  => { v: boolean | Prop v <=> Prop x } */
+declare function builtin_BITruthy<A>(x: A): boolean;
+
+/*@ builtin_BIFalsy  :: <A>(x:A) => { v:boolean | Prop v <=> not (Prop x) } */
+declare function builtin_BIFalsy<A>(x: A): boolean;
+
 // // HACK
-// /*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]} */
-//
-// /*@ invariant {v:null | [(ttag(v) = "object"); not (Prop v) ]} */
-//
-// /*@ invariant {v:boolean | [(ttag(v) = "boolean")]} */
-//
-// /*@ invariant {v:string | [(ttag(v) = "string"); (Prop(v) <=> v /= "" )]} */
-//
-// /*@ invariant {v:number | [(ttag(v)  =  "number"); (Prop(v) <=> v /= 0  )]}	*/
+// /*@ invariant {v: undefined | [(ttag(v) = "undefined"); not (Prop v) ]} */
+// /*@ invariant {v: null      | [(ttag(v) = "object"   ); not (Prop v) ]} */
+// /*@ invariant {v: boolean   | [(ttag(v) = "boolean"  )]} */
+// /*@ invariant {v: string    | [(ttag(v) = "string"   ); (Prop(v) <=> v /= "" )]} */
+// /*@ invariant {v: number    | [(ttag(v) = "number"   ); (Prop(v) <=> v /= 0  )]}	*/
 //
 //
 //

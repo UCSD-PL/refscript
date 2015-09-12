@@ -245,7 +245,7 @@ strengthen t _              = t    -- TAnd, TType, TAll, TExp fall through
 -- | Predicates on Types
 ----------------------------------------------------------------------------------------
 
-isPrim c t | TPrim c _ <- t = True | otherwise = False
+isPrim c t | TPrim c' _ <- t, c == c' = True | otherwise = False
 
 isTPrim t  | TPrim _ _ <- t = True | otherwise = False
 

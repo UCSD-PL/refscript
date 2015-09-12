@@ -52,6 +52,8 @@ import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           System.Console.CmdArgs.Default
 
+import           Debug.Trace                     hiding (traceShow)
+
 --------------------------------------------------------------------------------
 verifyFile :: Config -> FilePath -> [FilePath] -> IO (A.UAnnSol RefType, FError)
 --------------------------------------------------------------------------------
@@ -116,16 +118,16 @@ consRsc p@(Rsc {code = Src fs}) cha
         return ()
 
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Initialize environment
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 -- TODO: 1. Split the freshening part
 --       2. checkSyms?
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initGlobalEnv :: RefScript -> ClassHierarchy F.Reft -> CGM CGEnv
--------------------------------------------------------------------------------
-initGlobalEnv pgm@(Rsc { code = Src ss }) cha = freshenCGEnvM g
+--------------------------------------------------------------------------------
+initGlobalEnv pgm@(Rsc { code = Src ss }) cha = tracePP "" <$> freshenCGEnvM g
   where
     g     = CGE nms bnds ctx pth cha fenv grd cst mut thisT
     nms   = mkVarEnv (accumVars ss)    -- modules ?
@@ -139,9 +141,9 @@ initGlobalEnv pgm@(Rsc { code = Src ss }) cha = freshenCGEnvM g
     thisT = Nothing
 
 -- TODO: CheckSyms
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnLq] -> CGM CGEnv
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initModuleEnv g n s = freshenCGEnvM g'
   where
     g'    = CGE nms bnds ctx pth cha fenv grd cst mut thisT
@@ -164,14 +166,15 @@ initModuleEnv g n s = freshenCGEnvM g'
 --    * Adds binders for the arguments @ts@
 --    * Adds binder for the 'arguments' variable
 --
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 initCallableEnv :: (PP x, IsLocated x, IsLocated l)
                 => l -> CGEnv -> x
                 -> IOverloadSig F.Reft
+                -> [Id (AnnR F.Reft)]
                 -> [Statement (AnnR F.Reft)]
                 -> CGM CGEnv
--------------------------------------------------------------------------------
-initCallableEnv l g f fty s
+--------------------------------------------------------------------------------
+initCallableEnv l g f fty xs s
   = do  g1 <- cgEnvAdds ("init-func-" ++ ppshow f ++ "-0") params g0
         g2 <- cgEnvAdds ("init-func-" ++ ppshow f ++ "-1") arg g1
         -- XXX: Isn't this done at CGMonad envAddGoup?
@@ -195,16 +198,16 @@ initCallableEnv l g f fty s
     thisT  = cge_this g
 
     tyBs   = [(Loc (srcPos l) α, VI Local Ambient Initialized $ tVar α) | α <- αs]
-    params = [(x, VI Local WriteLocal Initialized tx) | B x tx <- xts ]
+    params = [(x, VI Local WriteLocal Initialized t) | (x, t) <- safeZip "initCallableEnv" xs ts ]
     arg    = single (argId $ srcPos l, mkArgTy l ts)
     ts     = map b_type xts
     αs     = map btvToTV bs
     (i, (bs,xts,t)) = fty
 
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Constraint generation
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement AnnLq -> CGM ()
@@ -213,7 +216,7 @@ consFun g (FunctionStmt l f xs Nothing)
   = return ()
 consFun g (FunctionStmt l f xs (Just body))
   = case envFindTy f (cge_names g) of
-      Just (VI _ _ _ t) -> cgFunTys l f xs t >>= mapM_ (consCallable l g f body)
+      Just (VI _ _ _ t) -> cgFunTys l f xs t >>= mapM_ (consCallable l g f xs body)
       Nothing   -> cgError $ errorMissingSpec (srcPos l) f
 
 consFun _ s
@@ -223,8 +226,8 @@ consFun _ s
 --   conjuncts of an overloaded (intersection) type signature.
 --   Assume: len ts' = len xs
 
-consCallable l g f body ift
-  = initCallableEnv l g f ift body >>= (`consStmts` body)
+consCallable l g f xs body ift
+  = initCallableEnv l g f ift xs body >>= (`consStmts` body)
 
 --------------------------------------------------------------------------------
 consStmts :: CGEnv -> [Statement AnnLq]  -> CGM (Maybe CGEnv)
@@ -277,10 +280,10 @@ consStmt g (IfSingleStmt l b s)
 
 -- if e { s1 } else { s2 }
 consStmt g (IfStmt l e s1 s2) =
-  mseq (cgSafeEnvFindTyM (builtinOpId BITruthy) g
-            >>= consCall g l "truthy" [(e, Nothing)]) $ \(xe,ge) -> do
-    g1'      <- (`consStmt` s1) $ envAddGuard xe True ge
-    g2'      <- (`consStmt` s2) $ envAddGuard xe False ge
+  mseq ((cgSafeEnvFindTyM (builtinOpId BITruthy) g)
+        >>= consCall g l "truthy" [(e, Nothing)]) $ \(xe,ge) -> do
+    g1' <- (`consStmt` s1) $ envAddGuard xe True ge
+    g2' <- (`consStmt` s2) $ envAddGuard xe False ge
     envJoin l g g1' g2'
 
 -- while e { s }
@@ -351,9 +354,9 @@ consStmt _ s
   = errorstar $ "consStmt: not handled " ++ ppshow s
 
 
-------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnLq -> CGM (Maybe CGEnv)
-------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 consVarDecl g v@(VarDecl l x (Just e))
   = case scrapeVarDecl v of
       -- | Local
@@ -363,7 +366,7 @@ consVarDecl g v@(VarDecl l x (Just e))
           Just   <$> cgEnvAdds "consVarDecl" [(x, VI Local WriteLocal Initialized t)] gy
 
       [(loc, _, WriteLocal, Just t)] ->
-        mseq (consCall g l "consVarDecl" [(e, Nothing)] $ localTy t) $ \(y,gy) -> do
+        mseq (consCall g l "consVarDecl" [(e, Just t)] $ localTy t) $ \(y,gy) -> do
           declT   <- cgSafeEnvFindTyM y gy
           Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc WriteLocal Initialized declT)] gy
 
@@ -390,7 +393,7 @@ consVarDecl g v@(VarDecl l x (Just e))
 
       -- | ReadOnly
       [(loc, _, Ambient, Just t)] ->
-        mseq (consCall g l "consVarDecl" [(e, Nothing)] $ localTy t) $ \(y,gy) -> do
+        mseq (consCall g l "consVarDecl" [(e, Just t)] $ localTy t) $ \(y,gy) -> do
           declT   <- cgSafeEnvFindTyM y gy
           Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc Ambient Initialized declT)] gy
 
@@ -407,17 +410,17 @@ consVarDecl g v@(VarDecl _ x Nothing)
   | otherwise   -- The rest should have fallen under the 'undefined' initialization case
   = error "LQ: consVarDecl this shouldn't happen"
 
-------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 consExprT :: CGEnv -> Expression AnnLq -> Maybe RefType
           -> CGM (Maybe (Id AnnLq, CGEnv))
-------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 consExprT g e Nothing  = consExpr g e Nothing
 consExprT g e (Just t) = consCall  g (getAnnotation e) "consExprT" [(e, Nothing)]
                        $ TFun [B (F.symbol "x") t] tVoid fTop
 
--- ------------------------------------------------------------------------------------
+-- --------------------------------------------------------------------------------
 -- consClassElts :: IsLocated l => l -> CGEnv -> TypeDecl F.Reft -> [ClassElt AnnLq] -> CGM ()
--- ------------------------------------------------------------------------------------
+-- --------------------------------------------------------------------------------
 -- consClassElts l g d@(ID nm _ vs _ es) cs
 --   = do  -- g0   <- cgEnvAdds "consClassElts-2" thisInfo g -- XXX: Add these at specific elements only
 --         -- g1   <- cgEnvAdds "consClassElts-1" fs g  -- Add imm fields into scope beforehand
@@ -435,16 +438,16 @@ consExprT g e (Just t) = consCall  g (getAnnotation e) "consExprT" [(e, Nothing)
 --     thisInfo  = [(this, VI ReadOnly Initialized this_t)]
 --     this      = Loc (srcPos l) thisId
 
-------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 consClassElt :: CGEnv -> TypeDecl F.Reft -> ClassElt AnnLq -> CGM ()
-------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) _) (Constructor l xs body)
   = do  let g = g0
               & initClassInstanceEnv sig
               & initClassCtorEnv sig
         g'   <- cgEnvAdds "ctor" exitP g
         ts   <- cgFunTys l ctor xs ctorT
-        mapM_ (consCallable l g' ctor body) ts
+        mapM_ (consCallable l g' ctor xs body) ts
   where
     thisT = TRef (Gen nm (map btVar bs)) fTop
     ms    = typeMembersOfType (envCHA g0) thisT
@@ -487,7 +490,7 @@ consClassElt _ _ (MemberVarDecl l False x _)
 consClassElt g (TD sig ms) (MemberMethDecl l True x xs body)
   | Just (MI _ _ t) <- F.lookupSEnv (F.symbol x) $ tm_smeth ms
   = do  its <- cgFunTys l x xs t
-        mapM_ (consCallable l g x body) its
+        mapM_ (consCallable l g x xs body) its
   | otherwise
   = cgError  $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
 
@@ -499,7 +502,7 @@ consClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
                & initClassInstanceEnv sig
                & initClassMethEnv m sig
         ft    <- cgFunTys l x xs t
-        mapM_ (consCallable l g0 x body) ft
+        mapM_ (consCallable l g0 x xs body) ft
 
   | otherwise
   = cgError $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
@@ -530,9 +533,9 @@ consAsgn l g x e =
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh,
 -- temporary (A-Normalized) variable holding the value of `e`,
 -- g' is g extended with a binding for x' (and other temps required for `e`)
-------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 consExpr :: CGEnv -> Expression AnnLq -> Maybe RefType -> CGM (Maybe (Id AnnLq, CGEnv))
-------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 consExpr g (Cast_ l e) tCtx =
   case envGetContextCast g l of
     CDead e' t' -> consDeadCode g l e' t'
@@ -665,7 +668,7 @@ consExpr g c@(CallExpr l em@(DotRef _ e f) es) _
 --
 consExpr g (CallExpr l e es) _
   = mseq (consExpr g e Nothing) $ \(x, g') ->
-      cgSafeEnvFindTyM x g' >>= consCall g' l e (es `zip` nths)
+      cgSafeEnvFindTyM x (ltracePP l "env at call" g') >>= consCall g' l e (es `zip` nths)
 
 -- | e.f
 --
@@ -749,20 +752,19 @@ consExpr g (SuperRef l) _
   = cgError $ errorSuper (fSrc l)
 
 -- | function(xs) { }
-consExpr g (FuncExpr l fo xs body) tCxtO
-  = case anns of
-      [ft] -> consFuncExpr ft
-      _    -> case tCxtO of
-                Just tCtx -> consFuncExpr tCtx
-                Nothing   -> cgError $ errorNoFuncAnn $ srcPos l
+consExpr g (FuncExpr l fo xs body) tCtxO
+  | Just ft       <- funTy
+  = do  kft       <-  freshTyFun g l ft
+        fts       <-  cgFunTys l f xs kft
+        forM_ fts  $  consCallable l g f xs body
+        Just      <$> cgEnvAddFresh "16" l (VI Local WriteLocal Initialized kft) g
+  | otherwise
+  = cgError $ errorNoFuncAnn $ srcPos l
   where
-    consFuncExpr ft = do kft       <-  freshTyFun g l ft
-                         fts       <-  cgFunTys l f xs kft
-                         forM_ fts  $  consCallable l g f body
-                         Just      <$> cgEnvAddFresh "16" l (VI Local WriteLocal Initialized kft) g
-
-    anns = [ t | SigAnn _ t <- fFact l ]
-    f    = maybe (F.symbol "<anonymous>") F.symbol fo
+    funTy | [ft] <- [ t | SigAnn _ t <- fFact l ] = Just ft
+          | Just ft <- tCtxO = Just ft
+          | otherwise        = Nothing
+    f     = maybe (F.symbol "<anonymous>") F.symbol fo
 
 -- not handled
 consExpr _ e _ = cgError $ unimplemented l "consExpr" e where l = srcPos  e
@@ -831,10 +833,10 @@ consCall :: PP a
 
 consCall g l fn ets ft0
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      ts <- T.mapM (`cgSafeEnvFindTyM` g') xes
+      ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case ol of
         -- If multiple are valid, pick the first one
-        (ft:_) -> consInstantiate l g' fn ft ts xes
+        (ft:_) -> traceTypePP l "CONSCALL" $ consInstantiate l g' fn ft ts xes
         _      -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts)
                               (toType <$> callSigs)
   where
@@ -842,7 +844,7 @@ consCall g l fn ets ft0
               , cge_ctx g == cx
               , lt <- callSigs
               , arg_type (toType t) == arg_type (toType lt) ]
-    callSigs  = extractCall g ft0
+    callSigs  = ltracePP l "FUNTY" $ extractCall g ft0
     arg_type t = (\(a,b,_) -> (a,b)) <$> bkFun t
 
 --------------------------------------------------------------------------------
@@ -857,7 +859,7 @@ consInstantiate l g fn ft ts xes
   = do  (_,its1,ot) <- instantiateFTy l g fn ft
         ts1         <- zipWithM (instantiateTy l g) [1..] ts
         (ts3, ot')  <- subNoCapture l its1 xes ot
-        _           <- zipWithM_ (subType l err g) ts1 (map b_type ts3)
+        _           <- zipWithM_ (subType l err g) (ts1) (map b_type ts3)
         Just       <$> cgEnvAddFresh "5" l (VI Local WriteLocal Initialized ot') g
   where
     err              = errorLiquid' l
@@ -1102,15 +1104,15 @@ globals ts = [(x,s1,s2) | (x, s1@(VI Local WriteGlobal Initialized _),
 
 errorLiquid' = errorLiquid . srcPos
 
--- traceTypePP l msg act
---   = act >>= \case
---       Just (x,g) ->
---           do  t <- cgSafeEnvFindTyM x g
---               return $ Just $ trace (ppshow (srcPos l) ++
---                                      " " ++ msg ++
---                                      ": " ++ ppshow x ++
---                                      " :: " ++ ppshow t) (x,g)
---       Nothing ->  return Nothing
+traceTypePP l msg act
+  = act >>= \case
+      Just (x,g) ->
+          do  t <- cgSafeEnvFindTyM x g
+              return $ Just $ trace (ppshow (srcPos l) ++
+                                     " " ++ msg ++
+                                     ": " ++ ppshow x ++
+                                     " :: " ++ ppshow t) (x,g)
+      Nothing ->  return Nothing
 
 
 -- Local Variables:

@@ -29,6 +29,7 @@ import           Language.Rsc.Names
 import           Language.Rsc.Options
 import           Language.Rsc.Parser.Common
 import           Language.Rsc.Parser.Lexer
+import           Language.Rsc.Pretty
 import           Language.Rsc.Transformations
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types

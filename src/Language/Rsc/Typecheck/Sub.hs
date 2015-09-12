@@ -40,6 +40,7 @@ isSubtype :: (PPR r, FE g) => g r -> RType r -> RType r -> Bool
 --------------------------------------------------------------------------------
 isSubtype γ t1 t2 =
   case convert def γ t1 t2 of
+  -- case tracePP (ppshow t1 ++ " <: " ++ ppshow t2) $ convert def γ t1 t2 of
     CNo     -> True
     CUp _ _ -> True
     _       -> False

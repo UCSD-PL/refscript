@@ -21,7 +21,7 @@ import           Data.Function                (on)
 import           Data.List                    (sortBy)
 import           Data.Monoid
 import           Language.Fixpoint.Errors     (die)
-import           Language.Fixpoint.Misc       (fst3, single)
+import           Language.Fixpoint.Misc       (fst3, safeZip, single)
 import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annots
 import           Language.Rsc.AST
@@ -101,10 +101,11 @@ initGlobalEnv pgm@(Rsc { code = Src ss }) cha
 initCallableEnv :: (IsLocated l, Unif r)
                 => AnnTc r -> TCEnv r -> l
                 -> IOverloadSig r
+                -> [Id (AnnTc r)]
                 -> [Statement (AnnTc r)]
                 -> TCEnv r
 --------------------------------------------------------------------------------
-initCallableEnv l γ f fty s
+initCallableEnv l γ f fty xs s
   = TCE nms bnds ctx pth cha mut tThis
   where
     nms   = toFgn (envNames γ)
@@ -116,7 +117,7 @@ initCallableEnv l γ f fty s
     -- tyBs  = [(tVarId α, VI Ambient Initialized $ tVar α) | α <- αs]
     -- tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
     tyBs  = [(Loc (srcPos l) α, VI Local Ambient Initialized $ tVar α) | α <- αs]
-    varBs = [(x, VI Local WriteLocal Initialized t) | B x t <- xts]
+    varBs = [(x, VI Local WriteLocal Initialized t) | (x, t) <- safeZip "initCallableEnv" xs ts]
     arg   = single (argId $ srcPos l, mkArgTy l ts)
     bnds  = envAdds [(s,t) | BTV s _ (Just t) <- bs] $ envBounds γ
     ctx   = pushContext i (envCtx γ)

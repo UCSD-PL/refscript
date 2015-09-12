@@ -110,6 +110,7 @@ data FactQ q r
   | MethAnn       (MethodInfoQ q r)
   | CtorAnn       (RTypeQ q r)
 
+  -- User specifier casts
   | UserCast      (RTypeQ q r)
 
   -- Named type annotation

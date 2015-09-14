@@ -300,8 +300,10 @@ consStmt g (ReturnStmt l Nothing)
        return Nothing
 
 -- return e
-consStmt g (ReturnStmt l (Just e@(VarRef lv x)))
-  | Just t <- cgEnvFindTy x g, needsCall t
+consStmt g (ReturnStmt l (Just e))
+  | VarRef lv x <- e
+  , Just t <- cgEnvFindTy x g
+  , isUMRef t
   = do  g' <- cgEnvAdds "Return" [(fn, VI Local Ambient Initialized $ finalizeTy t)] g
         consStmt g' (ReturnStmt l (Just (CallExpr l (VarRef lv fn) [e])))
   | otherwise
@@ -309,14 +311,7 @@ consStmt g (ReturnStmt l (Just e@(VarRef lv x)))
         return Nothing
   where
     retTy = cgEnvFindReturn g
-    fn    = Id l "__final)))ize__"
-    needsCall t | TRef (Gen _ (m:_)) _ <- t = isUM m | otherwise = False
-
-consStmt g (ReturnStmt l (Just e))
-  = do  _ <- consCall g l "return" [(e, Just retTy)] $ returnTy retTy True
-        return Nothing
-  where
-    retTy = cgEnvFindReturn g
+    fn    = Id l "__finalize__"
 
 -- throw e
 consStmt g (ThrowStmt _ e)
@@ -520,10 +515,10 @@ consAsgn l g x e =
 --------------------------------------------------------------------------------
 consExpr :: CGEnv -> Expression AnnLq -> Maybe RefType -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
-consExpr g (Cast_ l e) tCtx =
-  case envGetContextCast g l of
-    CDead e' t' -> consDeadCode g l e' t'
-    _           -> consExpr g e tCtx
+consExpr g (Cast_ l e) tCtx
+  = case envGetContextCast g l of
+      CDead errs t -> consDeadCode g l errs t
+      _            -> consExpr g e tCtx
 
 --     CNo         -> mseq (consExpr g e Nothing) $ return . Just
 --     CUp t t'    -> mseq (consExpr g e Nothing) $ \(x,g') -> Just <$> consUpCast   g' l x t t'
@@ -542,7 +537,7 @@ consExpr g (IntLit l i) _
 -- Assuming by default 32-bit BitVector
 consExpr g (HexLit l x) _
   | Just e <- bitVectorValue x
-  = Just <$> cgEnvAddFresh "9" l (VI Local WriteLocal Initialized $ tBV32 `nubstrengthen` e) g
+  = Just <$> cgEnvAddFresh "9" l (VI Local WriteLocal Initialized $ tBV32 `strengthen` e) g
   | otherwise
   = Just <$> cgEnvAddFresh "10" l (VI Local WriteLocal Initialized tBV32) g
 
@@ -563,10 +558,15 @@ consExpr g (ThisRef l) _
     this = Id l "this"
 
 consExpr g (VarRef l x) _
+  | F.symbol x == F.symbol "undefined"
+  = Just <$> cgEnvAddFresh "0" l (VI Local WriteLocal Initialized tUndef) g
+
   | Just (VI loc WriteGlobal i t) <- tInfo
   = Just <$> cgEnvAddFresh "0" l (VI loc WriteLocal i t) g
+
   | Just (VI _ _ _ t) <- tInfo
   = addAnnot (srcPos l) x t >> return (Just (x, g))
+
   | otherwise
   = cgError $ errorUnboundId (fSrc l) x
   where
@@ -675,7 +675,7 @@ consExpr g (DotRef l e f) to
               consExpr g' (CallExpr l (DotRef l (vr x) (Id l "_get_length_")) []) to
 
 
-        -- Do not nubstrengthen enumeration fields
+        -- Do not strengthen enumeration fields
         -- TODO: TEnum does not exist anymore - is this still ok?
         -- Just (TEnum _,t,_) -> Just <$> cgEnvAddFresh "1" l (t, Ambient, Initialized) g'
 
@@ -772,7 +772,7 @@ consDeadCode g l es t
   = do mapM_ (\e -> subType l e g t tBot) es
        return Nothing
     where
-       tBot = t `nubstrengthen` F.bot (rTypeR t)
+       tBot = t `strengthen` F.bot (rTypeR t)
 
 -- -- | UpCast(x, t1 => t2)
 -- consUpCast g l x _ t2

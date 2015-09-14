@@ -29,9 +29,6 @@ module Language.Rsc.Liquid.CGMonad (
   , freshTyFun, freshenType, freshTyInst, freshTyPhis, freshTyPhis'
   , freshTyObj, freshenCGEnvM
 
-  -- * Strengthen (optimized)
-  , nubstrengthen
-
   -- * Freshable
   , Freshable (..)
 
@@ -215,21 +212,16 @@ cgError err = throwE $ catMessage err "CG-ERROR\n"
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-envPushContext :: (CallSite a) => a -> CGEnv -> CGEnv
+envPushContext    :: (CallSite a) => a -> CGEnv -> CGEnv
 envGetContextCast :: CGEnv -> AnnLq -> Cast F.Reft
 --------------------------------------------------------------------------------
 envPushContext c g = g { cge_ctx = pushContext c (cge_ctx g) }
 
 envGetContextCast g a
-  = case [c | TCast cx c <- fFact a, cx == cge_ctx g] of
+  = case [(errs, t) | CDead errs t <- [ c | TCast cx c <- fFact a, cx == cge_ctx g]] of
       [ ] -> CNo
-      [c] -> c
-      cs  -> case L.find isDeadCast cs of
-               Just dc -> dc
-               Nothing -> die $ errorMultipleCasts (srcPos a) cs
-  where
-    isDeadCast CDead{} = True
-    isDeadCast _       = False
+      cs  -> let (errs', ts) = unzip cs in
+             CDead (concat errs') (mkUnion ts)
 
 --------------------------------------------------------------------------------
 envGetContextTypArgs :: Int -> CGEnv -> AnnLq -> [TVar] -> [RefType]
@@ -354,17 +346,17 @@ addInvariant g t
     cha = envCHA g
     -- | typeof
     typeof t@(TPrim p o)    i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup p i
-    typeof t@(TRef _ _)     _ = t `nubstrengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
-    typeof t@(TObj _ _)     _ = t `nubstrengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
+    typeof t@(TRef _ _)     _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
+    typeof t@(TObj _ _)     _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
     typeof   (TFun a b _)   _ = TFun a b typeofReft
     typeof t                _ = t
     -- | Truthy
     truthy t               | maybeTObj t
-                           = t `nubstrengthen` F.reft (vv t) (F.eProp $ vv t)
+                           = t `strengthen` F.reft (vv t) (F.eProp $ vv t)
                            | otherwise          = t
 
     strengthenOp t o r     | r `L.elem` ofRef o = t
-                           | otherwise          = t `nubstrengthen` r
+                           | otherwise          = t `strengthen` r
     typeofReft             = F.reft  (vv t) $ F.pAnd [ typeofExpr $ F.symbol "function"
                                                      , F.eProp    $ vv t                ]
     typeofExpr s           = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
@@ -373,7 +365,7 @@ addInvariant g t
     ofRef (F.Reft (s, ra)) = F.reft s <$> F.raConjuncts ra
 
     -- | { f: T } --> hasProperty("f", v)
-    hasProp ty             = t `nubstrengthen` keyReft (boundKeys cha ty)
+    hasProp ty             = t `strengthen` keyReft (boundKeys cha ty)
     keyReft ks             = F.reft (vv t) $ F.pAnd (F.PBexp . hasPropExpr <$> ks)
     hasPropExpr s          = F.EApp (F.dummyLoc (F.symbol "hasProperty"))
                                 [F.expr (F.symbolText s), F.eVar $ vv t]
@@ -381,9 +373,9 @@ addInvariant g t
     -- | extends class / interface
     hierarchy t@(TRef c _)
       | isClassType cha t
-      = t `nubstrengthen` rExtClass t (name <$> classAncestors cha (g_name c))
+      = t `strengthen` rExtClass t (name <$> classAncestors cha (g_name c))
       | otherwise
-      = t `nubstrengthen` rExtIface t (name <$> interfaceAncestors cha (g_name c))
+      = t `strengthen` rExtIface t (name <$> interfaceAncestors cha (g_name c))
     hierarchy t = t
 
     name (QN _ s) = s
@@ -395,16 +387,6 @@ addInvariant g t
     vv             = rTypeValueVar
     sym s          = F.dummyLoc $ F.symbol s
 
-
---------------------------------------------------------------------------------
-nubstrengthen                   :: RefType -> F.Reft -> RefType
---------------------------------------------------------------------------------
-nubstrengthen (TPrim c r)  r' = TPrim c  $ r' `mappend` r
-nubstrengthen (TRef n r)   r' = TRef n   $ r' `mappend` r
-nubstrengthen (TObj ms r)  r' = TObj ms  $ r' `mappend` r
-nubstrengthen (TVar α r)   r' = TVar α   $ r' `mappend` r
-nubstrengthen (TFun a b r) r' = TFun a b $ r' `mappend` r
-nubstrengthen t _             = t
 
 
 

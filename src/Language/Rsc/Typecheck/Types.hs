@@ -33,7 +33,7 @@ module Language.Rsc.Typecheck.Types (
 
   -- * Mutability primitives
   , tMut, tUqMut, tImm, tIM, tRO, trMut, trImm, trIM, trRO
-  , isRO, isMut, isImm, isUM, mutRelated
+  , isRO, isMut, isImm, isUM, isUMRef, mutRelated
 
   -- * Primitive Types
 
@@ -112,6 +112,8 @@ isRO  = isNamed "ReadOnly"
 isMut = isNamed "Mutable"
 isImm = isNamed "Immutable"
 isUM  = isNamed "UniqueMutable"
+
+isUMRef (TRef (Gen _ (m:_)) _) | isUM m = True | otherwise = False
 
 mutRelated t = isMut t || isImm t || isUM t || isRO t
 

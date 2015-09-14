@@ -57,6 +57,7 @@ isConvertible γ t1 t2 =
 convert :: (PPR r, FE g) => SrcSpan -> g r -> RType r -> RType r -> Cast r
 --------------------------------------------------------------------------------
 convert l γ t1 t2
+  -- = case ltracePP l ("compareTypes: " ++ ppshow τ1 ++ " <: " ++ ppshow τ2) $ compareTypes l γ' τ1 τ2 of
   = case compareTypes l γ' τ1 τ2 of
       EqT      -> CNo
       SubT     -> CUp (rType t1) (rType t2)

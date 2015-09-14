@@ -127,3 +127,68 @@ interface PropertyDescriptor<M> {
 interface PropertyDescriptorMap<M extends ReadOnly> {
     [s: string]: PropertyDescriptor<ReadOnly>;
 }
+
+
+
+//
+// /**
+//  *
+//  *    for ... in ...
+//  *
+//  *    https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for...in
+//  *
+//  *    A for...in loop only iterates over enumerable properties. Objects created from
+//  *    built–in constructors like Array and Object have inherited non–enumerable
+//  *    properties from Object.prototype and String.prototype, such as String's
+//  *    indexOf() method or Object's toString() method. The loop will iterate over all
+//  *    enumerable properties of the object itself and those the object inherits from
+//  *    its constructor's prototype (properties closer to the object in the prototype
+//  *    chain override prototypes' properties).
+//  *
+//  */
+//
+// /*@ builtin_BIForInKeys ::
+//     /\ forall A . (a: IArray<A>)                 => IArray<{ number | (0 <= v && v < (len a)) }>
+//     /\            (o: Object<Immutable>)         => IArray<{ string | (hasProperty(v,o) && enumProp(v,o)) }>
+//     /\            (o: [Immutable]{ })            => IArray<{ string | (hasProperty(v,o) && enumProp(v,o)) }>
+//     /\ forall A . (o: [Immutable]{[s:string]:A}) => IArray<{ string | (hasProperty(v,o) && enumProp(v,o)) }>
+//  */
+// //TODO: remove the last overload once {[s:string]:A} extends { }
+// declare function builtin_BIForInKeys(obj: Object): string[];
+//
+//
+
+//
+//
+// /**
+//  *
+//  *    ... `instanceof` ...
+//  *
+//  *    extends_class(x,s): this boolean value is true if value x has been
+//  *    constructed by a constructor named with string s. This should NOT be used
+//  *    with all nominal types (e.g. interfaces), but just classes (since they are
+//  *    the only ones associated with a constructor).
+//  *
+//  */
+//
+// /*@ builtin_OpInstanceof ::
+//     forall A . (x:A, s: string) => { v: boolean | (Prop(v) <=> extends_class(x,s)) }
+// */
+// declare function builtin_OpInstanceof<A>(x: A, s: string): boolean;
+//
+//
+// /**
+//  *
+//  *    ... `in` ...
+//  *
+//  *   https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/in
+//  *
+//  *   The in operator returns true for properties in the prototype chain.
+//  *
+//  */
+//
+// /*@ builtin_OpIn ::
+//     /\ forall A . (i: number, a: IArray<A>) => { v: boolean | ((Prop v) <=> (0 <= i && i < (len a))) }
+//     /\            (s: string, o: { }      ) => { v: boolean | ((Prop v) <=> hasProperty(s,o)) }
+//  */
+// declare function builtin_OpIn(s: string, obj: Object): boolean;

@@ -25020,6 +25020,9 @@ var ts;
                 case ts.SyntaxKind.MinusToken:
                     this.opKind = RsPrefixOpKind.PrefixMinus;
                     break;
+                case ts.SyntaxKind.TypeOfExpression:
+                    this.opKind = RsPrefixOpKind.PrefixTypeof;
+                    break;
                 default:
                     throw new Error("[refscript] unsupported prefix kind: " + ts.SyntaxKind[kind]);
             }
@@ -26844,6 +26847,8 @@ var ts;
                         return boolKeywordToRsExp(state, node);
                     case ts.SyntaxKind.FunctionExpression:
                         return functionExpressionToRsExp(state, node);
+                    case ts.SyntaxKind.TypeOfExpression:
+                        return typeOfExpressionToRsExp(state, node);
                 }
                 throw new Error("UNIMPLEMENTED nodeToRsExp for " + ts.SyntaxKind[node.kind]);
             }
@@ -26966,6 +26971,9 @@ var ts;
                     node.body.statements.map(function (statement) { return nodeToRsStmt(state, statement); }) :
                     [new ts.RsReturnStmt(nodeToSrcSpan(node), [], new ts.RsJust(nodeToRsExp(state, node.body)))];
                 return new ts.RsFuncExpr(nodeToSrcSpan(node), annotations, new ts.RsNothing(), nodeArrayToRsAST(state, node.parameters, nodeToRsId), new ts.RsList(statements));
+            }
+            function typeOfExpressionToRsExp(state, node) {
+                return new ts.RsPrefixExpr(nodeToSrcSpan(node), [], new ts.RsPrefixOp(node.kind), nodeToRsExp(state, node.expression));
             }
             function expressionStatementToRsStmt(state, node) {
                 return new ts.RsExprStmt(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression));

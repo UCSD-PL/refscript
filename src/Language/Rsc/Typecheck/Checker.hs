@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverlappingInstances  #-}
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TupleSections         #-}
@@ -135,6 +136,7 @@ patch fs
     vld PhiVarTy{}    = True
     vld PhiVarTC{}    = True
     vld PhiVar{}      = True
+    vld TCast{}       = True
     vld _             = False
 
 -- accumNodeIds :: Unif r => Statement (AnnTc r) -> [(Int, [Fact r])]
@@ -462,28 +464,26 @@ tcNormalCallWCtx γ l o es t
       Right (es', t') -> return (es', Just t')
       Left err -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) err) (fst <$> es)
 
-tcRetW γ l (Just e@(VarRef _ x))
-  | Just t <- tcEnvFindTy x γ, needsCall t
+tcRetW γ l (Just e)
+  | VarRef lv x <- e
+  , Just t <- tcEnvFindTy x γ
+  , isUMRef t
   = tcRetW (newEnv t) l (Just (CallExpr l (VarRef l fn) [e'])) >>= \case
       -- e' won't be cast
-      (ReturnStmt _ (Just (CallExpr _ _ [e''])),eo) -> return (ReturnStmt l (Just e''),eo)
-      _ -> die $ errorUqMutSubtyping (srcPos l) e t retTy
-  where
-    retTy    = tcEnvFindReturn γ
-    newEnv t = tcEnvAdd fn (VI Local Ambient Initialized $ finalizeTy t) γ
-    fn       = Id l "__finalize__"
-    e'       = fmap (\a -> a { fFact = BypassUnique : fFact a }) e
-    needsCall (TRef (Gen _ (m:_)) _) = isUM m
-    needsCall _                = False
+      (ReturnStmt _ (Just (CallExpr _ _ [e''])), eo)
+          -> return (ReturnStmt l (Just e''),eo)
+      _   -> die $ errorUqMutSubtyping (srcPos l) e t retTy
 
-tcRetW γ l eo = tcRetW' γ l eo
-
-tcRetW' γ l (Just e)
+  | otherwise
   = (tcWrap $ tcNormalCall γ l "return" [(e, Just retTy)] (returnTy retTy True)) >>= \case
-       Right (es', _) -> (,Nothing) . ReturnStmt l . Just <$> return (head es')
-       Left err -> (,Nothing) . ReturnStmt l . Just <$> deadcastM (tce_ctx γ) err e
+       Right ([e'], _) -> (,Nothing) . ReturnStmt l . Just <$> return e'
+       Left err        -> (,Nothing) . ReturnStmt l . Just <$> deadcastM (tce_ctx γ) err e
   where
-    retTy = tcEnvFindReturn γ
+    retTy     = tcEnvFindReturn γ
+
+    newEnv t  = tcEnvAdd fn (VI Local Ambient Initialized $ finalizeTy t) γ
+    fn        = Id l "__finalize__"
+    e'        = fmap (\a -> a { fFact = BypassUnique : fFact a }) e
 
 tcRetW' γ l Nothing
   = do (_, _) <- tcNormalCall γ l "return" [] $ returnTy (tcEnvFindReturn γ) False
@@ -533,6 +533,9 @@ tcExpr γ e@(ThisRef l) _
       Nothing -> fatal (errorUnboundId (fSrc l) "this") (e, tBot)
 
 tcExpr γ e@(VarRef l x) _
+  | F.symbol x == F.symbol "undefined"
+  = return (e, tUndef)
+
   | Just t <- to, not $ null [ () | BypassUnique <- fFact l ]
   = return (e,t)
 
@@ -793,8 +796,6 @@ tcCall _ (CallExpr _ (SuperRef _)  _)
 
 -- | `e.m(es)`
 --
---  TODO: cast @e@ to the subtype for which @f@ is an existing field.
---
 tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
   = runFailM (tcExpr γ e Nothing) >>= go
   where
@@ -831,7 +832,7 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
 -- | `e(es)`
 tcCall γ (CallExpr l e es)
   = do (e', ft0) <- tcExpr γ e Nothing
-       (es', t) <- tcNormalCall γ l e (es `zip` nths) ft0
+       (es', t)  <- tcNormalCall γ l e (es `zip` nths) ft0
        return $ (CallExpr l e' es', t)
 
 tcCall _ e = fatal (unimplemented (srcPos e) "tcCall" e) (e, tBot)

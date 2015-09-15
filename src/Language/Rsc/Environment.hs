@@ -10,14 +10,21 @@ module Language.Rsc.Environment (
     EnvLike (..)
   , EnvEntry
   , envLikeFindTy, envLikeFindTy'
+  , safeEnvFindTy
   , envFindBound
   , resolveModuleInEnv, resolveTypeInEnv, resolveEnumInEnv
   , toFgn
+
+  -- Global definitions
+  , globalLengthType
+
 
 ) where
 
 import           Control.Applicative          ((<$>))
 import           Control.Exception            (throw)
+import           Data.Default
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Names
 import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.AST
@@ -119,4 +126,12 @@ toFgn = envMap go
   where
     go (VI loc WriteLocal i t) = VI loc ForeignLocal i t
     go v = v
+
+--------------------------------------------------------------------------------
+safeEnvFindTy :: (EnvLike r t, IsLocated l, Symbolic x, Monad m) => l -> t r -> x -> m (RType r)
+--------------------------------------------------------------------------------
+safeEnvFindTy l γ x | Just t <- envLikeFindTy x γ = return t
+                    | otherwise = die $ bugEnvFindTy (srcPos l) (F.symbol x)
+
+globalLengthType γ = safeEnvFindTy (def::SrcSpan) γ "__getLength"
 

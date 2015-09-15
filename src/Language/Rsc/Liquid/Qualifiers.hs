@@ -1,16 +1,20 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module Language.Rsc.Liquid.Qualifiers (qualifiers) where
+module Language.Rsc.Liquid.Qualifiers (scrapeQuals) where
 
 import           Data.List                 (delete, nub)
 import           Data.Maybe                (fromMaybe)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Types   hiding (quals)
+import           Language.Rsc.Annots
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
+import           Language.Rsc.Names
+import qualified Language.Rsc.Types        as T
+import           Language.Rsc.Visitor
 
 qualifiers xts = concatMap (refTypeQualifiers γ0) xts
   where
@@ -39,3 +43,23 @@ lookupSort l  x γ = fromMaybe errorMsg $ lookupSEnv x γ
 
 orderedFreeVars γ = nub . filter (`memberSEnv` γ) . syms
 
+-- | Extracts all qualifiers from a RefScript program
+---------------------------------------------------------------------------------
+scrapeQuals :: [Qualifier] -> [Statement (AnnRel Reft)] -> [Qualifier]
+---------------------------------------------------------------------------------
+scrapeQuals qs ss = qs ++ qualifiers (mkUq $ foldStmts tbv [] ss)
+  where
+    tbv = defaultVisitor { accStmt = gos, accCElt = goe }
+
+    gos _ (FunctionStmt l f _ _) = [(f, t) | SigAnn _ t <- fFact l]
+    gos _ (VarDeclStmt _ vds)    = [(x, t) | VarDecl l x _ <- vds
+                                           , VarAnn _ _ (Just t) <- fFact l]
+    gos _ _                      = []
+
+    goe _ (Constructor l _ _)        = [(x, t) | CtorAnn  t <- fFact l, let x = Id l "ctor" ]
+    goe _ (MemberVarDecl l _ x _)    = [(x, t) | FieldAnn (T.FI _ _ t) <- fFact l ]
+    goe _ (MemberMethDecl l _ x _ _) = [(x, t) | MethAnn  (T.MI _ _ t) <- fFact l ]
+
+mkUq = zipWith tx ([0..] :: [Int])
+  where
+    tx i (Id l s, t) = (Id l $ s ++ "_" ++ show i, t)

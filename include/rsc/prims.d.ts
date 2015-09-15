@@ -1,4 +1,15 @@
 
+
+// /**
+//  *  Only 'length' is extractable from an array type.
+//  */
+// /* builtin_BIDotRef :: <T>(a: IArray<T>, f: "length") => { v: number | v = len a } */
+// declare function builtin_BIDotRef<T>(a: IArray<T>, f: "length"): number;
+// /* builtin_BIDotRef :: <T>(a: IArray<T>, f: { string | false }) => number */
+// declare function builtin_BIDotRef<M extends ReadOnly, T>(a: Array<M, T>, f: string): number;
+// declare function builtin_BIDotRef<T>(a: { f: T }, f: string): T;
+
+
  /*  builtin_BIBracketRef :: <M,A>(x: Array<M,A>, n: number + undefined) => A + undefined */
  /*  builtin_BIBracketRef :: <M,A>(x: Array<M,A>, n: undefined) => undefined */
  /*  builtin_BIBracketRef :: <A>  (o: [Immutable] {[y: string]: A }, x: string) => { A | has Property(x,o) } + { undefined | not (hasProperty(x,o)) } */
@@ -130,11 +141,7 @@ declare function builtin_OpLAnd(x: any, y: any): any;
 // /*   predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
 
 
-/*************************************************************************
- *
- *          RUN-TIME TAGS
- *
- ************************************************************************/
+// RUN-TIME TAGS
 
 /*@ builtin_PrefixTypeof :: <A>(x:A) => { v:string | ttag x = v } */
 declare function builtin_PrefixTypeof<A>(x: A): string;
@@ -154,18 +161,14 @@ declare function builtin_BIFalsy<A>(x: A): boolean;
 // /*@ invariant {v: number    | [(ttag(v) = "number"   ); (Prop(v) <=> v /= 0  )]}	*/
 //
 
-/*************************************************************************
- *
- *  GENERAL PURPOSE AUXILIARY DEFINITIONS
- *
- ************************************************************************/
+// GENERAL PURPOSE AUXILIARY DEFINITIONS
 
 declare function crash<A>(): A;
 
-/*@ assume :: <A>(x:A) => {v:void | Prop x} */
+/*@ assume :: <A>(x: A) => {v:void | Prop x} */
 declare function assume<A>(x: A): void;
 
-/*@ assert :: <A>({x:A|(Prop x)}) => void */
+/*@ assert :: <A>({A | Prop v}) => void */
 declare function assert<A>(x: A): void;
 
 declare function random(): number;
@@ -173,6 +176,6 @@ declare function random(): number;
 declare function pos(): posint;
 
 declare function alert(s: string): void;
-//
+
 // /*@ isNaN :: (x:undefined + number) => {v:boolean | Prop v <=> (ttag(v) != "number")} */
 // declare function isNaN(x:any) : boolean;

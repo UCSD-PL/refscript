@@ -134,7 +134,7 @@ compareObjs l γ t1@(TRef (Gen x1 (m1:t1s)) _) t2@(TRef (Gen x2 (m2:t2s)) _)
   --
   -- * Both immutable, same name, non arrays: co-variant subtyping on arguments
   --
-  | x1 == x2 && isImm m2 && not (isArr t1)
+  | x1 == x2 && isImm m2 && not (isArrayType t1)
   = mconcat $ compareTypes l γ m1 m2
             : zipWith (compareTypes l γ) t1s t2s
   --

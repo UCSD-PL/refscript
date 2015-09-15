@@ -60,9 +60,7 @@ getProp γ b f (TOr ts) = getPropUnion γ b f ts
 
 -- | TODO: Chain up to 'Object'
 getProp γ b f t@(TObj es _)
-  = (t,) <$> accessMember γ b InstanceK f es -- `M.union` t_elts empty
-  -- where
-  --   emptyObjectInterface = undefined
+  = (t,) <$> accessMember γ b InstanceK f es
 
 -- | Enumeration
 -- TODO: Instead of the actual integer value, assign unique symbolic values:
@@ -176,19 +174,11 @@ accessMember _ FieldAccess static f ms
   | Just t <- tm_sidx ms
   , validFieldName f
   = Just t
+  | otherwise
+  = error $ "Not found: " ++ ppshow f
   where
     props | static == StaticK = tm_sprop
           | otherwise         = tm_prop
-
-  -- | otherwise
-  -- = accessMemberProto γ b sk f es
-
--- accessMemberProto γ b sk f es
---   | Just (FieldSig _ _ _ pt) <- M.lookup (F.symbol "__proto__",sk) es
---   , Just (_,t,m) <- getProp γ b f pt
---   = return (t,m)
---   | otherwise
---   = Nothing
 
 -------------------------------------------------------------------------------
 validFieldName  :: F.Symbolic f => f -> Bool
@@ -227,3 +217,4 @@ getFieldMutability cha t f | Just (TObj ms _) <- expandType Coercive cha t
                            = Just m
                            | otherwise
                            = Nothing
+

@@ -400,6 +400,10 @@ transCast f = go
     go αs xs (CUp t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
     go αs xs (CDn t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
 
+-- | transRType :
+--
+--  Binds (αs and bs) accumulate on the left.
+--
 transRType :: F.Reftable r
            => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
            ->  [TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r
@@ -413,7 +417,8 @@ transRType f               = go
     go αs xs (TObj ms r)   = f αs xs $ TObj ms' r    where ms' = trans f αs xs ms
     go αs xs (TClass n)    = f αs xs $ TClass n'     where n'  = trans f αs xs n
     go αs xs (TMod m)      = f αs xs $ TMod m
-    go αs xs (TAll a t)    = f αs xs $ TAll a t'     where t'  = go (btvToTV a:αs) xs t
+    go αs xs (TAll a t)    = f αs xs $ TAll a t'     where t'  = go αs' xs t
+                                                           αs' = αs ++ [btvToTV a]
     go αs xs (TFun bs t r) = f αs xs $ TFun bs' t' r where bs' = trans f αs xs' <$> bs
                                                            t'  = go αs xs' t
                                                            xs' = bs ++ xs

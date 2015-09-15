@@ -36,6 +36,7 @@ import           Language.Rsc.Core.EitherIO
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
+import           Language.Rsc.Liquid.Types          (mkDotRefFunTy)
 import           Language.Rsc.Locations
 import           Language.Rsc.Lookup
 import           Language.Rsc.Misc                  (dup, nths, zipWith3M, (&))
@@ -256,7 +257,7 @@ tcStmt γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
-  = do opTy         <- safeTcEnvFindTy l γ (builtinOpId BITruthy)
+  = do opTy         <- safeEnvFindTy l γ (builtinOpId BITruthy)
        ([e'], z)    <- tcNormalCallW γ l BITruthy [e] opTy
        case z of
          Just _  ->
@@ -280,7 +281,7 @@ tcStmt γ (WhileStmt l c b)
       (c', Nothing) -> return (WhileStmt l c' b, Nothing)
       (c', Just t)  ->
         do unifyTypeM (srcPos l) γ t tBool
-           phiTys   <- mapM (safeTcEnvFindTy l γ) phis
+           phiTys   <- mapM (safeEnvFindTy l γ) phis
            (b', γl) <- tcStmt (tcEnvAdds (zip xs (VI Local WriteLocal Initialized <$> phiTys)) γ) b
            tcWA γ dummyExpr (envLoopJoin l γ γl) >>= \case
              Left e     -> return $ (ExprStmt  l e    , γl)
@@ -572,7 +573,7 @@ tcExpr γ e@(VarRef l x) _
 --    * The second conditional expression
 --
 tcExpr γ (CondExpr l e e1 e2) to
-  = do  opTy    <- mkTy to <$> safeTcEnvFindTy l γ (builtinOpId BICondExpr)
+  = do  opTy    <- mkTy to <$> safeEnvFindTy l γ (builtinOpId BICondExpr)
         (sv,v)  <- dup F.symbol (VarRef l) <$> freshCastId l
         let γ'   = tcEnvAdd sv (VI Local WriteLocal Initialized tt) γ
         ([e',_,e1',e2'], t') <- tcNormalCall γ' l BICondExpr (args v) opTy
@@ -678,7 +679,7 @@ tcExpr _ e _
 tcCast :: Unif r => TCEnv r -> AnnTc r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
 --------------------------------------------------------------------------------
 tcCast γ l e tc
-  = do  opTy        <- safeTcEnvFindTy l γ (builtinOpId BICastExpr)
+  = do  opTy        <- safeEnvFindTy l γ (builtinOpId BICastExpr)
         cid         <- freshCastId l
         let γ'       = tcEnvAdd (F.symbol cid) (VI Local WriteLocal Initialized tc) γ
         ([_,e'],t') <- tcNormalCall γ' l "user-cast" [(VarRef l cid, Nothing),(e, Just tc)] opTy
@@ -690,7 +691,7 @@ tcCall :: Unif r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
 
 -- | `o e`
 tcCall γ c@(PrefixExpr l o e)
-  = do opTy <- safeTcEnvFindTy l γ (prefixOpId o)
+  = do opTy <- safeEnvFindTy l γ (prefixOpId o)
        z    <- tcNormalCall γ l o [(e, Nothing)] opTy
        case z of
          ([e'], t) -> return (PrefixExpr l o e', t)
@@ -701,7 +702,7 @@ tcCall γ c@(InfixExpr l o@OpInstanceof e1 e2)
   = do (e2',t) <- tcExpr γ e2 Nothing
        case t of
          TClass (BGen (QN _ x) _)  ->
-            do  opTy <- safeTcEnvFindTy l γ (infixOpId o)
+            do  opTy <- safeEnvFindTy l γ (infixOpId o)
                 ([e1',_], t) <- let args = [e1, StringLit l2 (F.symbolString x)] `zip` nths in
                                 tcNormalCall γ l o args opTy
                       -- TODO: add qualified name
@@ -711,7 +712,7 @@ tcCall γ c@(InfixExpr l o@OpInstanceof e1 e2)
     l2 = getAnnotation e2
 
 tcCall γ c@(InfixExpr l o e1 e2)
-  = do opTy <- safeTcEnvFindTy l γ (infixOpId o)
+  = do opTy <- safeEnvFindTy l γ (infixOpId o)
        z    <- tcNormalCall γ l o ([e1,e2] `zip` nths) opTy
        case z of
          ([e1', e2'], t) -> return (InfixExpr l o e1' e2', t)
@@ -725,7 +726,7 @@ tcCall γ e@(BracketRef l e1 e2)
       -- Enumeration
       Right (_, t) | isEnumType (envCHA γ) t -> fatal (unimplemented (srcPos l) msg e) (e, tBot)
       -- Default
-      _ -> safeTcEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
+      _ -> safeEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
   where
     msg     = "Support for dynamic access of enumerations"
     call ty = tcNormalCall γ l BIBracketRef ([e1,e2] `zip` nths) ty >>= \case
@@ -734,7 +735,7 @@ tcCall γ e@(BracketRef l e1 e2)
 
 -- | `e1[e2] = e3`
 tcCall γ e@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
-  = do opTy <- safeTcEnvFindTy l γ (builtinOpId BIBracketAssign)
+  = do opTy <- safeEnvFindTy l γ (builtinOpId BIBracketAssign)
        z <- tcNormalCall γ l BIBracketAssign ([e1,e2,e3] `zip` nths) opTy
        case z of
          ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
@@ -742,7 +743,7 @@ tcCall γ e@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
 
 -- | `[e1,...,en]`
 tcCall γ (ArrayLit l es)
-  = do opTy <- arrayLitTy (length es) <$> safeTcEnvFindTy l γ (builtinOpId BIArrayLit)
+  = do opTy <- arrayLitTy (length es) <$> safeEnvFindTy l γ (builtinOpId BIArrayLit)
        (es', t) <- tcNormalCall γ l BIArrayLit (es `zip` nths) opTy
        return $ (ArrayLit l es', t)
 
@@ -767,25 +768,12 @@ tcCall γ ef@(DotRef l e f)
   = runFailM (tcExpr γ e Nothing) >>= \case
       Right (_, te) ->
           case getProp γ FieldAccess f te of
-            --
-            -- Special-casing Array.length
-            --
-            Just (TRef (Gen (QN (QP _ _ []) s) _) _, _)
-              | F.symbol "Array" == s && F.symbol "length" == F.symbol f ->
-                  do (CallExpr l' (DotRef _ e' _) _, t') <- tcCall γ $ CallExpr l (DotRef l e $ Id l "_get_length_") []
-                     return (DotRef l' e' f, t')
-            --
-            -- Proceed with field access
-            --
-            Just (te', t) ->
-                do ([e'],τ) <- tcNormalCall γ l ef [(e,Nothing)] $ mkTy te' t
-                   return $ (DotRef l e' f, τ)
-
+            Just (tObj, tField) ->
+                do  funTy <- ltracePP l (ppshow ef) <$> mkDotRefFunTy l γ f tObj tField
+                    (e':_, t') <- tcNormalCall γ l ef [(e, Nothing)] funTy
+                    return (DotRef l e' f, t')
             Nothing -> tcError $ errorMissingFld (srcPos l) f te
-
       Left err -> fatal err (ef, tBot)
-  where
-    mkTy s t = mkFun ([], [B (F.symbol "this") s], t)
 
 -- | `super(e1,...,en)`
 --
@@ -1005,7 +993,7 @@ envJoinStep l γ1 γ2 next (γ, st01, st02) xt =
               return   $ (tcEnvAdd v ta $ γ { tce_names = tce_names γ }, [], [])
 
 mkVdStmt l γ va vb t1 =
-  do  t0           <- safeTcEnvFindTy l γ va
+  do  t0           <- safeEnvFindTy l γ va
       rhs          <- VarRef <$> freshenAnn l <*> return va
       θ            <- unifyTypeM (srcPos l) γ t0 t1
       setSubst θ

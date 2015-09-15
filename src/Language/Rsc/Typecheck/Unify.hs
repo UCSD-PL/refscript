@@ -11,19 +11,19 @@ module Language.Rsc.Typecheck.Unify (
   , Unif
   ) where
 
-import           Control.Monad                       (foldM)
-import           Data.Either                         (rights)
-import           Data.Function                       (on)
+import           Control.Monad                      (foldM)
+import           Data.Either                        (rights)
+import           Data.Function                      (on)
 import           Data.Generics
-import qualified Data.HashMap.Strict                 as HM
-import qualified Data.HashSet                        as S
-import qualified Data.List                           as L
-import qualified Data.Map.Strict                     as M
-import           Data.Maybe                          (maybeToList)
+import qualified Data.HashMap.Strict                as HM
+import qualified Data.HashSet                       as S
+import qualified Data.List                          as L
+import qualified Data.Map.Strict                    as M
+import           Data.Maybe                         (maybeToList)
 import           Data.Monoid
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types             as F
+import qualified Language.Fixpoint.Types            as F
 import           Language.Rsc.Annots
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
@@ -42,7 +42,7 @@ import           Language.Rsc.Types
 -- | Unification
 -----------------------------------------------------------------------------
 
-type Unif r = (PP r, F.Reftable r, ExprReftable Int r, ExprReftable F.Symbol r, Free (Fact r))
+type Unif r = (PP r, F.Reftable r, ExprReftable Int r, ExprReftable F.Symbol r, ExprReftable F.Expr r, Free (Fact r))
 
 -----------------------------------------------------------------------------
 unify :: (Unif r)

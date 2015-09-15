@@ -663,34 +663,14 @@ consExpr g (CallExpr l e es) _
 --   the type of `e` (possibly adding a relevant cast). So no need to repeat the
 --   call here.
 --
-consExpr g (DotRef l e f) to
+consExpr g ef@(DotRef l e f) to
   = mseq (consExpr g e Nothing) $ \(x,g') -> do
       te <- cgSafeEnvFindTyM x g'
       case getProp g' FieldAccess f te of
-        --
-        -- Special-casing Array.length
-        --
-        Just (TRef (Gen (QN (QP _ _ []) s) _) _, _)
-          | F.symbol "Array" == s && F.symbol "length" == F.symbol f ->
-              consExpr g' (CallExpr l (DotRef l (vr x) (Id l "_get_length_")) []) to
-
-
-        -- Do not strengthen enumeration fields
-        -- TODO: TEnum does not exist anymore - is this still ok?
-        -- Just (TEnum _,t,_) -> Just <$> cgEnvAddFresh "1" l (t, Ambient, Initialized) g'
-
-        -- TODO: this is the only place where we need the information of whether
-        --       f is an immutable field
-        Just (tE,t) -> Just <$> cgEnvAddFresh "2" l (VI Local WriteLocal Initialized $ mkTy x t) g'
-
-        Nothing     -> cgError $  errorMissingFld (srcPos l) f te
-  where
-    vr       = VarRef $ getAnnotation e
-
-    mkTy x t | Just m <- getFieldMutability (envCHA g) t (F.symbol f)
-             , isImm m
-             = fmap F.top t `eSingleton` mkOffset x f
-             | otherwise      = substThis x t
+        Just (tObj, tField) ->
+            do  funTy <- mkDotRefFunTy l g f tObj tField
+                consCall g' l ef [(VarRef (getAnnotation e) x, Nothing)] funTy
+        Nothing -> cgError $ errorMissingFld (srcPos l) f te
 
 -- | e1[e2]
 consExpr g e@(BracketRef l e1 e2) _

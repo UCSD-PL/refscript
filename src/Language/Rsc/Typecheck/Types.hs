@@ -14,7 +14,7 @@
 module Language.Rsc.Typecheck.Types (
 
   -- * Type operations
-    toType, ofType, rTop, strengthen
+    toType, ofType, rTop, strengthen, toplevel
 
   , ExprReftable(..)
 
@@ -42,7 +42,7 @@ module Language.Rsc.Typecheck.Types (
 
   --   # Tests
   , isTPrim, isTTop, isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
-  , isTNull, isTVoid, isTFun, isArr
+  , isTNull, isTVoid, isTFun, isArrayType
 
   --   # Operations
   , orNull
@@ -226,17 +226,28 @@ orUndef t  | any isTUndef ts = t
   where ts = bkUnion t
 
 
+----------------------------------------------------------------------------------------
+toplevel :: RTypeQ q r -> (r -> r) -> RTypeQ q r
+----------------------------------------------------------------------------------------
+toplevel (TPrim c r) f  = TPrim c (f r)
+toplevel (TVar v r) f   = TVar v (f r)
+toplevel (TOr ts)   _   = TOr ts
+toplevel (TAnd ts) _    = TAnd ts
+toplevel (TRef n r) f   = TRef n (f r)
+toplevel (TObj ms r) f  = TObj ms (f r)
+toplevel (TClass n) _   = TClass n
+toplevel (TMod n) _     = TMod n
+toplevel (TAll b t) _   = TAll b t
+toplevel (TFun b t r) f = TFun b t (f r)
+toplevel (TExp e) _     = TExp e
+
+
 -- | Strengthen the top-level refinement
 ----------------------------------------------------------------------------------------
 strengthen :: F.Reftable r  => RTypeQ q r -> r -> RTypeQ q r
 ----------------------------------------------------------------------------------------
-strengthen (TPrim c r)   r' = TPrim c   $ r' `F.meet` r
-strengthen (TVar α r)    r' = TVar α    $ r' `F.meet` r
-strengthen (TOr ts)      r' = TOr       $ (`strengthen` r') <$> ts
-strengthen (TRef n r)    r' = TRef n    $ r' `F.meet` r
-strengthen (TObj m r)    r' = TObj m    $ r' `F.meet` r
-strengthen (TFun xs t r) r' = TFun xs t $ r' `F.meet` r
-strengthen t _              = t    -- TAnd, TType, TAll, TExp fall through
+strengthen (TOr ts) r' = TOr (map (`strengthen` r') ts)
+strengthen t        r' = toplevel t (r' `F.meet`)
 
 -- NOTE: r' is the OLD refinement.
 --       We want to preserve its VV binder as it "escapes",
@@ -277,7 +288,8 @@ isTFun (TAnd ts)      = all isTFun ts
 isTFun (TAll _ t)     = isTFun t
 isTFun _              = False
 
-isArr t | TRef x _ <- t = F.symbol x == F.symbol "Array" | otherwise = False
+isArrayType t | TRef (Gen x []) _ <- t = F.symbol x == F.symbol "Array"
+              | otherwise = False
 
 orNull t@(TOr ts) | any isTNull ts = t
                   | otherwise      = TOr $ tNull:ts

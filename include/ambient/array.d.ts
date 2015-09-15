@@ -152,9 +152,13 @@ interface Array<M extends ReadOnly, T> {
     [n: number]: T;
 }
 
-declare type IArray<T>  = Array<Immutable,T>;
-declare type MArray<T>  = Array<Mutable,T>;
-declare type ROArray<T> = Array<ReadOnly,T>;
+declare type IArray<T>  = Array<Immutable, T>;
+declare type MArray<T>  = Array<Mutable, T>;
+declare type ROArray<T> = Array<ReadOnly, T>;
+
+/*@ __getLength ::                     (a: IArray<T>) =>  { v: number | v >= 0 && v = (len this) } */
+/*@ __getLength :: <M extends ReadOnly>(a: Array<M,T>) => { v: number | v >= 0 } */
+declare function __getLength<M extends ReadOnly,T>(a: Array<M, T>): number;
 
 // interface ArrayConstructor {
 //     new (arrayLength?: number): any[];

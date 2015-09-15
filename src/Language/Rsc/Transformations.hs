@@ -28,12 +28,14 @@ import           Language.Rsc.Annots
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
+import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.Traversals
+import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Language.Rsc.Visitor
@@ -208,29 +210,23 @@ replaceDotRef p@(Rsc { code = Src fs, tAlias = ta, pAlias = pa, invts = is })
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
--- fixFunBinders :: PPR r => BareRsc r -> BareRsc r
--- fixFunBinders :: RefScript -> RefScript
+fixFunBinders :: RefScript -> RefScript
 --------------------------------------------------------------------------------
 fixFunBinders p@(Rsc { code = Src ss }) = p'
   where
-    p'    = p { code = Src $ (trans f [] [] <$>) <$> ss }
-    f _ _ = fixFunBindersInType
+    p' = p { code = Src $ (trans fixFunBindersInType [] [] <$>) <$> ss }
 
-fixFunBindersInType t | Just is <- bkFuns t = mkAnd $ map (mkFun . f) is
-                      | otherwise           = t
+fixFunBindersInType _ bs = go
   where
-    f (vs, yts, t) = (vs, ssb yts, sub t)
-      where
-        ks  = [ y | B y _ <- yts ]
-        ks' = (F.eVar . (`mappend` F.symbol [symSepName])) <$> ks
-        sub :: F.Subable a => a -> a
-        sub = F.subst $ F.mkSubst $ zip ks ks'
-        ssb bs = [ B (sub s) (sub t) | B s t <- bs ]
+    ks               = [ y | B y _ <- bs ]
+    ss               = (`mappend` F.symbol [symSepName])
+    ks'              = map (F.eVar . ss) ks
+    sub             :: F.Subable a => a -> a
+    sub              = F.subst (F.mkSubst (zip ks ks'))
 
--- fixFunBindersInModule m@(ModuleDef { m_variables = mv, m_types = mt })
---                 = m { m_variables = mv', m_types = mt' }
---   where
---    mv'          = envMap f mv
---    f (VI a i t) = VI a i $ fixFunBindersInType t
---    mt'          = envMap (trans g [] []) mt
---    g _ _        = fixFunBindersInType
+    go (TFun bs t r) = TFun [B (ss s) ts | B s ts <- bs] t (sub r)
+    go t             = toplevel t sub
+
+-- When costructing the substitution haskmap, if the list contains duplicate
+-- mappings, the later mappings take precedence.
+

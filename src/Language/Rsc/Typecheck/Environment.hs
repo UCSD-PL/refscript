@@ -13,7 +13,7 @@ module Language.Rsc.Typecheck.Environment
     , initCallableEnv
     , initClassInstanceEnv
     , tcEnvFindTy, resolveTypeM, tcEnvFindTyForAsgn
-    , tcEnvFindReturn, tcEnvAdd, tcEnvAdds, safeTcEnvFindTy
+    , tcEnvFindReturn, tcEnvAdd, tcEnvAdds
     , tcEnvAddBounds
     ) where
 
@@ -216,9 +216,6 @@ tcEnvFindTyWithAgsn x γ | Just t <- envFindTy x $ tce_names γ
 tcEnvFindTyForAsgn    :: (Unif r, F.Symbolic x) => x -> TCEnv r -> Maybe (EnvEntry r)
 --------------------------------------------------------------------------------
 tcEnvFindTyForAsgn x γ = envFindTy x $ tce_names γ
-
-safeTcEnvFindTy l γ x | Just t <- tcEnvFindTy x γ = return t
-                      | otherwise = die $ bugEnvFindTy (srcPos l) x
 
 tcEnvFindReturn = v_type . envFindReturn . tce_names
 

@@ -5,22 +5,20 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Rsc.Traversals (
-    scrapeQuals
-  , accumNamesAndPaths
+    accumNamesAndPaths
   , accumModuleStmts
   , accumVars
   ) where
 
-import           Control.Applicative            hiding (empty)
+import           Control.Applicative      hiding (empty)
 import           Data.Default
 import           Data.Generics
-import qualified Data.HashSet                   as H
-import           Data.Maybe                     (fromMaybe, listToMaybe, maybeToList)
+import qualified Data.HashSet             as H
+import           Data.Maybe               (fromMaybe, listToMaybe, maybeToList)
 import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types        as F
-import           Language.Rsc.Annots            hiding (err)
+import qualified Language.Fixpoint.Types  as F
+import           Language.Rsc.Annots      hiding (err)
 import           Language.Rsc.AST
-import           Language.Rsc.Liquid.Qualifiers
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
@@ -30,26 +28,6 @@ import           Language.Rsc.Visitor
 import           Debug.Trace
 
 
--- | Extracts all qualifiers from a RefScript program
----------------------------------------------------------------------------------
-scrapeQuals :: [F.Qualifier] -> [Statement (AnnRel F.Reft)] -> [F.Qualifier]
----------------------------------------------------------------------------------
-scrapeQuals qs ss = qs ++ qualifiers (mkUq $ foldStmts tbv [] ss)
-  where
-    tbv = defaultVisitor { accStmt = gos, accCElt = goe }
-
-    gos _ (FunctionStmt l f _ _) = [(f, t) | SigAnn _ t <- fFact l]
-    gos _ (VarDeclStmt _ vds)    = [(x, t) | VarDecl l x _ <- vds
-                                           , VarAnn _ _ (Just t) <- fFact l]
-    gos _ _                      = []
-
-    goe _ (Constructor l _ _)        = [(x, t) | CtorAnn  t <- fFact l, let x = Id l "ctor" ]
-    goe _ (MemberVarDecl l _ x _)    = [(x, t) | FieldAnn (FI _ _ t) <- fFact l ]
-    goe _ (MemberMethDecl l _ x _ _) = [(x, t) | MethAnn  (MI _ _ t) <- fFact l ]
-
-mkUq = zipWith tx ([0..] :: [Int])
-  where
-    tx i (Id l s, t) = (Id l $ s ++ "_" ++ show i, t)
 
 -- debugTyBinds p@(Rsc { code = Src ss }) = trace msg p
 --   where

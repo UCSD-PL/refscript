@@ -36,6 +36,7 @@ import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Alias
+import           Language.Rsc.Liquid.Qualifiers
 import           Language.Rsc.Locations           hiding (val)
 import           Language.Rsc.Misc                ((&))
 import           Language.Rsc.Names

@@ -23,7 +23,7 @@ import           Data.Tuple                   (swap)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Types      (differenceSEnv, intersectWithSEnv, toListSEnv)
-import           Language.Rsc.Annots
+import           Language.Rsc.Annotations
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
@@ -124,6 +124,12 @@ compareObjs l γ t1 t2
 
 compareObjs l γ t1@(TObj e1s _) t2@(TObj e2s _)
   = compareObjMembers l γ t1 e1s t2 e2s
+
+compareObjs l γ t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
+  | mutRelated t1, mutRelated t2, x1 == x2
+  = EqT
+  | mutRelated t1, mutRelated t2, isAncestor (envCHA γ) x2 x1
+  = SubT
 
 compareObjs l γ t1@(TRef (Gen x1 (m1:t1s)) _) t2@(TRef (Gen x2 (m2:t2s)) _)
   --

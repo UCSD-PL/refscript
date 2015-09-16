@@ -73,7 +73,7 @@ import           Data.Monoid                     (mappend, mempty)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types         as F
-import           Language.Rsc.Annots
+import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.CmdLine
@@ -88,6 +88,7 @@ import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import qualified Language.Rsc.SystemUtils        as S
+import           Language.Rsc.Transformations
 import           Language.Rsc.Typecheck.Sub
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types

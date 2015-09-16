@@ -1,13 +1,13 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverlappingInstances #-}
 
-module Language.Rsc.Pretty.Annots where
+module Language.Rsc.Pretty.Annotations where
 
 import           Control.Applicative        ((<$>))
 import qualified Data.IntMap.Strict         as I
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types    as F
-import           Language.Rsc.Annots
+import           Language.Rsc.Annotations
 import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Pretty.Errors ()
 import           Language.Rsc.Pretty.Types  ()

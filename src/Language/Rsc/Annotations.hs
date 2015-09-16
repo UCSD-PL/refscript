@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverlappingInstances #-}
 
-module Language.Rsc.Annots (
+module Language.Rsc.Annotations (
 
   -- * SSA
     SsaInfo(..), Var

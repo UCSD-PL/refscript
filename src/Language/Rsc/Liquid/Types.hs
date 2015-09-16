@@ -31,11 +31,6 @@ module Language.Rsc.Liquid.Types (
   -- * Predicates On RefType
   , isTrivialRefType
 
-  -- * Useful Operations
-  , foldReft, efoldReft, efoldRType
-  , mapReftM, mapReftTM
-  , mapTypeMembersM
-
   -- * Accessing Spec Annotations
   , getSpec, getRequires, getEnsures, getAssume, getAssert
   , getInvariant, getFunctionIds
@@ -50,7 +45,6 @@ module Language.Rsc.Liquid.Types (
   , mkOffset
   -- , substOffsetThis
   , mkCastFunTy
-  , mkDotRefFunTy
 
   ) where
 
@@ -58,19 +52,15 @@ import           Control.Applicative
 import           Data.Default
 import qualified Data.HashMap.Strict          as HM
 import qualified Data.List                    as L
-import           Data.Maybe                   (catMaybes, fromMaybe, maybeToList)
+import           Data.Maybe                   (catMaybes, fromMaybe)
 import           Data.Monoid                  (mconcat)
-import qualified Data.Traversable             as T
 import qualified Language.Fixpoint.Bitvector  as BV
-import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.AST
-import           Language.Rsc.Environment
-import           Language.Rsc.Errors
-import           Language.Rsc.Locations
-import           Language.Rsc.Lookup
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
+import           Language.Rsc.Transformations
+import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
@@ -235,180 +225,6 @@ instance (PPR r, F.Subable r) => F.Subable (RTypeQ q r) where
   substf f    = emapReft (F.substf . F.substfExcept f) []
   subst su    = emapReft (F.subst  . F.substExcept su) []
   subst1 t su = emapReft (\xs r -> F.subst1Except xs r su) [] t
-
-------------------------------------------------------------------------------------------
--- | Traversals over @RType@
-------------------------------------------------------------------------------------------
-
-------------------------------------------------------------------------------------------
-emapReft  :: PPR r => ([F.Symbol] -> r -> r') -> [F.Symbol] -> RTypeQ q r -> RTypeQ q r'
-------------------------------------------------------------------------------------------
-emapReft f γ (TVar α r)     = TVar α (f γ r)
-emapReft f γ (TPrim c r)    = TPrim c (f γ r)
-emapReft f γ (TRef n r)     = TRef (emapReftGen f γ n) (f γ r)
-emapReft f γ (TAll α t)     = TAll (emapReftBTV f γ α) (emapReft f γ t)
-emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts)
-                                   (emapReft f γ' t) (f γ r)
-                              where γ' = (b_sym <$> xts) ++ γ
-emapReft f γ (TObj xts r)   = TObj (emapReftTM f γ xts) (f γ r)
-emapReft f γ (TClass n)     = TClass (emapReftBGen f γ n)
-emapReft _ _ (TMod m)       = TMod m
-emapReft f γ (TOr ts)       = TOr (emapReft f γ <$> ts)
-emapReft f γ (TAnd ts)      = TAnd (emapReft f γ <$> ts)
-emapReft _ _ _              = error "Not supported in emapReft"
-
-emapReftBTV f γ (BTV s l c) = BTV s l $ emapReft f γ <$> c
-emapReftGen f γ (Gen n ts)  = Gen n $ emapReft f γ <$> ts
-emapReftBGen f γ (BGen n ts) = BGen n $ emapReftBTV f γ <$> ts
-emapReftBind f γ (B x t)    = B x $ emapReft f γ t
-emapReftTM f γ (TM p m sp sm c k s n)
-  = TM (fmap (emapReftFI f γ) p)
-       (fmap (emapReftMI f γ) m)
-       (fmap (emapReftFI f γ) sp)
-       (fmap (emapReftMI f γ) sm)
-       (emapReft f γ <$> c)
-       (emapReft f γ <$> k)
-       (emapReft f γ <$> s)
-       (emapReft f γ <$> n)
-
-emapReftFI f γ (FI m t1 t2) = FI m (emapReft f γ t1) (emapReft f γ t2)
-emapReftMI f γ (MI m n  t2) = MI m n (emapReft f γ t2)
-
-------------------------------------------------------------------------------------------
-mapReftM :: (F.Reftable r, PP r, Applicative m, Monad m)
-         => (r -> m r') -> RTypeQ q r -> m (RTypeQ q r')
-------------------------------------------------------------------------------------------
-mapReftM f (TVar α r)      = TVar α  <$> f r
-mapReftM f (TPrim c r)     = TPrim c <$> f r
-mapReftM f (TRef n r)      = TRef    <$> mapReftGenM f n <*> f r
-mapReftM f (TFun xts t r)  = TFun    <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> f r
-mapReftM f (TAll α t)      = TAll    <$> mapReftBTV f α <*> mapReftM f t
-mapReftM f (TAnd ts)       = TAnd    <$> mapM (mapReftM f) ts
-mapReftM f (TOr ts)        = TOr     <$> mapM (mapReftM f) ts
-mapReftM f (TObj xts r)    = TObj    <$> mapReftTM f xts <*> f r
-mapReftM f (TClass n)      = TClass  <$> mapReftBGenM f n
-mapReftM _ (TMod a)        = TMod    <$> pure a
-mapReftM _ t               = error $ "Not supported in mapReftM: " ++ ppshow t
-
-mapReftBTV   f (BTV s l c) = BTV s l <$> T.mapM (mapReftM f)   c
-mapReftGenM  f (Gen n ts)  = Gen n   <$>   mapM (mapReftM f)   ts
-mapReftBGenM f (BGen n ts) = BGen n  <$>   mapM (mapReftBTV f) ts
-mapReftBindM f (B x t)     = B x     <$>         mapReftM f    t
-
-mapReftTM f (TM p m sp sm c k s n)
-  = TM <$> T.mapM (mapReftFI f) p
-       <*> T.mapM (mapReftMI f) m
-       <*> T.mapM (mapReftFI f) sp
-       <*> T.mapM (mapReftMI f) sm
-       <*> T.mapM (mapReftM f) c
-       <*> T.mapM (mapReftM f) k
-       <*> T.mapM (mapReftM f) s
-       <*> T.mapM (mapReftM f) n
-
-mapReftFI f (FI m t1 t2) = FI m <$> mapReftM f t1 <*> mapReftM f t2
-mapReftMI f (MI m n t2) = MI m n <$> mapReftM f t2
-
-
-------------------------------------------------------------------------------------------
--- | fold over @RType@
-------------------------------------------------------------------------------------------
-
-------------------------------------------------------------------------------------------
-foldReft  :: PPR r => (r -> a -> a) -> a -> RTypeQ q r -> a
-------------------------------------------------------------------------------------------
-foldReft  f = efoldReft (\_ -> ()) (\_ -> f) F.emptySEnv
-
-------------------------------------------------------------------------------------------
-efoldReft :: PPR r => (RTypeQ q r -> b) -> (F.SEnv b -> r -> a -> a)
-                   -> F.SEnv b -> a -> RTypeQ q r -> a
-------------------------------------------------------------------------------------------
-efoldReft g f = go
-  where
-    go γ z (TVar _ r)     = f γ r z
-    go γ z (TPrim _ r)    = f γ r z
-    go γ z (TRef n r)     = f γ r $ gos γ z $ g_args n
-    go γ z (TAll _ t)     = go γ z t
-    go γ z (TFun xts t r) = f γ r $ go γ' (gos γ' z $ map b_type xts) t
-                            where γ' = foldr (efoldExt g) γ xts
-    go γ z (TOr ts)       = gos γ z ts
-    go γ z (TAnd ts)      = gos γ z ts
-    go γ z (TObj xts r)   = f γ r $ efoldReftTM g f xts γ z
-    go γ z (TClass n)     = gos γ z $ catMaybes $ btv_constr <$> b_args n
-    go _ z (TMod _)       = z
-    go _ _ t              = error $ "UNIMPLEMENTED[efoldReft]: " ++ ppshow t
-
-    gos γ z ts            = L.foldl' (go γ) z ts
-
-efoldExt g xt γ           = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
-
-------------------------------------------------------------------------------------------
-efoldReftTM :: PPR r => (RTypeQ q r -> b) -> (F.SEnv b -> r -> a -> a)
-                     -> TypeMembersQ q r -> F.SEnv b -> a -> a
-------------------------------------------------------------------------------------------
-efoldReftTM g f (TM p m sp sm c k s n) γ z =
-    L.foldl' (efoldReft g f γ) z $ pl ++ ml ++ spl ++ sml ++ cl ++ kl ++ sl ++ nl
-  where
-    pl  = L.foldr (\(_, FI _ t t') -> ([t,t'] ++) ) [] $ F.toListSEnv p
-    ml  = L.foldr (\(_, MI _ _ t ) -> ([t]    ++) ) [] $ F.toListSEnv m
-    spl = L.foldr (\(_, FI _ t t') -> ([t,t'] ++) ) [] $ F.toListSEnv sp
-    sml = L.foldr (\(_, MI _ _ t ) -> ([t]    ++) ) [] $ F.toListSEnv sm
-    cl  = maybeToList c
-    kl  = maybeToList k
-    sl  = maybeToList s
-    nl  = maybeToList n
-
-------------------------------------------------------------------------------------------
-mapTypeMembersM :: (Applicative m, Monad m)
-                => (RType r -> m (RType r)) -> TypeMembers r -> m (TypeMembers r)
-------------------------------------------------------------------------------------------
-mapTypeMembersM f (TM p m sp sm c k s n)
-  = TM <$> T.mapM (mapFieldInfoM f) p
-       <*> T.mapM (mapMethInfoM f) m
-       <*> T.mapM (mapFieldInfoM f) sp
-       <*> T.mapM (mapMethInfoM f) sm
-       <*> T.mapM f c
-       <*> T.mapM f k
-       <*> T.mapM f s
-       <*> T.mapM f n
-
-mapFieldInfoM f (FI o m t) = FI o <$> f m <*> f t
-mapMethInfoM  f (MI o m t) = MI o       m <$> f t
-
-------------------------------------------------------------------------------------------
-efoldRType :: PPR r => (RTypeQ q r -> b) -> (F.SEnv b -> RTypeQ q r -> a -> a)
-                    -> F.SEnv b -> a -> RTypeQ q r -> a
-------------------------------------------------------------------------------------------
-efoldRType g f              = go
-  where
-    go γ z t@(TVar _ _)     = f γ t z
-    go γ z t@(TPrim _ _)    = f γ t z
-    go γ z t@(TRef n _)     = f γ t $ gos γ z $ g_args n
-    go γ z t@(TAll _ t')    = f γ t $ go γ z t'
-    go γ z t@(TFun xts τ _) = f γ t $ go γ' (gos γ' z $ map b_type xts) τ
-                              where γ' = foldr (efoldExt g) γ xts
-    go γ z t@(TAnd ts)      = f γ t $ gos γ z ts
-    go γ z t@(TOr ts)       = f γ t $ gos γ z ts
-    go γ z t@(TObj xts _)   = f γ t $ efoldRTypeTM g f xts γ z
-    go γ z t@(TClass n)     = f γ t $ gos γ z $ catMaybes $ btv_constr <$> b_args n
-    go γ z t@(TMod _)       = f γ t z
-    go _ _ t              = error $ "UNIMPLEMENTED[efoldRType]: " ++ ppshow t
-    gos γ z ts            = L.foldl' (go γ) z ts
-
-------------------------------------------------------------------------------------------
-efoldRTypeTM :: PPR r => (RTypeQ q r -> b) -> (F.SEnv b -> RTypeQ q r -> a -> a)
-                      -> TypeMembersQ q r -> F.SEnv b -> a -> a
-------------------------------------------------------------------------------------------
-efoldRTypeTM g f (TM p m sp sm c k s n) γ z =
-    L.foldl' (efoldRType g f γ) z $ pl ++ ml ++ spl ++ sml ++ cl ++ kl ++ sl ++ nl
-  where
-    pl  = L.foldr (\(_, FI _ t t') -> ([t,t'] ++) ) [] $ F.toListSEnv p
-    ml  = L.foldr (\(_, MI _ _ t ) -> ([t]    ++) ) [] $ F.toListSEnv m
-    spl = L.foldr (\(_, FI _ t t') -> ([t,t'] ++) ) [] $ F.toListSEnv sp
-    sml = L.foldr (\(_, MI _ _ t ) -> ([t]    ++) ) [] $ F.toListSEnv sm
-    cl  = maybeToList c
-    kl  = maybeToList k
-    sl  = maybeToList s
-    nl  = maybeToList n
 
 
 ------------------------------------------------------------------------------------------
@@ -577,28 +393,4 @@ mkCastFunTy t
     α = TVar (TV a def) fTop
     x = F.symbol "x"
 
-
--- | Dot ref
---
----------------------------------------------------------------------------------
-mkDotRefFunTy :: (PP r, EnvLike r t, PP f, IsLocated l, F.Symbolic f, Monad m
-                 , ExprReftable F.Expr r, ExprReftable Int r, F.Reftable r)
-              => l -> t r -> f -> RType r -> RType r -> m (RType r)
----------------------------------------------------------------------------------
-mkDotRefFunTy l g f tObj tField
-  -- | Case array.length:
-  | isArrayType tObj, F.symbol "length" == F.symbol f
-  = globalLengthType g
-  -- | Case immutable field: (x: tObj) => { bField | v = x_f }
-  | Just m <- getFieldMutability (envCHA g) tObj (F.symbol f)
-  , isImm m
-  = return $ mkFun ([], [B x tObj], (fmap F.top tField) `eSingleton` mkOffset x f)
-  -- | TODO: Case: TEnum
-  -- | Rest (x: tTobj) => tField[this/x]
-  | otherwise
-  = return $ mkFun ([], [B x tObj], substThis x tField)
-  where
-    x = F.symbol "x"
-mkDotRefFunTy l _ f tObj _
-  = die $ errorMissingFld (srcPos l) f tObj
 

@@ -52,7 +52,7 @@ import           Data.Tuple                        (swap)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc            (concatMapM, intersperse, mapPair, single)
 import qualified Language.Fixpoint.Types           as F
-import           Language.Rsc.Annots               hiding (err)
+import           Language.Rsc.Annotations               hiding (err)
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
@@ -436,7 +436,7 @@ allAncestors γ s    = classAncestors γ s ++ interfaceAncestors γ s
 ---------------------------------------------------------------------------
 isAncestor :: ClassHierarchy t -> AbsName -> AbsName -> Bool
 ---------------------------------------------------------------------------
-isAncestor cha c p = p `elem` allAncestors cha c
+isAncestor cha sup sub = sub `elem` allAncestors cha sup
 
 ---------------------------------------------------------------------------
 boundKeys :: (ExprReftable Int r, F.Reftable r)

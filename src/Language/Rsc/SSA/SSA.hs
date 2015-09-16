@@ -22,7 +22,7 @@ import           Data.Typeable                ()
 import qualified Language.Fixpoint.Errors     as E
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types      as F
-import           Language.Rsc.Annots
+import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Core.Env
@@ -873,7 +873,7 @@ envJoin' l (θ1,φ1) (θ2,φ2) = do
     setSsaEnv θ'                          -- Keep Common binders
     phis       <- mapM (mapFstM freshenIdSSA) (envToList $ envLefts θ)
     gl_phis    <- mapM (mapFstM freshenIdSSA) (envToList $ envLefts φ)
-    stmts      <- forM (phis ++ gl_phis) $ phiAsgn l   -- Adds Phi-Binders, Phi Annots, Return Stmts
+    stmts      <- forM (phis ++ gl_phis) $ phiAsgn l   -- Adds Phi-Binders, Phi Annotations, Return Stmts
     θ''        <- getSsaEnv
     let (s1,s2) = unzip stmts
     return (fst <$> phis, Just θ'', Just $ BlockStmt l s1, Just $ BlockStmt l s2)

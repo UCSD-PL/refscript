@@ -62,7 +62,7 @@ import qualified Data.IntSet                 as I
 import           Data.Maybe                  (fromMaybe)
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types     as F
-import           Language.Rsc.Annots
+import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Core.Env

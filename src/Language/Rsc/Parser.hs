@@ -31,7 +31,7 @@ import           Data.Tuple
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types          as F
-import           Language.Rsc.Annots              hiding (err)
+import           Language.Rsc.Annotations              hiding (err)
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
@@ -68,7 +68,7 @@ parseRscFromFiles :: [FilePath] -> IO (Either FError RefScript)
 --------------------------------------------------------------------------------
 parseRscFromFiles fs =
   partitionEithers <$> mapM parseScriptFromJSON fs >>= \case
-    ([],ps) -> return $ mkRsc <$> parseAnnots (concat ps)
+    ([],ps) -> return $ mkRsc <$> parseAnnotations (concat ps)
     (es,_ ) -> return $ Left $ mconcat es
 
 --------------------------------------------------------------------------------
@@ -154,9 +154,9 @@ extractFact fs = map go fs
 type PState = Integer
 
 --------------------------------------------------------------------------------
-parseAnnots :: [Statement (SrcSpan, [RawSpec])] -> Either FError [Statement (SrcSpan, [Spec])]
+parseAnnotations :: [Statement (SrcSpan, [RawSpec])] -> Either FError [Statement (SrcSpan, [Spec])]
 --------------------------------------------------------------------------------
-parseAnnots ss =
+parseAnnotations ss =
   case mapAccumL (mapAccumL f) (0,[]) ss of
     ((_,[]),b) -> Right b
     ((_,es),_) -> Left  $ F.Unsafe es

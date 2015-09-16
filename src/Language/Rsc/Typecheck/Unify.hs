@@ -24,7 +24,7 @@ import           Data.Monoid
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types            as F
-import           Language.Rsc.Annots
+import           Language.Rsc.Annotations
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors

@@ -67,6 +67,7 @@ errorInvalidTopStmt l x       = mkErr l $ printf "Invalid top-level statement: %
 errorDuplicate i l l'         = mkErr l $ printf "Duplicate specification for '%s':\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
 errorDuplicateKey l x         = mkErr l $ printf "Duplicate key '%s' when merging creating environment" (ppshow x)
 errorInvalidHex l x           = mkErr l $ printf "'%s' is not a valid HEX value" (ppshow x)
+errorIllFormedType l t        = mkErr l $ printf "Type '%s' is ill-formed" (ppshow t)
 
 
 ---------------------------------------------------------------------------

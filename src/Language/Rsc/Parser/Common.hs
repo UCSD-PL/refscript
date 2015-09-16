@@ -22,7 +22,7 @@ import           Data.Maybe                   (listToMaybe)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Parse
 import qualified Language.Fixpoint.Types      as F
-import           Language.Rsc.Annots
+import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Locations       hiding (val)
 import           Language.Rsc.Typecheck.Types

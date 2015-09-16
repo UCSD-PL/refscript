@@ -82,10 +82,6 @@ envLikeFindTy' :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (EnvEntry r)
 -------------------------------------------------------------------------------
 envLikeFindTy' x (envNames -> γ) = envFindTy x γ
 
--- envLikeFindTy' x γ | Just t  <- envFindTy x $ names γ = Just t
---                    | Just γ' <- parent γ              = envLikeFindTy' x γ'
---                    | otherwise                        = Nothing
-
 -------------------------------------------------------------------------------
 envLikeFindTy :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (RType r)
 -------------------------------------------------------------------------------
@@ -133,5 +129,5 @@ safeEnvFindTy :: (EnvLike r t, IsLocated l, Symbolic x, Monad m) => l -> t r -> 
 safeEnvFindTy l γ x | Just t <- envLikeFindTy x γ = return t
                     | otherwise = die $ bugEnvFindTy (srcPos l) (F.symbol x)
 
-globalLengthType γ = safeEnvFindTy (def::SrcSpan) γ "__getLength"
+globalLengthType γ = safeEnvFindTy (def::SrcSpan) γ "_getLength"
 

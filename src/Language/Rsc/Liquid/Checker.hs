@@ -24,7 +24,7 @@ import           Language.Fixpoint.Interface     (solve)
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types         as F
 import qualified Language.Fixpoint.Visitor       as V
-import           Language.Rsc.Annots
+import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.CmdLine            (Config)
@@ -50,6 +50,7 @@ import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Checker  (typeCheck)
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
+import           Language.Rsc.TypeUtilities
 import           System.Console.CmdArgs.Default
 
 import           Debug.Trace                     hiding (traceShow)
@@ -60,6 +61,7 @@ verifyFile :: Config -> FilePath -> [FilePath] -> IO (A.UAnnSol RefType, FError)
 verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
   do  p   <- EitherIO   $ parseRscFromFiles fs
       _   <- liftIO     $ donePhase Loud "Parse Files"
+      _   <- pure       $ checkTypeWF p
       cha <- liftEither $ mkCHA p
       _   <- liftIO     $ donePhase Loud "SSA Transform"
       ssa <- EitherIO   $ ssaTransform p cha
@@ -652,7 +654,8 @@ consExpr g c@(CallExpr l em@(DotRef _ e f) es) _
 --
 consExpr g (CallExpr l e es) _
   = mseq (consExpr g e Nothing) $ \(x, g') ->
-      cgSafeEnvFindTyM x g' >>= consCall g' l e (es `zip` nths)
+      do  ft <- cgSafeEnvFindTyM x g'
+          consCall g' l e (es `zip` nths) ft
 
 -- | e.f
 --
@@ -794,13 +797,13 @@ consCall :: PP a
 --   3. Use @subType@ to add constraints between the types from (step 2) and (step 1)
 --   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in
 --      output type of callee.
-
 consCall g l fn ets ft0
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
+      -- ts <- ltracePP l (ppshow fn) <$> mapM (`cgSafeEnvFindTyM` g') xes
       ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case ol of
         -- If multiple are valid, pick the first one
-        (ft:_) -> consInstantiate l g' fn ft ts xes
+        (ft:_) -> {- traceTypePP l (ppshow fn) $-} consInstantiate l g' fn ft ts xes
         _      -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts)
                               (toType <$> callSigs)
   where
@@ -808,7 +811,7 @@ consCall g l fn ets ft0
               , cge_ctx g == cx
               , lt <- callSigs
               , arg_type (toType t) == arg_type (toType lt) ]
-    callSigs  = extractCall g ft0
+    callSigs  = {- ltracePP l (ppshow fn) $ -} extractCall g ft0
     arg_type t = (\(a,b,_) -> (a,b)) <$> bkFun t
 
 --------------------------------------------------------------------------------

@@ -10,7 +10,7 @@ import           Data.Maybe
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types      as F
 import qualified Language.Fixpoint.Visitor    as V
-import           Language.Rsc.Annots
+import           Language.Rsc.Annotations
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Types    ()

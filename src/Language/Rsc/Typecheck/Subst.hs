@@ -31,7 +31,7 @@ import qualified Data.HashSet                 as S
 import           Data.Monoid                  hiding ((<>))
 import           Language.Fixpoint.Misc       (intersperse)
 import qualified Language.Fixpoint.Types      as F
-import           Language.Rsc.Annots
+import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Locations

@@ -15,13 +15,11 @@ import           Prelude                 hiding (mapM)
 removeAnnotations :: Traversable t => t a -> t ()
 removeAnnotations = reannotate (const ())
 
--- | Changes all the labels in the tree to another one, given by a
--- function.
+-- | Changes all the labels in the tree to another one, given by a function.
 reannotate :: Traversable t => (a -> b) -> t a -> t b
 reannotate f tree = traverse (pure . f) tree ()
 
--- | add an extra field to the AST labels (the label would look like @
--- (a, b) @)
+-- | add an extra field to the AST labels (the label would look like @(a, b)@)
 addExtraAnnotationField :: Traversable t => b -> t a -> t (a, b)
 addExtraAnnotationField def t = traverse (\z -> pure (z, def)) t ()
 
@@ -29,10 +27,8 @@ addExtraAnnotationField def t = traverse (\z -> pure (z, def)) t ()
 removeExtraAnnotationField :: Traversable t => t (a, b) -> t a
 removeExtraAnnotationField t = traverse (pure . fst) t ()
 
-
--- | Assigns unique numeric (Int) ids to each node in the AST. Returns
--- a pair: the tree annotated with UID's and the last ID that was
--- assigned.
+-- | Assigns unique numeric (Int) ids to each node in the AST. Returns a pair:
+-- the tree annotated with UID's and the last ID that was assigned.
 assignUniqueIds :: Traversable t => Int -- ^ starting id
                                  -> t a -- ^ tree root
                                  -> (t (a, Int), Int)
@@ -49,81 +45,77 @@ class Annotated a where
 
 instance Annotated Expression where
   getAnnotation e = case e of
-   StringLit a s              -> a
-   RegexpLit a s g ci         -> a
-   NumLit a d                 -> a
-   HexLit a d                 -> a
-   IntLit a i                 -> a
-   BoolLit a b                -> a
-   NullLit a                  -> a
-   ArrayLit a exps            -> a
-   ObjectLit a props          -> a
-   ThisRef a                  -> a
-   VarRef a id                -> a
-   DotRef a exp id            -> a
-   BracketRef a container key -> a
-   NewExpr a ctor params      -> a
-   PrefixExpr a op e          -> a
-   UnaryAssignExpr a op lv    -> a
-   InfixExpr a op e1 e2       -> a
-   CondExpr a g et ef         -> a
-   AssignExpr a op lv e       -> a
-   ListExpr a es              -> a
-   CallExpr a fn params       -> a
-   FuncExpr a mid args s      -> a
-   Cast a e                   -> a
-   Cast_ a e                  -> a
-   SuperRef a         	      -> a
+    StringLit        a  _     -> a
+    RegexpLit        a  _ _ _ -> a
+    NumLit           a  _     -> a
+    HexLit           a  _     -> a
+    IntLit           a  _     -> a
+    BoolLit          a  _     -> a
+    NullLit          a        -> a
+    ArrayLit         a  _     -> a
+    ObjectLit        a  _     -> a
+    ThisRef          a        -> a
+    VarRef           a  _     -> a
+    DotRef           a  _ _   -> a
+    BracketRef       a  _ _   -> a
+    NewExpr          a  _ _   -> a
+    PrefixExpr       a  _ _   -> a
+    UnaryAssignExpr  a  _ _   -> a
+    InfixExpr        a  _ _ _ -> a
+    CondExpr         a  _ _ _ -> a
+    AssignExpr       a  _ _ _ -> a
+    ListExpr         a  _     -> a
+    CallExpr         a  _ _   -> a
+    FuncExpr         a  _ _ _ -> a
+    Cast             a  _     -> a
+    Cast_            a  _     -> a
+    SuperRef         a        -> a
 
 instance Annotated Statement where
-  getAnnotation = getAnnotationStmt
-
-getAnnotationStmt = go
-  where
-    go (BlockStmt a _            ) = a
-    go (EmptyStmt a              ) = a
-    go (ExprStmt a _             ) = a
-    go (IfStmt a _ _ _           ) = a
-    go (IfSingleStmt a _ _       ) = a
-    go (SwitchStmt a _ _         ) = a
-    go (WhileStmt a _ _          ) = a
-    go (DoWhileStmt a _ _        ) = a
-    go (BreakStmt a _            ) = a
-    go (ContinueStmt a _         ) = a
-    go (LabelledStmt a _ _       ) = a
-    go (ForInStmt a _ _ _        ) = a
-    go (ForStmt a _ _ _ _        ) = a
-    go (TryStmt a _ _ _          ) = a
-    go (ThrowStmt a _            ) = a
-    go (ReturnStmt a _           ) = a
-    go (WithStmt a _ _           ) = a
-    go (VarDeclStmt a _          ) = a
-    go (FunctionStmt a _ _ _     ) = a
-    go (ClassStmt a _ _ _ _      ) = a
-    go (ModuleStmt a _ _         ) = a
-    go (InterfaceStmt a _            ) = a
-    go (EnumStmt a _ _           ) = a
-
+  getAnnotation s = case s of
+    BlockStmt      a  _       -> a
+    EmptyStmt      a          -> a
+    ExprStmt       a  _       -> a
+    IfStmt         a  _ _ _   -> a
+    IfSingleStmt   a  _ _     -> a
+    SwitchStmt     a  _ _     -> a
+    WhileStmt      a  _ _     -> a
+    DoWhileStmt    a  _ _     -> a
+    BreakStmt      a  _       -> a
+    ContinueStmt   a  _       -> a
+    LabelledStmt   a  _ _     -> a
+    ForInStmt      a  _ _ _   -> a
+    ForStmt        a  _ _ _ _ -> a
+    TryStmt        a  _ _ _   -> a
+    ThrowStmt      a  _       -> a
+    ReturnStmt     a  _       -> a
+    WithStmt       a  _ _     -> a
+    VarDeclStmt    a  _       -> a
+    FunctionStmt   a  _ _ _   -> a
+    ClassStmt      a  _ _ _ _ -> a
+    ModuleStmt     a  _ _     -> a
+    InterfaceStmt  a  _       -> a
+    EnumStmt       a  _ _     -> a
 
 instance Annotated LValue where
   getAnnotation lv = case lv of
-    LVar a _ -> a
-    LDot a _ _ -> a
-    LBracket a _ _ -> a
+    LVar      a  _    -> a
+    LDot      a  _ _  -> a
+    LBracket  a  _ _  -> a
 
 instance Annotated VarDecl where
   getAnnotation (VarDecl a _ _) = a
 
 instance Annotated Prop  where
   getAnnotation p = case p of
-    PropId a _ -> a
+    PropId     a _ -> a
     PropString a _ -> a
-    PropNum a _ -> a
+    PropNum    a _ -> a
 
 instance Annotated CaseClause where
   getAnnotation c = case c of
-    CaseClause a _ _ -> a
-    CaseDefault a _ -> a
+    CaseClause  a _ _ -> a
+    CaseDefault a _   -> a
 
 instance Annotated CatchClause where
   getAnnotation (CatchClause a _ _) = a
@@ -133,9 +125,10 @@ instance Annotated Id where
 
 instance Annotated ClassElt where
   getAnnotation e = case e of
-    Constructor a _ _ -> a
-    MemberVarDecl a _ _ _ -> a
+    Constructor    a _ _     -> a
+    MemberVarDecl  a _ _ _   -> a
     MemberMethDecl a _ _ _ _ -> a
 
 instance (Annotated thing, IsLocated a) => IsLocated (thing a) where
   srcPos  = srcPos . getAnnotation
+

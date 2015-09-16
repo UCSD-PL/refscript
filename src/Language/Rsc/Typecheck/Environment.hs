@@ -23,7 +23,7 @@ import           Data.Monoid
 import           Language.Fixpoint.Errors     (die)
 import           Language.Fixpoint.Misc       (fst3, safeZip, single)
 import qualified Language.Fixpoint.Types      as F
-import           Language.Rsc.Annots
+import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Core.Env
@@ -87,8 +87,7 @@ initGlobalEnv :: Unif r => TcRsc r -> ClassHierarchy r -> TCEnv r
 initGlobalEnv pgm@(Rsc { code = Src ss }) cha
   = TCE nms bnds ctx pth cha mut tThis
   where
-    nms   = mkVarEnv vars    -- modules ?
-    vars  = accumVars ss
+    nms   = mkVarEnv (accumVars ss)
     bnds  = mempty
     ctx   = emptyContext
     pth   = emptyPath
@@ -107,15 +106,14 @@ initCallableEnv :: (IsLocated l, Unif r)
 --------------------------------------------------------------------------------
 initCallableEnv l γ f fty xs s
   = TCE nms bnds ctx pth cha mut tThis
+  & tcEnvAdds arg
+  & tcEnvAdds varBs
+  & tcEnvAdds tyBs
   where
     nms   = toFgn (envNames γ)
           & envUnion (mkVarEnv (accumVars s))
-          & envAdds arg
-          & envAdds varBs
-          & envAdds tyBs
           & envAddReturn f (VI Local ReturnVar Initialized t)
-    -- tyBs  = [(tVarId α, VI Ambient Initialized $ tVar α) | α <- αs]
-    -- tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
+
     tyBs  = [(Loc (srcPos l) α, VI Local Ambient Initialized $ tVar α) | α <- αs]
     varBs = [(x, VI Local WriteLocal Initialized t) | (x, t) <- safeZip "initCallableEnv" xs ts]
     arg   = single (argId $ srcPos l, mkArgTy l ts)
@@ -162,17 +160,12 @@ initModuleEnv γ n s = TCE nms bnds ctx pth cha mut tThis
 initClassCtorEnv :: Unif r => TypeSigQ AK r -> TCEnv r -> TCEnv r
 --------------------------------------------------------------------------------
 initClassCtorEnv (TS _ (BGen nm bs) _) γ
-  = γ { tce_names = addExit (envNames γ)
+  = γ { tce_names = envNames γ
       , tce_mut   = Just AssignsFields
-      , tce_this  = Just tThis
-      }
+      , tce_this  = Just tThis }
+  &  tcEnvAdd ctorExit ctorExitVI
   where
-    -- addSuper | Just t <- getImmediateSuperclass sig
-    --          = envAdd super (VI Ambient Initialized t)
-    --          | otherwise
-    --          = id
-    -- super    = builtinOpId BISuper
-    addExit  = envAdd ctorExit (VI Local Ambient Initialized exitTy)
+    ctorExitVI = VI Local Ambient Initialized exitTy
     ctorExit = builtinOpId BICtorExit
     -- XXX: * Keep the right order of fields
     --      * Make the return object immutable to avoid contra-variance

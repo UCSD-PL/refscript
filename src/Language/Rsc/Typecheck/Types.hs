@@ -288,8 +288,10 @@ isTFun (TAnd ts)      = all isTFun ts
 isTFun (TAll _ t)     = isTFun t
 isTFun _              = False
 
-isArrayType t | TRef (Gen x []) _ <- t = F.symbol x == F.symbol "Array"
-              | otherwise = False
+isArrayType t | TRef (Gen x [_,_]) _ <- t
+              = F.symbol x == F.symbol "Array"
+              | otherwise
+              = False
 
 orNull t@(TOr ts) | any isTNull ts = t
                   | otherwise      = TOr $ tNull:ts

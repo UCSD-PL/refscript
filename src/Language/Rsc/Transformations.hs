@@ -3,10 +3,15 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Rsc.Transformations (
-    convertTVar
-  , convertTVars
-  , replaceDotRef
-  , replaceAbsolute
+
+    Transformable (..), NameTransformable (..)
+  , transFmap, ntransFmap
+
+  , emapReft, mapReftM, mapTypeMembersM
+
+  , convertTVar, convertTVars
+  , replaceDotRef, replaceAbsolute
+
   , fixFunBinders
 
   ) where
@@ -21,24 +26,349 @@ import           Data.Maybe                   (fromMaybe)
 import           Data.Maybe                   (listToMaybe)
 import           Data.Monoid                  hiding ((<>))
 import           Data.Text                    (pack, splitOn)
+import qualified Data.Traversable             as T
 import           Language.Fixpoint.Names      (symSepName)
 import qualified Language.Fixpoint.Types      as F
 import qualified Language.Fixpoint.Visitor    as FV
-import           Language.Rsc.Annots
+import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
-import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.Traversals
-import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Language.Rsc.Visitor
+
+
+--------------------------------------------------------------------------------
+-- | Transformable
+--------------------------------------------------------------------------------
+
+class Transformable t where
+  trans :: F.Reftable r => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
+                        -> [TVar] -> [BindQ q r] -> t q r  -> t q r
+
+instance Transformable RTypeQ where
+  trans = transRType
+
+instance Transformable BindQ where
+  trans f αs xs b = b { b_type = trans f αs xs $ b_type b }
+
+instance Transformable FactQ where
+  trans = transFact
+
+instance Transformable CastQ where
+  trans = transCast
+
+instance Transformable TypeDeclQ where
+  trans f αs xs (TD s@(TS _ b _) es) = TD (trans f αs xs s) (trans f αs' xs es)
+    where
+      αs' = map btvToTV (b_args b) ++ αs
+
+instance Transformable TypeSigQ where
+  trans f αs xs (TS k b h) = TS k (trans f αs xs b) (transIFDBase f αs' xs h)
+      where
+        αs' = map btvToTV (b_args b) ++ αs
+
+instance Transformable TypeMembersQ where
+  trans f αs xs (TM p m sp sm c k s n) = TM (fmap (trans f αs xs) p)
+                                            (fmap (trans f αs xs) m)
+                                            (fmap (trans f αs xs) sp)
+                                            (fmap (trans f αs xs) sm)
+                                            (fmap (trans f αs xs) c)
+                                            (fmap (trans f αs xs) k)
+                                            (fmap (trans f αs xs) s)
+                                            (fmap (trans f αs xs) n)
+
+instance Transformable BTGenQ where
+  trans f αs xs (BGen n ts) = BGen n $ trans f αs xs <$> ts
+
+instance Transformable TGenQ where
+  trans f αs xs (Gen n ts) = Gen n $ trans f αs xs <$> ts
+
+instance Transformable BTVarQ where
+  trans f αs xs (BTV x l c) = BTV x l $ trans f αs xs <$> c
+
+instance Transformable FieldInfoQ where
+  trans f αs xs (FI o t t') = FI o (trans f αs xs t) (trans f αs xs t')
+
+instance Transformable MethodInfoQ where
+  trans f αs xs (MI o m t) = MI o m (trans f αs xs t)
+
+instance Transformable ModuleDefQ where
+  trans f αs xs (ModuleDef v t e p)
+    = ModuleDef (envMap (trans f αs xs) v) (envMap (trans f αs xs) t) e p
+
+instance Transformable VarInfoQ where
+  trans f αs xs (VI l a i t) = VI l a i $ trans f αs xs t
+
+instance Transformable FAnnQ where
+  trans f αs xs (FA i s ys) = FA i s $ trans f αs xs <$> ys
+
+transFmap ::  (F.Reftable r, Functor thing)
+          => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
+          -> [TVar] -> thing (FAnnQ q r) -> thing (FAnnQ q r)
+transFmap f αs = fmap (trans f αs [])
+
+transIFDBase f αs xs (es,is) = (trans f αs xs <$> es, trans f αs xs <$> is)
+
+transFact :: F.Reftable r => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
+                          -> [TVar] -> [BindQ q r] -> FactQ q r -> FactQ q r
+transFact f = go
+  where
+    go αs xs (PhiVarTy (v,t))  = PhiVarTy      $ (v, trans f αs xs t)
+
+    go αs xs (TypInst x y ts)  = TypInst x y   $ trans f αs xs <$> ts
+
+    go αs xs (EltOverload x m) = EltOverload x $ trans f αs xs m
+    go αs xs (Overload x t)    = Overload x    $ trans f αs xs t
+
+    go αs xs (VarAnn l a t)    = VarAnn l a    $ trans f αs xs <$> t
+
+    go αs xs (FieldAnn t)      = FieldAnn      $ trans f αs xs t
+    go αs xs (MethAnn t)       = MethAnn       $ trans f αs xs t
+    go αs xs (CtorAnn t)       = CtorAnn       $ trans f αs xs t
+
+    go αs xs (UserCast t)      = UserCast      $ trans f αs xs t
+    go αs xs (SigAnn l t)      = SigAnn l      $ trans f αs xs t
+    go αs xs (TCast x c)       = TCast x       $ trans f αs xs c
+
+    go αs xs (ClassAnn l ts)   = ClassAnn l    $ trans f αs xs ts
+    go αs xs (InterfaceAnn td) = InterfaceAnn  $ trans f αs xs td
+
+    go _ _   t                 = t
+
+transCast f = go
+  where
+    go _  _ CNo          = CNo
+    go αs xs (CDead e t) = CDead e $ trans f αs xs t
+    go αs xs (CUp t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
+    go αs xs (CDn t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
+
+-- | transRType :
+--
+--  Binds (αs and bs) accumulate on the left.
+--
+transRType :: F.Reftable r
+           => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
+           ->  [TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r
+transRType f               = go
+  where
+    go αs xs (TPrim c r)   = f αs xs $ TPrim c r
+    go αs xs (TVar v r)    = f αs xs $ TVar v r
+    go αs xs (TOr ts)      = f αs xs $ TOr ts'       where ts' = go αs xs <$> ts
+    go αs xs (TAnd ts)     = f αs xs $ TAnd ts'      where ts' = go αs xs <$> ts
+    go αs xs (TRef n r)    = f αs xs $ TRef n' r     where n'  = trans f αs xs n
+    go αs xs (TObj ms r)   = f αs xs $ TObj ms' r    where ms' = trans f αs xs ms
+    go αs xs (TClass n)    = f αs xs $ TClass n'     where n'  = trans f αs xs n
+    go αs xs (TMod m)      = f αs xs $ TMod m
+    go αs xs (TAll a t)    = f αs xs $ TAll a t'     where t'  = go αs' xs t
+                                                           αs' = αs ++ [btvToTV a]
+    go αs xs (TFun bs t r) = f αs xs $ TFun bs' t' r where bs' = trans f αs xs' <$> bs
+                                                           t'  = go αs xs' t
+                                                           xs' = bs ++ xs
+    go _  _  (TExp e)      = TExp e
+
+
+--------------------------------------------------------------------------------
+-- | Transform names
+--------------------------------------------------------------------------------
+
+class NameTransformable t where
+  ntrans :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> t p r  -> t q r
+
+instance NameTransformable RTypeQ where
+  ntrans = ntransRType
+
+instance NameTransformable BindQ where
+  ntrans f g b = b { b_type = ntrans f g $ b_type b }
+
+instance NameTransformable FactQ where
+  ntrans = ntransFact
+
+instance NameTransformable CastQ where
+  ntrans = ntransCast
+
+instance NameTransformable TypeDeclQ where
+  ntrans f g (TD s m) = TD (ntrans f g s) (ntrans f g m)
+
+instance NameTransformable TypeSigQ where
+  ntrans f g (TS k b (e,i)) = TS k (ntrans f g b) (ntrans f g <$> e, ntrans f g <$> i)
+
+instance NameTransformable TypeMembersQ where
+  ntrans f g (TM p m sp sm c k s n) = TM (fmap (ntrans f g) p)
+                                         (fmap (ntrans f g) m)
+                                         (fmap (ntrans f g) sp)
+                                         (fmap (ntrans f g) sm)
+                                         (fmap (ntrans f g) c)
+                                         (fmap (ntrans f g) k)
+                                         (fmap (ntrans f g) s)
+                                         (fmap (ntrans f g) n)
+
+instance NameTransformable BTGenQ where
+  ntrans f g (BGen n ts) = BGen (f n) (ntrans f g <$> ts)
+
+instance NameTransformable TGenQ where
+  ntrans f g (Gen n ts) = Gen (f n) (ntrans f g <$> ts)
+
+instance NameTransformable BTVarQ where
+  ntrans f g (BTV x l c) = BTV x l $ ntrans f g <$> c
+
+instance NameTransformable FieldInfoQ where
+  ntrans f g (FI o t t') = FI o (ntrans f g t) (ntrans f g t')
+
+instance NameTransformable MethodInfoQ where
+  ntrans f g (MI o m t) = MI o m (ntrans f g t)
+
+ntransFmap ::  (F.Reftable r, Functor t)
+           => (QN p -> QN q) -> (QP p -> QP q) -> t (FAnnQ p r) -> t (FAnnQ q r)
+ntransFmap f g = fmap (ntrans f g)
+
+ntransFact f g = go
+  where
+    go (PhiVar v)        = PhiVar        $ v
+    go (PhiVarTC v)      = PhiVarTC      $ v
+    go (PhiVarTy (v,t))  = PhiVarTy      $ (v, ntrans f g t)
+    go (PhiPost v)       = PhiPost       $ v
+    go (TypInst x y ts)  = TypInst x y   $ ntrans f g <$> ts
+    go (EltOverload x m) = EltOverload x $ ntrans f g m
+    go (Overload x t)    = Overload x    $ ntrans f g t
+    go (VarAnn l a t)    = VarAnn l a    $ ntrans f g <$> t
+    go (FieldAnn t)      = FieldAnn      $ ntrans f g t
+    go (MethAnn t)       = MethAnn       $ ntrans f g t
+    go (CtorAnn t)       = CtorAnn       $ ntrans f g t
+    go (UserCast t)      = UserCast      $ ntrans f g t
+    go (SigAnn l t)      = SigAnn l      $ ntrans f g t
+    go (TCast x c)       = TCast x       $ ntrans f g c
+    go (ClassAnn l t)    = ClassAnn l    $ ntrans f g t
+    go (InterfaceAnn t)  = InterfaceAnn  $ ntrans f g t
+    go (ModuleAnn m)     = ModuleAnn     $ m
+    go (EnumAnn e)       = EnumAnn       $ e
+    go (BypassUnique)    = BypassUnique
+
+ntransCast :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> CastQ p r -> CastQ q r
+ntransCast f g = go
+  where
+    go CNo         = CNo
+    go (CDead e t) = CDead e $ ntrans f g t
+    go (CUp t1 t2) = CUp (ntrans f g t1) (ntrans f g t2)
+    go (CDn t1 t2) = CUp (ntrans f g t1) (ntrans f g t2)
+
+ntransRType :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> RTypeQ p r -> RTypeQ q r
+ntransRType f g         = go
+  where
+    go (TPrim p r)   = TPrim p r
+    go (TVar v r)    = TVar v r
+    go (TOr ts)      = TOr ts'        where ts' = go <$> ts
+    go (TAnd ts)     = TAnd ts'       where ts' = go <$> ts
+    go (TRef n r)    = TRef n' r      where n'  = ntrans f g n
+    go (TObj ms r)   = TObj ms' r     where ms' = ntrans f g ms
+    go (TClass n)    = TClass n'      where n'  = ntrans f g n
+    go (TMod p)      = TMod p'        where p'  = g p
+    go (TAll a t)    = TAll a' t'     where a'  = ntrans f g a
+                                            t'  = go t
+    go (TFun bs t r) = TFun bs' t' r  where bs' = ntrans f g <$> bs
+                                            t'  = go t
+    go (TExp e)      = TExp e
+
+instance NameTransformable FAnnQ where
+  ntrans f g (FA i s ys) = FA i s $ ntrans f g <$> ys
+
+
+--------------------------------------------------------------------------------
+-- | Transformers over @RType@
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+emapReft  :: PPR r => ([F.Symbol] -> r -> r') -> [F.Symbol] -> RTypeQ q r -> RTypeQ q r'
+--------------------------------------------------------------------------------
+emapReft f γ (TVar α r)     = TVar α (f γ r)
+emapReft f γ (TPrim c r)    = TPrim c (f γ r)
+emapReft f γ (TRef n r)     = TRef (emapReftGen f γ n) (f γ r)
+emapReft f γ (TAll α t)     = TAll (emapReftBTV f γ α) (emapReft f γ t)
+emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts)
+                                   (emapReft f γ' t) (f γ r)
+                              where γ' = (b_sym <$> xts) ++ γ
+emapReft f γ (TObj xts r)   = TObj (emapReftTM f γ xts) (f γ r)
+emapReft f γ (TClass n)     = TClass (emapReftBGen f γ n)
+emapReft _ _ (TMod m)       = TMod m
+emapReft f γ (TOr ts)       = TOr (emapReft f γ <$> ts)
+emapReft f γ (TAnd ts)      = TAnd (emapReft f γ <$> ts)
+emapReft _ _ _              = error "Not supported in emapReft"
+
+emapReftBTV f γ (BTV s l c) = BTV s l $ emapReft f γ <$> c
+emapReftGen f γ (Gen n ts)  = Gen n $ emapReft f γ <$> ts
+emapReftBGen f γ (BGen n ts) = BGen n $ emapReftBTV f γ <$> ts
+emapReftBind f γ (B x t)    = B x $ emapReft f γ t
+emapReftTM f γ (TM p m sp sm c k s n)
+  = TM (fmap (emapReftFI f γ) p)
+       (fmap (emapReftMI f γ) m)
+       (fmap (emapReftFI f γ) sp)
+       (fmap (emapReftMI f γ) sm)
+       (emapReft f γ <$> c)
+       (emapReft f γ <$> k)
+       (emapReft f γ <$> s)
+       (emapReft f γ <$> n)
+
+emapReftFI f γ (FI m t1 t2) = FI m (emapReft f γ t1) (emapReft f γ t2)
+emapReftMI f γ (MI m n  t2) = MI m n (emapReft f γ t2)
+
+--------------------------------------------------------------------------------
+mapReftM :: (F.Reftable r, PP r, Applicative m, Monad m)
+         => (r -> m r') -> RTypeQ q r -> m (RTypeQ q r')
+--------------------------------------------------------------------------------
+mapReftM f (TVar α r)      = TVar α  <$> f r
+mapReftM f (TPrim c r)     = TPrim c <$> f r
+mapReftM f (TRef n r)      = TRef    <$> mapReftGenM f n <*> f r
+mapReftM f (TFun xts t r)  = TFun    <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> f r
+mapReftM f (TAll α t)      = TAll    <$> mapReftBTV f α <*> mapReftM f t
+mapReftM f (TAnd ts)       = TAnd    <$> mapM (mapReftM f) ts
+mapReftM f (TOr ts)        = TOr     <$> mapM (mapReftM f) ts
+mapReftM f (TObj xts r)    = TObj    <$> mapTypeMembers f xts <*> f r
+mapReftM f (TClass n)      = TClass  <$> mapReftBGenM f n
+mapReftM _ (TMod a)        = TMod    <$> pure a
+mapReftM _ t               = error $ "Not supported in mapReftM: " ++ ppshow t
+
+mapReftBTV   f (BTV s l c) = BTV s l <$> T.mapM (mapReftM f)   c
+mapReftGenM  f (Gen n ts)  = Gen n   <$>   mapM (mapReftM f)   ts
+mapReftBGenM f (BGen n ts) = BGen n  <$>   mapM (mapReftBTV f) ts
+mapReftBindM f (B x t)     = B x     <$>         mapReftM f    t
+
+mapTypeMembers f (TM p m sp sm c k s n)
+  = TM <$> T.mapM (mapReftFI f) p
+       <*> T.mapM (mapReftMI f) m
+       <*> T.mapM (mapReftFI f) sp
+       <*> T.mapM (mapReftMI f) sm
+       <*> T.mapM (mapReftM f) c
+       <*> T.mapM (mapReftM f) k
+       <*> T.mapM (mapReftM f) s
+       <*> T.mapM (mapReftM f) n
+
+mapReftFI f (FI m t1 t2) = FI m <$> mapReftM f t1 <*> mapReftM f t2
+mapReftMI f (MI m n t2) = MI m n <$> mapReftM f t2
+
+--------------------------------------------------------------------------------
+mapTypeMembersM :: (Applicative m, Monad m)
+                => (RType r -> m (RType r)) -> TypeMembers r -> m (TypeMembers r)
+--------------------------------------------------------------------------------
+mapTypeMembersM f (TM p m sp sm c k s n)
+  = TM <$> T.mapM (mapFieldInfoM f) p
+       <*> T.mapM (mapMethInfoM f) m
+       <*> T.mapM (mapFieldInfoM f) sp
+       <*> T.mapM (mapMethInfoM f) sm
+       <*> T.mapM f c
+       <*> T.mapM f k
+       <*> T.mapM f s
+       <*> T.mapM f n
+
+mapFieldInfoM f (FI o m t) = FI o <$> f m <*> f t
+mapMethInfoM  f (MI o m t) = MI o       m <$> f t
+
 
 
 --------------------------------------------------------------------------------
@@ -94,9 +424,9 @@ ctxCEltTvar as s = go s ++ as
     grab :: ClassElt (FAnnQ q r) -> [TVar]
     grab = concatMap factTVars . fFact . getAnnotation
 
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 factTVars :: FactQ q r -> [TVar]
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 factTVars = go
   where
     tvars t | Just ts <- bkFuns t

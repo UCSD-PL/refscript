@@ -6,13 +6,14 @@ import           Data.List                 (delete, nub)
 import           Data.Maybe                (fromMaybe)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Types   hiding (quals)
-import           Language.Rsc.Annots
+import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
+import           Language.Rsc.Traversals
 import qualified Language.Rsc.Types        as T
 import           Language.Rsc.Visitor
 

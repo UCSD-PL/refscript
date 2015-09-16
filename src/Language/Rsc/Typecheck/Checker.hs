@@ -28,7 +28,7 @@ import qualified Data.Traversable                   as T
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc             as FM
 import qualified Language.Fixpoint.Types            as F
-import           Language.Rsc.Annots
+import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.CmdLine               (Config, noFailCasts)
@@ -36,7 +36,6 @@ import           Language.Rsc.Core.EitherIO
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
-import           Language.Rsc.Liquid.Types          (mkDotRefFunTy)
 import           Language.Rsc.Locations
 import           Language.Rsc.Lookup
 import           Language.Rsc.Misc                  (dup, nths, zipWith3M, (&))
@@ -53,6 +52,7 @@ import           Language.Rsc.Typecheck.TCMonad
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Typecheck.Unify
 import           Language.Rsc.Types
+import           Language.Rsc.TypeUtilities
 import           Language.Rsc.Visitor
 
 import           Debug.Trace                        hiding (traceShow)
@@ -769,7 +769,7 @@ tcCall γ ef@(DotRef l e f)
       Right (_, te) ->
           case getProp γ FieldAccess f te of
             Just (tObj, tField) ->
-                do  funTy <- ltracePP l (ppshow ef) <$> mkDotRefFunTy l γ f tObj tField
+                do  funTy <- mkDotRefFunTy l γ f tObj tField
                     (e':_, t') <- tcNormalCall γ l ef [(e, Nothing)] funTy
                     return (DotRef l e' f, t')
             Nothing -> tcError $ errorMissingFld (srcPos l) f te

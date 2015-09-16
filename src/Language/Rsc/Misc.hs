@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
@@ -48,10 +49,12 @@ module Language.Rsc.Misc (
   , (<##>), (<###>)
   , (&)
   , (<//>)
+  , diePP
 
 ) where
 
 import           Control.Applicative       ((<$>))
+import           Control.Exception.Base
 import           Control.Monad             (foldM, liftM2)
 import           Data.Data
 import           Data.Function             (on)
@@ -63,8 +66,10 @@ import qualified Data.List                 as L
 import           Data.Maybe                (isJust)
 import           Data.Monoid               (Monoid, mappend)
 
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types   as F
+import           Language.Rsc.Pretty
 import           Text.PrettyPrint.HughesPJ
 
 -------------------------------------------------------------------------------
@@ -237,3 +242,15 @@ x & f = f x
 nths = repeat Nothing
 
 s1 <//> s2 = s1 ++ "\n" ++ s2
+
+
+data EString a = EString a deriving (Typeable)
+
+instance (PP a, Typeable a) => Exception (EString a)
+
+instance PP a => Show (EString a) where
+  show (EString e) = ppshow e
+
+
+diePP = throw . EString
+

@@ -7,7 +7,8 @@ module Language.Rsc.Program (
 
   -- * Programs
     Rsc (..)
-  , RscQ
+  , FRsc (..)
+--   , RscQ
   , BareRelRsc
   , BareRsc
   , RRsc
@@ -25,11 +26,11 @@ module Language.Rsc.Program (
 
   ) where
 
-import           Control.Applicative     hiding (empty)
+import           Control.Applicative      hiding (empty)
 import           Data.Generics
-import           Data.List               (stripPrefix)
-import           Data.Monoid             hiding ((<>))
-import qualified Language.Fixpoint.Types as F
+import           Data.List                (stripPrefix)
+import           Data.Monoid              hiding ((<>))
+import qualified Language.Fixpoint.Types  as F
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
@@ -85,6 +86,19 @@ data Rsc a r = Rsc {
 
 newtype Source a = Src [Statement a]
   deriving (Data, Typeable)
+
+data FRsc q r = FRsc (Rsc (FAnnQ q r) r)
+
+-- type BareRelRsc r = FRsc RK r           -- After parse (relative names)
+-- type BareRsc r    = FRsc AK r           -- After parse (absolute names)
+-- type RRsc r       = FRsc AK r           -- After parse (absolute names)
+-- type SsaRsc r     = FRsc AK r           -- SSA
+-- type TcRsc r      = FRsc AK r           -- Raw checking
+-- type RefScript    = RRsc F.Reft         -- Liquid
+-- type RelRefScript = BareRelRsc F.Reft
+-- type UBareRsc     = BareRsc ()
+-- type USsaRsc      = SsaRsc  ()
+
 
 type RscQ q r     = Rsc (FAnnQ q r) r
 type BareRelRsc r = Rsc (AnnRel  r) r         -- After parse (relative names)

@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds      #-}
+{-# LANGUAGE DeriveFunctor        #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -27,6 +28,7 @@ import           Data.Maybe                   (listToMaybe)
 import           Data.Monoid                  hiding ((<>))
 import           Data.Text                    (pack, splitOn)
 import qualified Data.Traversable             as T
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Names      (symSepName)
 import qualified Language.Fixpoint.Types      as F
 import qualified Language.Fixpoint.Visitor    as FV
@@ -452,6 +454,13 @@ factTVars = go
 -- | Replace all relatively qualified names/paths with absolute ones.
 --------------------------------------------------------------------------------
 
+-- instance NameTransformable FRsc where
+--   ntrans f g (FRsc (Rsc (Src ss ) cst ta pa pq inv max opt)) =
+--               FRsc (Rsc (Src ss') cst ta pa pq inv max opt)
+--     where
+--       ss'   = (ntrans f g <$>) <$> ss
+--
+
 --------------------------------------------------------------------------------
 replaceAbsolute :: (PPR r, Data r, Typeable r) => BareRelRsc r -> BareRsc r
 --------------------------------------------------------------------------------
@@ -463,7 +472,7 @@ replaceAbsolute pgm@(Rsc { code = Src ss }) = pgm { code = Src $ (tr <$>) <$> ss
                         Just a' -> a'
                         -- If it's a type alias, don't throw error
                         Nothing | isAlias a -> toAbsoluteName a
-                                | otherwise -> throw $ errorUnboundName (srcPos l) a
+                                | otherwise -> diePP $ errorUnboundName (srcPos l) a
     safeAbsPath l a = fromMaybe (throw $ errorUnboundPath (srcPos l) a)
                                 (absAct (absolutePath ps) l a)
 

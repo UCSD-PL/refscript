@@ -59,10 +59,11 @@ convert :: (PPR r, FE g) => SrcSpan -> g r -> RType r -> RType r -> Cast r
 convert l γ t1 t2
   -- = case ltracePP l ("compareTypes: " ++ ppshow τ1 ++ " <: " ++ ppshow τ2) $ compareTypes l γ' τ1 τ2 of
   = case compareTypes l γ' τ1 τ2 of
-      EqT      -> CNo
-      SubT     -> CUp (rType t1) (rType t2)
-      SupT     -> CDn (rType t1) (rType t2)
-      SubErr e -> CDead e (rType t1) -- (errorDeadCast l (toType t1) (toType t2)) (rType t1)
+      EqT       -> CNo
+      SubT      -> CUp (rType t1) (rType t2)
+      SupT      -> CDn (rType t1) (rType t2)
+      SubErr [] -> CDead [errorDeadCast l (toType t1) (toType t2)] (rType t1)
+      SubErr es -> CDead es (rType t1)
   where
     rType = ofType . toType
     τ1    = toType t1

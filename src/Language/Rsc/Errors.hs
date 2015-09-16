@@ -153,7 +153,7 @@ errorUnresolvedType l t       = mkErr l $ printf "Could not resolve type '%s'." 
 errorUnresolvedTypes l t1 t2  = mkErr l $ printf "Could not resolve types '%s' and '%s'." (ppshow t1) (ppshow t2)
 errorConsSigMissing l t       = mkErr l $ printf "Constructor signature for '%s' is missing." (ppshow t)
 errorModuleExport l m x       = mkErr l $ printf "Module '%s' does not export '%s'." (ppshow m) (ppshow x)
-errorDeadCast l t1 t2         = mkErr l $ printf "Cannot convert '%s' to '%s'" (ppshow t1) (ppshow t2)
+errorDeadCast l t1 t2         = mkErr l $ printf "Generic deadcast error when converting from type '%s' to '%s'" (ppshow t1) (ppshow t2)
 errorUqMutSubtyping l e t rt  = mkErr l $ printf "No subtyping allowed at unique mutability when returning expression '%s' of type '%s' to type '%s'." (ppshow e) (ppshow t) (ppshow rt)
 
 ---------------------------------------------------------------------------

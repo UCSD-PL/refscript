@@ -175,7 +175,7 @@ instance PP EnumDef where
   pp (EnumDef n m) = pp n <+> braces (pp m)
 
 instance (F.Reftable r, PP r) => PP (VarInfo r) where
-  pp (VI _ _ _ t) = pp t
+  pp (VI _ a _ t) = brackets (pp a) <+> pp t
 
 instance (PP r, F.Reftable r) => PP (ModuleDef r) where
   pp (ModuleDef vars tys enums path) =

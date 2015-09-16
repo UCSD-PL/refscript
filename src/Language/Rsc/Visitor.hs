@@ -31,7 +31,7 @@ import           Data.Maybe                   (catMaybes, fromMaybe, maybeToList
 import           Data.Monoid
 import qualified Data.Traversable             as T
 import qualified Language.Fixpoint.Types      as F
-import           Language.Rsc.Annotations          hiding (Annot, err)
+import           Language.Rsc.Annotations     hiding (Annot, err)
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
@@ -109,12 +109,12 @@ defaultVisitor = Visitor {
 scopeVisitor :: (Monoid acc, Functor m, Monad m) => VisitorM m acc ctx b
 scopeVisitor = defaultVisitor { endExpr = ee, endStmt = es }
   where
-    es FunctionStmt{} = True
-    es ClassStmt   {} = True
-    es InterfaceStmt   {} = True
-    es ModuleStmt  {} = True
-    es _              = False
-    ee _              = True
+    es FunctionStmt {} = True
+    es ClassStmt    {} = True
+    es InterfaceStmt{} = True
+    es ModuleStmt   {} = True
+    es _               = False
+    ee _               = True
 
 
 --------------------------------------------------------------------------------

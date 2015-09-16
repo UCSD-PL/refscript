@@ -751,6 +751,10 @@ consExpr _ e _ = cgError $ unimplemented l "consExpr" e where l = srcPos  e
 
 -- | Dead code
 --   Only prove the top-level false.
+consDeadCode g l [] t
+  = do  subType l (mkErr l "Dead-cast with no error associated.") g t tBot
+        return Nothing
+
 consDeadCode g l es t
   = do mapM_ (\e -> subType l e g t tBot) es
        return Nothing

@@ -226,17 +226,15 @@ compareMeth l γ (m, (MI o1 m1 t1, MI o2 m2 t2))
   | otherwise
   = compareTypes l γ t1 t2
 
-compareCalls l γ _  (Just f1) _  (Just f2) = compareFuns l γ f1 f2
-compareCalls l _ t1 _         t2 _         = SubErr [errorIncompCallSigs (srcPos l) t1 t2]
 
-compareCtors l γ _  (Just k1) _  (Just k2) = compareFuns l γ k1 k2
-compareCtors l _ t1 _         t2 _         = SubErr [errorIncompCtorSigs (srcPos l) t1 t2]
+compareMaybe l γ f _ _ (Just c1) _ (Just c2) = f l γ c1 c2
+compareMaybe _ _ _ _ _ Nothing   _ Nothing   = SubT
+compareMaybe l _ _ e _ t1        _ t2        = SubErr [e (srcPos l) t1 t2]
 
-compareSIdxs l γ _  (Just s1) _  (Just s2) = compareTypes l γ s1 s2 <> compareTypes l γ s2 s1
-compareSIdxs l _ t1 _         t2 _         = SubErr [errorIncompSIdxSigs (srcPos l) t1 t2]
-
-compareNIdxs l γ _  (Just n1) _  (Just n2) = compareTypes l γ n1 n2 <> compareTypes l γ n2 n1
-compareNIdxs l _ t1 _         t2 _         = SubErr [errorIncompNIdxSigs (srcPos l) t1 t2]
+compareCalls l γ = compareMaybe l γ compareFuns  errorIncompCallSigs
+compareCtors l γ = compareMaybe l γ compareTypes errorIncompCtorSigs
+compareSIdxs l γ = compareMaybe l γ compareTypes errorIncompSIdxSigs
+compareNIdxs l γ = compareMaybe l γ compareTypes errorIncompNIdxSigs
 
 t1 `eqMutability` t2 | isMut t1, isMut t2  = True
                      | isImm t1, isImm t2  = True

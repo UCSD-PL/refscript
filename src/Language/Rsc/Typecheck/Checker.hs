@@ -486,7 +486,7 @@ tcRetW γ l (Just e)
     fn        = Id l "__finalize__"
     e'        = fmap (\a -> a { fFact = BypassUnique : fFact a }) e
 
-tcRetW' γ l Nothing
+tcRetW γ l Nothing
   = do (_, _) <- tcNormalCall γ l "return" [] $ returnTy (tcEnvFindReturn γ) False
        return  $ (ReturnStmt l Nothing, Nothing)
 

@@ -1,14 +1,16 @@
 
 //adapted from transducers
 
-/*@ bar :: (string) => void */
-declare function bar(x);
-/*@ foo :: ([Immutable]{ }) => void */
-declare function foo(x);
+declare function bar(x: string): void;
+declare function foo(x: {}): void;
 
-/*@ reduce :: /\ (string) => {void | true}
-              /\ ([Immutable]{ }) => {void | true} */
-function reduce(coll) {
-    if (typeof coll === "string") bar(coll)
-    else foo(coll)
+export function reduce(x: string): void;
+export function reduce(x: {}): void;
+export function reduce(x: any): void {
+    if (typeof x === "string") {
+        bar(x);
+    }
+    else {
+        foo(x);
+    }
 }

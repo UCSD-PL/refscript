@@ -8,6 +8,8 @@ See https://github.com/UCSD-PL/rs-benchmarks
 Tool/Implementation
 -------------------
 
+  - Optional arguments
+  
   - Fix environment in SSA (make it similar to the one in TC/LQ)
 
   - fixEnums has been disabled -- handle at typechecking

@@ -73,6 +73,7 @@ convert l γ t1 t2
 --------------------------------------------------------------------------------
 compareTypes :: FE g => SrcSpan -> g () -> Type -> Type -> SubTRes
 --------------------------------------------------------------------------------
+compareTypes _ _ _  t2 | isTAny t2                  = SubT
 compareTypes _ _ _  t2 | isTTop t2                  = SubT
 compareTypes _ _ t1 t2 | isTPrim t1  ,  isTPrim t2  = comparePrims t1 t2
 compareTypes l γ t1 t2 | isTVar t1   || isTVar t2   = compareVars l γ t1 t2

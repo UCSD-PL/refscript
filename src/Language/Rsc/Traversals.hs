@@ -311,7 +311,7 @@ hoistBindings = snd . visitStmts vs ()
     acs _ (EnumStmt a x _)       = [(x, a { fFact = enumAnn x a }, EnumDeclKind, Ambient, Initialized)]
     acs _ _                      = []
 
-    acv _ (VarDecl l n ii)       = [(n, l, VarDeclKind, varAsgn l, tracePP (ppshow n) $ inited l ii)]
+    acv _ (VarDecl l n ii)       = [(n, l, VarDeclKind, varAsgn l, inited l ii)]
 
     inited l _        | any isAmbient (fFact l)
                       = Initialized

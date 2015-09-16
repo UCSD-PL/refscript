@@ -730,6 +730,7 @@ splitC (Sub g i t1@(TRef (Gen x1 (m1:t1s)) r1) t2@(TRef (Gen x2 (m2:t2s)) r2))
   = splitIncompatC g i t1
 
 splitC (Sub g i t1@(TPrim c1 _) t2@(TPrim c2 _))
+  | isTAny t2 = return []
   | c1 == c2  = bsplitC g i t1 t2
   | otherwise = splitIncompatC g i t1
 

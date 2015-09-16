@@ -41,7 +41,7 @@ module Language.Rsc.Typecheck.Types (
   , tNum, tBV32, tBool, tString, tTop, tVoid, tErr, tVar, btVar, tUndef, tNull, tBot, tAny
 
   --   # Tests
-  , isTPrim, isTTop, isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
+  , isTPrim, isTAny, isTTop, isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
   , isTNull, isTVoid, isTFun, isArrayType
 
   --   # Operations

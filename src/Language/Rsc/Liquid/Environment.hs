@@ -12,7 +12,7 @@ module Language.Rsc.Liquid.Environment where
 import           Data.Maybe                   (catMaybes)
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types      as F
-import           Language.Rsc.Annotations          ()
+import           Language.Rsc.Annotations     ()
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
@@ -125,7 +125,7 @@ checkSyms m g ok x t = efoldRType h f F.emptySEnv [] t
     biExtra    = map F.symbol ["bvor", "bvand", "builtin_BINumArgs", "offset", "this"]
     x_sym      = F.symbol x
     ok_syms    = map F.symbol ok
-    validAsgn  = [Ambient, WriteLocal]
+    validAsgn  = [RdOnly, Ambient, WriteLocal]
 
 
 -------------------------------------------------------------------------------

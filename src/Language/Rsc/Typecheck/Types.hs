@@ -113,7 +113,10 @@ isMut = isNamed "Mutable"
 isImm = isNamed "Immutable"
 isUM  = isNamed "UniqueMutable"
 
-isUMRef (TRef (Gen _ (m:_)) _) | isUM m = True | otherwise = False
+isUMRef t | TRef (Gen _ (m:_)) _ <- t, isUM m
+          = True
+          | otherwise
+          = False
 
 mutRelated t = isMut t || isImm t || isUM t || isRO t
 

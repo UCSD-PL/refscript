@@ -332,6 +332,11 @@ tcStmt _ s
 --------------------------------------------------------------------------------
 tcVarDecl :: Unif r => TCEnv r -> VarDecl (AnnTc r) -> TCM r (VarDecl (AnnTc r), TCEnvO r)
 --------------------------------------------------------------------------------
+-- PV: Some ugly special casing for Function expressions
+tcVarDecl γ (VarDecl l x (Just e@FuncExpr{}))
+  = do  (e', _) <- tcExpr γ e (v_type <$> envFindTy x (tce_names γ))
+        return (VarDecl l x (Just e'), Just γ)
+
 tcVarDecl γ v@(VarDecl l x (Just e))
   = case envFindTy x (tce_names γ) of
       -- | Local
@@ -350,10 +355,10 @@ tcVarDecl γ v@(VarDecl l x (Just e))
         --     scope.
         first (VarDecl l x . Just) <$> tcAsgn l γ x e
 
-      -- | Ambient
-      Just (VI loc Ambient _ t) ->
+      -- | ReadOnly
+      Just (VI loc RdOnly _ t) ->
         do  ([e'], Just t') <- tcNormalCallWCtx γ l "VarDecl-RO" [(e, Just t)] (localTy t)
-            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (VI loc Ambient Initialized t') γ)
+            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (VI loc RdOnly Initialized t') γ)
 
       c -> fatal (unimplemented l "tcVarDecl" ("case: " ++ ppshow c)) (v, Just γ)
 
@@ -361,8 +366,7 @@ tcVarDecl γ v@(VarDecl _ x Nothing)
   = case envFindTy x (tce_names γ) of
       Just (VI loc Ambient _ t) ->
           return $ (v, Just $ tcEnvAdds [(x, VI loc Ambient Initialized t)] γ)
-      _ ->  -- The rest should have fallen under the 'undefined' initialization case
-          error "TC-tcVarDecl: this shouldn't happen"
+      _ -> error "TC-tcVarDecl: this shouldn't happen"
 
 
 --------------------------------------------------------------------------------
@@ -505,7 +509,7 @@ tcWA γ e a = tcWrap a >>= \x -> case x of Right r -> return $ Right r
 tcExprT :: Unif r => TCEnv r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
 --------------------------------------------------------------------------------
 tcExprT γ e t
-  = do ([e'], _) <- tcNormalCall γ (getAnnotation e) "tcExprT" [(e, Nothing)] ty
+  = do ([e'], _) <- tcNormalCall γ (getAnnotation e) "tcExprT" [(e, Just t)] ty
        return (e', t)
   where
     ty = TFun [B (F.symbol "x") t] tVoid fTop

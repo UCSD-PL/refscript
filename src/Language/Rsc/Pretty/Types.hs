@@ -130,6 +130,7 @@ instance PP Locality where
 
 instance PP Assignability where
   pp Ambient      = text "Ambient"
+  pp RdOnly       = text "ReadOnly"
   pp WriteLocal   = text "WriteLocal"
   pp ForeignLocal = text "ForeignLocal"
   pp WriteGlobal  = text "WriteGlobal"

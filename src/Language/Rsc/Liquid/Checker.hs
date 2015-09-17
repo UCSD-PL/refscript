@@ -354,7 +354,11 @@ consStmt _ s
 --------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnLq -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
-consVarDecl g v@(VarDecl l x (Just e))
+-- PV: Some ugly special casing for Function expressions
+consVarDecl g (VarDecl l x (Just e@FuncExpr{}))
+  = (snd <$>) <$> consExpr g e (v_type <$> envFindTy x (cge_names g))
+
+consVarDecl g (VarDecl l x (Just e))
   = case envFindTy x (cge_names g) of
       -- | Local
       Nothing ->
@@ -377,10 +381,10 @@ consVarDecl g v@(VarDecl l x (Just e))
           Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc WriteGlobal Initialized fta)] gy
 
       -- | ReadOnly
-      Just (VI loc Ambient _ t) ->
+      Just (VI loc RdOnly _ t) ->
         mseq (consCall g l "consVarDecl" [(e, Just t)] $ localTy t) $ \(y,gy) -> do
           declT   <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc Ambient Initialized declT)] gy
+          Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc RdOnly Initialized declT)] gy
 
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 
@@ -391,13 +395,19 @@ consVarDecl g v@(VarDecl _ x Nothing)
       _ ->   -- The rest should have fallen under the 'undefined' initialization case
           error "LQ: consVarDecl this shouldn't happen"
 
+
+-- | `consExprT g e t` checks expression @e@ against type @t@.
+--   Special-casing FuncExpr because we can't infer a type for a
+--   function expression and then check for it - it needs to be
+--   present in the first place.
+--   XXX: perhaps other cases should work similarly.
+--
 --------------------------------------------------------------------------------
-consExprT :: CGEnv -> Expression AnnLq -> Maybe RefType
-          -> CGM (Maybe (Id AnnLq, CGEnv))
+consExprT :: CGEnv -> Expression AnnLq -> RefType -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
-consExprT g e Nothing  = consExpr g e Nothing
-consExprT g e (Just t) = consCall  g (getAnnotation e) "consExprT" [(e, Nothing)]
-                       $ TFun [B (F.symbol "x") t] tVoid fTop
+consExprT g e@FuncExpr{} t = consExpr g e (Just t)
+consExprT g e t = consCall  g (getAnnotation e) "consExprT" [(e, Just t)] (localTy t)
+
 
 -- --------------------------------------------------------------------------------
 -- consClassElts :: IsLocated l => l -> CGEnv -> TypeDecl F.Reft -> [ClassElt AnnLq] -> CGM ()
@@ -497,16 +507,16 @@ consAsgn l g x e =
     -- This is the first time we initialize this variable
     Just (VI loc WriteGlobal Uninitialized t) ->
       do  t' <- freshenType WriteGlobal g l t
-          mseq (consExprT g e $ Just t') $ \(_, g') -> do
+          mseq (consExprT g e t') $ \(_, g') -> do
             g'' <- cgEnvAdds "consAsgn-0" [(x, VI loc WriteGlobal Initialized t')] g'
             return $ Just g''
 
-    Just (VI _ WriteGlobal _ t) -> mseq (consExprT g e $ Just t) $ \(_, g') ->
+    Just (VI _ WriteGlobal _ t) -> mseq (consExprT g e t) $ \(_, g') ->
                                      return $ Just g'
-    Just (VI loc a i t) -> mseq (consExprT g e $ Just t) $ \(x', g') -> do
+    Just (VI loc a i t) -> mseq (consExprT g e t) $ \(x', g') -> do
                              t      <- cgSafeEnvFindTyM x' g'
                              Just  <$> cgEnvAdds "consAsgn-1" [(x, VI loc a i t)] g'
-    Nothing -> mseq (consExprT g e Nothing) $ \(x', g') -> do
+    Nothing -> mseq (consExpr g e Nothing) $ \(x', g') -> do
                  t      <- cgSafeEnvFindTyM x' g'
                  Just  <$> cgEnvAdds "consAsgn-1" [(x, VI Local WriteLocal Initialized t)] g'
 
@@ -666,7 +676,7 @@ consExpr g (CallExpr l e es) _
 --   the type of `e` (possibly adding a relevant cast). So no need to repeat the
 --   call here.
 --
-consExpr g ef@(DotRef l e f) to
+consExpr g ef@(DotRef l e f) _
   = mseq (consExpr g e Nothing) $ \(x,g') -> do
       te <- cgSafeEnvFindTyM x g'
       case getProp g' FieldAccess f te of
@@ -728,7 +738,7 @@ consExpr g (FuncExpr l fo xs body) tCtxO
   | otherwise
   = cgError $ errorNoFuncAnn $ srcPos l
   where
-    funTy | [ft] <- [ t | SigAnn _ t <- fFact l ] = Just ft
+    funTy | [ft] <- [t | SigAnn _ t <- fFact l] = Just ft
           | Just ft <- tCtxO = Just ft
           | otherwise        = Nothing
     f     = maybe (F.symbol "<anonymous>") F.symbol fo

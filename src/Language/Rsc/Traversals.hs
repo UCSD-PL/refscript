@@ -305,11 +305,12 @@ hoistBindings = snd . visitStmts vs ()
   where
     vs = scopeVisitor { accStmt = acs, accVDec = acv }
 
-    acs _ (FunctionStmt a x _ _) = [(x, a, FuncDeclKind, Ambient, Initialized)]
-    acs _ (ClassStmt a x _ _ _ ) = [(x, a, ClassDeclKind, Ambient, Initialized)]
-    acs _ (ModuleStmt a x _)     = [(x, a { fFact = modAnn x a }, ModuleDeclKind, Ambient, Initialized)]
-    acs _ (EnumStmt a x _)       = [(x, a { fFact = enumAnn x a }, EnumDeclKind, Ambient, Initialized)]
-    acs _ _                      = []
+    acs _ (FunctionStmt a x _ (Just _)) = [(x, a, FuncDeclKind, RdOnly, Initialized)]
+    acs _ (FunctionStmt a x _ Nothing ) = [(x, a, FuncDeclKind, Ambient, Initialized)]
+    acs _ (ClassStmt a x _ _ _) = [(x, a, ClassDeclKind, RdOnly, Initialized)]
+    acs _ (ModuleStmt a x _)    = [(x, a { fFact = modAnn x a }, ModuleDeclKind, RdOnly, Initialized)]
+    acs _ (EnumStmt a x _)      = [(x, a { fFact = enumAnn x a }, EnumDeclKind, RdOnly, Initialized)]
+    acs _ _                     = []
 
     acv _ (VarDecl l n ii)       = [(n, l, VarDeclKind, varAsgn l, inited l ii)]
 

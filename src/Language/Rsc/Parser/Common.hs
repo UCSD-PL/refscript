@@ -53,7 +53,7 @@ assignabilityP
   =  try (withinSpacesP (reserved "global"  ) >> return WriteGlobal)
  <|> try (withinSpacesP (reserved "local"   ) >> return WriteLocal )
  <|> try (withinSpacesP (reserved "ambient" ) >> return Ambient    )
- <|>     (withinSpacesP (reserved "readonly") >> return Ambient    )
+ <|>     (withinSpacesP (reserved "readonly") >> return RdOnly     )
 
 axyP lP sepP rP
   = do  a <- option WriteGlobal assignabilityP -- WG is default assignability

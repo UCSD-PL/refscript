@@ -217,6 +217,7 @@ initSsaEnv   :: AnnSSA r -> Var r -> SSAM r (Var r)
 initSsaEnv l x = getAssignability x >>= go
   where
     go Ambient = return x
+    go RdOnly  = return x
     go _       = updSsaEnv l x
 
 -------------------------------------------------------------------------------------
@@ -227,6 +228,7 @@ updSsaEnv ll x        = getAssignability x >>= go
     go   WriteLocal   = updSsaEnvLocal ll x
     go   WriteGlobal  = updSsaEnvGlobal ll x
     go m@Ambient      = ssaError $ errorWriteImmutable l m x
+    go m@RdOnly       = ssaError $ errorWriteImmutable l m x
     go m@ForeignLocal = ssaError $ errorWriteImmutable l m x
     go m@ReturnVar    = ssaError $ errorWriteImmutable l m x
     l                 = srcPos ll

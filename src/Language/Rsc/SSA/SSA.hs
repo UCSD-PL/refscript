@@ -102,10 +102,11 @@ varsInScope s = envFromList' [ (x,a) | (x,_,_,a,_) <- foldStmts vs () s ]
   where
     vs = scopeVisitor { accStmt = as, accVDec = av }
 
-    as _ (FunctionStmt l n _ _) = [(n, l, FuncDeclKind, Ambient, Initialized)]
-    as _ (ClassStmt l n _ _ _ ) = [(n, l, ClassDeclKind, Ambient, Initialized)]
-    as _ (ModuleStmt l n _)     = [(n, l { fFact = modAnn  n l }, ModuleDeclKind, Ambient, Initialized)]
-    as _ (EnumStmt l n _)       = [(n, l { fFact = enumAnn n l }, EnumDeclKind, Ambient, Initialized)]
+    as _ (FunctionStmt l n _ (Just _)) = [(n, l, FuncDeclKind, RdOnly, Initialized)]
+    as _ (FunctionStmt l n _ Nothing ) = [(n, l, FuncDeclKind, Ambient, Initialized)]
+    as _ (ClassStmt l n _ _ _ ) = [(n, l, ClassDeclKind, RdOnly, Initialized)]
+    as _ (ModuleStmt l n _)     = [(n, l { fFact = modAnn  n l }, ModuleDeclKind, RdOnly, Initialized)]
+    as _ (EnumStmt l n _)       = [(n, l { fFact = enumAnn n l }, EnumDeclKind, RdOnly, Initialized)]
     as _ _                      = []
 
     av _ (VarDecl l n init) = [(n, l, VarDeclKind, varAsgn l, fromInit init)]
@@ -838,6 +839,7 @@ ssaVarRef l x
   = do getAssignability x >>= \case
          WriteGlobal  -> return e
          Ambient      -> return e
+         RdOnly       -> return e
          WriteLocal   -> findSsaEnv x >>= \case
              Just t   -> return   $ VarRef l t
              Nothing  -> return   $ VarRef l x

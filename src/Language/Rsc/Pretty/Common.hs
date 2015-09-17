@@ -61,8 +61,8 @@ instance (PP a, PP b, PP c, PP d, PP e) => PP (a,b,c,d,e) where
 instance PP t => PP (I.IntMap t) where
   pp m = vcat (pp <$> I.toList m)
 
-instance PP t => PP (F.SEnv t) where
-  pp m = vcat $ pp <$> F.toListSEnv m
+instance (PP t) => PP (F.SEnv t) where
+  pp m = vcat $ map (\(x,t) -> pp x $$ nest 20 (dcolon <> text " " <> pp t)) (F.toListSEnv m)
 
 
 ---------------------------------------------------------------------
@@ -90,20 +90,7 @@ instance PP F.Pred where
   pp = pprint
 
 instance PP a => PP (Located a) where
-  pp x = pp (val x) <+> text "at:" <+> pp (loc x)
-
-
----------------------------------------------------------------------
--- | Env
----------------------------------------------------------------------
-
-instance PP t => PP (Env t) where
-  pp = vcat . (ppBind <$>) . F.toListSEnv . fmap val
-
-instance PP t => PP (QEnv t) where
-  pp m = vcat $ (ppBind <$>) $ qenvToList m
-
-ppBind (x, t) = pp x <+> dcolon <+> pp t
+  pp x = pp (val x) -- <+> text "at:" <+> pp (loc x)
 
 
 ---------------------------------------------------------------------

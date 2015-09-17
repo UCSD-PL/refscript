@@ -9,6 +9,7 @@ module Language.Rsc.Pretty.Syntax (
 ) where
 
 import           Control.Applicative        ((<$>))
+import           Data.Maybe                 (catMaybes, fromMaybe)
 import qualified Language.Fixpoint.Types    as F
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Names
@@ -23,7 +24,7 @@ instance PP (Expression a) where
   pp = ppExpression True
 
 instance PP (Statement a) where
-  pp = ppStatement
+  pp = fromMaybe (text "") . ppStatement
 
 instance PP (CaseClause a) where
   pp = caseClause
@@ -70,12 +71,12 @@ renderExpression = render . (ppExpression True)
 
 -- Displays the statement in { ... }, unless it is a block itself.
 inBlock:: Statement a -> Doc
-inBlock s@(BlockStmt _ _) = ppStatement s
+inBlock s@(BlockStmt _ _) = pp s
 inBlock s                 = ssAsBlock [s]
 
--- ssAsBlock :: [Statement a] -> Doc
 asBlock f ss = lbrace $+$ nest 2 (f ss) $$ rbrace
 
+ssAsBlock :: [Statement a] -> Doc
 ssAsBlock = asBlock stmtList
 
 classEltAsBlock = asBlock classEltList
@@ -106,77 +107,75 @@ ppVarDecl hasIn vd = case vd of
   VarDecl _ id Nothing  -> ppId id
   VarDecl _ id (Just e) -> ppId id <+> equals <+> ppAssignmentExpression hasIn e
 
-ppStatement :: Statement a -> Doc
+ppStatement :: Statement a -> Maybe Doc
 ppStatement s = case s of
-  BlockStmt _ ss -> ssAsBlock ss
-  EmptyStmt _ -> semi
-  ExprStmt _ e@(CallExpr _ (FuncExpr {}) _ ) ->
-    parens (ppExpression True e) <> semi
-  ExprStmt _ e -> ppExpression True e <> semi
-  IfSingleStmt _ test cons -> text "if" <+>
-                              parens (ppExpression True test) $$
-                              ppStatement cons
-  IfStmt _ test cons alt -> text "if" <+> parens (ppExpression True test) $$
-                            ppStatement cons $$ text "else" <+> ppStatement alt
-  SwitchStmt _ e cases ->
-    text "switch" <+> parens (ppExpression True e) $$
-    braces (nest 2 (vcat (map caseClause cases)))
-  WhileStmt _ test body -> text "while" <+> parens (ppExpression True test) $$
-                           ppStatement body
-  ReturnStmt _ Nothing -> text "return"
-  ReturnStmt _ (Just e) -> text "return" <+> ppExpression True e
-  DoWhileStmt _ s e ->
-    text "do" $$
-    (ppStatement s <+> text "while" <+> parens (ppExpression True e) <> semi)
-  BreakStmt _ Nothing ->  text "break" <> semi
-  BreakStmt _ (Just label) -> text "break" <+> ppId label <> semi
-  ContinueStmt _ Nothing -> text "continue" <> semi
-  ContinueStmt _ (Just label) -> text"continue" <+> ppId label <> semi
-  LabelledStmt _ label s -> ppId label <> colon $$ ppStatement s
-  ForInStmt p init e body ->
-    text "for" <+>
-    parens (ppForInInit init <+> text "in" <+> ppExpression True e) $+$
-    ppStatement body
-  ForStmt _ init incr test body ->
-    text "for" <+>
-    parens (ppForInit init <> semi <+> maybe incr (ppExpression True) <>
-            semi <+> maybe test (ppExpression True)) $$
-    ppStatement body
-  TryStmt _ stmt mcatch mfinally ->
-    text "try" $$ inBlock stmt $$ ppCatch $$ ppFinally
+  BlockStmt _ ss            -> Just $ ssAsBlock ss
+  EmptyStmt _               -> Nothing
+  ExprStmt _ e@(CallExpr _ FuncExpr{} _)
+                            -> Just $ parens (ppExpression True e) <> semi
+  ExprStmt _ e              -> Just $ ppExpression True e <> semi
+  IfSingleStmt _ test cons  -> Just $ text "if" <+>
+                                      parens (ppExpression True test) $$
+                                      pp cons
+  IfStmt _ test cons alt    -> Just $ text "if" <+> parens (ppExpression True test) $$
+                                      pp cons $$ text "else" $$ pp alt
+  SwitchStmt _ e cases      -> Just $ text "switch" <+> parens (ppExpression True e) $$
+                                      braces (nest 2 (vcat (map caseClause cases)))
+  WhileStmt _ test body     -> Just $ text "while" <+> parens (ppExpression True test) $$ pp body
+  ReturnStmt _ Nothing      -> Just $ text "return"
+  ReturnStmt _ (Just e)     -> Just $ text "return" <+> ppExpression True e
+  DoWhileStmt _ s e         -> Just $ text "do" $$ pp s <+> text "while" <+>
+                                      parens (ppExpression True e) <> semi
+  BreakStmt _ Nothing       -> Just $ text "break" <> semi
+  BreakStmt _ (Just label)  -> Just $ text "break" <+> ppId label <> semi
+  ContinueStmt _ Nothing    -> Just $ text "continue" <> semi
+  ContinueStmt _ (Just lbl) -> Just $ text "continue" <+> ppId lbl <> semi
+  LabelledStmt _ label s    -> Just $ ppId label <> colon $$ pp s
+  ForInStmt p init e body   -> Just $ text "for" <+>
+                                      parens (ppForInInit init <+> text "in" <+> ppExpression True e) $+$
+                                      pp body
+  ForStmt _ init incr test body
+                            -> Just $ text "for" <+>
+                                      parens (ppForInit init <> semi <+>
+                                              maybe incr (ppExpression True) <> semi <+>
+                                              maybe test (ppExpression True)) $$
+                                      pp body
+  TryStmt _ stmt mcatch mfinally
+                            -> Just $ text "try" $$ inBlock stmt $$ ppCatch $$ ppFinally
     where ppFinally = case mfinally of
-            Nothing -> empty
-            Just stmt -> text "finally" <> inBlock stmt
-          ppCatch = case mcatch of
-            Nothing -> empty
-            Just (CatchClause _ id s) ->
-              text "catch" <+> (parens.ppId) id <+> inBlock s
-  ThrowStmt _ e -> text "throw" <+> ppExpression True e <> semi
-  WithStmt _ e s -> text "with" <+> parens (ppExpression True e) $$ ppStatement s
-  VarDeclStmt _ decls ->
-    text "var" <+> cat (punctuate comma (map (ppVarDecl True) decls)) <> semi
-  FunctionStmt _ name args (Just body) ->
-    text "function" <+> ppId name <>
-    parens (cat $ punctuate comma (map ppId args)) $$
-    ssAsBlock body
-  FunctionStmt _ name args Nothing ->
-    text "function" <+> ppId name <>
-    parens (cat $ punctuate comma (map ppId args))
-  ClassStmt _ name ext imp body ->
-    text "class" <+> ppId name  <+>
-    ( case ext of
-        Just e  -> text "extends" <+> ppId e
-        Nothing -> text "") <+>
-    ( case imp of
-        [] -> text ""
-        is -> text "implements" <+> cat (punctuate comma (map ppId is))) $$
-    classEltAsBlock body
-
-  ModuleStmt _ name body ->
-    text "module" <+> ppId name $$ ssAsBlock body
-  InterfaceStmt _ x -> text "// interface" <+> ppId x
-  EnumStmt _ name elts -> text "enumeration" <+> ppId name <+>
-    braces (cat $ punctuate comma (map ppEnumElt elts))
+                        Nothing -> empty
+                        Just stmt -> text "finally" <> inBlock stmt
+          ppCatch   = case mcatch of
+                        Nothing -> empty
+                        Just (CatchClause _ id s) -> text "catch" <+>
+                                                     (parens.ppId) id <+> inBlock s
+  ThrowStmt _ e             -> Just $ text "throw" <+> ppExpression True e <> semi
+  WithStmt _ e s            -> Just $ text "with" <+> parens (ppExpression True e) $$ pp s
+  VarDeclStmt _ decls       -> Just $ text "var" <+>
+                                      cat (punctuate comma (map (ppVarDecl True) decls)) <>
+                                      semi
+  FunctionStmt _ name args (Just body)
+                            -> Just $ text "function" <+> ppId name <>
+                                      parens (cat $ punctuate comma (map ppId args)) $$
+                                      ssAsBlock body
+  FunctionStmt _ name args Nothing
+                            -> Nothing
+  ClassStmt _ name ext imp body
+                            -> Just $ text "class" <+> ppId name  <+>
+                                      (case ext of
+                                         Just e  -> text "extends" <+> ppId e
+                                         Nothing -> text ""
+                                      ) <+>
+                                      ( case imp of
+                                          [] -> text ""
+                                          is -> text "implements" <+>
+                                                cat (punctuate comma (map ppId is))
+                                      ) $$
+                                      classEltAsBlock body
+  ModuleStmt _ name body    -> Just $ text "module" <+> ppId name $$ ssAsBlock body
+  InterfaceStmt _ x         -> Nothing
+  EnumStmt _ name elts      -> Just $ text "enumeration" <+> ppId name <+>
+                                      braces (cat $ punctuate comma (map ppEnumElt elts))
 
 ppClassElt :: ClassElt a -> Doc
 ppClassElt (Constructor _ args body) =
@@ -195,7 +194,7 @@ ite True a _  = a
 ite False _ a = a
 
 stmtList :: [Statement a] -> Doc
-stmtList = vcat . map ppStatement
+stmtList = vcat . catMaybes . map ppStatement
 
 classEltList :: [ClassElt a] -> Doc
 classEltList = vcat . map ppClassElt

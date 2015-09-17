@@ -116,7 +116,7 @@ consRsc :: RefScript -> ClassHierarchy F.Reft -> CGM ()
 --------------------------------------------------------------------------------
 consRsc p@(Rsc {code = Src fs}) cha
   = do  g   <- initGlobalEnv p cha
-        consStmts g fs
+        consStmts g $ tracePP "" fs
         return ()
 
 
@@ -284,8 +284,8 @@ consStmt g (IfSingleStmt l b s)
 consStmt g (IfStmt l e s1 s2) =
   mseq ((cgSafeEnvFindTyM (builtinOpId BITruthy) g)
         >>= consCall g l "truthy" [(e, Nothing)]) $ \(xe,ge) -> do
-    g1' <- (`consStmt` s1) $ envAddGuard xe True ge
-    g2' <- (`consStmt` s2) $ envAddGuard xe False ge
+    g1' <- ltracePP l "IF" <$> ((`consStmt` s1) $ envAddGuard xe True ge)
+    g2' <- ltracePP l "ELSE" <$> ((`consStmt` s2) $ envAddGuard xe False ge)
     envJoin l g g1' g2'
 
 -- while e { s }

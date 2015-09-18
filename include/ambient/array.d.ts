@@ -159,9 +159,9 @@ declare type ROArray<T> = Array<ReadOnly, T>;
 
 // XXX: Add Well formedness check for missing type params
 
-/*@ _getLength ::                     <T>(a: IArray<T>) =>  { v: number | v >= 0 && v = (len a) } */
-/*@ _getLength :: <M extends ReadOnly, T>(a: Array<M,T>) => { v: number | v >= 0 } */
-declare function _getLength<M extends ReadOnly,T>(a: Array<M, T>): number;
+/*@ builtin_getLength ::                     <T>(a: IArray<T>) =>  { v: number | v >= 0 && v = (len a) } */
+/*@ builtin_getLength :: <M extends ReadOnly, T>(a: Array<M,T>) => { v: number | v >= 0 } */
+declare function builtin_getLength<M extends ReadOnly,T>(a: Array<M, T>): number;
 
 // interface ArrayConstructor {
 //     new (arrayLength?: number): any[];

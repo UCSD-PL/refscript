@@ -1,14 +1,14 @@
 
 // OBJECT LITERAL METHODS VS FUNCTION FIELDS
 
-
-interface NumberGenerator {
+interface NumberGenerator<M extends ReadOnly> {
     generate: () => number;
 }
 
-/*@ foo :: () => {NumberGenerator<Immutable> | true} */
-function foo() {
+export function foo(): NumberGenerator<Immutable> {
     return {
-        generate: function() /*@ <anonymous>  () => { number | true } */ { return 3; }
+        generate: function() /*@ <anonymous>  () => { number | true } */ {
+            return 3;
+        }
     }
 }

@@ -155,6 +155,7 @@ errorConsSigMissing l t       = mkErr l $ printf "Constructor signature for '%s'
 errorModuleExport l m x       = mkErr l $ printf "Module '%s' does not export '%s'." (ppshow m) (ppshow x)
 errorDeadCast l t1 t2         = mkErr l $ printf "Generic deadcast error when converting from type '%s' to '%s'" (ppshow t1) (ppshow t2)
 errorUqMutSubtyping l e t rt  = mkErr l $ printf "No subtyping allowed at unique mutability when returning expression '%s' of type '%s' to type '%s'." (ppshow e) (ppshow t) (ppshow rt)
+errorTypeParamConstr l t c    = mkErr l $ printf "Types '%s' do not fulfill constraints '%s'." (ppshow t) (ppshow c)
 
 ---------------------------------------------------------------------------
 -- | LIQUID

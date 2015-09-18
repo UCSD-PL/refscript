@@ -129,5 +129,5 @@ safeEnvFindTy :: (EnvLike r t, IsLocated l, Symbolic x, Monad m) => l -> t r -> 
 safeEnvFindTy l γ x | Just t <- envLikeFindTy x γ = return t
                     | otherwise = die $ bugEnvFindTy (srcPos l) (F.symbol x)
 
-globalLengthType γ = safeEnvFindTy (def::SrcSpan) γ "_getLength"
+globalLengthType γ = safeEnvFindTy (def::SrcSpan) γ "builtin_getLength"
 

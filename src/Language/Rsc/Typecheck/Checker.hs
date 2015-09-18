@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE ViewPatterns          #-}
 
 module Language.Rsc.Typecheck.Checker (verifyFile, typeCheck) where
 
@@ -683,11 +684,12 @@ tcExpr _ e _
 tcCast :: Unif r => TCEnv r -> AnnTc r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
 --------------------------------------------------------------------------------
 tcCast γ l e tc
-  = do  opTy        <- safeEnvFindTy l γ (builtinOpId BICastExpr)
+  = do  opTy        <- fixCastTy <$> safeEnvFindTy l γ (builtinOpId BICastExpr)
         cid         <- freshCastId l
-        let γ'       = tcEnvAdd (F.symbol cid) (VI Local WriteLocal Initialized tc) γ
-        ([_,e'],t') <- tcNormalCall γ' l "user-cast" [(VarRef l cid, Nothing),(e, Just tc)] opTy
+        ([_,e'],t') <- tcNormalCall γ l "user-cast" [(e, Just tc)] opTy
         return       $ (e', t')
+    where
+      fixCastTy (TAll (BTV s l _) t) = TAll (BTV s l (Just tc)) t
 
 --------------------------------------------------------------------------------
 tcCall :: Unif r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
@@ -752,11 +754,9 @@ tcCall γ (ArrayLit l es)
        return $ (ArrayLit l es', t)
 
 -- | `{ f1:t1,...,fn:tn }`
-tcCall γ (ObjectLit l bs)
+tcCall γ (ObjectLit l (unzip -> (ps, es)))
   = do (es', t) <- tcNormalCall γ l "ObjectLit" (es `zip` nths) (objLitTy l ps)
        return $ (ObjectLit l (zip ps es'), t)
-  where
-    (ps,es) = unzip bs
 
 -- | `new e(e1,...,en)`
 tcCall γ c@(NewExpr l e es)
@@ -909,63 +909,66 @@ resolveOverload γ l fn es ft
 tcCallCaseTry :: (Unif r, PP a)
   => TCEnv r -> AnnTc r -> a -> [RType r] -> [RType r] -> TCM r (Maybe (RSubst r, RType r))
 --------------------------------------------------------------------------------
-tcCallCaseTry _ _ _ _ [] = return Nothing
+tcCallCaseTry _ _ _ _ []
+  = return Nothing
+
 tcCallCaseTry γ l fn ts (ft:fts)
-  = runFailM (do  (_,its1,_) <- instantiateFTy l (tce_ctx γ) fn ft
-                  ts1 <- zipWithM (instantiateTy l $ tce_ctx γ) [1..] ts
-                  θ0 <- unifyTypesM (srcPos l) γ ts1 its1
-                  if and $ zipWith (isSubtype γ) (apply θ0 ts1) (apply θ0 its1)
-                    then return $ Just θ0
-                    else return Nothing)
-  >>= \case
-        Right (Just θ) -> return $ Just (θ, ft)
-        _              -> tcCallCaseTry γ l fn ts fts
+  = runFailM (do
+      (βs, its1, _)  <- instantiateFTy l (tce_ctx γ) fn ft
+      ts1            <- zipWithM (instantiateTy l $ tce_ctx γ) [1..] ts
+      θ              <- unifyTypesM (srcPos l) γ ts1 its1
+      let (ts2, its2) = apply θ (ts1, its1)
+      let (ts, cs)    = unzip [(t, c) | (t, BTV _ _ (Just c)) <- zip ts2 βs]
+      if not (and (zipWith (isSubtype γ) ts cs))
+        then
+          return Nothing
+        else
+          if and (zipWith (isSubtype γ) ts2 its2)
+            then return $ Just θ
+            else return Nothing
+    )
+    >>= \case
+          Right (Just θ') -> return $ Just (θ', ft)
+          _               -> tcCallCaseTry γ l fn ts fts
 
 --------------------------------------------------------------------------------
 tcCallCase :: (PP a, Unif r)
-           => TCEnv r
-           -> AnnTc r
-           -> a
-           -> [(ExprSSAR r, RType r)]
-           -> RType r
-           -> TCM r ([ExprSSAR r], RType r)
+  => TCEnv r -> AnnTc r -> a -> [(ExprSSAR r, RType r)] -> RType r -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
-tcCallCase γ l fn ets ft
-  = do let ξ            = tce_ctx γ
-       (_,its1,ot)     <- instantiateFTy l ξ fn ft
-       ts1             <- zipWithM (instantiateTy l $ tce_ctx γ) [1..] ts
-       -- let (ts2, its2)  = balance ts1 its1
-       θ               <- unifyTypesM (srcPos l) γ ts1 its1
-       let (ts3,its3)   = mapPair (apply θ) (ts1, its1)
-       es'             <- zipWith3M (castM γ) es ts3 its3
-       return           $ (es', apply θ ot)
-  where
-    (es, ts)            = unzip ets
+tcCallCase γ@(tce_ctx -> ξ) l fn (unzip -> (es, ts)) ft
+  = do  (βs, its1, ot) <- instantiateFTy l ξ fn ft
+        ts1            <- zipWithM (instantiateTy l ξ) [1..] ts
+        θ              <- unifyTypesM (srcPos l) γ ts1 its1
 
---
--- TODO: Add check on polymorphic bounds
---
+        -- Type parameter subtyping
+        let (vts, cs)   = unzip [(apply θ (tVar (TV s l)), c) | BTV s l (Just c) <- βs]
+        _              <- when (not $ and $ zipWith (isSubtype γ) vts cs)
+                               (fatal (errorTypeParamConstr l ts cs) ())
+
+        -- Type argument subtyping
+        let (ts2, its2) = apply θ (ts1, its1)
+        es'            <- zipWith3M (castM γ) es ts2 its2
+
+        return          $ (es', apply θ ot)
+
 --------------------------------------------------------------------------------
 instantiateTy :: Unif r => AnnTc r -> IContext -> Int -> RType r -> TCM r (RType r)
 --------------------------------------------------------------------------------
-instantiateTy l ξ i t = freshTyArgs l i ξ (btvToTV <$> bs) t'
-  where
-    (bs, t') = bkAll t
+instantiateTy l ξ i (bkAll -> (bs, t)) = snd <$> freshTyArgs l i ξ (btvToTV <$> bs) t
 
 --------------------------------------------------------------------------------
-instantiateFTy :: (Unif r, PP a)
-               => AnnTc r
-               -> IContext
-               -> a
-               -> RType r
-               -> TCM r ([BTVar r], [RType r], RType r)
+instantiateFTy :: (Unif r, PP a) => AnnTc r -> IContext -> a -> RType r -> TCM r ([BTVar r], [RType r], RType r)
 --------------------------------------------------------------------------------
-instantiateFTy l ξ fn ft
-  = freshTyArgs l 0 ξ αs t >>= maybe err return . bkFunNoBinds
+instantiateFTy l ξ fn ft@(bkAll -> (bs, t))
+  = do  (βs, ft')   <- freshTyArgs l 0 ξ αs t
+        (_, ts, t') <- maybe err return (bkFunNoBinds ft')
+        return       $ (mkBs βs, ts, t')
     where
-      (bs, t) = bkAll ft
-      αs = btvToTV <$> bs
-      err = tcError $ errorNonFunction (srcPos l) fn ft
+      αs      = [ TV α l     | BTV α l _ <- bs ]
+      ls      = [ l          | BTV _ l _ <- bs ]
+      cs      = [ c          | BTV _ _ c <- bs ]
+      mkBs βs = [ BTV β' l c | (TV β' l, c) <- zip βs cs ]
+      err     = tcError $ errorNonFunction (srcPos l) fn ft
 
 --------------------------------------------------------------------------------
 -- envJoin :: Unif r => AnnTc r -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)

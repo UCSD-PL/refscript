@@ -452,8 +452,13 @@ freshTyFun g l t
   | isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g
   | otherwise          = return t
 
-freshenVI _ _ v@(VI _ Ambient _ _) = return v
-freshenVI _ _ v@(VI Exported _ _ _) = return v
+--------------------------------------------------------------------------------
+freshenVI :: IsLocated l => CGEnv -> l -> VarInfo F.Reft -> CGM (VarInfo F.Reft)
+--------------------------------------------------------------------------------
+freshenVI _ _ v@(VI _ Ambient _ _)
+  = return v
+freshenVI _ _ v@(VI Exported _ _ _)
+  = return v
 freshenVI g l v@(VI loc a@WriteGlobal i t)
   | isTrivialRefType t
   = freshTy "freshenVI" (toType t) >>= (VI loc a i <$>) . wellFormed l g
@@ -467,19 +472,33 @@ freshenVI g l v@(VI loc a i t)
   | otherwise
   = return v
 
+--------------------------------------------------------------------------------
+freshenType :: IsLocated l => Assignability -> CGEnv -> l -> RefType -> CGM RefType
+--------------------------------------------------------------------------------
 freshenType WriteGlobal g l t
-  | isTrivialRefType t = freshTy "freshenType-WG" (toType t) >>= wellFormed l g
-  | otherwise          = return t
+  | isTrivialRefType t
+  = freshTy "freshenType-WG" (toType t) >>= wellFormed l g
+  | otherwise
+  = return t
 freshenType _ g l t
-  | not (isTFun t)     = return t
-  | isTrivialRefType t = freshTy "freshenType-RO" (toType t) >>= wellFormed l g
-  | otherwise          = return t
+  | not (isTFun t)
+  = return t
+  | isTrivialRefType t
+  = freshTy "freshenType-RO" (toType t) >>= wellFormed l g
+  | otherwise
+  = return t
 
 -- | Instantiate Fresh Type (at Call-site)
+--
+--   Returns a pair of instantiations of type variables @αs@ and the freshly
+--   instantiated body type of the function.
+--------------------------------------------------------------------------------
+freshTyInst :: IsLocated l => l -> CGEnv -> [TVar] -> [RefType] -> RefType -> CGM ([RefType], RefType)
+--------------------------------------------------------------------------------
 freshTyInst l g αs τs tbody
   = do ts    <- mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
-       return $ apply (fromList $ zip αs ts) tbody
+       return $ (ts, apply (fromList $ zip αs ts) tbody)
 
 -- | Instantiate Fresh Type (at Phi-site)
 --------------------------------------------------------------------------------

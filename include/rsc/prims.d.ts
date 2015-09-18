@@ -26,21 +26,17 @@ declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 /*@ builtin_BIBracketAssign :: <A>(a: {[y: string]: A}, s: string, v: A) => void */
 declare function builtin_BIBracketAssign<A>(a: any, s: any, v: A): void;
 
-/*@ builtin_BISetProp :: <A,M>({ f?: [M] A }      , A) => { A | true } */    // XXX: UniqueMutable ??
-/*@ builtin_BISetProp :: <A>  ({ f?: [Mutable] A }, A) => { A | true } */
+/*@ builtin_BISetProp :: <A,M>({ f?: [M] A }      , A) => A */    // XXX: UniqueMutable ??
+/*@ builtin_BISetProp :: <A>  ({ f?: [Mutable] A }, A) => A */
 declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
-/*@ builtin_BIArrayLit :: <M,A>(A) => {v: Array<M,A> | (len v) = builtin_BINumArgs } */
+/*@ builtin_BIArrayLit :: <M,A>(A) => {v: Aranyray<M,A> | (len v) = builtin_BINumArgs } */
 declare function builtin_BIArrayLit<A>(a: A): A[];
 
 /*@ builtin_BICondExpr :: <C,T>(c: C, t: T, x: T, y: T) => { v: T | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) } */
 declare function builtin_BICondExpr<C, T>(c: C, t: T, x: T, y: T): T;
 
-// type CAST_T = any
-
-/*  builtin_BICastExpr :: <V extends CAST_T>(x: V) => { v: V | v = x } */
-/*  builtin_BICastExpr :: <V extends CAST_T>(x: V) => V */
-// declare function builtin_BICastExpr<V extends CAST_T>(x: V): V;
+declare function builtin_BICastExpr<V>(x: V): V;
 
 /*@ builtin_OpLT :: (x:number, y:number) => {v:boolean | Prop v <=> x < y } */
 /*@ builtin_OpLT :: <T>(x:T, y:T) => boolean */
@@ -58,13 +54,13 @@ declare function builtin_OpGT(a: any, b: any): boolean;
 /*@ builtin_OpGEq :: <T>(x:T, y:T) => boolean */
 declare function builtin_OpGEq(a: any, b: any): boolean;
 
-/*@ builtin_OpAdd :: (x: number, y: number) => {number | v = x + y} */
-/*@ builtin_OpAdd :: (x: bitvector32, y: bitvector32) => bitvector32 */
-/*@ builtin_OpAdd :: (x: number, y: string) => string */
-/*@ builtin_OpAdd :: (x: string, y: number) => string */
-/*@ builtin_OpAdd :: (x: string, y: string) => string */
-/*@ builtin_OpAdd :: (x: string, y: boolean) => string */
-/*@ builtin_OpAdd :: (x: boolean, y: string) => string */
+/*@ builtin_OpAdd :: (x: number     , y: number     ) => {number | v = x + y} */
+/*@ builtin_OpAdd :: (x: bitvector32, y: bitvector32) => bitvector32          */
+/*@ builtin_OpAdd :: (x: number     , y: string     ) => string               */
+/*@ builtin_OpAdd :: (x: string     , y: number     ) => string               */
+/*@ builtin_OpAdd :: (x: string     , y: string     ) => string               */
+/*@ builtin_OpAdd :: (x: string     , y: boolean    ) => string               */
+/*@ builtin_OpAdd :: (x: boolean    , y: string     ) => string               */
 declare function builtin_OpAdd(a: any, b: any): any;
 
 /*@ builtin_OpSub :: (x:number, y:number)  => {v:number | v ~~ x - y} */

@@ -221,19 +221,20 @@ fatal err x = modify (\st -> st { tc_errors = err : tc_errors st}) >> return x
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-freshTyArgs :: Unif r => AnnSSA r -> Int -> IContext -> [TVar] -> RType r -> TCM r (RType r)
+freshTyArgs :: Unif r => AnnSSA r -> Int -> IContext -> [TVar] -> RType r -> TCM r ([TVar], RType r)
 --------------------------------------------------------------------------------
-freshTyArgs a n ξ αs t = (`apply` t) <$> freshSubst a n ξ αs
+freshTyArgs a n ξ αs t = do (βs, θ) <- freshSubst a n ξ αs
+                            return   $ (βs, apply θ t)
 
 --------------------------------------------------------------------------------
-freshSubst :: Unif r => AnnSSA r -> Int -> IContext -> [TVar] -> TCM r (RSubst r)
+freshSubst :: Unif r => AnnSSA r -> Int -> IContext -> [TVar] -> TCM r ([TVar], RSubst r)
 --------------------------------------------------------------------------------
 freshSubst (FA i l _) n ξ αs
   = do when (not $ unique αs) $ fatal (errorUniqueTypeParams l) ()
        βs        <- mapM (freshTVar l) αs
        setTyArgs l i n ξ βs
        extSubst   $ βs
-       return     $ fromList $ zip αs (tVar <$> βs)
+       return     $ (βs, fromList $ zip αs (tVar <$> βs))
 
 --------------------------------------------------------------------------------
 setTyArgs :: (IsLocated l, Unif r) => l -> NodeId -> Int -> IContext -> [TVar] -> TCM r ()

@@ -5,6 +5,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverlappingInstances      #-}
 {-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE ViewPatterns              #-}
 
 -- | Top Level for Refinement Type checker
 module Language.Rsc.Liquid.Checker (verifyFile) where
@@ -116,7 +117,7 @@ consRsc :: RefScript -> ClassHierarchy F.Reft -> CGM ()
 --------------------------------------------------------------------------------
 consRsc p@(Rsc {code = Src fs}) cha
   = do  g   <- initGlobalEnv p cha
-        consStmts g $ tracePP "" fs
+        consStmts g fs
         return ()
 
 
@@ -284,8 +285,8 @@ consStmt g (IfSingleStmt l b s)
 consStmt g (IfStmt l e s1 s2) =
   mseq ((cgSafeEnvFindTyM (builtinOpId BITruthy) g)
         >>= consCall g l "truthy" [(e, Nothing)]) $ \(xe,ge) -> do
-    g1' <- ltracePP l "IF" <$> ((`consStmt` s1) $ envAddGuard xe True ge)
-    g2' <- ltracePP l "ELSE" <$> ((`consStmt` s2) $ envAddGuard xe False ge)
+    g1' <- (`consStmt` s1) $ envAddGuard xe True ge
+    g2' <- (`consStmt` s2) $ envAddGuard xe False ge
     envJoin l g g1' g2'
 
 -- while e { s }
@@ -538,10 +539,14 @@ consExpr g (Cast_ l e) tCtx
 
 -- | < t > e
 consExpr g ex@(Cast l e) _
-  | [t] <- [ ct | UserCast ct <- fFact l ]
-  = consCall g l "Cast" [(e, Just t)] (mkCastFunTy t)
+  | [tc] <- [ ct | UserCast ct <- fFact l ]
+  = do  opty <- fixCastTy tc <$> cgSafeEnvFindTyM (builtinOpId BICastExpr) g
+        consCall g l "Cast" [(e, Just tc)] opty -- (mkCastFunTy t)
   | otherwise
   = die $ bugNoCasts (srcPos l) ex
+
+    where
+      fixCastTy tc (TAll (BTV s l _) t) = TAll (BTV s l (Just tc)) t
 
 consExpr g (IntLit l i) _
   = Just <$> cgEnvAddFresh "8" l (VI Local WriteLocal Initialized $ tNum `eSingleton` i) g
@@ -570,14 +575,16 @@ consExpr g (ThisRef l) _
     this = Id l "this"
 
 consExpr g (VarRef l x) _
+  -- | undefined
   | F.symbol x == F.symbol "undefined"
   = Just <$> cgEnvAddFresh "0" l (VI Local WriteLocal Initialized tUndef) g
 
   | Just (VI loc WriteGlobal i t) <- tInfo
   = Just <$> cgEnvAddFresh "0" l (VI loc WriteLocal i t) g
 
-  | Just (VI _ _ _ t) <- tInfo
-  = addAnnot (srcPos l) x t >> return (Just (x, g))
+  | Just (VI loc a i t) <- tInfo
+  = do  addAnnot (srcPos l) x t
+        Just <$> cgEnvAddFresh "cons VarRef" l (VI loc a i t) g
 
   | otherwise
   = cgError $ errorUnboundId (fSrc l) x
@@ -813,7 +820,7 @@ consCall :: PP a
 --      output type of callee.
 consCall g l fn ets ft0
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      -- ts <- ltracePP l (ppshow fn) <$> mapM (`cgSafeEnvFindTyM` g') xes
+      -- ts <- ltracePP l (ppshow fn ++ " " ++ ppshow xes) <$> mapM (`cgSafeEnvFindTyM` g') xes
       ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case ol of
         -- If multiple are valid, pick the first one
@@ -837,16 +844,41 @@ consInstantiate :: PP a
                 -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
 consInstantiate l g fn ft ts xes
-  = do  (_,its1,ot) <- instantiateFTy l g fn ft
-        ts1         <- zipWithM (instantiateTy l g) [1..] ts
-        (ts3, ot')  <- subNoCapture l its1 xes ot
-        _           <- zipWithM_ (subType l err g) (ts1) (map b_type ts3)
-        Just       <$> cgEnvAddFresh "5" l (VI Local WriteLocal Initialized ot') g
+  = do  (its1, ot) <- instantiateFTy l g fn ft
+        ts1        <- zipWithM (instantiateTy l g) [1..] ts
+        (ts3, ot') <- subNoCapture l its1 xes ot
+        _          <- zipWithM_ (subType l err g) ts1 (map b_type ts3)
+        Just      <$> cgEnvAddFresh "5" l (VI Local WriteLocal Initialized ot') g
   where
-    err              = errorLiquid' l
+    err            = errorLiquid' l
 
--- Special casing conditional expression call here because we'd like the
--- arguments to be typechecked under a different guard each.
+----------------------------------------------------------------------------------
+instantiateTy :: AnnLq -> CGEnv -> Int -> RefType -> CGM RefType
+----------------------------------------------------------------------------------
+instantiateTy l g i t = snd <$> freshTyInst l g αs ts t'
+    where
+      (αs, t')        = mapFst (map btvToTV) $ bkAll t
+      ts              = envGetContextTypArgs i g l αs
+
+-- | instantiateFTy:
+--
+---------------------------------------------------------------------------------
+instantiateFTy :: PP a => AnnLq -> CGEnv -> a -> RefType -> CGM ([Bind F.Reft], RefType)
+---------------------------------------------------------------------------------
+instantiateFTy l g fn ft@(bkAll -> (bs, t))
+  = do  (vts, ft')      <- freshTyInst l g αs ts t
+        (_, ts, t')     <- maybe err return (bkFun ft')
+        let (vts', cs)   = unzip [ (t, c) | (t, BTV _ _ (Just c)) <- safeZip "instantiateFTy" vts bs ]
+        _               <- zipWithM_ (subType l (errorTypeParamConstr l vts' cs) g) vts' cs
+        return           $ (ts, t')
+    where
+      αs  = [ TV α l | BTV α l _ <- bs ]
+      ts  = envGetContextTypArgs 0 g l αs
+      err = cgError $ errorNonFunction (srcPos l) fn ft
+
+-- | consCallCondExpr: Special casing conditional expression call here because we'd like the
+--   arguments to be typechecked under a different guard each.
+--
 consCallCondExpr g l fn ets ft0
   = mseq (consCondExprArgs (srcPos l) g ets) $ \(xes, g') -> do
       ts <- T.mapM (`cgSafeEnvFindTyM` g') xes
@@ -859,24 +891,6 @@ consCallCondExpr g l fn ets ft0
   where
     callSigs    = extractCall g ft0
 
-----------------------------------------------------------------------------------
-instantiateTy :: AnnLq -> CGEnv -> Int -> RefType -> CGM RefType
-----------------------------------------------------------------------------------
-instantiateTy l g i t = freshTyInst l g αs ts t'
-    where
-      (αs, t')        = mapFst (map btvToTV) $ bkAll t
-      ts              = envGetContextTypArgs i g l αs
-
----------------------------------------------------------------------------------
-instantiateFTy :: PP a => AnnLq -> CGEnv -> a -> RefType -> CGM  ([BTVar F.Reft], [Bind F.Reft], RefType)
----------------------------------------------------------------------------------
-instantiateFTy l g fn ft
-  = do  t'   <- freshTyInst l g αs ts t
-        maybe err return $ bkFun t'
-    where
-      (αs, t) = mapFst (map btvToTV) $ bkAll ft
-      ts      = envGetContextTypArgs 0 g l αs
-      err     = cgError $ errorNonFunction (srcPos l) fn ft
 
 -----------------------------------------------------------------------------------
 consScan :: (CGEnv -> a -> b -> CGM (Maybe (c, CGEnv))) -> CGEnv -> [(a,b)] -> CGM (Maybe ([c], CGEnv))

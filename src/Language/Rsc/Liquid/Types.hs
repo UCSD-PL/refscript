@@ -171,7 +171,7 @@ rTypeSort (TPrim c _)         = rTypeSortPrim c
 rTypeSort (TOr ts)            = F.FApp (rawStringFTycon $ F.symbol "union") $ L.sort $ rTypeSort <$> ts
 rTypeSort (TAnd ts)           = F.FApp (rawStringFTycon $ F.symbol "intersection") $ L.sort $ rTypeSort <$> ts
 rTypeSort (TRef (Gen n ts) _) = F.FApp (rawStringFTycon $ F.symbol n) (rTypeSort <$> ts)
-rTypeSort (TObj _ _ )         = F.FApp (rawStringFTycon $ F.symbol "Object") []
+rTypeSort (TObj _ _ _ )       = F.FApp (rawStringFTycon $ F.symbol "Object") []
 rTypeSort (TClass _)          = F.FApp (rawStringFTycon $ F.symbol "class" ) []
 rTypeSort (TMod _)            = F.FApp (rawStringFTycon $ F.symbol "module") []
 rTypeSort t                   = error $ render $ text ("BUG: Unsupported in rTypeSort " ++ ppshow t)
@@ -203,7 +203,7 @@ stripRTypeBase (TPrim _ r)  = Just r
 stripRTypeBase (TRef _ r)   = Just r
 stripRTypeBase (TVar _ r)   = Just r
 stripRTypeBase (TFun _ _ r) = Just r
-stripRTypeBase (TObj _ r)   = Just r
+stripRTypeBase (TObj _ _ r) = Just r
 stripRTypeBase _            = Nothing
 
 ------------------------------------------------------------------------------------------

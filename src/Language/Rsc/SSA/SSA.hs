@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE LambdaCase                #-}
@@ -55,7 +56,7 @@ ssaTransform p cha = return $ execute p cha $ ssaRsc p
 -- * Spec annotations (functions, global variable declarations)
 -- * Type annotations (variable declarations (?), class elements)
 ----------------------------------------------------------------------------------
-ssaRsc :: Data r => BareRsc r -> SSAM r (SsaRsc r)
+ssaRsc :: (Data r, PPR r) => BareRsc r -> SSAM r (SsaRsc r)
 ----------------------------------------------------------------------------------
 ssaRsc p@(Rsc { code = Src fs })
   = do  setGlobs $ allGlobs
@@ -141,7 +142,7 @@ mergeModuleASgn γOuter γScope
 
 
 -------------------------------------------------------------------------------------
-ssaFun :: Data r => AnnSSA r -> [Var r] -> [Statement (AnnSSA r)] -> SSAM r [Statement (AnnSSA r)]
+ssaFun :: (Data r, PPR r) => AnnSSA r -> [Var r] -> [Statement (AnnSSA r)] -> SSAM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------------
 ssaFun l xs body
   = do  γ0         <- getSsaEnv
@@ -167,12 +168,12 @@ ssaSeq f            = go True
                          return      (b', y:ys)
 
 -------------------------------------------------------------------------------------
-ssaStmts :: Data r => [Statement (AnnSSA r)] -> SSAM r (Bool, [Statement (AnnSSA r)])
+ssaStmts :: (Data r, PPR r) => [Statement (AnnSSA r)] -> SSAM r (Bool, [Statement (AnnSSA r)])
 -------------------------------------------------------------------------------------------
 ssaStmts ss = mapSnd flattenBlock <$> ssaSeq ssaStmt ss
 
 -----------------------------------------------------------------------------------
-ssaStmt :: Data r => Statement (AnnSSA r) -> SSAM r (Bool, Statement (AnnSSA r))
+ssaStmt :: (Data r, PPR r) => Statement (AnnSSA r) -> SSAM r (Bool, Statement (AnnSSA r))
 -------------------------------------------------------------------------------------
 -- skip
 ssaStmt s@(EmptyStmt _)
@@ -441,7 +442,7 @@ ssaAsgnStmt l1 l2 x@(Id l3 v) x' e'
 fr_                   = freshenAnn
 
 -------------------------------------------------------------------------------------
-ctorVisitor :: Data r => [Id (AnnSSA r)] -> VisitorM (SSAM r) () () (AnnSSA r)
+ctorVisitor :: (Data r, PPR r) => [Id (AnnSSA r)] -> VisitorM (SSAM r) () () (AnnSSA r)
 -------------------------------------------------------------------------------------
 ctorVisitor ms            = defaultVisitor { endStmt = es } { endExpr = ee }
                                            { mStmt   = ts } { mExpr   = te }
@@ -527,7 +528,7 @@ ctorExit l ms
 --  }
 --
 -------------------------------------------------------------------------------------
-ssaClassElt :: Data r => ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
+ssaClassElt :: (Data r, PPR r) => ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
 -------------------------------------------------------------------------------------
 ssaClassElt (Constructor l xs bd)
   = do  (γ,αs)     <- (,)      <$> getSsaEnv <*> getAsgn
@@ -629,7 +630,7 @@ ssaWith θ φ f x = do
                    else return Nothing
 
 -------------------------------------------------------------------------------------
-ssaExpr ::  Data r => Expression (AnnSSA r) -> SSAM r ([Statement (AnnSSA r)], Expression (AnnSSA r))
+ssaExpr :: (Data r, PPR r) => Expression (AnnSSA r) -> SSAM r ([Statement (AnnSSA r)], Expression (AnnSSA r))
 -------------------------------------------------------------------------------------
 
 ssaExpr e@(IntLit _ _)
@@ -749,7 +750,7 @@ ssaAsgnExpr l lx x e
        return         (s ++ [ssaAsgnStmt l lx x x' e'], e')
 
 -----------------------------------------------------------------------------
-ssaLval    ::  Data r => LValue (AnnSSA r) -> SSAM r (LValue (AnnSSA r))
+ssaLval :: (Data r, PPR r) => LValue (AnnSSA r) -> SSAM r (LValue (AnnSSA r))
 -----------------------------------------------------------------------------
 ssaLval (LVar lv v)
   = do VarRef _ (Id _ v') <- ssaVarRef lv (Id lv v)
@@ -816,7 +817,7 @@ unaryId x _ _            = x
 
 
 -------------------------------------------------------------------------------------
-ssaVarDecl :: Data r
+ssaVarDecl :: (Data r, PPR r)
            => VarDecl (AnnSSA r)
            -> SSAM r ([Statement (AnnSSA r)], VarDecl (AnnSSA r))
 -------------------------------------------------------------------------------------
@@ -833,7 +834,7 @@ ssaVarDecl v@(VarDecl l x Nothing)
                          <*> justM (VarRef <$> fr_ l <*> freshenIdSSA undefinedId))
 
 ------------------------------------------------------------------------------------------
-ssaVarRef ::  Data r => AnnSSA r -> Id (AnnSSA r) -> SSAM r (Expression (AnnSSA r))
+ssaVarRef :: (Data r, PPR r) => AnnSSA r -> Id (AnnSSA r) -> SSAM r (Expression (AnnSSA r))
 ------------------------------------------------------------------------------------------
 ssaVarRef l x
   = do getAssignability x >>= \case
@@ -849,7 +850,7 @@ ssaVarRef l x
        e = VarRef l x
 
 ------------------------------------------------------------------------------------
-ssaAsgn :: Data r
+ssaAsgn :: (Data r, PPR r)
         => AnnSSA r
         -> Id (AnnSSA r)
         -> Expression (AnnSSA r)
@@ -909,7 +910,7 @@ getLoopPhis b = do
     meet x x' = if x == x' then Right x else Left (x, x')
 
 -------------------------------------------------------------------------------------
-ssaForLoop :: Data r
+ssaForLoop :: (Data r, PPR r)
            => AnnSSA r
            -> [VarDecl (AnnSSA r)]
            -> Maybe (Expression (AnnSSA r))
@@ -928,7 +929,7 @@ ssaForLoop l vds cOpt incExpOpt b =
     c          = maybe (BoolLit l True) id cOpt
 
 -------------------------------------------------------------------------------------
-ssaForLoopExpr :: Data r
+ssaForLoopExpr :: (Data r, PPR r)
                => AnnSSA r
                -> Expression (AnnSSA r)
                -> Maybe (Expression (AnnSSA r))

@@ -1,15 +1,22 @@
 {-# LANGUAGE ConstraintKinds      #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverlappingInstances #-}
 
 -- | Pretty-printing JavaScript.
-module Language.Rsc.Pretty.Common ( ppArgs, ppshow, pprint, PP (..), PPR ) where
+module Language.Rsc.Pretty.Common ( ppArgs, ppshow, pprint, PP (..), PPR, diePP ) where
 
 import           Control.Applicative           ((<$>))
+import           Control.Exception.Base
+import           Data.Data
 import           Data.Function                 (on)
 import qualified Data.IntMap                   as I
 import           Data.List                     (isPrefixOf, sortBy)
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Misc
+import qualified Language.Fixpoint.Types       as F
+-- import           Language.Rsc.Pretty
 import           Language.Fixpoint.PrettyPrint
 import qualified Language.Fixpoint.Types       as F
 import           Language.Rsc.Core.Env
@@ -109,4 +116,17 @@ instance PP a => PP (Located a) where
 
 instance PP SrcSpan where
   pp    = pprint
+
+---------------------------------------------------------------------
+-- | SrcSpans
+---------------------------------------------------------------------
+data EString a = EString a deriving (Typeable)
+
+instance (PP a, Typeable a) => Exception (EString a)
+
+instance PP a => Show (EString a) where
+  show (EString e) = ppshow e
+
+diePP :: (PP e, Typeable e) => e -> a
+diePP = throw . EString
 

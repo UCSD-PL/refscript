@@ -71,7 +71,9 @@ data RTypeQ q r =
   --
   -- Object
   --
-  | TObj (TypeMembersQ q r) r
+  --  The mutability modifier is meant to be internal (default: Immutable)
+  --
+  | TObj (RTypeQ q r) (TypeMembersQ q r) r
   --
   -- Class / Enum
   --

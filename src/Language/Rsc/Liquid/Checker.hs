@@ -869,7 +869,7 @@ instantiateFTy l g fn ft@(bkAll -> (bs, t))
   = do  (vts, ft')      <- freshTyInst l g αs ts t
         (_, ts, t')     <- maybe err return (bkFun ft')
         let (vts', cs)   = unzip [ (t, c) | (t, BTV _ _ (Just c)) <- safeZip "instantiateFTy" vts bs ]
-        _               <- zipWithM_ (subType l (errorTypeParamConstr l vts' cs) g) vts' cs
+        _               <- zipWithM_ (subType l (errorTypeParamConstr l fn vts' cs) g) vts' cs
         return           $ (ts, t')
     where
       αs  = [ TV α l | BTV α l _ <- bs ]

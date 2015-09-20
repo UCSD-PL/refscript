@@ -171,7 +171,7 @@ initClassCtorEnv (TS _ (BGen nm bs) _) γ
     --      * Make the return object immutable to avoid contra-variance
     --        checks at the return from the constructor.
     exitTy   = mkFun (bs, xts, tThis)
-    xts      | Just (TObj ms _) <- expandType Coercive (envCHA γ) tThis
+    xts      | Just (TObj _ ms _) <- expandType Coercive (envCHA γ) tThis
              = sortBy c_sym [ B x t | (x, FI _ _ t) <- F.toListSEnv $ tm_prop ms ]
              | otherwise
              = []

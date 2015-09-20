@@ -1,22 +1,19 @@
 
-interface Pair1<A> {
-  x:A;
-  y:A;
+interface Pair1<M extends ReadOnly, A> {
+    x: A;
+    y: A;
 }
 
-interface ColorPair1<A,C> extends Pair1<A> { 
-  c:C;
+interface ColorPair1<M extends ReadOnly, A, C> extends Pair1<M, A> {
+    c: C;
 }
 
-/*@ foo :: forall M A . (Pair1<M, A>) => void */
-function foo<A>(p: Pair1<A>) {
+export function foo<M extends ReadOnly, A>(p: Pair1<M, A>) {
 
 }
 
-/*@ p :: ColorPair1<Immutable,number,string> */
-declare var p: ColorPair1<number, string>;
+declare var p: ColorPair1<Immutable, number, string>;
 
 foo(p);
 
 assert(typeof p.x === "number");
-

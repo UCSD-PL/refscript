@@ -232,17 +232,17 @@ orUndef t  | any isTUndef ts = t
 ----------------------------------------------------------------------------------------
 toplevel :: RTypeQ q r -> (r -> r) -> RTypeQ q r
 ----------------------------------------------------------------------------------------
-toplevel (TPrim c r) f  = TPrim c (f r)
-toplevel (TVar v r) f   = TVar v (f r)
-toplevel (TOr ts)   _   = TOr ts
-toplevel (TAnd ts) _    = TAnd ts
-toplevel (TRef n r) f   = TRef n (f r)
-toplevel (TObj ms r) f  = TObj ms (f r)
-toplevel (TClass n) _   = TClass n
-toplevel (TMod n) _     = TMod n
-toplevel (TAll b t) _   = TAll b t
-toplevel (TFun b t r) f = TFun b t (f r)
-toplevel (TExp e) _     = TExp e
+toplevel (TPrim c r) f   = TPrim c (f r)
+toplevel (TVar v r) f    = TVar v (f r)
+toplevel (TOr ts)   _    = TOr ts
+toplevel (TAnd ts) _     = TAnd ts
+toplevel (TRef n r) f    = TRef n (f r)
+toplevel (TObj m ms r) f = TObj m ms (f r)
+toplevel (TClass n) _    = TClass n
+toplevel (TMod n) _      = TMod n
+toplevel (TAll b t) _    = TAll b t
+toplevel (TFun b t r) f  = TFun b t (f r)
+toplevel (TExp e) _      = TExp e
 
 
 -- | Strengthen the top-level refinement
@@ -278,18 +278,18 @@ isBV32    = isPrim TBV32
 isTVar   t | TVar _ _ <- t = True | otherwise = False
 isTUnion t | TOr  _   <- t = True | otherwise = False
 
-maybeTObj (TRef _ _)  = True
-maybeTObj (TObj _ _)  = True
-maybeTObj (TClass _)  = True
-maybeTObj (TMod _ )   = True
-maybeTObj (TAll _ t)  = maybeTObj t
-maybeTObj (TOr ts)    = any maybeTObj ts
-maybeTObj _           = False
+maybeTObj (TRef _ _)   = True
+maybeTObj (TObj _ _ _) = True
+maybeTObj (TClass _)   = True
+maybeTObj (TMod _ )    = True
+maybeTObj (TAll _ t)   = maybeTObj t
+maybeTObj (TOr ts)     = any maybeTObj ts
+maybeTObj _            = False
 
-isTFun (TFun _ _ _)   = True
-isTFun (TAnd ts)      = all isTFun ts
-isTFun (TAll _ t)     = isTFun t
-isTFun _              = False
+isTFun (TFun _ _ _)    = True
+isTFun (TAnd ts)       = all isTFun ts
+isTFun (TAll _ t)      = isTFun t
+isTFun _               = False
 
 isArrayType t | TRef (Gen x [_,_]) _ <- t
               = F.symbol x == F.symbol "Array"
@@ -315,7 +315,7 @@ rTypeR' (TVar _ r)   = Just r
 rTypeR' (TOr _ )     = Just fTop
 rTypeR' (TFun _ _ r) = Just r
 rTypeR' (TRef _ r)   = Just r
-rTypeR' (TObj _ r)   = Just r
+rTypeR' (TObj _ _ r) = Just r
 rTypeR' (TClass _)   = Just fTop
 rTypeR' (TMod _)     = Just fTop
 rTypeR' (TAnd _ )    = Nothing
@@ -403,7 +403,7 @@ objLitTy l ps     = mkFun (vs, bs, rt)
   where
     vs            = mvs ++ avs
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
-    rt            = TObj tms fTop
+    rt            = TObj tImm tms fTop
     tms           = tmFromFieldList [ (s, FI Req m a) | (s,m,a) <- zip3 ss mts ats ]
     (mvs, mts)    = unzip $ map (freshBTV l mSym Nothing) [1..length ps]  -- field mutability
     (avs, ats)    = unzip $ map (freshBTV l aSym Nothing) [1..length ps]  -- field type vars
@@ -443,7 +443,7 @@ mkArgTy l ts   = VI Local Ambient Initialized
 immObjectLitTy :: F.Reftable r => [Prop l] -> [RType r] -> RType r
 --------------------------------------------------------------------------------------------
 immObjectLitTy ps ts | length ps == length ts
-                     = TObj elts fTop
+                     = TObj tImm elts fTop
                      | otherwise
                      = error "Mismatched args for immObjectLit"
   where
@@ -457,7 +457,7 @@ setPropTy :: F.Reftable r => F.Symbol -> RType r
 setPropTy f = mkAll [bvt, bvm] t
   where
     ft      = TFun [b1, b2] t fTop
-    b1      = B (F.symbol "o") $ TObj (tmFromFieldList [(f, FI Opt m t)]) fTop
+    b1      = B (F.symbol "o") $ TObj tImm (tmFromFieldList [(f, FI Opt m t)]) fTop
     b2      = B (F.symbol "x") $ t
     m       = toTTV bvm :: F.Reftable r => RType r
     t       = toTTV bvt

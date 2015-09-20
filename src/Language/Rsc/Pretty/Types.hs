@@ -21,6 +21,7 @@ module Language.Rsc.Pretty.Types (
 import           Control.Applicative               ((<$>))
 import           Data.Graph.Inductive.Graph
 import           Data.Graph.Inductive.PatriciaTree
+import qualified Data.HashMap.Strict               as HM
 import qualified Data.Map.Strict                   as M
 import           Language.Fixpoint.Misc            (intersperse)
 import qualified Language.Fixpoint.Types           as F
@@ -28,6 +29,7 @@ import           Language.Rsc.AST
 import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Pretty.Syntax
 import           Language.Rsc.Program
+import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
@@ -54,7 +56,7 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp (TOr ts)        = ppArgs id (text " +") ts
   pp (TAnd ts)       = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TRef t r)      = F.ppTy r $ pp t
-  pp (TObj ms r)     = F.ppTy r $ braces $ pp ms
+  pp (TObj _ ms r)   = F.ppTy r $ braces $ pp ms
   pp (TClass t)      = text "class" <+> pp t
   pp (TMod t)        = text "module" <+> pp t
   pp t@(TAll _ _)    = ppArgs angles comma αs <> text "." <+> pp t' where (αs, t') = bkAll t
@@ -180,19 +182,15 @@ instance (F.Reftable r, PP r) => PP (VarInfo r) where
 
 instance (PP r, F.Reftable r) => PP (ModuleDef r) where
   pp (ModuleDef vars tys enums path) =
-          text "==================="
+          text ""
+      $+$ pp (take 80 (repeat '='))
       $+$ text "module" <+> pp path
-      $+$ text "==================="
-      $+$ text "Variables"
-      $+$ text "----------"
-      $+$ braces (pp vars)
-      $+$ text "-----"
-      $+$ text "Types"
-      $+$ text "-----"
+      $+$ pp (take 80 (repeat '='))
+      $+$ text "VARIABLES"
+      $+$ pp vars
+      $+$ text "TYPES"
       $+$ pp tys
-      $+$ text "-----"
-      $+$ text "Enums"
-      $+$ text "-----"
+      $+$ text "ENUMERATIONS"
       $+$ pp enums
 
 instance PP IContext where
@@ -221,6 +219,14 @@ instance (PP r, F.Reftable r) => PP (Rsc a r) where
     $+$ text "\n******************* Invariants ****************"
     $+$ vcat (pp <$> invts pgm)
     $+$ text "\n***********************************************\n"
+
+instance (F.Reftable r, PP r) => PP (RSubst r) where
+  pp (Su m) | HM.null m      = text "empty"
+            | HM.size m < 10 = intersperse comma $ (ppBind <$>) $ HM.toList m
+            | otherwise      = vcat $ (ppBind <$>) $ HM.toList m
+
+ppBind (x, t) = pp x <+> text ":=" <+> pp t
+
 
 -- | PP Fixpoint
 

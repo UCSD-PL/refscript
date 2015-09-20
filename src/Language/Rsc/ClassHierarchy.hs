@@ -52,19 +52,21 @@ import           Data.Tuple                        (swap)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc            (concatMapM, intersperse, mapPair, single)
 import qualified Language.Fixpoint.Types           as F
-import           Language.Rsc.Annotations               hiding (err)
+import           Language.Rsc.Annotations          hiding (err)
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
-import           Language.Rsc.Pretty
+import           Language.Rsc.Pretty.Common
+import           Language.Rsc.Pretty.Errors
+import           Language.Rsc.Pretty.Types
 import           Language.Rsc.Program
 import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import qualified Text.PrettyPrint.HughesPJ         as P
+import           Text.PrettyPrint.HughesPJ
 import           Text.Printf
 
 type FError = F.FixResult Error
@@ -103,7 +105,7 @@ instance Functor ClassHierarchy where
 
 
 ------------------------------------------------------------------------------------
-mkCHA :: (PPR r, Typeable r, Data r) => BareRsc r -> Either (F.FixResult Error) (ClassHierarchy r)
+mkCHA :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (ClassHierarchy r)
 ------------------------------------------------------------------------------------
 mkCHA rsc = accumModules rsc >>= pure . fromModuleDef
 
@@ -192,7 +194,7 @@ declOfStmt (ClassStmt l c _ _ cs)
   where
     cc     = fmap fSrc c
     cas    = [ ts | ClassAnn _ ts <- fFact l ]
-    errMsg = "Invalid class annotation: " ++ show (intersperse P.comma (map pp cas))
+    errMsg = "Invalid class annotation: " ++ show (intersperse comma (map pp cas))
 
 declOfStmt (InterfaceStmt l c)
   | [t] <- ifaceAnns  = Right (fmap fSrc c,t)
@@ -200,7 +202,7 @@ declOfStmt (InterfaceStmt l c)
   where
     ifaceAnns         = [ t | InterfaceAnn t <- fFact l ]
     errMsg            = "Invalid interface annotation: "
-                     ++ show (intersperse P.comma (map pp ifaceAnns))
+                     ++ show (intersperse comma (map pp ifaceAnns))
 
 declOfStmt s         = Left $ F.Unsafe $ single
                       $ err (sourceSpanSrcSpan $ getAnnotation s)
@@ -208,7 +210,7 @@ declOfStmt s         = Left $ F.Unsafe $ single
 
 -- | Given a list of class elements, returns a @TypeMembers@ structure
 ---------------------------------------------------------------------------------------
-typeMembers :: PPR r => [ClassElt (AnnR r)] -> TypeMembers r
+typeMembers :: F.Reftable r => [ClassElt (AnnR r)] -> TypeMembers r
 ---------------------------------------------------------------------------------------
 typeMembers cs = TM ps ms sps sms call ctor sidx nidx
   where
@@ -241,7 +243,7 @@ fromModuleDef ms = CHA graph nk ms
                = (s, [ (x, g) | g@(Gen x _) <- uncurry (++) h ])
 
 --------------------------------------------------------------------------------
-isClassType :: ClassHierarchy r -> RTypeQ AK t -> Bool
+-- isClassType :: ClassHierarchy r -> RTypeQ AK t -> Bool
 --------------------------------------------------------------------------------
 isClassType cha n | TRef (Gen x _) _ <- n
                   , Just d           <- resolveType cha x
@@ -265,20 +267,20 @@ functionInterface    = mkAbsName [] $ F.symbol "Function"
 emptyObjectInterface = mkAbsName [] $ F.symbol "EmptyObject"
 
 --------------------------------------------------------------------------------
-resolveModule :: ClassHierarchy r -> AbsPath -> Maybe (ModuleDef r)
-resolveType   :: ClassHierarchy r -> AbsName -> Maybe (TypeDeclQ AK r)
-resolveEnum   :: ClassHierarchy r -> AbsName -> Maybe EnumDef
+-- resolveModule :: ClassHierarchy r -> AbsPath -> Maybe (ModuleDef r)
+-- resolveType   :: ClassHierarchy r -> AbsName -> Maybe (TypeDeclQ AK r)
+-- resolveEnum   :: ClassHierarchy r -> AbsName -> Maybe EnumDef
 --------------------------------------------------------------------------------
 resolveModule (cModules -> ms) = (`qenvFindTy` ms)
 resolveType cha (QN p s) = resolveModule cha p >>= envFindTy s . m_types
 resolveEnum cha (QN p s) = resolveModule cha p >>= envFindTy s . m_enums
 
 --------------------------------------------------------------------------------
-typeMembersOfType :: (ExprReftable Int r, F.Reftable r) => ClassHierarchy r -> RType r -> TypeMembers r
-typeMemersOfTDecl :: F.Reftable r => ClassHierarchy r -> TypeDecl r -> TypeMembers r
+typeMembersOfType :: (ExprReftable Int r, PPR r) => ClassHierarchy r -> RType r -> TypeMembers r
+typeMemersOfTDecl :: PPR r => ClassHierarchy r -> TypeDecl r -> TypeMembers r
 --------------------------------------------------------------------------------
 typeMembersOfType cha t
-  | Just (TObj ms _) <- expandType Coercive cha t = ms
+  | Just (TObj _ ms _) <- expandType Coercive cha t = ms
   | otherwise = mempty
 
 typeMemersOfTDecl cha (TD (TS k _ (h,_)) es) = es `mappend` heritage h
@@ -289,7 +291,7 @@ typeMemersOfTDecl cha (TD (TS k _ (h,_)) es) = es `mappend` heritage h
     heritage _             = mempty
 
 ---------------------------------------------------------------------------
-expandWithSubst :: (SubstitutableQ q r (TypeMembers r), F.Reftable r)
+expandWithSubst :: (SubstitutableQ q r (TypeMembers r), PPR r)
                 => ClassHierarchy r -> TypeDeclQ AK r -> [RTypeQ q r] -> TypeMembers r
 ---------------------------------------------------------------------------
 expandWithSubst cha t@(TD (TS _ (BGen _ bvs) _) _) ts
@@ -302,16 +304,17 @@ data CoercionKind = Coercive | NonCoercive
 --  * If @c@ is `Coercive`, then primitive types will be treated as their
 --    object counterparts, i.e. String, Number, Boolean.
 ---------------------------------------------------------------------------
-expandType :: (ExprReftable Int r, F.Reftable r)
-           => CoercionKind -> ClassHierarchy r -> RType r -> Maybe (RType r)
+-- expandType :: (ExprReftable Int r, F.Reftable r)
+--            => CoercionKind -> ClassHierarchy r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
-expandType _ _ t@(TObj _ _) = Just t
+expandType _ _ t@(TObj _ _ _) = Just t
 
 -- | Enumeration
 expandType _ cha (TRef (Gen n []) _)
   | Just e <- resolveEnum cha n
-  = Just $ TObj (tmFromFieldList $ concatMap mkField $ envToList $ e_mapping e) fTop
+  = Just $ TObj tImm (ms e) fTop
   where
+    ms  = tmFromFieldList . concatMap mkField . envToList . e_mapping
     -- TODO
     mkField (k, IntLit _ i) = [(k, FI Req tImm (tNum `strengthen` exprReft i))]
     mkField (k, HexLit _ s) | Just e <- bitVectorValue s
@@ -321,25 +324,25 @@ expandType _ cha (TRef (Gen n []) _)
 expandType _ _ t@(TRef _ _) | mutRelated t = Nothing
 
 -- | Type Reference
-expandType _ cha t@(TRef (Gen n ts) r)
-  | isClassType cha t = (`TObj` r) . fltInst <$> ms
-  | otherwise         = (`TObj` r)           <$> ms
+expandType _ cha t@(TRef (Gen n ts@(mut:_)) r)
+  | isClassType cha t = (\m -> TObj mut m r) . fltInst <$> ms
+  | otherwise         = (\m -> TObj mut m r)           <$> ms
   where
     ms = expandWithSubst cha <$> resolveType cha n <*> return ts
     fltInst (TM p _ m _ _ _ s n) = TM p mempty m mempty Nothing Nothing s n
 
 expandType _ cha (TClass (BGen n ts))
-  = (`TObj` fTop) . fltStat <$> ms
+  = (\m -> TObj tImm m fTop) . fltStat <$> ms
   where
     ms  = expandWithSubst cha <$> resolveType cha n <*> return ts'
     ts' = [ tVar $ TV x s | BTV x s _ <- ts ] -- these shouldn't matter anyway
     fltStat (TM _ p _ m c k _ _) = TM mempty p mempty m c k Nothing Nothing
 
 expandType _ cha (TMod n)
-  = (`TObj` fTop) <$> tmFromFields
-                   .  fmap toFieldInfo
-                   .  m_variables
-                  <$> resolveModule cha n
+  = (\m -> TObj tImm m fTop) <$> tmFromFields
+                              .  fmap toFieldInfo
+                              .  m_variables
+                             <$> resolveModule cha n
   where
     toFieldInfo (val -> VI _ _ _ t) = FI Req tImm t
 
@@ -347,11 +350,11 @@ expandType _ cha (TMod n)
 expandType NonCoercive _ _ = Nothing
 
 expandType _ cha (TPrim TNumber _)
-  = (`TObj` fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha numberInterface)
+  = (\m -> TObj tImm m fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha numberInterface)
 expandType _ cha (TPrim TString _)
-  = (`TObj` fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha stringInterface)
+  = (\m -> TObj tImm m fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha stringInterface)
 expandType _ cha (TPrim TBoolean _)
-  = (`TObj` fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha booleanInterface)
+  = (\m -> TObj tImm m fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha booleanInterface)
 
 expandType _ _ t  = Just t
 
@@ -364,7 +367,7 @@ expandType _ _ t  = Just t
 -- * If A </: B then return @Nothing@.
 --
 ---------------------------------------------------------------------------
-weaken :: PPR r => ClassHierarchy r -> TGen r -> AbsName -> Maybe (TGen r)
+weaken :: F.Reftable r => ClassHierarchy r -> TGen r -> AbsName -> Maybe (TGen r)
 ---------------------------------------------------------------------------
 weaken (CHA g m _) tr@(Gen s _) t
   | s == t                    = Just tr
@@ -436,22 +439,22 @@ allAncestors γ s    = classAncestors γ s ++ interfaceAncestors γ s
 ---------------------------------------------------------------------------
 isAncestor :: ClassHierarchy t -> AbsName -> AbsName -> Bool
 ---------------------------------------------------------------------------
-isAncestor cha sup sub = sub `elem` allAncestors cha sup
+isAncestor cha sup sub = sup `elem` allAncestors cha sub
 
 ---------------------------------------------------------------------------
-boundKeys :: (ExprReftable Int r, F.Reftable r)
+boundKeys :: (ExprReftable Int r, PPR r)
           => ClassHierarchy r -> RType r -> [F.Symbol]
 ---------------------------------------------------------------------------
 boundKeys cha t@(TRef _ _) | Just t <- expandType Coercive cha t = boundKeys cha t
                            | otherwise                         = []
-boundKeys _ (TObj es _)    = fst <$> F.toListSEnv (tm_prop es)
+boundKeys _ (TObj _ es _)  = fst <$> F.toListSEnv (tm_prop es)
 boundKeys _ _              = []
 
 ---------------------------------------------------------------------------
-immFields :: (ExprReftable Int r, F.Reftable r)
+immFields :: (ExprReftable Int r, PPR r)
           => ClassHierarchy r -> RType r -> [(F.Symbol, RType r)]
 ---------------------------------------------------------------------------
-immFields cha t | Just (TObj es _) <- expandType Coercive cha t
+immFields cha t | Just (TObj _ es _) <- expandType Coercive cha t
                 = [ (x,t) | (x, FI _ m t) <- F.toListSEnv $ tm_prop es, isImm m ]
                 | otherwise
                 = []
@@ -463,7 +466,7 @@ getImmediateSuperclass (TS _ _ ([Gen p ps], _)) = Just $ TRef (Gen p ps) fTop
 getImmediateSuperclass _ = Nothing
 
 -------------------------------------------------------------------------------
-getSuperType :: F.Reftable r => ClassHierarchy r -> RType r -> Maybe (RType r)
+-- getSuperType :: F.Reftable r => ClassHierarchy r -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 getSuperType cha (TRef (Gen nm ts) _)
   | Just (TD (TS _ (BGen _ bs) ([p],_)) _) <- resolveType cha nm
@@ -471,3 +474,16 @@ getSuperType cha (TRef (Gen nm ts) _)
     Just $ apply θ $ TRef p fTop
   | otherwise
   = Nothing
+
+
+instance (F.Reftable r, PP r) => PP (ClassHierarchy r) where
+  pp (CHA g _ _)   =  text ""
+                  $+$ pp (take 80 (repeat '='))
+                  $+$ text "Class Hierarchy"
+                  $+$ pp (take 80 (repeat '-'))
+                  $+$ vcat (ppEdge <$> edges g)
+                  $+$ pp (take 80 (repeat '='))
+    where
+      ppEdge (a,b) =  ppNode a <+> text "->" <+> ppNode b
+      ppNode       =  pp . lab' . context g
+

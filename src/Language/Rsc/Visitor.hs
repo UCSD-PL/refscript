@@ -38,7 +38,6 @@ import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc            (mapSndM)
 import           Language.Rsc.Names
-import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types

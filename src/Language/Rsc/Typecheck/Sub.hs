@@ -94,11 +94,19 @@ compareVars :: FE g => SrcSpan -> g () -> Type -> Type -> SubTRes
 --------------------------------------------------------------------------------
 compareVars _ _ (TVar v1 _) (TVar v2 _) | v1 == v2  = EqT
                                         | otherwise = SubErr []     -- TODO
+
+-- compareVars _ _ (TVar v1 _) (TVar v2 _) | unassigned v1 undefined
+--                                         = undefined
+
 compareVars l γ (TVar v1 _) t2          = compareTypes l γ bt1 t2
                                           where bt1 = fromMaybe tTop $ envFindBound v1 γ
 compareVars _ _ _           (TVar _ _)  = SubErr []                 -- TODO
 
 compareVars _ _ _           _           = SubErr [{- BUG -}]
+
+-- unassigned α (Su m) | Just t <- HM.lookup α m = t `eqV` TVar α fTop
+--                     | otherwise               = False
+
 
 --------------------------------------------------------------------------------
 compareUnions :: FE g => g () -> Type -> Type -> SubTRes
@@ -124,7 +132,7 @@ compareObjs l γ t1 t2
   | not (isClassType (envCHA γ) t1) && isClassType (envCHA γ) t2
   = SubErr [errorObjectType l t1 t2]
 
-compareObjs l γ t1@(TObj e1s _) t2@(TObj e2s _)
+compareObjs l γ t1@(TObj _ e1s _) t2@(TObj _ e2s _)
   = compareObjMembers l γ t1 e1s t2 e2s
 
 compareObjs l γ t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
@@ -132,6 +140,8 @@ compareObjs l γ t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
   = EqT
   | mutRelated t1, mutRelated t2, isAncestor (envCHA γ) x2 x1
   = SubT
+  | mutRelated t1, mutRelated t2
+  = SubErr [] -- TODO
 
 compareObjs l γ t1@(TRef (Gen x1 (m1:t1s)) _) t2@(TRef (Gen x2 (m2:t2s)) _)
   --

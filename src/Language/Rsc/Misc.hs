@@ -49,7 +49,6 @@ module Language.Rsc.Misc (
   , (<##>), (<###>)
   , (&)
   , (<//>)
-  , diePP
 
 ) where
 
@@ -65,11 +64,9 @@ import           Data.HashSet
 import qualified Data.List                 as L
 import           Data.Maybe                (isJust)
 import           Data.Monoid               (Monoid, mappend)
-
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types   as F
-import           Language.Rsc.Pretty
 import           Text.PrettyPrint.HughesPJ
 
 -------------------------------------------------------------------------------
@@ -79,8 +76,6 @@ mapi f          = go 0
   where
     go i (x:xs) = f i x : go (i+1) xs
     go _ []     = []
-
-
 
 -------------------------------------------------------------------------------
 mapFstM :: (Functor m, Monad m) => (a -> m c) -> (a, b) -> m (c, b)
@@ -242,15 +237,4 @@ x & f = f x
 nths = repeat Nothing
 
 s1 <//> s2 = s1 ++ "\n" ++ s2
-
-
-data EString a = EString a deriving (Typeable)
-
-instance (PP a, Typeable a) => Exception (EString a)
-
-instance PP a => Show (EString a) where
-  show (EString e) = ppshow e
-
-
-diePP = throw . EString
 

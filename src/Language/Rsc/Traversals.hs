@@ -31,7 +31,6 @@ import           Language.Rsc.Annotations     hiding (err)
 import           Language.Rsc.AST
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
-import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
@@ -43,19 +42,19 @@ import           Language.Rsc.Visitor
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-foldReft   :: PPR r => (r -> a -> a) -> a -> RTypeQ q r -> a
-efoldReft  :: PPR r => (RTypeQ q r -> b) -> (F.SEnv b -> r -> a -> a)          -> F.SEnv b -> a -> RTypeQ q r -> a
-efoldRType :: PPR r => (RTypeQ q r -> b) -> (F.SEnv b -> RTypeQ q r -> a -> a) -> F.SEnv b -> a -> RTypeQ q r -> a
+foldReft   :: F.Reftable r => (r -> a -> a) -> a -> RTypeQ q r -> a
+efoldReft  :: F.Reftable r => (RTypeQ q r -> b) -> (F.SEnv b -> r -> a -> a)          -> F.SEnv b -> a -> RTypeQ q r -> a
+efoldRType :: F.Reftable r => (RTypeQ q r -> b) -> (F.SEnv b -> RTypeQ q r -> a -> a) -> F.SEnv b -> a -> RTypeQ q r -> a
 --------------------------------------------------------------------------------
 foldReft   f   = efold (\_ -> ()) (\_ _ -> id) (\_ -> f) F.emptySEnv
 efoldReft  f h = efold f          (\_ _ -> id) h
 efoldRType f g = efold f          g            (\_ _ -> id)
 
 --------------------------------------------------------------------------------
-efold :: PPR r => (            RTypeQ q r -> b)         -- f
-               -> (F.SEnv b -> RTypeQ q r -> a -> a)    -- g
-               -> (F.SEnv b -> r          -> a -> a)    -- h
-               -> F.SEnv b -> a -> RTypeQ q r -> a
+efold :: F.Reftable r => (            RTypeQ q r -> b)         -- f
+                      -> (F.SEnv b -> RTypeQ q r -> a -> a)    -- g
+                      -> (F.SEnv b -> r          -> a -> a)    -- h
+                      -> F.SEnv b -> a -> RTypeQ q r -> a
 --------------------------------------------------------------------------------
 efold f g h                  = go
   where
@@ -64,7 +63,7 @@ efold f g h                  = go
     go γ z t@(TOr ts)        = g γ t $ gos γ z ts
     go γ z t@(TAnd ts)       = g γ t $ gos γ z ts
     go γ z t@(TRef n r)      = h γ r $ g γ t $ gos γ z $ g_args n
-    go γ z t@(TObj xts r)    = h γ r $ g γ t $ efoldTypeMembers' f g h xts γ z
+    go γ z t@(TObj m xts r)  = h γ r $ g γ t $ efoldTypeMembers' f g h xts γ $ go γ z m
     go γ z t@(TClass n)      = g γ t $ gos γ z $ catMaybes $ btv_constr <$> b_args n
     go γ z t@(TMod _)        = g γ t z
     go γ z t@(TAll _ t')     = g γ t $ go γ z t'
@@ -75,10 +74,10 @@ efold f g h                  = go
     ext (B x t)              = x `F.insertSEnv` f t
 
 --------------------------------------------------------------------------------
-efoldTypeMembers' :: PPR r => (            RTypeQ q r -> b)         -- f
-                           -> (F.SEnv b -> RTypeQ q r -> a -> a)    -- g
-                           -> (F.SEnv b -> r          -> a -> a)    -- h
-                           -> TypeMembersQ q r -> F.SEnv b -> a -> a
+efoldTypeMembers' :: F.Reftable r => (            RTypeQ q r -> b)         -- f
+                                  -> (F.SEnv b -> RTypeQ q r -> a -> a)    -- g
+                                  -> (F.SEnv b -> r          -> a -> a)    -- h
+                                  -> TypeMembersQ q r -> F.SEnv b -> a -> a
 --------------------------------------------------------------------------------
 efoldTypeMembers' g f h (TM p m sp sm c k s n) γ z =
     L.foldl' (efold g f h γ) z $ pl ++ ml ++ spl ++ sml ++ cl ++ kl ++ sl ++ nl
@@ -228,7 +227,7 @@ foldRType f                   = go
     go αs xs t@(TOr ts)       = f αs xs t <> Ext.foldMap (go αs xs) ts
     go αs xs t@(TAnd ts)      = f αs xs t <> Ext.foldMap (go αs xs) ts
     go αs xs t@(TRef n r)     = f αs xs t <> fold f αs xs n
-    go αs xs t@(TObj ms r)    = f αs xs t <> fold f αs xs ms
+    go αs xs t@(TObj m ms r)  = f αs xs t <> fold f αs xs ms <> fold f αs xs m
     go αs xs t@(TClass n)     = f αs xs t <> fold f αs xs n
     go αs xs t@(TMod _)       = f αs xs t
     go αs xs t@(TAll a t')    = f αs xs t <> fold f αs' xs t'
@@ -238,7 +237,7 @@ foldRType f                   = go
     go αs xs t@(TExp e)       = f αs xs t
 
 
-type PPRD r = (PPR r, Data r, Typeable r)
+type PPRD r = (F.Reftable r, Data r, Typeable r)
 
 -- | Summarise all nodes in top-down, left-to-right order, carrying some state
 --   down the tree during the computation, but not left-to-right to siblings,
@@ -284,7 +283,7 @@ accumAbsNames (QP AK_ _ ss)  = concatMap go
 
 -- TODO: Add modules as well?
 --------------------------------------------------------------------------------
-accumVars :: PPR r => [Statement (AnnR r)] -> [(Id SrcSpan, SyntaxKind, VarInfo r)]
+accumVars :: F.Reftable r => [Statement (AnnR r)] -> [(Id SrcSpan, SyntaxKind, VarInfo r)]
 --------------------------------------------------------------------------------
 accumVars s = [ (fSrc <$> n, k, VI loc a i t) | (n,l,k,a,i) <- hoistBindings s
                                               , fact        <- fFact l
@@ -343,18 +342,16 @@ checkTypeWF p = undefined
 --     lts -> Left $ F.Unsafe [ errorIllFormedType l t | (l, t) <- lts ]
 
 
-checkTypeWFVisitor :: (Monad m, Functor m, PP r) => VisitorM m () () (AnnR r)
-checkTypeWFVisitor = defaultVisitor {
+-- checkTypeWFVisitor :: (Monad m, Functor m, PP r) => VisitorM m () () (AnnR r)
+-- checkTypeWFVisitor = defaultVisitor {
+--   mExpr = \e -> do let a = getAnnotation e
+--                    wellFormedAnnotation a
+--                    return e
+-- }
 
-  mExpr = \e -> do let a = getAnnotation e
-                   wellFormedAnnotation a
-                   return e
-
-}
-
-wellFormedAnnotation :: (Monad m, Functor m, PP r) => AnnR r -> m ()
-wellFormedAnnotation (FA _ l fs) = forM_ fs (wellFormedFact l)
-
-wellFormedFact :: (Monad m, Functor m, PP r) => SrcSpan -> Fact r -> m ()
-wellFormedFact l (SigAnn _ t) = undefined
-
+-- wellFormedAnnotation :: (Monad m, Functor m, PP r) => AnnR r -> m ()
+-- wellFormedAnnotation (FA _ l fs) = forM_ fs (wellFormedFact l)
+--
+-- wellFormedFact :: (Monad m, Functor m, PP r) => SrcSpan -> Fact r -> m ()
+-- wellFormedFact l (SigAnn _ t) = undefined
+--

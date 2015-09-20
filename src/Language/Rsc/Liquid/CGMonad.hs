@@ -294,11 +294,13 @@ envAddGroup msg ks g (x, xts)
     toIBindEnv       = (`F.insertsIBindEnv` F.emptyIBindEnv)
 
 -------------------------------------------------------------------------------
-resolveTypeM :: IsLocated a => a -> CGEnv -> AbsName -> CGM (TypeDecl F.Reft)
+-- resolveTypeM :: IsLocated a => a -> CGEnv -> AbsName -> CGM (TypeDecl F.Reft)
 -------------------------------------------------------------------------------
 resolveTypeM l γ x
-  | Just t <- resolveTypeInEnv γ x = return t
-  | otherwise = die $ bugClassDefNotFound (srcPos l) x
+  | Just t <- resolveTypeInEnv γ x
+  = return t
+  | otherwise
+  = die $ bugClassDefNotFound (srcPos l) x
 
 
 -- | Bindings for IMMUTABLE fields
@@ -318,7 +320,7 @@ objFields g (x, e@(VI loc a _ t))
     -- v = offset(x,"f")
     ty t f = substThis x t `eSingleton` mkOffset x f
 
-    fs | Just (TObj ms _) <- expandType Coercive (envCHA g) t
+    fs | Just (TObj _ ms _) <- expandType Coercive (envCHA g) t
        = F.toListSEnv (tm_prop ms)
        | otherwise = []
 
@@ -348,7 +350,7 @@ addInvariant g t
     -- | typeof
     typeof t@(TPrim p o)    i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup p i
     typeof t@(TRef _ _)     _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
-    typeof t@(TObj _ _)     _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
+    typeof t@(TObj _ _ _)   _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
     typeof   (TFun a b _)   _ = TFun a b typeofReft
     typeof t                _ = t
     -- | Truthy
@@ -663,6 +665,14 @@ trueRefType    = mapReftM true
 splitC :: SubC -> CGM [FixSubC]
 --------------------------------------------------------------------------------
 
+splitC (Sub g i t1 t2)
+  | mutRelated t1, mutRelated t2
+  = return []
+  | mutRelated t1
+  = error "Only `splitC` mutability types with eachother."
+  | mutRelated t2
+  = error "Only `splitC` mutability types with eachother."
+
 -- | Function types
 --
 splitC (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
@@ -761,7 +771,7 @@ splitC (Sub g i t1@(TPrim c1 _) t2@(TPrim c2 _))
 
 -- | TObj
 --
-splitC (Sub g i@(Ci _ l) t1@(TObj m1 r1) t2@(TObj m2 _))
+splitC (Sub g i@(Ci _ l) t1@(TObj _ m1 r1) t2@(TObj _ m2 _))
   | F.isFalse (F.simplify r1)
   = return []
   | otherwise
@@ -770,8 +780,6 @@ splitC (Sub g i@(Ci _ l) t1@(TObj m1 r1) t2@(TObj m2 _))
         cs'    <- splitTM g' (F.symbol x) i m1 m2
         return $ cs ++ cs'
 
--- | Object-like: after expansion should fall under previous case
---
 splitC (Sub g i t1 t2)
   | all maybeTObj [t1, t2]
   = case (expandType NonCoercive (envCHA g) t1, expandType NonCoercive (envCHA g) t2) of
@@ -877,7 +885,7 @@ splitW (W g i t@(TRef (Gen _ ts) _))
 splitW (W g i (TAnd ts))
   = concatMapM splitW [W g i t | t <- ts]
 
-splitW (W g i t@(TObj ms _))
+splitW (W g i t@(TObj _ ms _))
   = do let bws = bsplitW g t i
        -- TODO: add field bindings in g?
        ws     <- concatMapM splitW [ W g i t' | t' <- typesOfTM ms ]
@@ -954,7 +962,7 @@ unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
 --------------------------------------------------------------------------------
 unqualifyThis g t = F.subst $ F.mkSubst fieldSu
   where
-    fieldSu | Just (TObj fs _) <- expandType Coercive (envCHA g) t
+    fieldSu | Just (TObj _ fs _) <- expandType Coercive (envCHA g) t
             = [ subPair f | (f, FI _ m _) <- F.toListSEnv $ tm_prop fs, isImm m ]
             | otherwise
             = []

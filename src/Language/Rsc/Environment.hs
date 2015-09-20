@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TupleSections         #-}
@@ -93,27 +94,22 @@ envFindBound :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (RType r)
 envFindBound x (envBounds -> b) = envFindTy x b
 
 --------------------------------------------------------------------------------
-resolveModuleInEnv  :: EnvLike r t => t r -> AbsPath -> Maybe (ModuleDef r)
-resolveTypeInEnv    :: EnvLike r t => t r -> AbsName -> Maybe (TypeDecl r)
-resolveEnumInEnv    :: EnvLike r t => t r -> AbsName -> Maybe EnumDef
+resolveModuleInEnv  :: (PPR r, EnvLike r t) => t r -> AbsPath -> Maybe (ModuleDef r)
+resolveTypeInEnv    :: (PPR r, EnvLike r t) => t r -> AbsName -> Maybe (TypeDecl r)
+resolveEnumInEnv    :: (PPR r, EnvLike r t) => t r -> AbsName -> Maybe EnumDef
 --------------------------------------------------------------------------------
 resolveModuleInEnv (envCHA -> c) = resolveModule c
 resolveTypeInEnv   (envCHA -> c) = resolveType c
 resolveEnumInEnv   (envCHA -> c) = resolveEnum c
 
 
-instance (PP r, F.Reftable r, EnvLike r t) => PP (t r) where
-  pp = ppTCEnv
+-- instance (PP r, F.Reftable r, EnvLike r t) => PP (t r) where
+--   pp = ppTCEnv
 
---------------------------------------------------------------------------------
-ppTCEnv :: (EnvLike r t, PP r, F.Reftable r) => t r -> Doc
---------------------------------------------------------------------------------
-ppTCEnv g = pp (envNames g)
---   =   text "******************** Environment ************************"
---   $+$ pp (envNames g)
---   $+$ text "******************** Absolute path **********************"
---   $+$ pp (envPath g)
-
+-- --------------------------------------------------------------------------------
+-- ppTCEnv :: (PP r, F.Reftable r) => Env r -> Doc
+-- --------------------------------------------------------------------------------
+-- ppTCEnv g = pp (envNames g)
 
 --------------------------------------------------------------------------------
 toFgn :: Env (VarInfoQ q r) -> Env (VarInfoQ q r)

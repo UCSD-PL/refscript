@@ -117,7 +117,7 @@ tcRsc p@(Rsc {code = Src fs}) cha
         (fs',_) <- tcStmts γ fs
         fs''    <- patch fs'
         ast_cnt <- getAstCount
-        return   $ p { code  = Src fs'', maxId = ast_cnt }
+        return   $ p { code = Src fs'', maxId = ast_cnt }
   where
     γ = initGlobalEnv p cha
 
@@ -936,14 +936,17 @@ tcCallCase :: (PP a, Unif r)
   => TCEnv r -> AnnTc r -> a -> [(ExprSSAR r, RType r)] -> RType r -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
 tcCallCase γ@(tce_ctx -> ξ) l fn (unzip -> (es, ts)) ft
+
   = do  (βs, its1, ot) <- instantiateFTy l ξ fn ft
         ts1            <- zipWithM (instantiateTy l ξ) [1..] ts
         θ              <- unifyTypesM (srcPos l) γ ts1 its1
 
         -- Type parameter subtyping
-        let (vts, cs)   = unzip [(apply θ (tVar (TV s l)), c) | BTV s l (Just c) <- βs]
+        let (vts, cs)   = unzip [(apply θ v, c) | BTV s l (Just c) <- βs
+                                                , let v = tVar (TV s l)]
         _              <- when (not $ and $ zipWith (isSubtype γ) vts cs)
-                               (fatal (errorTypeParamConstr l ts cs) ())
+        -- $ ltracePP l ("sub params " ++ ppshow fn ++ " " ++ ppshow vts) cs)
+                               (fatal (errorTypeParamConstr l fn vts cs) ())
 
         -- Type argument subtyping
         let (ts2, its2) = apply θ (ts1, its1)

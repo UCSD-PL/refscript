@@ -166,7 +166,8 @@ transRType f               = go
     go αs xs (TOr ts)      = f αs xs $ TOr ts'       where ts' = go αs xs <$> ts
     go αs xs (TAnd ts)     = f αs xs $ TAnd ts'      where ts' = go αs xs <$> ts
     go αs xs (TRef n r)    = f αs xs $ TRef n' r     where n'  = trans f αs xs n
-    go αs xs (TObj ms r)   = f αs xs $ TObj ms' r    where ms' = trans f αs xs ms
+    go αs xs (TObj m ms r) = f αs xs $ TObj m' ms' r where m'  = trans f αs xs m
+                                                           ms' = trans f αs xs ms
     go αs xs (TClass n)    = f αs xs $ TClass n'     where n'  = trans f αs xs n
     go αs xs (TMod m)      = f αs xs $ TMod m
     go αs xs (TAll a t)    = f αs xs $ TAll a t'     where t'  = go αs' xs t
@@ -269,7 +270,8 @@ ntransRType f g         = go
     go (TOr ts)      = TOr ts'        where ts' = go <$> ts
     go (TAnd ts)     = TAnd ts'       where ts' = go <$> ts
     go (TRef n r)    = TRef n' r      where n'  = ntrans f g n
-    go (TObj ms r)   = TObj ms' r     where ms' = ntrans f g ms
+    go (TObj m ms r) = TObj m' ms' r  where m'  = ntrans f g m
+                                            ms' = ntrans f g ms
     go (TClass n)    = TClass n'      where n'  = ntrans f g n
     go (TMod p)      = TMod p'        where p'  = g p
     go (TAll a t)    = TAll a' t'     where a'  = ntrans f g a
@@ -296,7 +298,7 @@ emapReft f γ (TAll α t)     = TAll (emapReftBTV f γ α) (emapReft f γ t)
 emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts)
                                    (emapReft f γ' t) (f γ r)
                               where γ' = (b_sym <$> xts) ++ γ
-emapReft f γ (TObj xts r)   = TObj (emapReftTM f γ xts) (f γ r)
+emapReft f γ (TObj m xts r) = TObj (emapReft f γ m) (emapReftTM f γ xts) (f γ r)
 emapReft f γ (TClass n)     = TClass (emapReftBGen f γ n)
 emapReft _ _ (TMod m)       = TMod m
 emapReft f γ (TOr ts)       = TOr (emapReft f γ <$> ts)
@@ -331,7 +333,7 @@ mapReftM f (TFun xts t r)  = TFun    <$> mapM (mapReftBindM f) xts <*> mapReftM 
 mapReftM f (TAll α t)      = TAll    <$> mapReftBTV f α <*> mapReftM f t
 mapReftM f (TAnd ts)       = TAnd    <$> mapM (mapReftM f) ts
 mapReftM f (TOr ts)        = TOr     <$> mapM (mapReftM f) ts
-mapReftM f (TObj xts r)    = TObj    <$> mapTypeMembers f xts <*> f r
+mapReftM f (TObj m xts r)  = TObj    <$> mapReftM f m <*> mapTypeMembers f xts <*> f r
 mapReftM f (TClass n)      = TClass  <$> mapReftBGenM f n
 mapReftM _ (TMod a)        = TMod    <$> pure a
 mapReftM _ t               = error $ "Not supported in mapReftM: " ++ ppshow t
@@ -480,6 +482,7 @@ replaceAbsolute pgm@(Rsc { code = Src ss }) = pgm { code = Src $ (tr <$>) <$> ss
     isAlias (QN _ _) = False
 
     absAct f l a    = I.lookup (fId l) mm >>= (`f` a)
+
     mm              = snd $ visitStmts vs (QP AK_ def []) ss
     vs              = defaultVisitor { ctxStmt = cStmt }
                                      { accStmt = acc   }

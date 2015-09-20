@@ -59,7 +59,7 @@ getProp γ b f t@(TPrim _ _) = getPropPrim γ b f t
 getProp γ b f (TOr ts) = getPropUnion γ b f ts
 
 -- | TODO: Chain up to 'Object'
-getProp γ b f t@(TObj es _)
+getProp γ b f t@(TObj _ es _)
   = (t,) <$> accessMember γ b InstanceK f es
 
 -- | Enumeration
@@ -77,14 +77,14 @@ getProp γ _ f t@(TRef (Gen n []) _)
 
 getProp γ b f t@(TRef _ _)
   = expandType Coercive (envCHA γ) t >>= \case
-      TObj ms _ -> (t,) <$> accessMember γ b InstanceK f ms
-      _         -> Nothing
+      TObj _ ms _ -> (t,) <$> accessMember γ b InstanceK f ms
+      _           -> Nothing
 
 
 getProp γ b f t@(TClass _)
   = expandType Coercive (envCHA γ) t >>= \case
-      TObj ms _ -> (t,) <$> accessMember γ b StaticK f ms
-      _         -> Nothing
+      TObj _ ms _ -> (t,) <$> accessMember γ b StaticK f ms
+      _           -> Nothing
 
 getProp γ _ f t@(TMod m)
   = do  m'          <- resolveModuleInEnv γ m
@@ -131,7 +131,7 @@ extractCtor γ t = go t
     -- var a: IA<S>;  // S <: T
     -- var x = new a(x);
     go (TRef _ _)          = expandType Coercive (envCHA γ) t >>= go
-    go (TObj ms _)         = tm_ctor ms
+    go (TObj _ ms _)       = tm_ctor ms
     go _                   = Nothing
 
 -- fixRet x vs = fmap (mkAnd . (mkAll vs . mkFun . fixOut vs <$>)) . bkFuns
@@ -146,13 +146,13 @@ extractCall :: (EnvLike r g, PPRD r) => g r -> RType r -> [RType r]
 extractCall γ            = (uncurry mkAll <$>) . go []
   where
     go αs t@TFun{} = [(αs, t)]
-    go αs   (TAnd ts)    = concatMap (go αs) ts
-    go αs   (TAll α t)   = go (αs ++ [α]) t
-    go αs t@(TRef _ _)   | Just t' <- expandType Coercive (envCHA γ) t
-                         = go αs t'
-    go αs   (TObj ms _)  | Just t <- tm_call ms
-                         = go αs t
-    go _  _              = []
+    go αs   (TAnd ts)     = concatMap (go αs) ts
+    go αs   (TAll α t)    = go (αs ++ [α]) t
+    go αs t@(TRef _ _)    | Just t' <- expandType Coercive (envCHA γ) t
+                          = go αs t'
+    go αs   (TObj _ ms _) | Just t <- tm_call ms
+                          = go αs t
+    go _  _               = []
 
 -------------------------------------------------------------------------------
 accessMember :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
@@ -209,10 +209,10 @@ getPropUnion γ b f ts =
 
 -------------------------------------------------------------------------------
 getFieldMutability ::
-  (ExprReftable Int r, F.Reftable r) =>
+  (ExprReftable Int r, PPR r) =>
   ClassHierarchy r -> RType r -> F.Symbol -> Maybe (RType r)
 -------------------------------------------------------------------------------
-getFieldMutability cha t f | Just (TObj ms _) <- expandType Coercive cha t
+getFieldMutability cha t f | Just (TObj _ ms _) <- expandType Coercive cha t
                            , Just (FI _ m _)  <- F.lookupSEnv f $ tm_prop ms
                            = Just m
                            | otherwise

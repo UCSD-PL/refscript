@@ -11,6 +11,7 @@ module Language.Rsc.Typecheck.Unify (
   , Unif
   ) where
 
+import           Control.Applicative                ((<$>))
 import           Control.Monad                      (foldM)
 import           Data.Either                        (rights)
 import           Data.Function                      (on)
@@ -89,9 +90,10 @@ unify l γ θ (TClass (BGen n1 b1s)) (TClass (BGen n2 b2s))
 -- "Object"-ify types that can be expanded to an object literal type
 unify l γ θ t1 t2
   | all maybeTObj [t1,t2]
-  , Just (TObj m1 _) <- expandType NonCoercive (envCHA γ) t1
-  , Just (TObj m2 _) <- expandType NonCoercive (envCHA γ) t2
-  = unifyMembers l γ θ m1 m2
+  , Just (TObj m1 ms1 _) <- expandType NonCoercive (envCHA γ) t1
+  , Just (TObj m2 ms2 _) <- expandType NonCoercive (envCHA γ) t2
+  = do  θ1 <- unify l γ θ m1 m2
+        unifyMembers l γ θ1 ms1 ms2
 
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ
@@ -116,9 +118,9 @@ unifyUnions l γ θ t1 t2
      unifys l γ θ1 c1s' c2s'
   | [v1] <- v1s
   , [v2] <- v2s
-  = unify l γ θ  v1 (mkUnion unmatched2) >>= \θ1 ->
-    unify l γ θ1 (mkUnion unmatched1) v2 >>= \θ2 ->
-    unifys l γ θ2 c1s' c2s'
+  = do  θ1 <- unify l γ θ  v1 (mkUnion unmatched2)
+        θ2 <- unify l γ θ1 (mkUnion unmatched1) v2
+        unifys l γ θ2 c1s' c2s'
   | length v1s > 1
   = Left $ unsupportedUnionTVar (srcPos l) t1
   | otherwise
@@ -135,7 +137,7 @@ unifyUnions l γ θ t1 t2
     match (TPrim p1 _)          (TPrim p2 _)        = p1 == p2
     match (TVar v1 _)           (TVar v2 _)         = v1 == v2
     match (TRef (Gen n1 _) _)   (TRef (Gen n2 _) _) = n1 == n2
-    match (TObj _ _ )           (TObj _ _)          = True
+    match (TObj _ _ _ )         (TObj _ _ _)        = True
     match (TClass b1)           (TClass b2)         = b1 == b2
     match (TMod m1)             (TMod m2)           = m1 == m2
     match (TFun _ _ _)          (TFun _ _ _)        = True
@@ -150,10 +152,10 @@ unifyMembers :: Unif r
              -> TypeMembers r
              -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
-unifyMembers l γ θ (TM p1 m1 _ _ c1 k1 s1 n1) (TM p2 m2 _ _ c2 k2 s2 n2) =
-    unifys l γ θ p1s  p2s >>= \θ1 ->
-    unifys l γ θ1 m1s m2s >>= \θ2 ->
-    unifys l γ θ2 r1s r2s
+unifyMembers l γ θ (TM p1 m1 _ _ c1 k1 s1 n1) (TM p2 m2 _ _ c2 k2 s2 n2)
+  = do  θ1 <- unifys l γ θ p1s  p2s
+        θ2 <- unifys l γ θ1 m1s m2s
+        unifys l γ θ2 r1s r2s
   where
     (p1s , p2s) = unzip $ concatMap fromFI $ F.toListSEnv $ F.intersectWithSEnv (,) p1 p2
     (m1s , m2s) = unzip $ concatMap fromMI $ F.toListSEnv $ F.intersectWithSEnv (,) m1 m2

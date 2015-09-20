@@ -36,7 +36,7 @@ import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
-import           Language.Rsc.Pretty
+-- import           Language.Rsc.Pretty
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
@@ -70,13 +70,6 @@ instance (F.Reftable r, SubstitutableQ q r (RType r)) => Monoid (RSubstQ q r) wh
   mempty                    = Su HM.empty
   mappend (Su m) θ'@(Su m') = Su $ (apply θ' <$> m) `HM.union` m'
 
-instance (F.Reftable r, PP r) => PP (RSubst r) where
-  pp (Su m) | HM.null m      = text "empty"
-            | HM.size m < 10 = intersperse comma $ (ppBind <$>) $ HM.toList m
-            | otherwise      = vcat $ (ppBind <$>) $ HM.toList m
-
-ppBind (x, t) = pp x <+> text ":=" <+> pp t
-
 
 class Free a where
   free  :: a -> S.HashSet TVar
@@ -87,7 +80,7 @@ instance Free (RType r) where
   free (TOr ts)             = free ts
   free (TAnd ts)            = free ts
   free (TRef n _)           = free n
-  free (TObj es _)          = free es
+  free (TObj m es _)        = free m `mappend` free es
   free (TClass t)           = free t
   free (TMod _)             = S.empty
   free (TAll α t)           = S.delete (btvToTV α) $ free t
@@ -282,7 +275,7 @@ appTy (Su m) t@(TVar α r)    = (HM.lookupDefault t α m) `strengthen` r
 appTy θ        (TOr ts)      = TOr (apply θ ts)
 appTy θ        (TAnd ts)     = TAnd (apply θ ts)
 appTy θ        (TRef n r)    = TRef (apply θ n) r
-appTy θ        (TObj es r)   = TObj (apply θ es) r
+appTy θ        (TObj m es r) = TObj (apply θ m) (apply θ es) r
 appTy θ        (TClass t)    = TClass (apply θ t)
 appTy _        (TMod n)      = TMod n
 appTy (Su m)   (TAll α t)    = TAll α $ apply (Su $ HM.delete (btvToTV α) m) t
@@ -322,7 +315,8 @@ instance (F.Reftable r) => Eq (RType r) where
   TOr ts    == TOr ts'     = ts == ts'
   TAnd ts   == TAnd ts'    = ts == ts'
   TRef g _  == TRef g' _   = g == g'
-  TObj m _  == TObj m' _   = m == m'
+  TObj m ms _  == TObj m' ms' _
+                           = m == m && ms == ms'
   TClass g  == TClass g'   = g == g'
   TMod n    == TMod n'     = n == n'
   TAll v@(BTV _ b _) t == TAll v'@(BTV _ b' _) t'

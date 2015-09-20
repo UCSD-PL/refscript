@@ -11204,6 +11204,8 @@ var ts;
         var globalNumberType;
         var globalBooleanType;
         var globalRegExpType;
+        var globalMutableType;
+        var globalImmutableType;
         var globalTemplateStringsArrayType;
         var globalESSymbolType;
         var jsxElementType;
@@ -14353,11 +14355,14 @@ var ts;
             throw new Error("[refscript] createIterableIteratorType not supported.");
             return createTypeFromGenericGlobalType(globalIterableIteratorType, undefined, elementType);
         }
-        function createArrayType(elementType) {
-            var mutabilityTypeParameter = createType(512);
-            mutabilityTypeParameter.symbol = createSymbol(262144, "__MM__");
-            mutabilityTypeParameter.constraint = globalReadOnlyType;
-            return createTypeFromGenericGlobalType(globalArrayType, mutabilityTypeParameter, elementType);
+        function createArrayType(elementType, mutabilityType) {
+            // let mutabilityTypeParameter = <TypeParameter>createType(TypeFlags.TypeParameter);
+            // // PV: '__MM__' should be a "hard-to-guess" type variable name
+            // mutabilityTypeParameter.symbol = createSymbol(SymbolFlags.TypeParameter, "__MM__");
+            // mutabilityTypeParameter.constraint = globalReadOnlyType;
+            if (mutabilityType === void 0) { mutabilityType = globalImmutableType; }
+            var t = createTypeFromGenericGlobalType(globalArrayType, mutabilityType, elementType);
+            return t;
         }
         function getTypeFromArrayTypeNode(node) {
             var links = getNodeLinks(node);
@@ -22181,6 +22186,8 @@ var ts;
             globalNumberType = getGlobalType("Number");
             globalBooleanType = getGlobalType("Boolean");
             globalRegExpType = getGlobalType("RegExp");
+            globalMutableType = getGlobalType("Mutable");
+            globalImmutableType = getGlobalType("Immutable");
             jsxElementType = getExportedTypeFromNamespace("JSX", JsxNames.Element);
             getGlobalClassDecoratorType = ts.memoize(function () { return getGlobalType("ClassDecorator"); });
             getGlobalPropertyDecoratorType = ts.memoize(function () { return getGlobalType("PropertyDecorator"); });
@@ -26825,6 +26832,8 @@ var ts;
                 switch (node.kind) {
                     case ts.SyntaxKind.SourceFile:
                         return sourceFileNodeToRsAST(state, node);
+                    case ts.SyntaxKind.PropertyAssignment:
+                        return propertyAssignmentToRsAST(state, node);
                 }
                 throw new Error("UNIMPLEMENTED nodeToRsAST for " + ts.SyntaxKind[node.kind]);
             }
@@ -26873,6 +26882,10 @@ var ts;
                         return typeOfExpressionToRsExp(state, node);
                     case ts.SyntaxKind.TypeAssertionExpression:
                         return typeAssertionExpressionToRsExp(state, node);
+                    case ts.SyntaxKind.ConditionalExpression:
+                        return conditionalExpressionToRsExp(state, node);
+                    case ts.SyntaxKind.ObjectLiteralExpression:
+                        return objectLiteralExpressionToRsExp(state, node);
                 }
                 throw new Error("UNIMPLEMENTED nodeToRsExp for " + ts.SyntaxKind[node.kind]);
             }
@@ -27004,6 +27017,12 @@ var ts;
                 var annotation = new ts.CastAnnotation(nodeToSrcSpan(node.type), checker.typeToString(type, node.type));
                 return new ts.RsCast(nodeToSrcSpan(node), [annotation], nodeToRsExp(state, node.expression));
             }
+            function conditionalExpressionToRsExp(state, node) {
+                return new ts.RsCondExpr(nodeToSrcSpan(node), [], nodeToRsExp(state, node.condition), nodeToRsExp(state, node.whenTrue), nodeToRsExp(state, node.whenFalse));
+            }
+            function objectLiteralExpressionToRsExp(state, node) {
+                return new ts.RsObjectLit(nodeToSrcSpan(node), [], nodeArrayToRsAST(state, node.properties, nodeToRsAST));
+            }
             function expressionStatementToRsStmt(state, node) {
                 return new ts.RsExprStmt(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression));
             }
@@ -27060,6 +27079,9 @@ var ts;
                     annotations = annotations.concat(ts.makeVariableDeclarationAnnotation([idName.text, "::", type].join(" "), nodeToSrcSpan(node), node));
                 }
                 return new ts.RsVarDecl(nodeToSrcSpan(node), annotations, nodeToRsId(state, node.name), (node.initializer) ? new ts.RsJust(nodeToRsExp(state, node.initializer)) : new ts.RsNothing());
+            }
+            function propertyAssignmentToRsAST(state, node) {
+                return new ts.RsList([new ts.RsPropId(nodeToSrcSpan(node), [], nodeToRsId(state, node.name)), nodeToRsExp(state, node.initializer)]);
             }
             function ifStatementToRsStmt(state, node) {
                 if (node.elseStatement) {

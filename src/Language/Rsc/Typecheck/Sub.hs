@@ -152,7 +152,9 @@ compareObjs l γ t1@(TRef (Gen x1 (m1:t1s)) _) t2@(TRef (Gen x2 (m2:t2s)) _)
   --
   -- * Both immutable, same name, non arrays: co-variant subtyping on arguments
   --
-  | x1 == x2 && isImm m2 && not (isArrayType t1)
+  | x1 == x2
+  , isImm m2
+  , not (isArrayType t1)
   = mconcat $ compareTypes l γ m1 m2
             : zipWith (compareTypes l γ) t1s t2s
   --
@@ -165,20 +167,14 @@ compareObjs l γ t1@(TRef (Gen x1 (m1:t1s)) _) t2@(TRef (Gen x2 (m2:t2s)) _)
   --
   -- * Compatible mutabilities, differenet names:
   --
-  | isAncestor (envCHA γ) x1 x2 || isAncestor (envCHA γ) x2 x1
-  = case (weaken (envCHA γ) (Gen x1 (m1:t1s)) x2, weaken (envCHA γ) (Gen x2 (m2:t2s)) x1) of
-      --
-      -- * Adjusting `t1` to reach `t2` moving upward in the type
-      --   hierarchy -- this is equivalent to Upcast
-      --
-      (Just (Gen _ (m1':t1s')), _) -> mconcat $ SubT : zipWith (compareTypes l γ) (m1':t1s') (m2:t2s)
-      --
-      -- * Adjusting `t2` to reach `t1` moving upward in the type
-      --   hierarchy -- this is equivalent to DownCast
-      --
-      (_, Just (Gen _ (m2':t2s'))) -> mconcat $ SupT : zipWith (compareTypes l γ) (m1:t1s) (m2':t2s')
+  | Just (Gen _ (m1':t1s')) <- weaken (envCHA γ) (Gen x1 (m1:t1s)) x2
+  = mconcat $ SubT : zipWith (compareTypes l γ) (m1':t1s') (m2:t2s)
 
-      (_, _) -> SubErr [bugWeakenAncestors (srcPos l) x1 x2]
+  | Just (Gen _ (m1':t1s')) <- weaken (envCHA γ) (Gen x2 (m2:t2s)) x1
+  = mconcat $ SubT : zipWith (compareTypes l γ) (m1':t1s') (m2:t2s)
+
+  | otherwise
+  = SubErr [bugWeakenAncestors (srcPos l) x1 x2]
 
 compareObjs l γ (TClass c1) (TClass c2) = convertTClass l γ c1 c2
 

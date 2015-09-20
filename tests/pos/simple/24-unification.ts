@@ -4,13 +4,11 @@ interface Pair1<M extends ReadOnly, A> {
     y: A;
 }
 
-interface ColorPair1<M extends ReadOnly, A, C> extends Pair1<M, A> {
-    c: C;
+interface ColorPair1<M extends ReadOnly, A, B> extends Pair1<M, A> {
+    b: B;
 }
 
-export function foo<M extends ReadOnly, A>(p: Pair1<M, A>) {
-
-}
+export function foo<M extends ReadOnly, A>(p: Pair1<M, A>) { }
 
 declare var p: ColorPair1<Immutable, number, string>;
 

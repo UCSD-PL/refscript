@@ -730,7 +730,7 @@ splitC (Sub g c t1 t2)
 --
 --  TODO: restore co/contra-variance
 --
-splitC (Sub g i t1@(TRef (Gen x1 (m1:t1s)) r1) t2@(TRef (Gen x2 (m2:t2s)) r2))
+splitC (Sub g i t1@(TRef n1@(Gen x1 (m1:t1s)) r1) t2@(TRef n2@(Gen x2 (m2:t2s)) r2))
   --
   -- * Trivial case (do not even descend)
   --
@@ -744,14 +744,17 @@ splitC (Sub g i t1@(TRef (Gen x1 (m1:t1s)) r1) t2@(TRef (Gen x2 (m2:t2s)) r2))
   --
   -- * Both immutable, same name, non arrays: Co-variant subtyping
   --
-  | x1 == x2 && isImm m2 && not (isArrayType t1)
+  | x1 == x2
+  , isImm m2
+  , not (isArrayType t1)
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- concatMapM splitC $ safeZipWith "splitc-4" (Sub g i) t1s t2s
         return $ cs ++ cs'
   --
   -- * Non-immutable, same name: invariance
   --
-  | x1 == x2 && not (F.isFalse r2)
+  | x1 == x2
+  , not (F.isFalse r2)
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- concatMapM splitC $ safeZipWith "splitc-5" (Sub g i) t1s t2s
         cs''  <- concatMapM splitC $ safeZipWith "splitc-6" (Sub g i) t2s t1s
@@ -759,6 +762,14 @@ splitC (Sub g i t1@(TRef (Gen x1 (m1:t1s)) r1) t2@(TRef (Gen x2 (m2:t2s)) r2))
 
   | x1 == x2
   = bsplitC g i t1 t2
+
+  | Just n1@(Gen x1' _) <- weaken (envCHA g) n1 x2    -- UPCAST
+  , x1' == x2 -- sanity check
+  = splitC (Sub g i (TRef n1 r1) t2)
+
+  | Just n2@(Gen x2' _) <- weaken (envCHA g) n2 x1    -- DOWNCAST
+  , x2' == x1 -- sanity check
+  = splitC (Sub g i t1 (TRef n2 r2))
 
   | otherwise
   = splitIncompatC g i t1

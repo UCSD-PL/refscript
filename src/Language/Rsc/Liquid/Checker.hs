@@ -54,6 +54,9 @@ import           Language.Rsc.Types
 import           Language.Rsc.TypeUtilities
 import           System.Console.CmdArgs.Default
 
+import qualified Data.Foldable                   as FO
+import           Text.PrettyPrint.HughesPJ
+
 import           Debug.Trace                     hiding (traceShow)
 
 --------------------------------------------------------------------------------
@@ -69,9 +72,17 @@ verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
       _   <- liftIO     $ donePhase Loud "Typecheck"
       tc  <- EitherIO   $ typeCheck cfg ssa cha
       _   <- liftIO     $ donePhase Loud "Generate Constraints"
+      -- cgi <- pure       $ generateConstraints cfg (trace (show (ppCasts tc)) tc) cha
       cgi <- pure       $ generateConstraints cfg tc cha
       res <- liftIO     $ solveConstraints tc f cgi
       return res
+
+
+
+ppCasts (Rsc { code = Src fs })
+  = fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+                                  , TCast _ c <- fFact a ]
+
 
 -- | solveConstraints: Call solve with `ueqAllSorts` enabled.
 --------------------------------------------------------------------------------
@@ -824,15 +835,15 @@ consCall g l fn ets ft0
       ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case ol of
         -- If multiple are valid, pick the first one
-        (ft:_) -> {- traceTypePP l (ppshow fn) $-} consInstantiate l g' fn ft ts xes
+        (ft:_) -> {- traceTypePP l (ppshow fn) $ -} consInstantiate l g' fn ft ts xes
         _      -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts)
                               (toType <$> callSigs)
   where
-    ol = [ lt | Overload cx t <- fFact l
-              , cge_ctx g == cx
-              , lt <- callSigs
-              , arg_type (toType t) == arg_type (toType lt) ]
-    callSigs  = {- ltracePP l (ppshow fn) $ -} extractCall g ft0
+    ol  = [ lt | Overload cx t <- fFact l
+               , cge_ctx g == cx
+               , lt <- callSigs
+               , arg_type (toType t) == arg_type (toType lt) ]
+    callSigs   = extractCall g ft0
     arg_type t = (\(a,b,_) -> (a,b)) <$> bkFun t
 
 --------------------------------------------------------------------------------

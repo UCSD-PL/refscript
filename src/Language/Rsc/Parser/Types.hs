@@ -365,7 +365,8 @@ methP = do  s     <- option InstanceK (reserved "static" *> return StaticK)
 callP           = withinSpacesP methSigP
 
 -- | new [<A..>](t..): t
-ctorP           = withinSpacesP (reserved "new")
+ctorP           = withinSpacesP (reserved "constructor")
+               *> dcolon
                *> withinSpacesP methSigP
 
 mutabilityP     =  brackets bareTypeP

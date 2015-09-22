@@ -105,10 +105,10 @@ varsInScope s = envFromList' [ (x,a) | (x,_,_,a,_) <- foldStmts vs () s ]
 
     as _ (FunctionStmt l n _ (Just _)) = [(n, l, FuncDeclKind, RdOnly, Initialized)]
     as _ (FunctionStmt l n _ Nothing ) = [(n, l, FuncDeclKind, Ambient, Initialized)]
-    as _ (ClassStmt l n _ _ _ ) = [(n, l, ClassDeclKind, RdOnly, Initialized)]
-    as _ (ModuleStmt l n _)     = [(n, l { fFact = modAnn  n l }, ModuleDeclKind, RdOnly, Initialized)]
-    as _ (EnumStmt l n _)       = [(n, l { fFact = enumAnn n l }, EnumDeclKind, RdOnly, Initialized)]
-    as _ _                      = []
+    as _ (ClassStmt l n _ ) = [(n, l, ClassDeclKind, RdOnly, Initialized)]
+    as _ (ModuleStmt l n _) = [(n, l { fFact = modAnn  n l }, ModuleDeclKind, RdOnly, Initialized)]
+    as _ (EnumStmt l n _)   = [(n, l { fFact = enumAnn n l }, EnumDeclKind, RdOnly, Initialized)]
+    as _ _                  = []
 
     av _ (VarDecl l n init) = [(n, l, VarDeclKind, varAsgn l, fromInit init)]
           --  ++ [(n, l, VarDeclKind, WriteGlobal, fromInit init) | AmbVarAnn _ <- fFact l] -- TODO
@@ -414,8 +414,8 @@ ssaStmt (SwitchStmt l e xs)
 --
 --  TODO: fix env here.
 --
-ssaStmt (ClassStmt l n e is bd)
-  = (True,) <$> (ClassStmt l n e is <$> withinClass n (mapM ssaClassElt bd))
+ssaStmt (ClassStmt l n bd)
+  = (True,) <$> (ClassStmt l n <$> withinClass n (mapM ssaClassElt bd))
 
 ssaStmt (ModuleStmt l n body)
   = do  (γ,αs) <- (,) <$> getSsaEnv <*> getAsgn

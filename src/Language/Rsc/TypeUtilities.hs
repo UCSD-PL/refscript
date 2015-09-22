@@ -12,7 +12,8 @@
 
 module Language.Rsc.TypeUtilities (
 
-  mkDotRefFunTy
+    mkDotRefFunTy
+  , setPropTy
 
   ) where
 
@@ -63,4 +64,23 @@ mkDotRefFunTy l g f tObj tField
     x = F.symbol "x"
 mkDotRefFunTy l _ f tObj _
   = die $ errorMissingFld (srcPos l) f tObj
+
+
+-- | setProp<A, M extends Mutable>(o: { f[M]: A }, x: A) => A
+--
+--------------------------------------------------------------------------------------------
+setPropTy :: (F.Reftable r, F.Symbolic f) => f -> RType r
+--------------------------------------------------------------------------------------------
+setPropTy f = mkAll [bvt, bvm] ft
+  where
+    ft      = TFun [b1, b2] t fTop
+ -- b1      = B (F.symbol "o") $ TObj tImm (tmFromFieldList [(f, FI Opt m t)]) fTop
+    b1      = B (F.symbol "o") $ TObj tImm (tmFromFieldList [(f, FI Req m t)]) fTop
+    b2      = B (F.symbol "x") $ t
+    m       = toTTV bvm :: F.Reftable r => RType r
+    t       = toTTV bvt
+    bvt     = BTV (F.symbol "A") def Nothing
+    bvm     = BTV (F.symbol "M") def (Just tMut) :: F.Reftable r => BTVar r
+    toTTV   :: F.Reftable r => BTVar r -> RType r
+    toTTV   = (`TVar` fTop) . btvToTV
 

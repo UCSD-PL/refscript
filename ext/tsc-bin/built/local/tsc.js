@@ -25654,17 +25654,15 @@ var ts;
     ts.RsBlockStmt = RsBlockStmt;
     var RsClassStmt = (function (_super) {
         __extends(RsClassStmt, _super);
-        function RsClassStmt(span, ann, id, extendsClass, implementsInterfaces, body) {
+        function RsClassStmt(span, ann, id, body) {
             _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
             this.id = id;
-            this.extendsClass = extendsClass;
-            this.implementsInterfaces = implementsInterfaces;
             this.body = body;
         }
         RsClassStmt.prototype.serialize = function () {
-            return this._toAeson("ClassStmt", [this.id.serialize(), this.extendsClass.serialize(), this.implementsInterfaces.serialize(), this.body.serialize()], AesonCtor.WITH_CTOR);
+            return this._toAeson("ClassStmt", [this.id.serialize(), this.body.serialize()], AesonCtor.WITH_CTOR);
         };
         return RsClassStmt;
     })(RsStatement);
@@ -25890,6 +25888,14 @@ var ts;
         return FunctionDeclarationAnnotation;
     })(Annotation);
     ts.FunctionDeclarationAnnotation = FunctionDeclarationAnnotation;
+    var ConstructorDeclarationAnnotation = (function (_super) {
+        __extends(ConstructorDeclarationAnnotation, _super);
+        function ConstructorDeclarationAnnotation(sourceSpan, content) {
+            _super.call(this, sourceSpan, AnnotationKind.ConstructorRawSpec, content);
+        }
+        return ConstructorDeclarationAnnotation;
+    })(Annotation);
+    ts.ConstructorDeclarationAnnotation = ConstructorDeclarationAnnotation;
     var TypeSignatureAnnotation = (function (_super) {
         __extends(TypeSignatureAnnotation, _super);
         function TypeSignatureAnnotation(sourceSpan, content) {
@@ -25914,6 +25920,14 @@ var ts;
         return TypeAliasAnnotation;
     })(Annotation);
     ts.TypeAliasAnnotation = TypeAliasAnnotation;
+    var ClassStatementAnnotation = (function (_super) {
+        __extends(ClassStatementAnnotation, _super);
+        function ClassStatementAnnotation(sourceSpan, content) {
+            _super.call(this, sourceSpan, AnnotationKind.ClassRawSpec, content);
+        }
+        return ClassStatementAnnotation;
+    })(Annotation);
+    ts.ClassStatementAnnotation = ClassStatementAnnotation;
     var VariableDeclarationAnnotation = (function (_super) {
         __extends(VariableDeclarationAnnotation, _super);
         function VariableDeclarationAnnotation(sourceSpan, content) {
@@ -25986,14 +26000,6 @@ var ts;
         return PropertyAnnotation;
     })(Annotation);
     ts.PropertyAnnotation = PropertyAnnotation;
-    var ConstructorAnnotation = (function (_super) {
-        __extends(ConstructorAnnotation, _super);
-        function ConstructorAnnotation(sourceSpan, content) {
-            _super.call(this, sourceSpan, AnnotationKind.ConstructorRawSpec, content);
-        }
-        return ConstructorAnnotation;
-    })(Annotation);
-    ts.ConstructorAnnotation = ConstructorAnnotation;
     var CastAnnotation = (function (_super) {
         __extends(CastAnnotation, _super);
         function CastAnnotation(sourceSpan, content) {
@@ -26077,9 +26083,9 @@ var ts;
     ts.makeFunctionDeclarationAnnotation = makeFunctionDeclarationAnnotation;
     function makeConstructorAnnotations(s, srcSpan) {
         var tokens = stringTokens(s);
-        if (!tokens || tokens[0] !== "new")
+        if (!tokens || tokens[0] !== "constructor")
             throw new Error("[refscript] Invalid constructor annotation: " + s);
-        return [new ConstructorAnnotation(srcSpan, s)];
+        return [new ConstructorDeclarationAnnotation(srcSpan, s)];
     }
     ts.makeConstructorAnnotations = makeConstructorAnnotations;
     function makeMethodAnnotations(s, srcSpan) {
@@ -26125,6 +26131,14 @@ var ts;
         return [];
     }
     ts.makeTypeAliasAnnotations = makeTypeAliasAnnotations;
+    function makeClassStatementAnnotations(s, srcSpan) {
+        var tokens = stringTokens(s);
+        if (tokens && tokens.length > 0 && tokens[0] === "class") {
+            return [new ClassStatementAnnotation(srcSpan, s)];
+        }
+        return [];
+    }
+    ts.makeClassStatementAnnotations = makeClassStatementAnnotations;
     function makeFunctionExpressionAnnotations(s, srcSpan) {
         var tokens = stringTokens(s);
         if (isReservedAnnotationPrefix(tokens[0]))
@@ -26886,6 +26900,8 @@ var ts;
                         return conditionalExpressionToRsExp(state, node);
                     case ts.SyntaxKind.ObjectLiteralExpression:
                         return objectLiteralExpressionToRsExp(state, node);
+                    case ts.SyntaxKind.SuperKeyword:
+                        return superKeywordToRsExp(state, node);
                 }
                 throw new Error("UNIMPLEMENTED nodeToRsExp for " + ts.SyntaxKind[node.kind]);
             }
@@ -26893,6 +26909,8 @@ var ts;
                 switch (node.kind) {
                     case ts.SyntaxKind.Identifier:
                         return new ts.RsLVar(nodeToSrcSpan(node), [], node.text);
+                    case ts.SyntaxKind.PropertyAccessExpression:
+                        return propertyAccessExpressionToRsLVal(state, node);
                 }
                 throw new Error("[refscript] Unimplemented nodeToRsLval for " + ts.SyntaxKind[node.kind]);
             }
@@ -26917,8 +26935,17 @@ var ts;
                         return typeAliasDeclarationToRsStmt(state, node);
                     case ts.SyntaxKind.ThrowStatement:
                         return throwStatementToRsStmt(state, node);
+                    case ts.SyntaxKind.ClassDeclaration:
+                        return classDeclarationToRsStmt(state, node);
                 }
                 throw new Error("[refscript] Unimplemented nodeToRsStmt for " + ts.SyntaxKind[node.kind]);
+            }
+            function nodeToRsClassElts(state, node) {
+                switch (node.kind) {
+                    case ts.SyntaxKind.Constructor:
+                        return constructorDeclarationToRsClassElts(state, node);
+                }
+                throw new Error("[refscript] Unimplemented nodeToRsClassElts for " + ts.SyntaxKind[node.kind]);
             }
             function sourceFileNodeToRsAST(state, node) {
                 var globalAnnotations = accumulateGlobalAnnotations(node);
@@ -26984,6 +27011,9 @@ var ts;
             function propertyAccessExpressionToRsExp(state, node) {
                 return new ts.RsDotRef(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression), nodeToRsId(state, node.name));
             }
+            function propertyAccessExpressionToRsLVal(state, node) {
+                return new ts.RsLDot(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression), ts.getTextOfNode(node.name));
+            }
             function stringLiteralToRsExp(state, node) {
                 return new ts.RsStringLit(nodeToSrcSpan(node), [], node.text);
             }
@@ -27022,6 +27052,9 @@ var ts;
             }
             function objectLiteralExpressionToRsExp(state, node) {
                 return new ts.RsObjectLit(nodeToSrcSpan(node), [], nodeArrayToRsAST(state, node.properties, nodeToRsAST));
+            }
+            function superKeywordToRsExp(state, node) {
+                return new ts.RsSuperRef(nodeToSrcSpan(node), []);
             }
             function expressionStatementToRsStmt(state, node) {
                 return new ts.RsExprStmt(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression));
@@ -27097,23 +27130,51 @@ var ts;
             function returnStatementToRsStmt(state, node) {
                 return new ts.RsReturnStmt(nodeToSrcSpan(node), [], (node.expression) ? new ts.RsJust(nodeToRsExp(state, node.expression)) : new ts.RsNothing());
             }
+            function typeParametersToString(typeParameters) {
+                if (typeParameters && typeParameters.length > 0) {
+                    return ts.angles(typeParameters.map(function (typeParameter) {
+                        var s = ts.getTextOfNode(typeParameter.name);
+                        if (typeParameter.constraint) {
+                            s += " extends ";
+                            s += checker.typeToString(checker.getTypeAtLocation(typeParameter.constraint), typeParameter.constraint);
+                        }
+                        return s;
+                    }).join(", "));
+                }
+                return "";
+            }
+            function heritageClausesToString(heritageClauses) {
+                if (heritageClauses && heritageClauses.length > 0) {
+                    return ts.concat(heritageClauses.map(function (heritageClause) {
+                        switch (heritageClause.token) {
+                            case ts.SyntaxKind.ExtendsKeyword:
+                                if (heritageClause.types && heritageClause.types.length > 0) {
+                                    return ["extends", heritageClause.types.map(function (type) { return checker.typeToString(checker.getTypeAtLocation(type)); }).join(", ")];
+                                }
+                                break;
+                            case ts.SyntaxKind.ImplementsKeyword:
+                                if (heritageClause.types && heritageClause.types.length > 0) {
+                                    return ["implements", heritageClause.types.map(function (type) { return checker.typeToString(checker.getTypeAtLocation(type)); }).join(", ")];
+                                }
+                                break;
+                        }
+                        return [];
+                    })).join(" ");
+                }
+                return "";
+            }
             function interfaceDeclarationToRsStmt(state, node) {
                 // TODO: Exported annotation?
-                var typeSignatureText = "";
+                var typeSignatureText;
                 var headerAnnotations = nodeAnnotations(node, ts.makeTypeSignatureAnnotation);
                 if (headerAnnotations && headerAnnotations.length > 0) {
-                    typeSignatureText += headerAnnotations[0].content;
+                    typeSignatureText = headerAnnotations[0].content;
                 }
                 else {
-                    var interfaceHeaderText = "interface ";
-                    interfaceHeaderText += ts.getTextOfNode(node.name);
-                    if (node.typeParameters) {
-                        interfaceHeaderText += ts.angles(node.typeParameters.map(function (typeParameter) { return ts.getTextOfNode(typeParameter); }).join(", "));
-                    }
-                    if (node.heritageClauses) {
-                        interfaceHeaderText += " " + node.heritageClauses.map(function (heritageClause) { return ts.getTextOfNode(heritageClause); }).join(", ");
-                    }
-                    typeSignatureText += interfaceHeaderText;
+                    var nameText = ts.getTextOfNode(node.name);
+                    var typeParametersText = typeParametersToString(node.typeParameters);
+                    var heritageText = heritageClausesToString(node.heritageClauses);
+                    typeSignatureText = ["interface", nameText, typeParametersText, heritageText].join(" ");
                 }
                 var bodyText = " { ";
                 if (node.members) {
@@ -27182,6 +27243,54 @@ var ts;
             }
             function throwStatementToRsStmt(state, node) {
                 return new ts.RsThrowStatement(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression));
+            }
+            function classDeclarationToRsStmt(state, node) {
+                var annotations = nodeAnnotations(node, ts.makeClassStatementAnnotations);
+                if (annotations.length < 1) {
+                    var nameText = ts.getTextOfNode(node.name);
+                    var typeParametersText = typeParametersToString(node.typeParameters);
+                    var heritageText = heritageClausesToString(node.heritageClauses);
+                    var annotationText = ["class", nameText, typeParametersText, heritageText].join(" ");
+                    annotations = ts.concatenate(annotations, [new ts.ClassAnnotation(nodeToSrcSpan(node), annotationText)]);
+                }
+                if (node.modifiers && node.modifiers.some(function (modifier) { return modifier.kind === ts.SyntaxKind.ExportKeyword; })) {
+                    annotations = ts.concatenate(annotations, [new ts.ExportedAnnotation(nodeToSrcSpan(node))]);
+                }
+                return new ts.RsClassStmt(nodeToSrcSpan(node), annotations, nodeToRsId(state, node.name), new ts.RsList(ts.concat(node.members.map(function (n) { return nodeToRsClassElts(state, n); }))));
+            }
+            function constructorDeclarationToRsClassElts(state, node) {
+                var isAmbient = !!(node.flags & 2);
+                if (!node.body && !isAmbient) {
+                    return [];
+                }
+                node.parameters.forEach(function (parameter) {
+                    if (parameter.initializer) {
+                        state.postDiagnostic(node, ts.Diagnostics.Initialization_of_parameter_0_at_the_signature_site_is_not_supported, [ts.getTextOfNode(parameter)]);
+                    }
+                });
+                var containingClass = ts.getContainingClass(node);
+                var constructorSignatureInfo = containingClass.members.map(function (member) {
+                    if (member.kind === ts.SyntaxKind.Constructor) {
+                        var constructorDeclaration = member;
+                        var signature = checker.getSignatureFromDeclaration(constructorDeclaration);
+                        return {
+                            ambient: !(constructorDeclaration.body),
+                            signature: signature
+                        };
+                    }
+                });
+                var constructorSignatures = (constructorSignatureInfo.some(function (i) { return i.ambient; })) ?
+                    (constructorSignatureInfo.filter(function (i) { return i.ambient; }).map(function (i) { return i.signature; })) :
+                    (constructorSignatureInfo.map(function (i) { return i.signature; }));
+                var constructorDeclarationAnnotations = ts.concat(constructorSignatures.map(function (signature) {
+                    var signatureDeclaration = signature.declaration;
+                    var sourceSpan = nodeToSrcSpan(signatureDeclaration);
+                    var binderAnnotations = nodeAnnotations(signatureDeclaration, ts.makeConstructorAnnotations);
+                    return (binderAnnotations.length === 0) ?
+                        [new ts.ConstructorDeclarationAnnotation(sourceSpan, "constructor :: " + checker.methodToRscString(signature, signatureDeclaration))] :
+                        binderAnnotations;
+                }));
+                return [new ts.RsConstructor(nodeToSrcSpan(node), constructorDeclarationAnnotations, nodeArrayToRsAST(state, node.parameters, nodeToRsId), nodeArrayToRsAST(state, [], nodeToRsStmt))];
             }
             function nodeAnnotations(node, creator) {
                 if (!node)

@@ -51,7 +51,7 @@ module Language.Rsc.Liquid.CGMonad (
   , addAnnot
 
   -- * Function Types
-  , cgFunTys, subNoCapture
+  , cgFunTys, substNoCapture
 
   -- * Zip type wrapper
   -- , zipTypeUpM, zipTypeDownM
@@ -225,7 +225,7 @@ envGetContextCast g a
              CDead (concat errs') (mkUnion ts)
 
 --------------------------------------------------------------------------------
-envGetContextTypArgs :: Int -> CGEnv -> AnnLq -> [TVar] -> [RefType]
+envGetContextTypArgs :: Int -> CGEnv -> AnnLq -> [BTVar F.Reft] -> [RefType]
 --------------------------------------------------------------------------------
 -- NOTE: If we do not need to instantiate any type parameter (i.e. length αs ==
 -- 0), DO NOT attempt to compare that with the TypInst that might hide within
@@ -495,12 +495,14 @@ freshenType _ g l t
 --   Returns a pair of instantiations of type variables @αs@ and the freshly
 --   instantiated body type of the function.
 --------------------------------------------------------------------------------
-freshTyInst :: IsLocated l => l -> CGEnv -> [TVar] -> [RefType] -> RefType -> CGM ([RefType], RefType)
+freshTyInst :: IsLocated l => l -> CGEnv -> [BTVar F.Reft] -> [RefType] -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-freshTyInst l g αs τs tbody
+freshTyInst l g bs τs tbody
   = do ts    <- mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
-       return $ (ts, apply (fromList $ zip αs ts) tbody)
+       return $ apply (fromList $ zip αs ts) tbody
+  where
+    αs = btvToTV <$> bs
 
 -- | Instantiate Fresh Type (at Phi-site)
 --------------------------------------------------------------------------------
@@ -938,23 +940,27 @@ cgFunTys l f xs ft   | Just ts <- bkFuns ft
                      = cgError $ errorNonFunction (srcPos l) f ft
   where
     fTy (αs, yts, t) | Just yts' <- padUndefineds xs yts
-                     = uncurry (αs,,) <$> subNoCapture l yts' xs t
+                     = uncurry (αs,,) <$> substNoCapture l xs (yts', t)
                      | otherwise
                      = cgError $ errorArgMismatch (srcPos l)
 
 -- | Avoids capture of function binders by existing value variables
 --------------------------------------------------------------------------------
-subNoCapture :: F.Symbolic a => t -> [Bind F.Reft] -> [a] -> RefType -> CGM ([Bind F.Reft], RefType)
+substNoCapture :: F.Symbolic a => t -> [a] -> ([Bind F.Reft], RefType) -> CGM ([Bind F.Reft], RefType)
 --------------------------------------------------------------------------------
-subNoCapture _ yts xs t   | length yts /= length xs
-                          = error "subNoCapture - length test failed"
-                          | otherwise
-                          = (,) <$> mapM (\(B s t) -> B s <$> mapReftM ff t) yts
-                                <*> mapReftM ff t
+substNoCapture _ xs (yts, t) | length yts /= length xs
+                             = error "substNoCapture - length test failed"
+                             | otherwise
+                             = (,) <$> mapM (\(B s t) -> B s <$> mapReftM ff t) yts
+                                   <*> mapReftM ff t
   where
-    -- If the symbols we are about to introduce are already capture by some
-    -- value variable, then (1) create a fresh value var. and (2) proceed with
-    -- the substitution after replacing with the new val. var.
+    -- If the symbols we are about to introduce are already captured by some vv,
+    -- then:
+    --
+    --  (1) create a fresh vv., and
+    --
+    --  (2) proceed with the substitution after replacing with the new vv.
+    --
     ff r@(F.Reft (v,ras)) | v `L.elem` xss
                           = do v' <- freshVV
                                return $ F.subst su $ F.Reft . (v',)
@@ -963,7 +969,7 @@ subNoCapture _ yts xs t   | length yts /= length xs
                           = return $ F.subst su r
     freshVV               = F.vv . Just <$> fresh
     xss                   = F.symbol <$> xs
-    su                    = F.mkSubst $ safeZipWith "subNoCapture" fSub yts xs
+    su                    = F.mkSubst $ safeZipWith "substNoCapture" fSub yts xs
     fSub yt x             = (b_sym yt, F.eVar x)
 
 

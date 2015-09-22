@@ -54,7 +54,7 @@ module Language.Rsc.Typecheck.Types (
   , tmFromFields, tmFromFieldList, typesOfTM
 
   -- * Operator Types
-  , infixOpId, prefixOpId, builtinOpId, arrayLitTy, objLitTy, setPropTy, localTy, finalizeTy
+  , infixOpId, prefixOpId, builtinOpId, arrayLitTy, objLitTy, localTy, finalizeTy
 
   -- * Builtin: Binders
   , mkId, argId, mkArgTy, returnTy
@@ -448,23 +448,6 @@ immObjectLitTy ps ts | length ps == length ts
                      = error "Mismatched args for immObjectLit"
   where
     elts = tmFromFieldList [ (F.symbol p, FI Req tImm t) | (p,t) <- safeZip "immObjectLitTy" ps ts ]
-
--- | setProp<A, M extends Mutable>(o: { f[M]: A }, x: A) => A
---
---------------------------------------------------------------------------------------------
-setPropTy :: F.Reftable r => F.Symbol -> RType r
---------------------------------------------------------------------------------------------
-setPropTy f = mkAll [bvt, bvm] t
-  where
-    ft      = TFun [b1, b2] t fTop
-    b1      = B (F.symbol "o") $ TObj tImm (tmFromFieldList [(f, FI Opt m t)]) fTop
-    b2      = B (F.symbol "x") $ t
-    m       = toTTV bvm :: F.Reftable r => RType r
-    t       = toTTV bvt
-    bvt     = BTV (F.symbol "A") def Nothing
-    bvm     = BTV (F.symbol "M") def (Just tMut) :: F.Reftable r => BTVar r
-    toTTV   :: F.Reftable r => BTVar r -> RType r
-    toTTV   = (`TVar` fTop) . btvToTV
 
 --------------------------------------------------------------------------------------------
 tmFromFields :: F.SEnv (FieldInfoQ q r) -> TypeMembersQ q r

@@ -229,7 +229,7 @@ data Statement a
     -- ^ @var x, y=42;@, spec 12.2
   | FunctionStmt a (Id a) [Id a] (Maybe [Statement a])
     -- ^ @function f(x, y, z) [{...}]@, spec 13
-  | ClassStmt a (Id a) (Maybe (Id a)) {-extends-} [Id a] {-implem-} [ClassElt a]
+  | ClassStmt a (Id a) [ClassElt a]
     -- ^ @class C<V> extends C'<T> {...}@
   | ModuleStmt a (Id a) [Statement a]
     -- ^ @module M {...}@

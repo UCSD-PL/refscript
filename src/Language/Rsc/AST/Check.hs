@@ -137,7 +137,7 @@ instance IsRsc (Statement a) where
   isRsc (ReturnStmt _ e)         = isRsc e
   isRsc (FunctionStmt _ _ _ b)   = isRsc b
   isRsc (SwitchStmt _ e cs)      = isRsc e && not (null cs) && isRsc cs
-  isRsc (ClassStmt _ _ _ _  bd)  = all isRsc bd
+  isRsc (ClassStmt _ _ bd)       = all isRsc bd
   isRsc (ThrowStmt _ e)          = isRsc e
   isRsc (InterfaceStmt _ _)          = True
   isRsc (ModuleStmt _ _ s)       = all isRsc s

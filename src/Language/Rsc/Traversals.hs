@@ -66,7 +66,7 @@ efold f g h                  = go
     go γ z t@(TObj m xts r)  = h γ r $ g γ t $ efoldTypeMembers' f g h xts γ $ go γ z m
     go γ z t@(TClass n)      = g γ t $ gos γ z $ catMaybes $ btv_constr <$> b_args n
     go γ z t@(TMod _)        = g γ t z
-    go γ z t@(TAll _ t')     = g γ t $ go γ z t'
+    go γ z t@(TAll bs t')    = g γ t $ go γ (gos γ z $ maybeToList $ btv_constr bs) t'
     go γ z t@(TFun xts t' r) = h γ r $ g γ t $ go γ' (gos γ' z $ map b_type xts) t'
                                where γ' = foldr ext γ xts
     go γ z t@(TExp _)        = g γ t z
@@ -276,10 +276,10 @@ accumAbsNames :: IsLocated a => AbsPath -> [Statement a] -> [AbsName]
 --------------------------------------------------------------------------------
 accumAbsNames (QP AK_ _ ss)  = concatMap go
   where
-    go (ClassStmt l x _ _ _) = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
-    go (EnumStmt l x _ )     = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
-    go (InterfaceStmt l x )      = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
-    go _                     = []
+    go (ClassStmt l x _ )   = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
+    go (EnumStmt l x _ )    = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
+    go (InterfaceStmt l x ) = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
+    go _                    = []
 
 -- TODO: Add modules as well?
 --------------------------------------------------------------------------------
@@ -306,12 +306,12 @@ hoistBindings = snd . visitStmts vs ()
 
     acs _ (FunctionStmt a x _ (Just _)) = [(x, a, FuncDeclKind, RdOnly, Initialized)]
     acs _ (FunctionStmt a x _ Nothing ) = [(x, a, FuncDeclKind, Ambient, Initialized)]
-    acs _ (ClassStmt a x _ _ _) = [(x, a, ClassDeclKind, RdOnly, Initialized)]
-    acs _ (ModuleStmt a x _)    = [(x, a { fFact = modAnn x a }, ModuleDeclKind, RdOnly, Initialized)]
-    acs _ (EnumStmt a x _)      = [(x, a { fFact = enumAnn x a }, EnumDeclKind, RdOnly, Initialized)]
-    acs _ _                     = []
+    acs _ (ClassStmt a x _)  = [(x, a, ClassDeclKind, RdOnly, Initialized)]
+    acs _ (ModuleStmt a x _) = [(x, a { fFact = modAnn x a }, ModuleDeclKind, RdOnly, Initialized)]
+    acs _ (EnumStmt a x _)   = [(x, a { fFact = enumAnn x a }, EnumDeclKind, RdOnly, Initialized)]
+    acs _ _                  = []
 
-    acv _ (VarDecl l n ii)       = [(n, l, VarDeclKind, varAsgn l, inited l ii)]
+    acv _ (VarDecl l n ii)   = [(n, l, VarDeclKind, varAsgn l, inited l ii)]
 
     inited l _        | any isAmbient (fFact l)
                       = Initialized

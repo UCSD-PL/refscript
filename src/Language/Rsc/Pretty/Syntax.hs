@@ -160,18 +160,7 @@ ppStatement s = case s of
                                       ssAsBlock body
   FunctionStmt _ name args Nothing
                             -> Nothing
-  ClassStmt _ name ext imp body
-                            -> Just $ text "class" <+> ppId name  <+>
-                                      (case ext of
-                                         Just e  -> text "extends" <+> ppId e
-                                         Nothing -> text ""
-                                      ) <+>
-                                      ( case imp of
-                                          [] -> text ""
-                                          is -> text "implements" <+>
-                                                cat (punctuate comma (map ppId is))
-                                      ) $$
-                                      classEltAsBlock body
+  ClassStmt _ name body     -> Just $ text "class" <+> ppId name $$ classEltAsBlock body
   ModuleStmt _ name body    -> Just $ text "module" <+> ppId name $$ ssAsBlock body
   InterfaceStmt _ x         -> Nothing
   EnumStmt _ name elts      -> Just $ text "enumeration" <+> ppId name <+>

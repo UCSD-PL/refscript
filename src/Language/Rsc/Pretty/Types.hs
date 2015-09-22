@@ -59,7 +59,7 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp (TObj _ ms r)   = F.ppTy r $ braces $ pp ms
   pp (TClass t)      = text "class" <+> pp t
   pp (TMod t)        = text "module" <+> pp t
-  pp t@(TAll _ _)    = ppArgs angles comma αs <> text "." <+> pp t' where (αs, t') = bkAll t
+  pp t@(TAll _ _)    = ppArgs angles comma αs <> pp t' where (αs, t') = bkAll t
   pp (TFun xts t _)  = ppArgs parens comma xts <+> text "=>" <+> pp t
   pp (TExp e)        = pprint e
 

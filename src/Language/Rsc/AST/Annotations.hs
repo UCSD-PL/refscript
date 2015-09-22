@@ -92,7 +92,7 @@ instance Annotated Statement where
     WithStmt       a  _ _     -> a
     VarDeclStmt    a  _       -> a
     FunctionStmt   a  _ _ _   -> a
-    ClassStmt      a  _ _ _ _ -> a
+    ClassStmt      a  _ _     -> a
     ModuleStmt     a  _ _     -> a
     InterfaceStmt  a  _       -> a
     EnumStmt       a  _ _     -> a

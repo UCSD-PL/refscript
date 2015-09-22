@@ -15,7 +15,7 @@ import           Control.Monad
 import           Data.Function                   (on)
 import qualified Data.HashMap.Strict             as HM
 import           Data.List                       (sortBy)
-import           Data.Maybe                      (catMaybes, fromMaybe)
+import           Data.Maybe                      (catMaybes, fromJust, fromMaybe)
 import           Data.Monoid                     (mempty)
 import qualified Data.Text                       as T
 import qualified Data.Traversable                as T
@@ -49,6 +49,7 @@ import           Language.Rsc.SSA.SSA
 import qualified Language.Rsc.SystemUtils        as A
 import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Checker  (typeCheck)
+import           Language.Rsc.Typecheck.Subst    (apply, fromList)
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Language.Rsc.TypeUtilities
@@ -76,7 +77,6 @@ verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
       cgi <- pure       $ generateConstraints cfg tc cha
       res <- liftIO     $ solveConstraints tc f cgi
       return res
-
 
 
 ppCasts (Rsc { code = Src fs })
@@ -269,8 +269,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
       t         <- cgSafeEnvFindTyM x1 g'
       let rhsCtx = fmap snd $ getProp g' FieldAccess f t
-          opTy   = setPropTy (F.symbol f) -- <$> cgSafeEnvFindTyM (builtinOpId BISetProp) g'
-      fmap snd <$> consCall g' l BISetProp [(vr x1, Nothing),(e2, rhsCtx)] opTy
+      fmap snd <$> consCall g' l BISetProp [(vr x1, Nothing),(e2, rhsCtx)] (setPropTy f)
   where
       vr         = VarRef $ getAnnotation e1
 
@@ -342,7 +341,7 @@ consStmt g s@(FunctionStmt _ _ _ _)
 --
 --  * Compute type for "this" and add that to the env as well.
 --
-consStmt g (ClassStmt l x _ _ ce)
+consStmt g (ClassStmt l x ce)
   = do  d <- resolveTypeM l g nm
         mapM_ (consClassElt g d) ce
         return $ Just g
@@ -829,23 +828,29 @@ consCall :: PP a
 --   3. Use @subType@ to add constraints between the types from (step 2) and (step 1)
 --   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in
 --      output type of callee.
+--
+--   5. If multiple are valid, pick the first one
+--
 consCall g l fn ets ft0
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      -- ts <- ltracePP l (ppshow fn ++ " " ++ ppshow xes) <$> mapM (`cgSafeEnvFindTyM` g') xes
       ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case ol of
-        -- If multiple are valid, pick the first one
-        (ft:_) -> {- traceTypePP l (ppshow fn) $ -} consInstantiate l g' fn ft ts xes
-        _      -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts)
-                              (toType <$> callSigs)
+        (ft: _) -> consInstantiate l g' fn ft ts xes
+        _       -> cgError $ errorNoMatchCallee (srcPos l) fn (tts ts) (tts callSigs)
   where
-    ol  = [ lt | Overload cx t <- fFact l
-               , cge_ctx g == cx
-               , lt <- callSigs
-               , arg_type (toType t) == arg_type (toType lt) ]
+    ol         = [ lt | Overload cx t <- fFact l, cge_ctx g == cx, lt <- callSigs, att t == att lt ]
     callSigs   = extractCall g ft0
-    arg_type t = (\(a,b,_) -> (a,b)) <$> bkFun t
+    att t      = (\(a,b,_) -> (a,b)) <$> bkFun (toType t)
+    tts        = (toType <$>)
 
+
+-- | `consInstantiate` does the subtyping between the types of the arguments
+--   @xes@ and the formal paramaters of @ft@.
+--   If this are bounded type variables, then repeat the parameter types of the
+--   function this time with all bound type variables replaced by their
+--   respective type constraint (also repeat the respective actual arguments in
+--   the subtyping constraint).
+--
 --------------------------------------------------------------------------------
 consInstantiate :: PP a
                 => AnnLq -> CGEnv -> a
@@ -855,21 +860,32 @@ consInstantiate :: PP a
                 -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
 consInstantiate l g fn ft ts xes
-  = do  (its1, ot) <- instantiateFTy l g fn ft
-        ts1        <- zipWithM (instantiateTy l g) [1..] ts
-        (ts3, ot') <- subNoCapture l its1 xes ot
-        _          <- zipWithM_ (subType l err g) ts1 (map b_type ts3)
-        Just      <$> cgEnvAddFresh "5" l (VI Local WriteLocal Initialized ot') g
+  = do  o            <- instantiateFTy l g fn ft'
+        (rhs0, ot)   <- substNoCapture l xes' o
+        rhs1         <- pure (map b_type rhs0)
+        lhs          <- zipWithM (instantiateTy l g) [1..] (ts ++ ts)
+        _            <- zipWithM_ (subType l err g) lhs rhs1
+        Just        <$> cgEnvAddFresh "5" l (VI Local WriteLocal Initialized ot) g
   where
-    err            = errorLiquid' l
+    (bs, xts, t)    = fromJust (bkFun ft)
+    hasBoundedPars  = not $ null $ catMaybes $ map btv_constr bs
+
+    xes'            | hasBoundedPars = xes ++ xes
+                    | otherwise      = xes
+
+    θc              = fromList [ (TV s l, c )| BTV s l (Just c) <- bs ]
+    xts'            = apply θc xts
+    ft'             | hasBoundedPars
+                    = mkFun (bs, xts ++ xts', t)
+                    | otherwise
+                    = ft
+    err             = errorLiquid' l
 
 ----------------------------------------------------------------------------------
 instantiateTy :: AnnLq -> CGEnv -> Int -> RefType -> CGM RefType
 ----------------------------------------------------------------------------------
-instantiateTy l g i t = snd <$> freshTyInst l g αs ts t'
-    where
-      (αs, t')        = mapFst (map btvToTV) $ bkAll t
-      ts              = envGetContextTypArgs i g l αs
+instantiateTy l g i (bkAll -> (αs, t))
+  = freshTyInst l g αs (envGetContextTypArgs i g l αs) t
 
 -- | instantiateFTy:
 --
@@ -877,14 +893,11 @@ instantiateTy l g i t = snd <$> freshTyInst l g αs ts t'
 instantiateFTy :: PP a => AnnLq -> CGEnv -> a -> RefType -> CGM ([Bind F.Reft], RefType)
 ---------------------------------------------------------------------------------
 instantiateFTy l g fn ft@(bkAll -> (bs, t))
-  = do  (vts, ft')      <- freshTyInst l g αs ts t
+  = do  ft'             <- freshTyInst l g bs ts t
         (_, ts, t')     <- maybe err return (bkFun ft')
-        let (vts', cs)   = unzip [ (t, c) | (t, BTV _ _ (Just c)) <- safeZip "instantiateFTy" vts bs ]
-        _               <- zipWithM_ (subType l (errorTypeParamConstr l fn vts' cs) g) vts' cs
         return           $ (ts, t')
     where
-      αs  = [ TV α l | BTV α l _ <- bs ]
-      ts  = envGetContextTypArgs 0 g l αs
+      ts  = envGetContextTypArgs 0 g l bs     -- type instantiations
       err = cgError $ errorNonFunction (srcPos l) fn ft
 
 -- | consCallCondExpr: Special casing conditional expression call here because we'd like the

@@ -230,6 +230,9 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
        return $ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
 -- e1.f = e2
+--
+--  We use runFail to enable contextual typing of e2.
+--
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do  z               <- runFailM ( tcExpr γ e1l Nothing )
         case z of
@@ -237,9 +240,8 @@ tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
           Left _        -> tcSetProp Nothing
   where
     e1l  = fmap (\a -> a { fFact = BypassUnique : fFact a }) e1
-    opTy = setPropTy (F.symbol f)
     tcSetProp rhsCtx = do
-      ([e1',e2'],_) <- tcNormalCallWCtx γ l BISetProp [(e1l, Nothing), (e2, rhsCtx)] opTy
+      ([e1',e2'],_) <- tcNormalCallWCtx γ l BISetProp [(e1l, Nothing), (e2, rhsCtx)] (setPropTy f)
       return (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1' f) e2'), Just γ)
 
 -- e
@@ -310,10 +312,10 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
   = tcFun γ s
 
 -- | class A<S...> [extends B<T...>] [implements I,J,...] { ... }
-tcStmt γ (ClassStmt l x e is ce)
+tcStmt γ (ClassStmt l x ce)
   = do  d  <- resolveTypeM l γ rn
         ms <- mapM (tcClassElt γ d) ce
-        return $ (ClassStmt l x e is ms, Just γ)
+        return $ (ClassStmt l x ms, Just γ)
   where
     rn = QN (envPath γ) (F.symbol x)
 
@@ -379,7 +381,8 @@ tcClassElt γ (TD sig@(TS _ (BGen _ bs) _) ms) (Constructor l xs body)
         body'  <- foldM (tcCallable γ' l ctor xs) body its
         return  $ Constructor l xs body'
   where
-    γ'     = γ
+    γ'     = tracePP "CTOR ENV"
+           $ γ
            & initClassInstanceEnv sig
            & initClassCtorEnv sig
            -- TODO: TEST THIS
@@ -832,13 +835,8 @@ tcCall _ e = fatal (unimplemented (srcPos e) "tcCall" e) (e, tBot)
 --------------------------------------------------------------------------------
 -- | @tcNormalCall@ resolves overloads and returns cast-wrapped versions of the arguments.
 --------------------------------------------------------------------------------
-tcNormalCall :: (Unif r, PP a)
-             => TCEnv r
-             -> AnnTc r
-             -> a
-             -> [(ExprSSAR r, Maybe (RType r))]
-             -> RType r
-             -> TCM r ([ExprSSAR r], RType r)
+tcNormalCall :: (Unif r, PP a) => TCEnv r -> AnnTc r -> a -> [(ExprSSAR r, Maybe (RType r))]
+             -> RType r -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
 tcNormalCall γ l fn etos ft0
   -- = do ets <- ltracePP l ("tcNormalCall " ++ ppshow fn) <$> T.mapM (uncurry $ tcExprWD γ) etos
@@ -881,17 +879,11 @@ resolveOverload :: (Unif r, PP a)
 --   * If the function requires a 'self' argument, the parameters provide one.
 --
 resolveOverload γ l fn es ft
-  = case [ mkFun (vs, bs, τ) | (vs, bs, τ) <- catMaybes $ bkFun <$> extractCall γ ft
-                             , length bs == length es ] of
-                             -- , and $ zipWith (\b e -> matchTypes (b_type b) (snd e)) bs es ] of
+  = case [ mkFun s | s@(_, bs, _) <- sigs, length bs == length es ] of
       [t]    -> Just . (,t) <$> getSubst
       fts    -> tcCallCaseTry γ l fn (snd <$> es) fts
   where
-    -- -- A deep check on the number of arguments
-    -- matchTypes (TFun as _ _) (TFun bs _ _)
-    --   | length as == length bs = and $ zipWith (on matchTypes b_type) as bs
-    --   | otherwise              = False
-    -- matchTypes _  _            = True
+      sigs = catMaybes $ bkFun <$> extractCall γ ft
 
 
 --------------------------------------------------------------------------------
@@ -936,22 +928,12 @@ tcCallCase :: (PP a, Unif r)
   => TCEnv r -> AnnTc r -> a -> [(ExprSSAR r, RType r)] -> RType r -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
 tcCallCase γ@(tce_ctx -> ξ) l fn (unzip -> (es, ts)) ft
-
   = do  (βs, its1, ot) <- instantiateFTy l ξ fn ft
         ts1            <- zipWithM (instantiateTy l ξ) [1..] ts
         θ              <- unifyTypesM (srcPos l) γ ts1 its1
-
-        -- Type parameter subtyping
-        let (vts, cs)   = unzip [(apply θ v, c) | BTV s l (Just c) <- βs
-                                                , let v = tVar (TV s l)]
-        _              <- when (not $ and $ zipWith (isSubtype γ) vts cs)
-        -- $ ltracePP l ("sub params " ++ ppshow fn ++ " " ++ ppshow vts) cs)
-                               (fatal (errorTypeParamConstr l fn vts cs) ())
-
-        -- Type argument subtyping
-        let (ts2, its2) = apply θ (ts1, its1)
+        let θβ          = fromList [ (TV s l, t) | BTV s l (Just t) <- βs ]
+        let (ts2, its2) = apply θ (ts1, apply θβ its1)
         es'            <- zipWith3M (castM γ) es ts2 its2
-
         return          $ (es', apply θ ot)
 
 --------------------------------------------------------------------------------

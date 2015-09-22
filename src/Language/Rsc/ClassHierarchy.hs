@@ -136,7 +136,7 @@ accumModules (Rsc { code = Src stmts }) =
     -- The Assignabilities below are overwitten to default values
     vStmt _ (FunctionStmt l x _ _)
       = [(ss x, FuncDeclKind  , VI loc Ambient Initialized t) | VarAnn loc _ (Just t) <- fFact l ]
-    vStmt _ (ClassStmt l x _ _ _)
+    vStmt _ (ClassStmt l x _)
       = [(ss x, ClassDeclKind , VI loc Ambient Initialized $ TClass b) | ClassAnn loc (TS _ b _) <- fFact l ]
     -- TODO: Fix the Locality in the following two
     vStmt p (ModuleStmt l x _)
@@ -188,7 +188,7 @@ mkVarEnv = envMap snd
 ---------------------------------------------------------------------------------------
 declOfStmt :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
 ---------------------------------------------------------------------------------------
-declOfStmt (ClassStmt l c _ _ cs)
+declOfStmt (ClassStmt l c cs)
   | [ts] <- cas = Right (cc, TD ts (typeMembers cs))
   | otherwise   = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where

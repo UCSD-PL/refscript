@@ -319,8 +319,8 @@ eltKindsToTypeMembers = foldl' go mempty
   where
     go ms (Prop f InstanceK o m t) = ms { tm_prop  = F.insertSEnv f (FI o m t) (tm_prop  ms) }
     go ms (Prop f StaticK   o m t) = ms { tm_sprop = F.insertSEnv f (FI o m t) (tm_sprop ms) }
-    go ms (Meth n InstanceK o m t) = ms { tm_meth  = F.insertSEnv n (MI o m t) (tm_meth  ms) }
-    go ms (Meth n StaticK   o m t) = ms { tm_smeth = F.insertSEnv n (MI o m t) (tm_smeth ms) }
+    go ms (Meth n InstanceK o m t) = ms { tm_meth  = F.insertSEnv n (MI o [(m,t)]) (tm_meth  ms) }
+    go ms (Meth n StaticK   o m t) = ms { tm_smeth = F.insertSEnv n (MI o [(m,t)]) (tm_smeth ms) }
     -- TODO: Multiple overloads are dropped
     go ms (Call t) = ms { tm_call = Just t }
     go ms (Ctor t) = ms { tm_ctor = Just t }
@@ -365,8 +365,7 @@ methP = do  s     <- option InstanceK (reserved "static" *> return StaticK)
 callP           = withinSpacesP methSigP
 
 -- | new [<A..>](t..): t
-ctorP           = withinSpacesP (reserved "constructor")
-               *> dcolon
+ctorP           = withinSpacesP (reserved "new")
                *> withinSpacesP methSigP
 
 mutabilityP     =  brackets bareTypeP

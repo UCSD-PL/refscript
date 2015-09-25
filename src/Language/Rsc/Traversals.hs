@@ -61,8 +61,8 @@ efold f g h                  = go
     go γ z t@(TPrim _ r)     = h γ r $ g γ t z
     go γ z t@(TVar _ r)      = h γ r $ g γ t z
     go γ z t@(TOr ts)        = g γ t $ gos γ z ts
-    go γ z t@(TAnd ts)       = g γ t $ gos γ z ts
-    go γ z t@(TRef n r)      = h γ r $ g γ t $ gos γ z $ g_args n
+    go γ z t@(TAnd ts)       = g γ t $ gos γ z $ map snd ts
+    go γ z t@(TRef n r  )    = h γ r $ g γ t $ gos γ z $ g_args n
     go γ z t@(TObj m xts r)  = h γ r $ g γ t $ efoldTypeMembers' f g h xts γ $ go γ z m
     go γ z t@(TClass n)      = g γ t $ gos γ z $ catMaybes $ btv_constr <$> b_args n
     go γ z t@(TMod _)        = g γ t z
@@ -82,10 +82,10 @@ efoldTypeMembers' :: F.Reftable r => (            RTypeQ q r -> b)         -- f
 efoldTypeMembers' g f h (TM p m sp sm c k s n) γ z =
     L.foldl' (efold g f h γ) z $ pl ++ ml ++ spl ++ sml ++ cl ++ kl ++ sl ++ nl
   where
-    pl  = L.foldr (\(_, FI _ t t') -> ([t,t'] ++) ) [] $ F.toListSEnv p
-    ml  = L.foldr (\(_, MI _ _ t ) -> ([t]    ++) ) [] $ F.toListSEnv m
-    spl = L.foldr (\(_, FI _ t t') -> ([t,t'] ++) ) [] $ F.toListSEnv sp
-    sml = L.foldr (\(_, MI _ _ t ) -> ([t]    ++) ) [] $ F.toListSEnv sm
+    pl  = L.foldr (\(_, FI _ t t') -> ([t,t']      ++) ) [] $ F.toListSEnv p
+    ml  = L.foldr (\(_, MI _ mts ) -> (map snd mts ++) ) [] $ F.toListSEnv m
+    spl = L.foldr (\(_, FI _ t t') -> ([t,t']      ++) ) [] $ F.toListSEnv sp
+    sml = L.foldr (\(_, MI _ mts ) -> (map snd mts ++) ) [] $ F.toListSEnv sm
     cl  = maybeToList c
     kl  = maybeToList k
     sl  = maybeToList s
@@ -153,7 +153,7 @@ instance Foldable FieldInfoQ where
   fold f αs xs (FI o t t') = fold f αs xs t <> fold f αs xs t'
 
 instance Foldable MethodInfoQ where
-  fold f αs xs (MI o m t) = fold f αs xs t
+  fold f αs xs (MI o (mts)) = mconcat $ fold f αs xs . snd <$> mts
 --
 -- instance Foldable ModuleDefQ where
 --   trans f αs xs (ModuleDef v t e p)
@@ -225,8 +225,8 @@ foldRType f                   = go
     go αs xs t@(TPrim _ _)    = f αs xs t
     go αs xs t@(TVar _ _)     = f αs xs t
     go αs xs t@(TOr ts)       = f αs xs t <> Ext.foldMap (go αs xs) ts
-    go αs xs t@(TAnd ts)      = f αs xs t <> Ext.foldMap (go αs xs) ts
-    go αs xs t@(TRef n r)     = f αs xs t <> fold f αs xs n
+    go αs xs t@(TAnd ts)      = f αs xs t <> Ext.foldMap (go αs xs) (map snd ts)
+    go αs xs t@(TRef n r)   = f αs xs t <> fold f αs xs n
     go αs xs t@(TObj m ms r)  = f αs xs t <> fold f αs xs ms <> fold f αs xs m
     go αs xs t@(TClass n)     = f αs xs t <> fold f αs xs n
     go αs xs t@(TMod _)       = f αs xs t

@@ -104,9 +104,9 @@ instance Functor ClassHierarchy where
   fmap f (CHA g n m) = CHA (nmap (fmap f) $ emap (fmap f) g) n (fmap (fmap f) m)
 
 
-------------------------------------------------------------------------------------
-mkCHA :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (ClassHierarchy r)
-------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- mkCHA :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (ClassHierarchy r)
+--------------------------------------------------------------------------------
 mkCHA rsc = accumModules rsc >>= pure . fromModuleDef
 
 
@@ -117,9 +117,9 @@ mkCHA rsc = accumModules rsc >>= pure . fromModuleDef
 --
 --    * m_types with: classes and interfaces
 --
-------------------------------------------------------------------------------------
-accumModules :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (QEnv (ModuleDef r))
-------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- accumModules :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (QEnv (ModuleDef r))
+--------------------------------------------------------------------------------
 accumModules (Rsc { code = Src stmts }) =
     (qenvFromList . map toQEnvList) `liftM` mapM mkMod (accumModuleStmts stmts)
   where
@@ -163,9 +163,9 @@ accumModules (Rsc { code = Src stmts }) =
 
     ss                       = fmap fSrc
 
----------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 mkVarEnv :: F.Symbolic s => [(s, SyntaxKind, VarInfo r)] -> Env (VarInfo r)
----------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 mkVarEnv = envMap snd
          . envFromListWithKey mergeVarInfo
          . concatMap f
@@ -185,11 +185,11 @@ mkVarEnv = envMap snd
       = (k1, VI l1 a1 i1 $ mkAnd $ bkAnd t1 ++ bkAnd t2)
     mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
 
----------------------------------------------------------------------------------------
-declOfStmt :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
----------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- declOfStmt :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
+--------------------------------------------------------------------------------
 declOfStmt (ClassStmt l c cs)
-  | [ts] <- cas = Right (cc, TD ts (typeMembers cs))
+  | [ts] <- cas = Right (cc, TD ts $ typeMembers cs)
   | otherwise   = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where
     cc     = fmap fSrc c
@@ -209,23 +209,26 @@ declOfStmt s         = Left $ F.Unsafe $ single
                       $ "Statement\n" ++ ppshow s ++ "\ncannot have a type annotation."
 
 -- | Given a list of class elements, returns a @TypeMembers@ structure
----------------------------------------------------------------------------------------
-typeMembers :: F.Reftable r => [ClassElt (AnnR r)] -> TypeMembers r
----------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- typeMembers :: F.Reftable r => [ClassElt (AnnR r)] -> TypeMembers r
+--------------------------------------------------------------------------------
 typeMembers cs = TM ps ms sps sms call ctor sidx nidx
   where
+    -- XXX: Overloads here?
     ps         = F.fromListSEnv [(F.symbol x, f) | MemberVarDecl  l False x _   <- cs, FieldAnn f <- fFact l]
-    ms         = F.fromListSEnv [(F.symbol x, m) | MemberMethDecl l False x _ _ <- cs, MethAnn  m <- fFact l]
     sps        = F.fromListSEnv [(F.symbol x, f) | MemberVarDecl  l True  x _   <- cs, FieldAnn f <- fFact l]
-    sms        = F.fromListSEnv [(F.symbol x, m) | MemberMethDecl l True  x _ _ <- cs, MethAnn  m <- fFact l]
+    -- Create intersection types of the
+    ms         = F.fromListSEnv [(F.symbol x, mconcat [ m | MethAnn m <- fFact l ]) | MemberMethDecl l False x _ _ <- cs ]
+    sms        = F.fromListSEnv [(F.symbol x, mconcat [ m | MethAnn m <- fFact l ]) | MemberMethDecl l True  x _ _ <- cs ]
     call       = Nothing
-    ctor       = listToMaybe [ t | Constructor l _ _ <- cs, CtorAnn t <- fFact l ]
-    sidx       = Nothing    -- XXX: This could be added
+    ctor       = mkAndOpt [ t | Constructor l _ _ <- cs, CtorAnn t <- fFact l ]
+    -- XXX: This could be added
+    sidx       = Nothing
     nidx       = Nothing
 
----------------------------------------------------------------------------
-fromModuleDef :: QEnv (ModuleDef r) -> ClassHierarchy r
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- fromModuleDef :: QEnv (ModuleDef r) -> ClassHierarchy r
+--------------------------------------------------------------------------------
 fromModuleDef ms = CHA graph nk ms
   where
     graph      = mkGraph ns es
@@ -280,8 +283,10 @@ typeMembersOfType :: (ExprReftable Int r, PPR r) => ClassHierarchy r -> RType r 
 typeMemersOfTDecl :: PPR r => ClassHierarchy r -> TypeDecl r -> TypeMembers r
 --------------------------------------------------------------------------------
 typeMembersOfType cha t
-  | Just (TObj _ ms _) <- expandType Coercive cha t = ms
-  | otherwise = mempty
+  | Just (TObj _ ms _) <- tracePP ("EXPAND " ++ ppshow t) $ expandType Coercive cha t
+  = ms
+  | otherwise
+  = mempty
 
 typeMemersOfTDecl cha (TD (TS k _ (h,_)) es) = es `mappend` heritage h
   where
@@ -310,6 +315,7 @@ data CoercionKind = Coercive | NonCoercive
 expandType _ _ t@(TObj _ _ _) = Just t
 
 -- | Enumeration
+--
 expandType _ cha (TRef (Gen n []) _)
   | Just e <- resolveEnum cha n
   = Just $ TObj tImm (ms e) fTop
@@ -324,11 +330,21 @@ expandType _ cha (TRef (Gen n []) _)
 expandType _ _ t@(TRef _ _) | mutRelated t = Nothing
 
 -- | Type Reference
+--
 expandType _ cha t@(TRef (Gen n ts@(mut:_)) r)
   | isClassType cha t = (\m -> TObj mut m r) . fltInst <$> ms
   | otherwise         = (\m -> TObj mut m r)           <$> ms
   where
     ms = expandWithSubst cha <$> resolveType cha n <*> return ts
+    fltInst (TM p _ m _ _ _ s n) = TM p mempty m mempty Nothing Nothing s n
+
+-- | Ambient type: String, Number, etc.
+--
+expandType _ cha t@(TRef (Gen n []) r)
+  | isClassType cha t = (\m -> TObj tImm m r) . fltInst <$> ms
+  | otherwise         = (\m -> TObj tImm m r)           <$> ms
+  where
+    ms = typeMemersOfTDecl cha <$> resolveType cha n
     fltInst (TM p _ m _ _ _ s n) = TM p mempty m mempty Nothing Nothing s n
 
 expandType _ cha (TClass (BGen n ts))
@@ -366,9 +382,9 @@ expandType _ _ t  = Just t
 --
 -- * If A </: B then return @Nothing@.
 --
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 weaken :: F.Reftable r => ClassHierarchy r -> TGen r -> AbsName -> Maybe (TGen r)
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 weaken (CHA g m _) tr@(Gen s _) t
   | s == t                    = Just tr
   | otherwise
@@ -387,18 +403,18 @@ weaken (CHA g m _) tr@(Gen s _) t
             Gen _ t2 <- find ((x2 ==) . g_name) $ e1 ++ i1
             return $ Gen x2 $ apply θ t2
 
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 ancestors :: TypeDeclKind -> ClassHierarchy t -> AbsName -> [AbsName]
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 ancestors k (CHA g m _) s =
     [ n | cur <- maybeToList $ HM.lookup s m
         , anc <- reachable cur g
         , TS k' (BGen n _) _ <- maybeToList $ lab g anc
         , k' == k ]
 
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 nonStaticFields :: ClassHierarchy r -> AbsName -> [F.Symbol]
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 nonStaticFields (CHA g m modules) x
   = HS.toList . HS.unions $ HS.fromList . flds <$> ps
   where
@@ -411,9 +427,9 @@ nonStaticFields (CHA g m modules) x
                         , TS k (BGen n _) _ <- maybeToList $ lab g anc
                         , k == ClassTDK ]
 
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 inheritedNonStaticFields :: ClassHierarchy r -> AbsName -> [F.Symbol]
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 inheritedNonStaticFields (CHA g m mod) x
   = HS.toList . HS.unions $ HS.fromList . flds <$> ps
   where
@@ -427,47 +443,47 @@ inheritedNonStaticFields (CHA g m mod) x
                         , TS k (BGen n _) _ <- maybeToList $ lab g anc
                         , k == ClassTDK ]
 
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 classAncestors     :: ClassHierarchy t -> AbsName -> [AbsName]
 interfaceAncestors :: ClassHierarchy t -> AbsName -> [AbsName]
 allAncestors       :: ClassHierarchy t -> AbsName -> [AbsName]
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 classAncestors      = ancestors ClassTDK
 interfaceAncestors  = ancestors InterfaceTDK
 allAncestors γ s    = classAncestors γ s ++ interfaceAncestors γ s
 
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 isAncestor :: ClassHierarchy t -> AbsName -> AbsName -> Bool
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 isAncestor cha sup sub = sup `elem` allAncestors cha sub
 
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 boundKeys :: (ExprReftable Int r, PPR r)
           => ClassHierarchy r -> RType r -> [F.Symbol]
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 boundKeys cha t@(TRef _ _) | Just t <- expandType Coercive cha t = boundKeys cha t
                            | otherwise                         = []
 boundKeys _ (TObj _ es _)  = fst <$> F.toListSEnv (tm_prop es)
 boundKeys _ _              = []
 
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 immFields :: (ExprReftable Int r, PPR r)
           => ClassHierarchy r -> RType r -> [(F.Symbol, RType r)]
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 immFields cha t | Just (TObj _ es _) <- expandType Coercive cha t
                 = [ (x,t) | (x, FI _ m t) <- F.toListSEnv $ tm_prop es, isImm m ]
                 | otherwise
                 = []
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 getImmediateSuperclass :: F.Reftable r => TypeSig r -> Maybe (RType r)
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 getImmediateSuperclass (TS _ _ ([Gen p ps], _)) = Just $ TRef (Gen p ps) fTop
 getImmediateSuperclass _ = Nothing
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- getSuperType :: F.Reftable r => ClassHierarchy r -> RType r -> Maybe (RType r)
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 getSuperType cha (TRef (Gen nm ts) _)
   | Just (TD (TS _ (BGen _ bs) ([p],_)) _) <- resolveType cha nm
   = let θ = fromList $ zip (btvToTV <$> bs) ts in

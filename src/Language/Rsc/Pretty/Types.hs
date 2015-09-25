@@ -13,13 +13,14 @@
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE UndecidableInstances      #-}
+{-# LANGUAGE ViewPatterns              #-}
 
 module Language.Rsc.Pretty.Types (
 
 ) where
 
 import           Control.Applicative               ((<$>))
-import           Data.Graph.Inductive.Graph
+import           Data.Graph.Inductive.Graph        hiding (empty)
 import           Data.Graph.Inductive.PatriciaTree
 import qualified Data.HashMap.Strict               as HM
 import qualified Data.Map.Strict                   as M
@@ -55,7 +56,7 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp (TVar α r)      = F.ppTy r $ (text "#" <> pp α)
   pp (TOr ts)        = ppArgs id (text " +") ts
   pp (TAnd ts)       = vcat [text "/\\" <+> pp t | t <- ts]
-  pp (TRef t r)      = F.ppTy r $ pp t
+  pp (TRef t r)      = F.ppTy r (pp t)
   pp (TObj _ ms r)   = F.ppTy r $ braces $ pp ms
   pp (TClass t)      = text "class" <+> pp t
   pp (TMod t)        = text "module" <+> pp t
@@ -65,31 +66,37 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
 
 instance (F.Reftable r, PP r) => PP (TypeMembersQ q r) where
   pp (TM fs ms sfs sms cs cts sidx nidx)
-    = ppProp fs  <+> ppMeth ms  <+> ppSProp sfs <+> ppSMeth sms <+>
-      ppCall cs  <+> ppCtor cts <+> ppSIdx sidx <+> ppNIdx nidx
+    = ppProp fs   $+$
+      ppMeth ms   $+$
+      ppSProp sfs $+$
+      ppSMeth sms $+$
+      ppCall cs   $+$
+      ppCtor cts  $+$
+      ppSIdx sidx $+$
+      ppNIdx nidx
 
-ppProp  = vcat . map (\(x, f) -> pp x <> pp f <> semi) . F.toListSEnv
-ppMeth  = vcat . map (\(x, m) -> pp x <> pp m <> semi) . F.toListSEnv
-ppSProp = vcat . map (\(x, f) -> pp "static" <+> pp x <> pp f <> semi) . F.toListSEnv
-ppSMeth = vcat . map (\(x, m) -> pp "static" <+> pp x <> pp m <> semi) . F.toListSEnv
+ppProp  = sep . map (\(x, f) -> pp x <> pp f <> semi) . F.toListSEnv
+ppMeth  = sep . map (\(x, m) -> pp x <> pp m <> semi) . F.toListSEnv
+ppSProp = sep . map (\(x, f) -> pp "static" <+> pp x <> pp f <> semi) . F.toListSEnv
+ppSMeth = sep . map (\(x, m) -> pp "static" <+> pp x <> pp m <> semi) . F.toListSEnv
 
-ppCall optT | Just t <- optT = pp t              <> semi | otherwise = pp ""
-ppCtor optT | Just t <- optT = pp "new" <+> pp t <> semi | otherwise = pp ""
+ppCall optT | Just t <- optT = pp t              <> semi | otherwise = empty
+ppCtor optT | Just t <- optT = pp "new" <+> pp t <> semi | otherwise = empty
 
 ppSIdx (Just t) = pp "[x: string]:" <+> pp t <> semi
-ppSIdx _        = pp ""
+ppSIdx _        = empty
 ppNIdx (Just t) = pp "[x: number]:" <+> pp t <> semi
-ppNIdx _        = pp ""
+ppNIdx _        = empty
 
 instance PPR r => PP (FieldInfoQ q r) where
   pp (FI o m t) = pp o <> colon <+> brackets (ppMut m) <+> pp t
 
 instance PPR r => PP (MethodInfoQ q r) where
-  pp (MI o m t) = pp o <> brackets (pp m) <> pp t
+  pp (MI o mts) = pp o <> vcat (map (\(m,t) -> brackets (pp m) <> pp t) mts)
 
 instance PP Optionality where
   pp Opt = text "?"
-  pp Req = text ""
+  pp Req = empty
 
 instance (F.Reftable r, PP r) => PP (TGenQ q r) where
   pp (Gen x []) = pp x
@@ -162,12 +169,12 @@ ppExtends (n:_) = text "extends" <+> pp n
 ppImplements [] = text ""
 ppImplements ts = text "implements" <+> intersperse comma (pp <$> ts)
 
-mutSym (TRef n _) | s == F.symbol "Mutable"       = Just "_MU_"
-                  | s == F.symbol "UniqueMutable" = Just "_UM_"
-                  | s == F.symbol "Immutable"     = Just "_IM_"
-                  | s == F.symbol "ReadOnly"      = Just "_RO_"
-                  | s == F.symbol "AssignsFields" = Just "_AF"
-  where s = F.symbol n
+mutSym (TRef (F.symbol -> s) _)
+  | s == F.symbol "Mutable"       = Just "_MU_"
+  | s == F.symbol "UniqueMutable" = Just "_UM_"
+  | s == F.symbol "Immutable"     = Just "_IM_"
+  | s == F.symbol "ReadOnly"      = Just "_RO_"
+  | s == F.symbol "AssignsFields" = Just "_AF"
 mutSym _ = Nothing
 
 ppMut t@TVar{} = pp t
@@ -205,20 +212,15 @@ instance (PP a, PP s, PP t) => PP (Alias a s t) where
 
 instance (PP r, F.Reftable r) => PP (Rsc a r) where
   pp pgm@(Rsc {code = (Src s) })
-    =   text "\n******************* Code **********************"
-    $+$ pp s
-    $+$ text "\n******************* Constants *****************"
-    $+$ pp (consts pgm)
-    $+$ text "\n******************* Predicate Aliases *********"
-    $+$ pp (pAlias pgm)
-    $+$ text "\n******************* Type Aliases **************"
-    $+$ pp (tAlias pgm)
-    $+$ text "\n******************* Qualifiers ****************"
-    $+$ vcat (F.toFix <$> take 3 (pQuals pgm))
+    =   text "/*"
+    $+$ text "\nCONSTANTS"          $+$ nest 2 (pp (consts pgm))
+    $+$ text "\nPREDICATE ALIASES"  $+$ nest 2 (pp (pAlias pgm))
+    $+$ text "\nTYPE ALIASES"       $+$ nest 2 (pp (tAlias pgm))
+    $+$ text "\nQUALIFIERS"         $+$ nest 2 (vcat (F.toFix <$> take 3 (pQuals pgm)))
     $+$ text "..."
-    $+$ text "\n******************* Invariants ****************"
-    $+$ vcat (pp <$> invts pgm)
-    $+$ text "\n***********************************************\n"
+    $+$ text "\nINVARIANTS"         $+$ nest 2 (vcat (pp <$> invts pgm))
+    $+$ text "*/"
+    $+$ text "\n// CODE"            $+$ pp s
 
 instance (F.Reftable r, PP r) => PP (RSubst r) where
   pp (Su m) | HM.null m      = text "empty"

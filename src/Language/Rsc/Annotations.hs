@@ -97,7 +97,7 @@ data FactQ q r
 
   -- Overloading
   | EltOverload   IContext (MethodInfoQ q r)
-  | Overload      IContext (RTypeQ q r)
+  | Overload      IContext Int  -- Overload index
 
   -- ** SPECIFICATIONS **
 

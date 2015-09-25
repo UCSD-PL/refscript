@@ -1,9 +1,9 @@
-{-# LANGUAGE TupleSections      #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TupleSections      #-}
 
 module Language.Rsc.CmdLine (Config(..), config) where
 
-import System.Console.CmdArgs
+import           System.Console.CmdArgs
 
 ---------------------------------------------------------------------
 -- | Command Line Configuration Options
@@ -14,11 +14,11 @@ data Config
            , incdirs     :: [FilePath]     -- ^ path to directory for include specs
            , noFailCasts :: Bool           -- ^ fail typecheck when casts are inserted
            }
-  | Liquid { files       :: [FilePath]     -- ^ source files to check
-           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
-           , extraInvs   :: Bool           -- ^ add extra invariants to object types
-           , renderAnns  :: Bool           -- ^ render annotations
-           , prelude     :: Maybe FilePath -- ^ use this prelude file
+  | Liquid { files      :: [FilePath]     -- ^ source files to check
+           , incdirs    :: [FilePath]     -- ^ path to directory for include specs
+           , extraInvs  :: Bool           -- ^ add extra invariants to object types
+           , renderAnns :: Bool           -- ^ render annotations
+           , prelude    :: Maybe FilePath -- ^ use this prelude file
            }
   deriving (Data, Typeable, Show, Eq)
 
@@ -46,7 +46,7 @@ liquid = Liquid {
                        &= typFile
 
  , incdirs      = def  &= typDir
-                       &= help "Paths to Spec Include Directory "
+                       &= help "Paths to Spec Include Directory"
 
  , extraInvs    = def  &= help "Add extra invariants (e.g. 'keyIn' for object types)"
 
@@ -76,3 +76,4 @@ config = modes [
 -- banner args =  "rsc © Copyright 2013-14 Regents of the University of California.\n"
 --             ++ "All Rights Reserved.\n"
 --             ++ "rsc" ++ show args ++ "\n"
+

@@ -224,13 +224,8 @@ compareProp l γ (f, (FI o1 m1 t1, FI o2 m2 t2))
   | otherwise
   = SubErr [errorIncompMutElt (srcPos l) f]
 
-compareMeth l γ (m, (MI o1 m1 t1, MI o2 m2 t2))
-  | o1 /= o2
-  = SubErr [errorIncompatOptional (srcPos l) m]
-  | m1 /= m2
-  = SubErr [errorIncompMethMut (srcPos l) m]
-  | otherwise
-  = compareTypes l γ t1 t2
+compareMeth l γ (_, (m, m'))
+  = SubErr [unsupportedMethodComp (srcPos l) m m']
 
 
 compareMaybe l γ f _ _ (Just c1) _ (Just c2) = f l γ c1 c2
@@ -262,13 +257,13 @@ compareFuns l γ (TFun b1s o1 _) (TFun b2s o2 _)
     args2     = map b_type b2s
 
 compareFuns l γ t1@(TAnd _) t2@(TAnd t2s)
-  | and $ isSubtype γ t1 <$> t2s
+  | and $ isSubtype γ t1 <$> map snd t2s
   = SubT
   | otherwise
   = SubErr [errorFuncSubtype l t1 t2]
 
 compareFuns l γ t1@(TAnd t1s) t2
-  | or $ f <$> t1s
+  | or $ f <$> map snd t1s
   = SubT
   | otherwise
   = SubErr [errorFuncSubtype l t1 t2]

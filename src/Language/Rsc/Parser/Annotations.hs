@@ -116,7 +116,7 @@ parseSpec = go
     go (InterfaceRawSpec           (_ , _)) = InterfaceSpec           <$> interfaceP
     go (ClassRawSpec               (_ , _)) = ClassSpec               <$> classDeclP
     go (FieldRawSpec               (_ , _)) = FieldSpec               <$> (propP >>= \(_,_,o,m,t) -> return (FI o m t))
-    go (MethodRawSpec              (_ , _)) = MethodSpec              <$> (methP >>= \(_,_,o,m,t) -> return (MI o m t))
+    go (MethodRawSpec              (_ , _)) = MethodSpec              <$> (methP >>= \(_,_,o,m,t) -> return (MI o [(m, t)]))
     go (ConstructorRawSpec         (_ , _)) = ConstructorSpec         <$> ctorP
     go (CastRawSpec                (ss, _)) = CastSpec ss             <$> bareTypeP
     go (ExportRawSpec              (_ , _)) = return ExportedSpec

@@ -63,7 +63,7 @@ data RTypeQ q r =
   --
   -- Intersection
   --
-  | TAnd [RTypeQ q r]
+  | TAnd [(Int, RTypeQ q r)]
   --
   -- Type Reference
   --
@@ -128,8 +128,7 @@ data FieldInfoQ q r   = FI Optionality                  -- Optional
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data MethodInfoQ q r  = MI Optionality                          -- Optional
-                           MutabilityMod                        -- Mutability
-                           (RTypeQ q r)                         -- Type
+                           [(MutabilityMod, RTypeQ q r)]        -- Mutability, Type
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data MutabilityMod    = Mutable
@@ -381,6 +380,12 @@ instance Monoid Initialization where
   mempty                              = Uninitialized
   Initialized `mappend` Initialized   = Initialized
   _           `mappend` _             = Uninitialized
+
+
+instance Monoid (MethodInfo r) where
+  mempty                                = MI Req []
+  MI r t `mappend` MI r' t' | r == r'   = MI r   (t ++ t')
+                            | otherwise = MI Req (t ++ t')
 
 
 --------------------------------------------------------------------------------

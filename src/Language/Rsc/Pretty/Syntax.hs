@@ -60,6 +60,7 @@ instance PP (Id a) where
   pp (Id _ x) = text x
 
 
+indentationLevel = 4
 
 -- | Renders a list of statements as a 'String'
 renderStatements :: [Statement a] -> String
@@ -69,12 +70,11 @@ renderStatements = render . stmtList
 renderExpression :: Expression a -> String
 renderExpression = render . (ppExpression True)
 
--- Displays the statement in { ... }, unless it is a block itself.
 inBlock:: Statement a -> Doc
-inBlock s@(BlockStmt _ _) = pp s
-inBlock s                 = ssAsBlock [s]
+inBlock (BlockStmt _ ss) = stmtList ss
+inBlock s                = stmtList [s]
 
-asBlock f ss = lbrace $+$ nest 2 (f ss) $$ rbrace
+asBlock  f ss = lbrace $+$ nest indentationLevel (f ss) $$ rbrace
 
 ssAsBlock :: [Statement a] -> Doc
 ssAsBlock = asBlock stmtList
@@ -98,9 +98,9 @@ ppForInInit t = case t of
 
 caseClause :: CaseClause a -> Doc
 caseClause (CaseClause _ e ss) =
-  text "case" $+$ ppExpression True e <+> colon $$ nest 2 (stmtList ss)
+  text "case" $+$ ppExpression True e <+> colon $$ nest indentationLevel (stmtList ss)
 caseClause (CaseDefault _ ss) =
-  text "default:" $$ nest 2 (stmtList ss)
+  text "default:" $$ nest indentationLevel (stmtList ss)
 
 ppVarDecl :: Bool -> VarDecl a -> Doc
 ppVarDecl hasIn vd = case vd of
@@ -117,13 +117,13 @@ ppStatement s = case s of
   IfSingleStmt _ test cons  -> Just $ text "if" <+>
                                       parens (ppExpression True test) $$
                                       pp cons
-  IfStmt _ test cons alt    -> Just $ text "if" <+> parens (ppExpression True test) $$
-                                      pp cons $$ text "else" $$ pp alt
+  IfStmt _ test cons alt    -> Just $ headerWithBlock (text "if" <+> parens (ppExpression True test)) (inBlock cons) $$
+                                      headerWithBlock (text "else") (inBlock alt)
   SwitchStmt _ e cases      -> Just $ text "switch" <+> parens (ppExpression True e) $$
-                                      braces (nest 2 (vcat (map caseClause cases)))
+                                      braces (nest indentationLevel (vcat (map caseClause cases)))
   WhileStmt _ test body     -> Just $ text "while" <+> parens (ppExpression True test) $$ pp body
-  ReturnStmt _ Nothing      -> Just $ text "return"
-  ReturnStmt _ (Just e)     -> Just $ text "return" <+> ppExpression True e
+  ReturnStmt _ Nothing      -> Just $ text "return" <> semi
+  ReturnStmt _ (Just e)     -> Just $ text "return" <+> ppExpression True e <> semi
   DoWhileStmt _ s e         -> Just $ text "do" $$ pp s <+> text "while" <+>
                                       parens (ppExpression True e) <> semi
   BreakStmt _ Nothing       -> Just $ text "break" <> semi
@@ -155,32 +155,36 @@ ppStatement s = case s of
                                       cat (punctuate comma (map (ppVarDecl True) decls)) <>
                                       semi
   FunctionStmt _ name args (Just body)
-                            -> Just $ text "function" <+> ppId name <>
-                                      parens (cat $ punctuate comma (map ppId args)) $$
-                                      ssAsBlock body
+                            -> Just $ headerWithBlock
+                                        ( text "function" <+> ppId name <>
+                                          parens (cat $ punctuate comma (map ppId args)))
+                                        (stmtList body)
+
   FunctionStmt _ name args Nothing
                             -> Nothing
-  ClassStmt _ name body     -> Just $ text "class" <+> ppId name $$ classEltAsBlock body
+  ClassStmt _ name body     -> Just $ headerWithBlock (text "class" <+> ppId name) (classEltList body)
   ModuleStmt _ name body    -> Just $ text "module" <+> ppId name $$ ssAsBlock body
   InterfaceStmt _ x         -> Nothing
   EnumStmt _ name elts      -> Just $ text "enumeration" <+> ppId name <+>
                                       braces (cat $ punctuate comma (map ppEnumElt elts))
 
+headerWithBlock header block
+  = header <+> lbrace $$ nest indentationLevel block $$ rbrace
+
+
 ppClassElt :: ClassElt a -> Doc
 ppClassElt (Constructor _ args body) =
-  text "constructor" <>
-  parens (cat $ punctuate comma (map ppId args)) $$
-  ssAsBlock body
-ppClassElt (MemberVarDecl a s name eo) =
-  text (ite s " static " "") <> ppVarDecl True (VarDecl a name eo)
-ppClassElt (MemberMethDecl _ s name args body) =
-  text ({-ite m "public" "private" ++ -}ite s " static" "") <+>
-  ppId name <>
-  parens (cat $ punctuate comma (map ppId args)) $$
-  ssAsBlock body
+  headerWithBlock (text "constructor" <> parens (cat $ punctuate comma (map ppId args)))
+                  (stmtList body)
 
-ite True a _  = a
-ite False _ a = a
+ppClassElt (MemberVarDecl a s name eo) =
+  ifStatic s <+> ppVarDecl True (VarDecl a name eo)
+
+ppClassElt (MemberMethDecl _ s name args body) =
+  headerWithBlock (ifStatic s <+> ppId name <> parens (cat $ punctuate comma (map ppId args)))
+                  (stmtList body)
+
+ifStatic s | s = pp "static" | otherwise = empty
 
 stmtList :: [Statement a] -> Doc
 stmtList = vcat . catMaybes . map ppStatement

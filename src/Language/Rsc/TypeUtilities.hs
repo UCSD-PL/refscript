@@ -14,6 +14,7 @@ module Language.Rsc.TypeUtilities (
 
     mkDotRefFunTy
   , setPropTy
+  , idTy
 
   ) where
 
@@ -83,4 +84,12 @@ setPropTy f = mkAll [bvt, bvm] ft
     bvm     = BTV (F.symbol "M") def (Just tMut) :: F.Reftable r => BTVar r
     toTTV   :: F.Reftable r => BTVar r -> RType r
     toTTV   = (`TVar` fTop) . btvToTV
+
+
+--------------------------------------------------------------------------------------------
+idTy :: (ExprReftable F.Symbol r, F.Reftable r) => RTypeQ q r -> RTypeQ q r
+--------------------------------------------------------------------------------------------
+idTy t = mkFun ([], [B sx t], t `strengthen` uexprReft sx)
+  where
+    sx    = F.symbol "x_"
 

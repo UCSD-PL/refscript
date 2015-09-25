@@ -838,8 +838,8 @@ splitF g i (_, (FI _ m1 t1, FI _ m2 t2))
   | otherwise = (++) <$> splitC (Sub g i t1 t2)
                      <*> splitC (Sub g i t2 t1)
 
-splitM g i (_, (MI _ _ t1, MI _ _ t2))
-  = splitC (Sub g i t1 t2)
+splitM g i (_, (m, m'))
+  = cgError $ unsupportedConvFun (srcPos i) m m'
 
 
 --------------------------------------------------------------------------------
@@ -895,7 +895,7 @@ splitW (W g i t@(TRef (Gen _ ts) _))
         ws'   <- concatMapM splitW [W g i ti | ti <- ts]
         return $ ws ++ ws'
 
-splitW (W g i (TAnd ts))
+splitW (W g i (TAnd (map snd -> ts)))
   = concatMapM splitW [W g i t | t <- ts]
 
 splitW (W g i t@(TObj _ ms _))

@@ -29,14 +29,13 @@ import           Control.Applicative          ((<$>))
 import qualified Data.HashMap.Strict          as HM
 import qualified Data.HashSet                 as S
 import           Data.Monoid                  hiding ((<>))
-import           Language.Fixpoint.Misc       (intersperse)
+import           Language.Fixpoint.Misc       (intersperse, mapSnd)
 import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
--- import           Language.Rsc.Pretty
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
@@ -78,7 +77,7 @@ instance Free (RType r) where
   free (TPrim _ _)          = S.empty
   free (TVar α _)           = S.singleton α
   free (TOr ts)             = free ts
-  free (TAnd ts)            = free ts
+  free (TAnd ts)            = free $ snd <$> ts
   free (TRef n _)           = free n
   free (TObj m es _)        = free m `mappend` free es
   free (TClass t)           = free t
@@ -102,7 +101,7 @@ instance Free (FieldInfo r) where
   free (FI _ _ t)           = free t
 
 instance Free (MethodInfo r) where
-  free (MI _ _ t)           = free t
+  free (MI _ mts)           = free $ map snd mts
 
 instance Free a => Free [a] where
   free                      = S.unions . map free
@@ -117,7 +116,6 @@ instance Free (Fact r) where
   free (PhiVarTy (_,t))     = free t
   free (TypInst _ _ ts)     = free ts
   free (EltOverload _ t)    = free t
-  free (Overload _ t)       = free t
   free (VarAnn _ _ t )      = free t
   free (FieldAnn f)         = free f
   free (MethAnn m)          = free m
@@ -187,7 +185,6 @@ instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   apply θ (PhiVarTy (v,t))  = PhiVarTy . (v,) $ apply θ t
   apply θ (TypInst i ξ ts)  = TypInst i ξ     $ apply θ ts
   apply θ (EltOverload ξ t) = EltOverload ξ   $ apply θ t
-  apply θ (Overload ξ t)    = Overload ξ      $ apply θ t
   apply θ (VarAnn l a t)    = VarAnn l a      $ apply θ t
   apply θ (FieldAnn f)      = FieldAnn        $ apply θ f
   apply θ (MethAnn t)       = MethAnn         $ apply θ t
@@ -200,7 +197,7 @@ instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   apply _ a                 = a
 
 instance F.Reftable r => SubstitutableQ q r (MethodInfoQ q r) where
-  apply θ (MI ms m t)       = MI ms m (apply θ t)
+  apply θ (MI o mts)        = MI o (mapSnd (apply θ) <$> mts)
 
 instance F.Reftable r => SubstitutableQ q r (FieldInfoQ q r) where
   apply θ (FI ms m t)       = FI ms (apply θ m) (apply θ t)
@@ -273,7 +270,7 @@ appTy :: F.Reftable r => RSubstQ q r -> RTypeQ q r -> RTypeQ q r
 appTy _        (TPrim p r)   = TPrim p r
 appTy (Su m) t@(TVar α r)    = (HM.lookupDefault t α m) `strengthen` r
 appTy θ        (TOr ts)      = TOr (apply θ ts)
-appTy θ        (TAnd ts)     = TAnd (apply θ ts)
+appTy θ        (TAnd ts)     = TAnd (mapSnd (apply θ) <$> ts)
 appTy θ        (TRef n r)    = TRef (apply θ n) r
 appTy θ        (TObj m es r) = TObj (apply θ m) (apply θ es) r
 appTy θ        (TClass t)    = TClass (apply θ t)
@@ -298,7 +295,7 @@ instance (F.Reftable r) => Eq (FieldInfo r) where
   FI k t1 t2 == FI k' t1' t2' = k == k' && t1 == t1' && t2 == t2'
 
 instance (F.Reftable r) => Eq (MethodInfo r) where
-  MI k t1 t2 == MI k' t1' t2' = k == k' && t1 == t1' && t2 == t2'
+  MI k mts == MI k' mts' = k == k' && mts == mts'
 
 instance (F.Reftable r) => Eq (Bind r) where
   B x t == B x' t' = x == x' && t == t'
@@ -310,17 +307,16 @@ instance F.Reftable r => Eq (BTVar r) where
   BTV _ _ c1 == BTV _ _ c2 = c1 == c2
 
 instance (F.Reftable r) => Eq (RType r) where
-  TPrim p _ == TPrim p' _  = p == p'
-  TVar α _  == TVar α' _   = α == α'
-  TOr ts    == TOr ts'     = ts == ts'
-  TAnd ts   == TAnd ts'    = ts == ts'
-  TRef g _  == TRef g' _   = g == g'
-  TObj m ms _  == TObj m' ms' _
-                           = m == m && ms == ms'
-  TClass g  == TClass g'   = g == g'
-  TMod n    == TMod n'     = n == n'
+  TPrim p _    == TPrim p' _    = p == p'
+  TVar α _     == TVar α' _     = α == α'
+  TOr ts       == TOr ts'       = ts == ts'
+  TAnd ts      == TAnd ts'      = ts == ts'
+  TRef g _     == TRef g' _     = g == g'
+  TObj m ms _  == TObj m' ms' _ = m == m && ms == ms'
+  TClass g     == TClass g'     = g == g'
+  TMod n       == TMod n'       = n == n'
   TAll v@(BTV _ b _) t == TAll v'@(BTV _ b' _) t'
-                           = b == b' && t == appTy θ t'
+                                = b == b' && t == appTy θ t'
     where
       θ = fromList [(btvToTV v', tVar $ btvToTV v)]
   TFun bs o _ == TFun bs' o' _ = bs == bs' && o == o'

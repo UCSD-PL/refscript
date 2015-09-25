@@ -21,6 +21,7 @@ import qualified Data.Text                       as T
 import qualified Data.Traversable                as T
 import qualified Language.Fixpoint.Config        as C
 import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Files         (Ext (..), extFileName, tempDirectory)
 import           Language.Fixpoint.Interface     (solve)
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types         as F
@@ -54,6 +55,8 @@ import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Language.Rsc.TypeUtilities
 import           System.Console.CmdArgs.Default
+import           System.FilePath.Posix           (dropExtension)
+import           System.IO                       (writeFile)
 
 import qualified Data.Foldable                   as FO
 import           Text.PrettyPrint.HughesPJ
@@ -72,16 +75,25 @@ verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
       ssa <- EitherIO   $ ssaTransform p cha
       _   <- liftIO     $ donePhase Loud "Typecheck"
       tc  <- EitherIO   $ typeCheck cfg ssa cha
+      _   <- liftIO     $ dumpJS f "-tc" tc
       _   <- liftIO     $ donePhase Loud "Generate Constraints"
-      -- cgi <- pure       $ generateConstraints cfg (trace (show (ppCasts tc)) tc) cha
       cgi <- pure       $ generateConstraints cfg tc cha
       res <- liftIO     $ solveConstraints tc f cgi
       return res
 
 
+-- | Debug info
+--
+dumpJS f s p = writeFile (extFileName Ts (dropExtension f ++ s))
+                         (ppshow p ++ show (ppCasts p))
+
 ppCasts (Rsc { code = Src fs })
-  = fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
-                                  , TCast _ c <- fFact a ]
+   =  text ""
+  $+$ text "/*"
+  $+$ nest 2 (fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+                                            , TCast _ c <- fFact a ]
+             )
+  $+$ text "*/"
 
 
 -- | solveConstraints: Call solve with `ueqAllSorts` enabled.
@@ -378,7 +390,7 @@ consVarDecl g (VarDecl l x (Just e))
           Just   <$> cgEnvAdds "consVarDecl" [(x, VI Local WriteLocal Initialized t)] gy
 
       Just (VI loc  WriteLocal _ t) ->
-        mseq (consCall g l "consVarDecl" [(e, Just t)] $ localTy t) $ \(y,gy) -> do
+        mseq (consCall g l "consVarDecl" [(e, Just t)] $ idTy t) $ \(y,gy) -> do
           declT   <- cgSafeEnvFindTyM y gy
           Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc WriteLocal Initialized declT)] gy
 
@@ -393,7 +405,7 @@ consVarDecl g (VarDecl l x (Just e))
 
       -- | ReadOnly
       Just (VI loc RdOnly _ t) ->
-        mseq (consCall g l "consVarDecl" [(e, Just t)] $ localTy t) $ \(y,gy) -> do
+        mseq (consCall g l "consVarDecl" [(e, Just t)] $ idTy t) $ \(y,gy) -> do
           declT   <- cgSafeEnvFindTyM y gy
           Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc RdOnly Initialized declT)] gy
 
@@ -407,43 +419,23 @@ consVarDecl g v@(VarDecl _ x Nothing)
           error "LQ: consVarDecl this shouldn't happen"
 
 
--- | `consExprT g e t` checks expression @e@ against type @t@.
+-- | `consExprT l g e t` checks expression @e@ against type @t@.
 --   Special-casing FuncExpr because we can't infer a type for a
 --   function expression and then check for it - it needs to be
 --   present in the first place.
 --   XXX: perhaps other cases should work similarly.
 --
 --------------------------------------------------------------------------------
-consExprT :: CGEnv -> Expression AnnLq -> RefType -> CGM (Maybe (Id AnnLq, CGEnv))
+consExprT :: AnnLq -> CGEnv -> String -> Expression AnnLq -> RefType -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
-consExprT g e@FuncExpr{} t = consExpr g e (Just t)
-consExprT g e t = consCall  g (getAnnotation e) "consExprT" [(e, Just t)] (localTy t)
+consExprT l g fn e@FuncExpr{} t = consExpr g e (Just t)
+consExprT l g fn e            t = consCall g l fn [(e, Just t)] (idTy t)
 
-
--- --------------------------------------------------------------------------------
--- consClassElts :: IsLocated l => l -> CGEnv -> TypeDecl F.Reft -> [ClassElt AnnLq] -> CGM ()
--- --------------------------------------------------------------------------------
--- consClassElts l g d@(ID nm _ vs _ es) cs
---   = do  -- g0   <- cgEnvAdds "consClassElts-2" thisInfo g -- XXX: Add these at specific elements only
---         -- g1   <- cgEnvAdds "consClassElts-1" fs g  -- Add imm fields into scope beforehand
---         mapM_ (consClassElt g d) cs
---   where
---     -- fs = [ (ql f, VI ro ii t) | ((_,InstanceMember), (FieldSig f _ m t)) <- M.toList es
---     --                           , isImmutable m ]
---     -- TODO: Make location more precise
---     --
---     -- PV: qualified name here used as key -> ok
---     ql        = mkQualSym $ F.symbol thisId
---     ro        = ReadOnly
---     ii        = Initialized
---     this_t    = TRef nm (tVar <$> vs) fTop
---     thisInfo  = [(this, VI ReadOnly Initialized this_t)]
---     this      = Loc (srcPos l) thisId
 
 --------------------------------------------------------------------------------
 consClassElt :: CGEnv -> TypeDecl F.Reft -> ClassElt AnnLq -> CGM ()
 --------------------------------------------------------------------------------
-consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) _) (Constructor l xs body)
+consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
   = do  let g = g0
               & initClassInstanceEnv sig
               & initClassCtorEnv sig
@@ -452,11 +444,12 @@ consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) _) (Constructor l xs body)
         mapM_ (consCallable l g' ctor xs body) ts
   where
     thisT = TRef (Gen nm (map btVar bs)) fTop
-    ms    = typeMembersOfType (envCHA g0) thisT
     ctor  = builtinOpId BICtor
     cExit = builtinOpId BICtorExit
+
     -- substOffsetThis exitTy ???
     exitP = [(cExit, VI Local Ambient Initialized $ mkFun (bs, xts, ret))]
+
     ret   = thisT `strengthen` F.reft (F.vv Nothing) (F.pAnd $ bnd <$> out)
     xts   = sortBy c_sym [ B x t' | (x, FI _ _ t) <- F.toListSEnv (tm_prop ms)
                                   , let t' = unqualifyThis g0 thisT t ]
@@ -464,9 +457,8 @@ consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) _) (Constructor l xs body)
     bnd f = F.PAtom F.Eq (mkOffset v_sym $ F.symbolString f) (F.eVar f)
     v_sym = F.symbol $ F.vv Nothing
     c_sym = on compare b_sym
-    ctorT | Just t <- tm_ctor ms
-          = mkAll bs t -- XXX $ remThisBinding t
-          | otherwise = die $ unsupportedNonSingleConsTy (srcPos l)
+
+    ctorT = fromMaybe (die $ unsupportedNonSingleConsTy (srcPos l)) (tm_ctor ms)
 
 -- | Static field
 --
@@ -490,8 +482,9 @@ consClassElt _ _ (MemberVarDecl l False x _)
 -- | Static method
 --
 consClassElt g (TD sig ms) (MemberMethDecl l True x xs body)
-  | Just (MI _ _ t) <- F.lookupSEnv (F.symbol x) $ tm_smeth ms
-  = do  its <- cgFunTys l x xs t
+  | Just (MI _ mts) <- F.lookupSEnv (F.symbol x) $ tm_smeth ms
+  = do  let t = mkAnd $ map snd mts
+        its <- cgFunTys l x xs t
         mapM_ (consCallable l g x xs body) its
   | otherwise
   = cgError  $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
@@ -499,15 +492,16 @@ consClassElt g (TD sig ms) (MemberMethDecl l True x xs body)
 -- | Instance method
 --
 consClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
-  | Just (MI _ m t) <- F.lookupSEnv (F.symbol x) (tm_meth ms)
-  = do  let g0 = g
-               & initClassInstanceEnv sig
-               & initClassMethEnv m sig
-        ft    <- cgFunTys l x xs t
-        mapM_ (consCallable l g0 x xs body) ft
+  | Just (MI _ mts) <- F.lookupSEnv (F.symbol x) (tm_meth ms)
+  = do  let (ms, ts) = unzip mts
+        its         <- cgFunTys l x xs $ mkAnd ts
+        let mts'     = zip ms its
+        mapM_ (\(m,t) -> consCallable l (mkEnv m) x xs body t) mts'
 
   | otherwise
   = cgError $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
+  where
+    mkEnv m = g & initClassInstanceEnv sig & initClassMethEnv m sig
 
 
 --------------------------------------------------------------------------------
@@ -518,13 +512,13 @@ consAsgn l g x e =
     -- This is the first time we initialize this variable
     Just (VI loc WriteGlobal Uninitialized t) ->
       do  t' <- freshenType WriteGlobal g l t
-          mseq (consExprT g e t') $ \(_, g') -> do
+          mseq (consExprT l g "assign" e t') $ \(_, g') -> do
             g'' <- cgEnvAdds "consAsgn-0" [(x, VI loc WriteGlobal Initialized t')] g'
             return $ Just g''
 
-    Just (VI _ WriteGlobal _ t) -> mseq (consExprT g e t) $ \(_, g') ->
+    Just (VI _ WriteGlobal _ t) -> mseq (consExprT l g "assign" e t) $ \(_, g') ->
                                      return $ Just g'
-    Just (VI loc a i t) -> mseq (consExprT g e t) $ \(x', g') -> do
+    Just (VI loc a i t) -> mseq (consExprT l g "assign" e t) $ \(x', g') -> do
                              t      <- cgSafeEnvFindTyM x' g'
                              Just  <$> cgEnvAdds "consAsgn-1" [(x, VI loc a i t)] g'
     Nothing -> mseq (consExpr g e Nothing) $ \(x', g') -> do
@@ -543,11 +537,7 @@ consExpr g (Cast_ l e) tCtx
       CDead errs t -> consDeadCode g l errs t
       _            -> consExpr g e tCtx
 
---     CNo         -> mseq (consExpr g e Nothing) $ return . Just
---     CUp t t'    -> mseq (consExpr g e Nothing) $ \(x,g') -> Just <$> consUpCast   g' l x t t'
---     CDn t t'    -> mseq (consExpr g e Nothing) $ \(x,g') -> Just <$> consDownCast g' l x t t'
-
--- | < t > e
+-- | <T>e
 consExpr g ex@(Cast l e) _
   | [tc] <- [ ct | UserCast ct <- fFact l ]
   = do  opty <- fixCastTy tc <$> cgSafeEnvFindTyM (builtinOpId BICastExpr) g
@@ -812,36 +802,23 @@ consDeadCode g l es t
 --     made explicit by this point.
 --
 --------------------------------------------------------------------------------
-consCall :: PP a
-         => CGEnv
-         -> AnnLq
-         -> a
-         -> [(Expression AnnLq, Maybe RefType)]
-         -> RefType
-         -> CGM (Maybe (Id AnnLq, CGEnv))
+consCall :: PP a => CGEnv -> AnnLq -> a -> [(Expression AnnLq, Maybe RefType)]
+                 -> RefType -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
-
---   1. Fill in @instantiateFTy@ to get a monomorphic instance of @ft@
---      i.e. the callee's RefType, at this call-site (You may want
---      to use @freshTyInst@)
---   2. Use @consExpr@ to determine types for arguments @es@
---   3. Use @subType@ to add constraints between the types from (step 2) and (step 1)
 --   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in
 --      output type of callee.
---
---   5. If multiple are valid, pick the first one
 --
 consCall g l fn ets ft0
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts <- mapM (`cgSafeEnvFindTyM` g') xes
-      case ol of
+      case validOverloads of
         (ft: _) -> consInstantiate l g' fn ft ts xes
-        _       -> cgError $ errorNoMatchCallee (srcPos l) fn (tts ts) (tts callSigs)
+        _       -> cgError $ errorNoMatchCallee (srcPos l) fn ts validOverloads
   where
-    ol         = [ lt | Overload cx t <- fFact l, cge_ctx g == cx, lt <- callSigs, att t == att lt ]
-    callSigs   = extractCall g ft0
-    att t      = (\(a,b,_) -> (a,b)) <$> bkFun (toType t)
-    tts        = (toType <$>)
+    validOverloads = [ mkFun t | Overload cx i <- fFact l     -- all overloads
+                               , cge_ctx g == cx              -- right context
+                               , (j, t) <- extractCall g ft0  -- extract callables
+                               , i == j ]                     -- pick the one resolved at TC
 
 
 -- | `consInstantiate` does the subtyping between the types of the arguments
@@ -906,14 +883,12 @@ instantiateFTy l g fn ft@(bkAll -> (bs, t))
 consCallCondExpr g l fn ets ft0
   = mseq (consCondExprArgs (srcPos l) g ets) $ \(xes, g') -> do
       ts <- T.mapM (`cgSafeEnvFindTyM` g') xes
-      case [ lt | Overload cx t <- fFact l
-                , cge_ctx g == cx
-                , lt <- callSigs
-                , toType t == toType lt ] of
+      case validOverloads of
         [ft] -> consInstantiate l g' fn ft ts xes
-        _    -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
+        _    -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> validOverloads)
   where
-    callSigs    = extractCall g ft0
+    validOverloads = [ mkFun t | Overload cx i <- fFact l, cge_ctx g == cx
+                               , (j, t) <- extractCall g ft0, i == j ]
 
 
 -----------------------------------------------------------------------------------

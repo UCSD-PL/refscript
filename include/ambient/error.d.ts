@@ -1,13 +1,13 @@
 
-interface Error {
+interface Error<M extends Immutable> {
     name: string;
     message: string;
 }
 
-interface ErrorConstructor {
-    new (message?: string): Error;
-    (message?: string): Error;
-    prototype: Error;
+interface ErrorConstructor<M extends Immutable> {
+    new (message?: string): Error<M>;
+    (message?: string): Error<M>;
+    prototype: Error<M>;
 }
 
-declare var Error: ErrorConstructor;
+declare var Error: ErrorConstructor<Immutable>;

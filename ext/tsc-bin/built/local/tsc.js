@@ -2443,7 +2443,9 @@ var ts;
         Class_0_extends_other_classes_so_needs_to_have_an_explicit_constructor: { code: 10034, category: ts.DiagnosticCategory.Unimplemented, key: "Class '{0}' extends other classes so needs to have an explicit constructor." },
         Constructor_parent_has_not_been_set: { code: 10035, category: ts.DiagnosticCategory.Bug, key: "Constructor parent has not been set." },
         Invalid_enumeration_entry_for_0: { code: 10036, category: ts.DiagnosticCategory.Unimplemented, key: "Invalid enumeration entry for '{0}'." },
-        RefScript_does_not_support_the_cast_Colon_0: { code: 10037, category: ts.DiagnosticCategory.Unimplemented, key: "RefScript does not support the cast: '{0}'." }
+        RefScript_does_not_support_the_cast_Colon_0: { code: 10037, category: ts.DiagnosticCategory.Unimplemented, key: "RefScript does not support the cast: '{0}'." },
+        The_first_type_parameter_of_class_0_needs_to_extend_a_mutability_type: { code: 10038, category: ts.DiagnosticCategory.Error, key: "The first type parameter of class '{0}' needs to extend a mutability type." },
+        The_first_type_parameter_of_interface_0_needs_to_extend_a_mutability_type: { code: 10039, category: ts.DiagnosticCategory.Error, key: "The first type parameter of interface '{0}' needs to extend a mutability type." }
     };
 })(ts || (ts = {}));
 /// <reference path="core.ts"/>
@@ -11116,8 +11118,8 @@ var ts;
         return symbol.id;
     }
     ts.getSymbolId = getSymbolId;
-    function createTypeChecker(host, produceDiagnostics, refscript) {
-        if (refscript === void 0) { refscript = false; }
+    function createTypeChecker(host, produceDiagnostics) {
+        var refscript = true;
         var cancellationToken;
         var Symbol = ts.objectAllocator.getSymbolConstructor();
         var Type = ts.objectAllocator.getTypeConstructor();
@@ -20637,6 +20639,17 @@ var ts;
                 checkIndexConstraints(type);
                 checkTypeForDuplicateIndexSignatures(node);
             }
+            if (node.name && (ts.indexOfEq([], ts.getTextOfNode(node.name)) !== -1))
+                return;
+            if (node.typeParameters && node.typeParameters.length > 0) {
+                var firstTypeParamter = node.typeParameters[0];
+                if (firstTypeParamter.constraint && (ts.indexOfEq(["ReadOnly", "Mutable", "Immutable"], ts.getTextOfNode(firstTypeParamter.constraint)) < 0)) {
+                    error(node, ts.Diagnostics.The_first_type_parameter_of_class_0_needs_to_extend_a_mutability_type, [ts.getTextOfNode(node.name)]);
+                }
+            }
+            else {
+                error(node, ts.Diagnostics.The_first_type_parameter_of_class_0_needs_to_extend_a_mutability_type, [ts.getTextOfNode(node.name)]);
+            }
         }
         function getTargetSymbol(s) {
             return s.flags & 16777216 ? getSymbolLinks(s).target : s;
@@ -20808,6 +20821,19 @@ var ts;
             ts.forEach(node.members, checkSourceElement);
             if (produceDiagnostics) {
                 checkTypeForDuplicateIndexSignatures(node);
+            }
+            if (node.name && (ts.indexOfEq(["Boolean", "Error", "Function", "Number", "NumberConstructor", "ErrorConstructor", "ReadOnly",
+                "AssignsFields", "Immutable", "Mutable", "RegExp", "RegExpExecArray", "String", "StringConstructor",
+                "Object", "IArguments"], ts.getTextOfNode(node.name)) !== -1))
+                return;
+            if (node.typeParameters && node.typeParameters.length > 0) {
+                var firstTypeParamter = node.typeParameters[0];
+                if (firstTypeParamter.constraint && (ts.indexOfEq(["ReadOnly", "Mutable", "Imuutable"], ts.getTextOfNode(firstTypeParamter.constraint)) < 0)) {
+                    error(node, ts.Diagnostics.The_first_type_parameter_of_interface_0_needs_to_extend_a_mutability_type, [ts.getTextOfNode(node.name)]);
+                }
+            }
+            else {
+                error(node, ts.Diagnostics.The_first_type_parameter_of_interface_0_needs_to_extend_a_mutability_type, [ts.getTextOfNode(node.name)]);
             }
         }
         function checkTypeAliasDeclaration(node) {
@@ -25041,7 +25067,7 @@ var ts;
                     this.opKind = RsPrefixOpKind.PrefixTypeof;
                     break;
                 default:
-                    throw new Error("[refscript] unsupported prefix kind: " + ts.SyntaxKind[kind]);
+                    throw new Error("[refscript] unsupported prefix kind: " + kind);
             }
         }
         RsPrefixOp.prototype.serialize = function () {
@@ -25477,9 +25503,9 @@ var ts;
         return RsMemberVarDecl;
     })(RsClassElt);
     ts.RsMemberVarDecl = RsMemberVarDecl;
-    var RsMemberMethDef = (function (_super) {
-        __extends(RsMemberMethDef, _super);
-        function RsMemberMethDef(span, ann, sta, name, args, body) {
+    var RsMemberMethDecl = (function (_super) {
+        __extends(RsMemberMethDecl, _super);
+        function RsMemberMethDecl(span, ann, sta, name, args, body) {
             _super.call(this, span, ann);
             this.span = span;
             this.ann = ann;
@@ -25488,24 +25514,8 @@ var ts;
             this.args = args;
             this.body = body;
         }
-        RsMemberMethDef.prototype.serialize = function () {
-            return this._toAeson("MemberMethDef", [this.sta, this.name.serialize(), this.args.serialize(), this.body.serialize()], AesonCtor.WITH_CTOR);
-        };
-        return RsMemberMethDef;
-    })(RsClassElt);
-    ts.RsMemberMethDef = RsMemberMethDef;
-    var RsMemberMethDecl = (function (_super) {
-        __extends(RsMemberMethDecl, _super);
-        function RsMemberMethDecl(span, ann, sta, name, args) {
-            _super.call(this, span, ann);
-            this.span = span;
-            this.ann = ann;
-            this.sta = sta;
-            this.name = name;
-            this.args = args;
-        }
         RsMemberMethDecl.prototype.serialize = function () {
-            return this._toAeson("MemberMethDecl", [this.sta, this.name.serialize(), this.args.serialize()], AesonCtor.WITH_CTOR);
+            return this._toAeson("MemberMethDecl", [this.sta, this.name.serialize(), this.args.serialize(), this.body.serialize()], AesonCtor.WITH_CTOR);
         };
         return RsMemberMethDecl;
     })(RsClassElt);
@@ -25896,6 +25906,14 @@ var ts;
         return ConstructorDeclarationAnnotation;
     })(Annotation);
     ts.ConstructorDeclarationAnnotation = ConstructorDeclarationAnnotation;
+    var MethodDeclarationAnnotation = (function (_super) {
+        __extends(MethodDeclarationAnnotation, _super);
+        function MethodDeclarationAnnotation(sourceSpan, content) {
+            _super.call(this, sourceSpan, AnnotationKind.MethodRawSpec, content);
+        }
+        return MethodDeclarationAnnotation;
+    })(Annotation);
+    ts.MethodDeclarationAnnotation = MethodDeclarationAnnotation;
     var TypeSignatureAnnotation = (function (_super) {
         __extends(TypeSignatureAnnotation, _super);
         function TypeSignatureAnnotation(sourceSpan, content) {
@@ -25968,14 +25986,6 @@ var ts;
         return FieldAnnotation;
     })(Annotation);
     ts.FieldAnnotation = FieldAnnotation;
-    var MethodAnnotation = (function (_super) {
-        __extends(MethodAnnotation, _super);
-        function MethodAnnotation(sourceSpan, content) {
-            _super.call(this, sourceSpan, AnnotationKind.MethodRawSpec, content);
-        }
-        return MethodAnnotation;
-    })(Annotation);
-    ts.MethodAnnotation = MethodAnnotation;
     var CallAnnotation = (function (_super) {
         __extends(CallAnnotation, _super);
         function CallAnnotation(sourceSpan, content) {
@@ -26083,18 +26093,18 @@ var ts;
     ts.makeFunctionDeclarationAnnotation = makeFunctionDeclarationAnnotation;
     function makeConstructorAnnotations(s, srcSpan) {
         var tokens = stringTokens(s);
-        if (!tokens || tokens[0] !== "constructor")
+        if (!tokens || tokens[0] !== "new")
             throw new Error("[refscript] Invalid constructor annotation: " + s);
         return [new ConstructorDeclarationAnnotation(srcSpan, s)];
     }
     ts.makeConstructorAnnotations = makeConstructorAnnotations;
-    function makeMethodAnnotations(s, srcSpan) {
+    function makeMethodDeclarationAnnotations(s, srcSpan) {
         var tokens = stringTokens(s);
         if (isReservedAnnotationPrefix(tokens[0]))
             throw new Error("[refscript] Invalid method annotation: " + s);
-        return [new MethodAnnotation(srcSpan, s)];
+        return [new MethodDeclarationAnnotation(srcSpan, s)];
     }
-    ts.makeMethodAnnotations = makeMethodAnnotations;
+    ts.makeMethodDeclarationAnnotations = makeMethodDeclarationAnnotations;
     function makePropertyAnnotations(s, srcSpan) {
         var tokens = stringTokens(s);
         if (isReservedAnnotationPrefix(tokens[0]))
@@ -26944,6 +26954,8 @@ var ts;
                 switch (node.kind) {
                     case ts.SyntaxKind.Constructor:
                         return constructorDeclarationToRsClassElts(state, node);
+                    case ts.SyntaxKind.MethodDeclaration:
+                        return methodDeclarationToRsClassElts(state, node);
                 }
                 throw new Error("[refscript] Unimplemented nodeToRsClassElts for " + ts.SyntaxKind[node.kind]);
             }
@@ -27071,11 +27083,13 @@ var ts;
                     case ts.SyntaxKind.EqualsEqualsEqualsToken:
                     case ts.SyntaxKind.AmpersandAmpersandToken:
                     case ts.SyntaxKind.BarBarToken:
+                    case ts.SyntaxKind.AsteriskToken:
+                    case ts.SyntaxKind.InstanceOfKeyword:
                         return new ts.RsInfixExpr(nodeToSrcSpan(node), [], new ts.RsInfixOp(ts.getTextOfNode(node.operatorToken)), nodeToRsExp(state, node.left), nodeToRsExp(state, node.right));
                     case ts.SyntaxKind.EqualsToken:
                         return new ts.RsAssignExpr(nodeToSrcSpan(node), [], new ts.RsAssignOp(ts.getTextOfNode(node.operatorToken)), nodeToRsLval(state, node.left), nodeToRsExp(state, node.right));
                     default:
-                        throw new Error("[refscript] BinaryExpression toRsExp Expression for: " + ts.SyntaxKind[node.operatorToken.kind]);
+                        throw new Error("[refscript] BinaryExpression toRsExp Expression for: " + node.operatorToken.kind);
                 }
             }
             function literalExpressionToRsExp(state, node) {
@@ -27190,7 +27204,7 @@ var ts;
                                     return ["new " + checker.methodToRscString(constructorSignature, member)];
                                 }
                             case ts.SyntaxKind.MethodSignature:
-                                var methodAnnotations = nodeAnnotations(member, ts.makeMethodAnnotations);
+                                var methodAnnotations = nodeAnnotations(member, ts.makeMethodDeclarationAnnotations);
                                 if (methodAnnotations.length > 0) {
                                     return [methodAnnotations[0].content];
                                 }
@@ -27269,16 +27283,17 @@ var ts;
                     }
                 });
                 var containingClass = ts.getContainingClass(node);
-                var constructorSignatureInfo = containingClass.members.map(function (member) {
+                var constructorSignatureInfo = ts.concat(containingClass.members.map(function (member) {
                     if (member.kind === ts.SyntaxKind.Constructor) {
                         var constructorDeclaration = member;
                         var signature = checker.getSignatureFromDeclaration(constructorDeclaration);
-                        return {
-                            ambient: !(constructorDeclaration.body),
-                            signature: signature
-                        };
+                        return [{
+                                ambient: !(constructorDeclaration.body),
+                                signature: signature
+                            }];
                     }
-                });
+                    return [];
+                }));
                 var constructorSignatures = (constructorSignatureInfo.some(function (i) { return i.ambient; })) ?
                     (constructorSignatureInfo.filter(function (i) { return i.ambient; }).map(function (i) { return i.signature; })) :
                     (constructorSignatureInfo.map(function (i) { return i.signature; }));
@@ -27287,10 +27302,32 @@ var ts;
                     var sourceSpan = nodeToSrcSpan(signatureDeclaration);
                     var binderAnnotations = nodeAnnotations(signatureDeclaration, ts.makeConstructorAnnotations);
                     return (binderAnnotations.length === 0) ?
-                        [new ts.ConstructorDeclarationAnnotation(sourceSpan, "constructor :: " + checker.methodToRscString(signature, signatureDeclaration))] :
+                        [new ts.ConstructorDeclarationAnnotation(sourceSpan, "new " + checker.methodToRscString(signature, signatureDeclaration))] :
                         binderAnnotations;
                 }));
                 return [new ts.RsConstructor(nodeToSrcSpan(node), constructorDeclarationAnnotations, nodeArrayToRsAST(state, node.parameters, nodeToRsId), nodeArrayToRsAST(state, [], nodeToRsStmt))];
+            }
+            function methodDeclarationToRsClassElts(state, node) {
+                var isAmbient = !!(node.flags & 2);
+                if (!node.body && !isAmbient) {
+                    return [];
+                }
+                var nameText = ts.getTextOfNode(node.name);
+                var type = checker.getTypeAtLocation(node);
+                var signatures = checker.getSignaturesOfType(type, 0);
+                var methodDeclarationAnnotations = ts.concat(signatures.map(function (signature) {
+                    var signatureDeclaration = signature.declaration;
+                    var sourceSpan = nodeToSrcSpan(signatureDeclaration);
+                    var binderAnnotations = nodeAnnotations(signatureDeclaration, ts.makeMethodDeclarationAnnotations);
+                    if (binderAnnotations.length === 0) {
+                        return [new ts.MethodDeclarationAnnotation(sourceSpan, nameText + checker.methodToRscString(signature, signatureDeclaration))];
+                    }
+                    else {
+                        return binderAnnotations;
+                    }
+                }));
+                var static = !!(node.flags & 128);
+                return [new ts.RsMemberMethDecl(nodeToSrcSpan(node), methodDeclarationAnnotations, static, new ts.RsId(nodeToSrcSpan(node.name), [], nameText), nodeArrayToRsAST(state, node.parameters, nodeToRsId), new ts.RsList(node.body.statements.map(function (statement) { return nodeToRsStmt(state, statement); })))];
             }
             function nodeAnnotations(node, creator) {
                 if (!node)
@@ -33074,6 +33111,7 @@ var ts;
 /// <reference path="core.ts" />
 var ts;
 (function (ts) {
+    ts.preludePath = "/home/pvekris/Documents/Research/rsc/RefScript/include/prelude.d.ts";
     ts.programTime = 0;
     ts.emitTime = 0;
     ts.ioReadTime = 0;
@@ -33261,7 +33299,7 @@ var ts;
         outDir: "built",
         rootDir: ".",
         sourceMap: false,
-        lib: ts.combinePaths(ts.getDirectoryPath(ts.normalizePath(ts.sys.getExecutingFilePath())), "lib.d.ts")
+        lib: ts.preludePath
     };
     function createCompilerHost(options, setParentNodes) {
         var currentDirectory;
@@ -33324,7 +33362,7 @@ var ts;
                 if (options.lib) {
                     return ts.combinePaths(ts.normalizePath(ts.sys.getCurrentDirectory()), options.lib);
                 }
-                return ts.combinePaths(ts.getDirectoryPath(ts.normalizePath(ts.sys.getExecutingFilePath())), ts.getDefaultLibFileName(options));
+                return ts.preludePath;
             },
             writeFile: writeFile,
             getCurrentDirectory: function () { return currentDirectory || (currentDirectory = ts.sys.getCurrentDirectory()); },
@@ -33499,10 +33537,10 @@ var ts;
             };
         }
         function getDiagnosticsProducingTypeChecker() {
-            return diagnosticsProducingTypeChecker || (diagnosticsProducingTypeChecker = ts.createTypeChecker(program, true, true));
+            return diagnosticsProducingTypeChecker || (diagnosticsProducingTypeChecker = ts.createTypeChecker(program, true));
         }
         function getTypeChecker() {
-            return noDiagnosticsTypeChecker || (noDiagnosticsTypeChecker = ts.createTypeChecker(program, false, true));
+            return noDiagnosticsTypeChecker || (noDiagnosticsTypeChecker = ts.createTypeChecker(program, false));
         }
         function emit(sourceFile, writeFileCallback, cancellationToken) {
             var _this = this;
@@ -34036,6 +34074,10 @@ var ts;
         },
         {
             name: "noLib",
+            type: "boolean"
+        },
+        {
+            name: "refscript",
             type: "boolean"
         },
         {
@@ -34683,18 +34725,31 @@ var ts;
                     ? ts.ExitStatus.DiagnosticsPresent_OutputsSkipped
                     : ts.ExitStatus.Success;
             }
-            if (diagnostics.length > 0) {
-                dumpRefScriptDiagnostics(diagnostics, []);
-                return ts.ExitStatus.DiagnosticsPresent_OutputsSkipped;
+            if (compilerOptions.refscript) {
+                if (diagnostics.length > 0) {
+                    dumpRefScriptDiagnostics(diagnostics, []);
+                    return ts.ExitStatus.DiagnosticsPresent_OutputsSkipped;
+                }
+                try {
+                    var rscOutput = program.toRsc();
+                    dumpRefScriptDiagnostics(rscOutput.diagnostics, rscOutput.jsonFiles);
+                    return ts.ExitStatus.Success;
+                }
+                catch (e) {
+                    dumpRefScriptUnknownError(e.stack);
+                    throw e;
+                }
             }
-            try {
-                var rscOutput = program.toRsc();
-                dumpRefScriptDiagnostics(rscOutput.diagnostics, rscOutput.jsonFiles);
+            else {
+                reportDiagnostics(diagnostics);
+                var emitOutput = program.emit();
+                if (emitOutput.emitSkipped) {
+                    return ts.ExitStatus.DiagnosticsPresent_OutputsSkipped;
+                }
+                if (diagnostics.length > 0 || emitOutput.diagnostics.length > 0) {
+                    return ts.ExitStatus.DiagnosticsPresent_OutputsGenerated;
+                }
                 return ts.ExitStatus.Success;
-            }
-            catch (e) {
-                dumpRefScriptUnknownError(e.stack);
-                throw e;
             }
         }
         function dumpRefScriptDiagnostics(_diagnostics, rscOutputFiles) {

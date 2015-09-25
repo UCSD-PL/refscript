@@ -29,6 +29,7 @@ import           Data.Monoid                  hiding ((<>))
 import           Data.Text                    (pack, splitOn)
 import qualified Data.Traversable             as T
 import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Misc       (mapSnd)
 import           Language.Fixpoint.Names      (symSepName)
 import qualified Language.Fixpoint.Types      as F
 import qualified Language.Fixpoint.Visitor    as FV
@@ -100,7 +101,7 @@ instance Transformable FieldInfoQ where
   trans f αs xs (FI o t t') = FI o (trans f αs xs t) (trans f αs xs t')
 
 instance Transformable MethodInfoQ where
-  trans f αs xs (MI o m t) = MI o m (trans f αs xs t)
+  trans f αs xs (MI o mts) = MI o (mapSnd (trans f αs xs) <$> mts)
 
 instance Transformable ModuleDefQ where
   trans f αs xs (ModuleDef v t e p)
@@ -128,7 +129,6 @@ transFact f = go
     go αs xs (TypInst x y ts)  = TypInst x y   $ trans f αs xs <$> ts
 
     go αs xs (EltOverload x m) = EltOverload x $ trans f αs xs m
-    go αs xs (Overload x t)    = Overload x    $ trans f αs xs t
 
     go αs xs (VarAnn l a t)    = VarAnn l a    $ trans f αs xs <$> t
 
@@ -164,7 +164,7 @@ transRType f               = go
     go αs xs (TPrim c r)   = f αs xs $ TPrim c r
     go αs xs (TVar v r)    = f αs xs $ TVar v r
     go αs xs (TOr ts)      = f αs xs $ TOr ts'       where ts' = go αs xs <$> ts
-    go αs xs (TAnd ts)     = f αs xs $ TAnd ts'      where ts' = go αs xs <$> ts
+    go αs xs (TAnd ts)     = f αs xs $ TAnd ts'      where ts' = mapSnd (go αs xs) <$> ts
     go αs xs (TRef n r)    = f αs xs $ TRef n' r     where n'  = trans f αs xs n
     go αs xs (TObj m ms r) = f αs xs $ TObj m' ms' r where m'  = trans f αs xs m
                                                            ms' = trans f αs xs ms
@@ -226,7 +226,7 @@ instance NameTransformable FieldInfoQ where
   ntrans f g (FI o t t') = FI o (ntrans f g t) (ntrans f g t')
 
 instance NameTransformable MethodInfoQ where
-  ntrans f g (MI o m t) = MI o m (ntrans f g t)
+  ntrans f g (MI o mts)  = MI o (mapSnd (ntrans f g) <$> mts)
 
 ntransFmap ::  (F.Reftable r, Functor t)
            => (QN p -> QN q) -> (QP p -> QP q) -> t (FAnnQ p r) -> t (FAnnQ q r)
@@ -240,7 +240,7 @@ ntransFact f g = go
     go (PhiPost v)       = PhiPost       $ v
     go (TypInst x y ts)  = TypInst x y   $ ntrans f g <$> ts
     go (EltOverload x m) = EltOverload x $ ntrans f g m
-    go (Overload x t)    = Overload x    $ ntrans f g t
+    go (Overload x i)    = Overload x i
     go (VarAnn l a t)    = VarAnn l a    $ ntrans f g <$> t
     go (FieldAnn t)      = FieldAnn      $ ntrans f g t
     go (MethAnn t)       = MethAnn       $ ntrans f g t
@@ -268,7 +268,7 @@ ntransRType f g         = go
     go (TPrim p r)   = TPrim p r
     go (TVar v r)    = TVar v r
     go (TOr ts)      = TOr ts'        where ts' = go <$> ts
-    go (TAnd ts)     = TAnd ts'       where ts' = go <$> ts
+    go (TAnd ts)     = TAnd ts'       where ts' = mapSnd go <$> ts
     go (TRef n r)    = TRef n' r      where n'  = ntrans f g n
     go (TObj m ms r) = TObj m' ms' r  where m'  = ntrans f g m
                                             ms' = ntrans f g ms
@@ -302,7 +302,7 @@ emapReft f γ (TObj m xts r) = TObj (emapReft f γ m) (emapReftTM f γ xts) (f �
 emapReft f γ (TClass n)     = TClass (emapReftBGen f γ n)
 emapReft _ _ (TMod m)       = TMod m
 emapReft f γ (TOr ts)       = TOr (emapReft f γ <$> ts)
-emapReft f γ (TAnd ts)      = TAnd (emapReft f γ <$> ts)
+emapReft f γ (TAnd ts)      = TAnd (mapSnd (emapReft f γ) <$> ts)
 emapReft _ _ _              = error "Not supported in emapReft"
 
 emapReftBTV f γ (BTV s l c) = BTV s l $ emapReft f γ <$> c
@@ -320,7 +320,7 @@ emapReftTM f γ (TM p m sp sm c k s n)
        (emapReft f γ <$> n)
 
 emapReftFI f γ (FI m t1 t2) = FI m (emapReft f γ t1) (emapReft f γ t2)
-emapReftMI f γ (MI m n  t2) = MI m n (emapReft f γ t2)
+emapReftMI f γ (MI m mts  ) = MI m (mapSnd (emapReft f γ) <$> mts)
 
 --------------------------------------------------------------------------------
 mapReftM :: (F.Reftable r, PP r, Applicative m, Monad m)
@@ -331,7 +331,7 @@ mapReftM f (TPrim c r)     = TPrim c <$> f r
 mapReftM f (TRef n r)      = TRef    <$> mapReftGenM f n <*> f r
 mapReftM f (TFun xts t r)  = TFun    <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> f r
 mapReftM f (TAll α t)      = TAll    <$> mapReftBTV f α <*> mapReftM f t
-mapReftM f (TAnd ts)       = TAnd    <$> mapM (mapReftM f) ts
+mapReftM f (TAnd ts)       = TAnd    <$> mapM (mapSndM (mapReftM f)) ts
 mapReftM f (TOr ts)        = TOr     <$> mapM (mapReftM f) ts
 mapReftM f (TObj m xts r)  = TObj    <$> mapReftM f m <*> mapTypeMembers f xts <*> f r
 mapReftM f (TClass n)      = TClass  <$> mapReftBGenM f n
@@ -354,7 +354,7 @@ mapTypeMembers f (TM p m sp sm c k s n)
        <*> T.mapM (mapReftM f) n
 
 mapReftFI f (FI m t1 t2) = FI m <$> mapReftM f t1 <*> mapReftM f t2
-mapReftMI f (MI m n t2) = MI m n <$> mapReftM f t2
+mapReftMI f (MI m mts  ) = MI m <$> mapM (mapSndM (mapReftM f)) mts
 
 --------------------------------------------------------------------------------
 mapTypeMembersM :: (Applicative m, Monad m)
@@ -371,7 +371,7 @@ mapTypeMembersM f (TM p m sp sm c k s n)
        <*> T.mapM f n
 
 mapFieldInfoM f (FI o m t) = FI o <$> f m <*> f t
-mapMethInfoM  f (MI o m t) = MI o       m <$> f t
+mapMethInfoM  f (MI o mts) = MI o <$> mapM (mapSndM f) mts
 
 
 
@@ -445,7 +445,7 @@ factTVars = go
     go (VarAnn _ _ (Just t)) = tvars t
     go (SigAnn _ t)          = tvars t
     go (FieldAnn (FI _ _ t)) = tvars t
-    go (MethAnn (MI _ _ t))  = tvars t
+    go (MethAnn (MI _ mts))  = concatMap (tvars . snd) mts
     go (CtorAnn t)           = tvars t
     go (ClassAnn _ sig)      = btvToTV <$> b_args (sigTRef sig)
     go (InterfaceAnn d)      = btvToTV <$> b_args (sigTRef (typeSig d))

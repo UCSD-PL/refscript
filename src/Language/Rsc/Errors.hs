@@ -8,6 +8,7 @@ import           Debug.Trace
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Locations
 import           Language.Rsc.Pretty.Common
+import           Language.Rsc.Typecheck.Types
 import           Text.PrettyPrint.HughesPJ
 import           Text.Printf
 
@@ -28,6 +29,7 @@ unsupportedDotRef l t         = mkErr l $ printf "Unsupported dot reference %s" 
 unsupportedConvFun l t1 t2    = mkErr l $ printf "Unsupported case in convertFun:\n%s\nvs\n%s" (ppshow t1) (ppshow t2)
 unsupportedStaticNoInit l x   = mkErr l $ printf "Unsupported uninitialized static field '%s'." (ppshow x)
 unsupportedUnionTVar l t      = mkErr l $ printf "Unsupported multiple type variables in union '%s'." (ppshow t)
+unsupportedMethodComp l m m'  = mkErr l $ printf "Unsupported method comparison between '%s' and '%s'." (ppshow m) (ppshow m')
 
 bug' l s                      = err   l $ printf "BUG: %s" s
 bug l s                       = mkErr l $ printf "BUG: %s" s
@@ -167,7 +169,7 @@ errorTAliasMismatch l t a     = mkErr l $ printf "Invalid type alias application
 
 errorBadPAlias l p nx ne      = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." (ppshow p) nx ne
 errorLiquid l                 = mkErr l $ printf "Liquid Type Error"
-errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for '%s'.\nArgument Types: %s\nFunction Type: %s" (ppshow fn) (ppshow ts) (ppshow t)
+errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for '%s'.\nArgument Types: %s\nFunction Type: %s" (ppshow fn) (ppshow $ map toType ts) (ppshow $ map toType t)
 errorMultipleCasts l cs       = mkErr l $ printf "Multiple Casts: %s" (ppshow cs)
 errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"
 errorWellFormed l             = mkErr l $ printf "Well-formedness Error"

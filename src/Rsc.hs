@@ -74,7 +74,8 @@ withExistingFile cfg f
     tsCmd          = "tsc"
     oks            = [".ts", ".js"]
     mkArgs libs    = [ "--outDir", tempDirectory f
-                     , "--module", moduleKind ] ++
+                     , "--module", moduleKind
+                     , "--refscript" ] ++
                      concat [ ["--lib", lib] | lib <- libs ] ++
                      [ f ]
     moduleKind      = "commonjs" -- also 'amd', 'system', 'umd'
@@ -139,8 +140,8 @@ pprManyOrdered = map pp . sort
 renderAnnotations :: PP t => FilePath -> F.FixResult Error -> UAnnSol t -> IO ()
 ----------------------------------------------------------------------------------
 renderAnnotations srcFile res (NoAnn :: UAnnSol t)
-  = do B.writeFile jsonFile    $ annotByteString res (mempty :: UAnnInfo t)
-       writeFile   vimFile     $ annotVimString res (mempty :: UAnnInfo t)
+  = do B.writeFile jsonFile $ annotByteString res (mempty :: UAnnInfo t)
+       writeFile   vimFile  $ annotVimString res (mempty :: UAnnInfo t)
     where
        jsonFile = extFileName Json  srcFile
        vimFile  = extFileName Annot (srcFile ++ ".vim")

@@ -208,7 +208,7 @@ tcError err = throwE $ catMessage err "TC-ERROR\n"
 --------------------------------------------------------------------------------
 tcWrap :: TCM r a -> TCM r (Either Error a)
 --------------------------------------------------------------------------------
-tcWrap act = (Right <$> act) `catchError` (return . Left)
+tcWrap act = fmap Right act `catchError` (return . Left)
 
 --------------------------------------------------------------------------------
 fatal   :: Error -> a -> TCM r a

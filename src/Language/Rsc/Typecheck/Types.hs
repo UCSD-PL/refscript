@@ -19,7 +19,7 @@ module Language.Rsc.Typecheck.Types (
   , ExprReftable(..)
 
   -- * Constructing Types
-  , mkUnion, mkFun, mkAll, mkAnd, mkInitFldTy, mkTCons
+  , mkUnion, mkFun, mkAll, mkAnd, mkAndOpt, mkInitFldTy, mkTCons
 
   -- * Deconstructing Types
   , bkFun, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion
@@ -54,7 +54,7 @@ module Language.Rsc.Typecheck.Types (
   , tmFromFields, tmFromFieldList, typesOfTM
 
   -- * Operator Types
-  , infixOpId, prefixOpId, builtinOpId, arrayLitTy, objLitTy, localTy, finalizeTy
+  , infixOpId, prefixOpId, builtinOpId, arrayLitTy, objLitTy, finalizeTy
 
   -- * Builtin: Binders
   , mkId, argId, mkArgTy, returnTy
@@ -194,11 +194,14 @@ bkAll                 = go []
     go αs t           = (reverse αs, t)
 
 bkAnd :: RTypeQ q r -> [RTypeQ q r]
-bkAnd (TAnd ts) = ts
+bkAnd (TAnd ts) = snd <$> ts
 bkAnd t         = [t]
 
 mkAnd [t]       = t
-mkAnd ts        = TAnd ts
+mkAnd ts        = TAnd $ zip [0..] ts
+
+mkAndOpt []     = Nothing
+mkAndOpt ts     = Just $ mkAnd ts
 
 mkTCons         = (`TObj` fTop)
 
@@ -287,7 +290,7 @@ maybeTObj (TOr ts)     = any maybeTObj ts
 maybeTObj _            = False
 
 isTFun (TFun _ _ _)    = True
-isTFun (TAnd ts)       = all isTFun ts
+isTFun (TAnd ts)       = all isTFun $ snd <$> ts
 isTFun (TAll _ t)      = isTFun t
 isTFun _               = False
 
@@ -464,10 +467,10 @@ tmFromFieldList f = TM (F.fromListSEnv $ mapFst F.symbol <$> f)
 typesOfTM :: TypeMembers r -> [RType r]
 --------------------------------------------------------------------------------------------
 typesOfTM (TM p m sp sm c k s n) =
-  concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv p) ++
-  concatMap (\(MI _ _ t') -> [t'  ]) (map snd $ F.toListSEnv m) ++
-  concatMap (\(FI _ t t') -> [t,t']) (map snd $ F.toListSEnv sp) ++
-  concatMap (\(MI _ _ t') -> [t'  ]) (map snd $ F.toListSEnv sm) ++
+  concatMap (\(FI _ t t') -> [t,t']     ) (map snd $ F.toListSEnv p) ++
+  concatMap (\(MI _ mts ) -> map snd mts) (map snd $ F.toListSEnv m) ++
+  concatMap (\(FI _ t t') -> [t,t']     ) (map snd $ F.toListSEnv sp) ++
+  concatMap (\(MI _ mts ) -> map snd mts) (map snd $ F.toListSEnv sm) ++
   concatMap maybeToList [c, k, s, n]
 
 ---------------------------------------------------------------------------------
@@ -489,10 +492,6 @@ finalizeTy t  | TRef (Gen x (m:ts)) _ <- t, isUM m
     mOut      = BTV (F.symbol "N") def Nothing
     tV        = tVar $ btvToTV mV
     mV        = BTV (F.symbol "V") def Nothing
-
-localTy t = mkFun ([], [B sx t], t `strengthen` uexprReft sx)
-  where
-    sx    = F.symbol "x_"
 
 mkInitFldTy t = mkFun ([], [B (F.symbol "f") t], tVoid)
 

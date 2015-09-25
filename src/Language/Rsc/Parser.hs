@@ -31,7 +31,7 @@ import           Data.Tuple
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types          as F
-import           Language.Rsc.Annotations              hiding (err)
+import           Language.Rsc.Annotations         hiding (err)
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors

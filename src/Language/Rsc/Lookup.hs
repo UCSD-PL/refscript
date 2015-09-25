@@ -123,14 +123,9 @@ extractCtor :: (PPRD r, EnvLike r g) => g r -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 extractCtor γ t = go t
   where
-    -- No need to parents of class A, cause A will have a constructor in any case
-    -- e.g. class A extends B { .. }
-    go (TClass (BGen x _)) | Just (TD (TS _ (BGen _ bs) _) ms) <- resolveTypeInEnv γ x
-                           = tm_ctor ms >>= pure . mkAll bs
-    -- interface IA<V extends T> { new(x: T) { ... } }
-    -- var a: IA<S>;  // S <: T
-    -- var x = new a(x);
-    go (TRef _ _)          = expandType Coercive (envCHA γ) t >>= go
+    go (TClass (BGen x _)) | Just (TD _ ms) <- resolveTypeInEnv γ x
+                           = tm_ctor ms
+    go s@(TRef _ _)        = expandType Coercive (envCHA γ) t >>= go
     go (TObj _ ms _)       = tm_ctor ms
     go _                   = Nothing
 
@@ -141,12 +136,12 @@ extractCtor γ t = go t
 -- defCtor x vs = mkAll vs $ TFun Nothing [] (retT x vs) fTop
 
 -------------------------------------------------------------------------------
-extractCall :: (EnvLike r g, PPRD r) => g r -> RType r -> [RType r]
+extractCall :: (EnvLike r g, PPRD r) => g r -> RType r -> [IOverloadSig r]
 -------------------------------------------------------------------------------
-extractCall γ            = (uncurry mkAll <$>) . go []
+extractCall γ             = zip [0..] . go []
   where
-    go αs t@TFun{} = [(αs, t)]
-    go αs   (TAnd ts)     = concatMap (go αs) ts
+    go αs   (TFun ts t _) = [(αs, ts, t)]
+    go αs   (TAnd ts)     = concatMap (go αs) (map snd ts)
     go αs   (TAll α t)    = go (αs ++ [α]) t
     go αs t@(TRef _ _)    | Just t' <- expandType Coercive (envCHA γ) t
                           = go αs t'
@@ -159,8 +154,8 @@ accessMember :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
              => g r -> AccessKind -> StaticKind -> f -> TypeMembers r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 accessMember _ MethodAccess static m ms
-  | Just (MI _ _ t) <- F.lookupSEnv (F.symbol m) $ meths ms
-  = Just t
+  | Just (MI _ mts) <- F.lookupSEnv (F.symbol m) $ meths ms
+  = Just $ mkAnd $ snd <$> mts
   | otherwise
   = Nothing
   where

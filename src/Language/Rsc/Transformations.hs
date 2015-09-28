@@ -2,11 +2,13 @@
 {-# LANGUAGE DeriveFunctor             #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE ViewPatterns              #-}
 
 module Language.Rsc.Transformations (
     Transformable (..), NameTransformable (..), AnnotTransformable (..)
-  , transFmap, ntransFmap
+  , transFmap, ntransFmap, ntransPure
   , emapReft, mapReftM, mapTypeMembersM
   , replaceDotRef, replaceAbsolute
   , fixFunBinders
@@ -14,7 +16,10 @@ module Language.Rsc.Transformations (
 
 import           Control.Applicative          hiding (empty)
 import           Control.Exception            (throw)
+import           Control.Monad                (liftM2)
+import           Control.Monad.State.Strict
 import           Data.Default
+import           Data.Functor.Identity
 import           Data.Generics
 import qualified Data.HashSet                 as HS
 import qualified Data.IntMap.Strict           as I
@@ -177,14 +182,20 @@ transRType f               = go
 -- | Transform names
 --------------------------------------------------------------------------------
 
+ntransPure :: (NameTransformable t, F.Reftable r) => (QN p -> QN q) -> (QP p -> QP q) -> t p r  -> t q r
+ntransPure f g a = runIdentity (ntrans f' g' a)
+  where g' = return . g
+        f' = return . f
+
 class NameTransformable t where
-  ntrans :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> t p r  -> t q r
+  ntrans :: (Monad m, Applicative m, F.Reftable r)
+         => (QN p -> m (QN q)) -> (QP p -> m (QP q)) -> t p r  -> m (t q r)
 
 instance NameTransformable RTypeQ where
   ntrans = ntransRType
 
 instance NameTransformable BindQ where
-  ntrans f g b = b { b_type = ntrans f g $ b_type b }
+  ntrans f g (B s t) = B s <$> ntrans f g t
 
 instance NameTransformable FactQ where
   ntrans = ntransFact
@@ -193,90 +204,99 @@ instance NameTransformable CastQ where
   ntrans = ntransCast
 
 instance NameTransformable TypeDeclQ where
-  ntrans f g (TD s m) = TD (ntrans f g s) (ntrans f g m)
+  ntrans f g (TD s m) = TD <$> ntrans f g s <*> ntrans f g m
 
 instance NameTransformable TypeSigQ where
-  ntrans f g (TS k b (e,i)) = TS k (ntrans f g b) (ntrans f g <$> e, ntrans f g <$> i)
+  ntrans f g (TS k b (e,i))
+    = TS k <$> ntrans f g b <*> liftM2 (,) (mapM (ntrans f g) e) (mapM (ntrans f g) i)
 
 instance NameTransformable TypeMembersQ where
-  ntrans f g (TM p m sp sm c k s n) = TM (fmap (ntrans f g) p)
-                                         (fmap (ntrans f g) m)
-                                         (fmap (ntrans f g) sp)
-                                         (fmap (ntrans f g) sm)
-                                         (fmap (ntrans f g) c)
-                                         (fmap (ntrans f g) k)
-                                         (fmap (ntrans f g) s)
-                                         (fmap (ntrans f g) n)
+  ntrans f g (TM p m sp sm c k s n) = TM <$> T.mapM (ntrans f g) p
+                                         <*> T.mapM (ntrans f g) m
+                                         <*> T.mapM (ntrans f g) sp
+                                         <*> T.mapM (ntrans f g) sm
+                                         <*> T.mapM (ntrans f g) c
+                                         <*> T.mapM (ntrans f g) k
+                                         <*> T.mapM (ntrans f g) s
+                                         <*> T.mapM (ntrans f g) n
 
 instance NameTransformable BTGenQ where
-  ntrans f g (BGen n ts) = BGen (f n) (ntrans f g <$> ts)
+  ntrans f g (BGen n ts) = BGen <$> f n <*> mapM (ntrans f g) ts
 
 instance NameTransformable TGenQ where
-  ntrans f g (Gen n ts) = Gen (f n) (ntrans f g <$> ts)
+  ntrans f g (Gen n ts) = Gen <$> f n <*> mapM (ntrans f g) ts
 
 instance NameTransformable BTVarQ where
-  ntrans f g (BTV x l c) = BTV x l $ ntrans f g <$> c
+  ntrans f g (BTV x l c) = BTV x l <$> T.mapM (ntrans f g) c
 
 instance NameTransformable FieldInfoQ where
-  ntrans f g (FI o t t') = FI o (ntrans f g t) (ntrans f g t')
+  ntrans f g (FI o t t') = FI o <$> ntrans f g t <*> ntrans f g t'
 
 instance NameTransformable MethodInfoQ where
-  ntrans f g (MI o mts)  = MI o (mapSnd (ntrans f g) <$> mts)
+  ntrans f g (MI o mts)  = MI o <$> mapM (mapSndM (ntrans f g)) mts
 
-ntransFmap ::  (F.Reftable r, Functor t)
-           => (QN p -> QN q) -> (QP p -> QP q) -> t (FAnnQ p r) -> t (FAnnQ q r)
-ntransFmap f g = fmap (ntrans f g)
+ntransFmap ::  (F.Reftable r, Applicative m, Monad m, T.Traversable t)
+           => (QN p -> m (QN q)) -> (QP p -> m (QP q)) -> t (FAnnQ p r) -> m (t (FAnnQ q r))
+ntransFmap f g x = T.mapM (ntrans f g) x
 
 ntransFact f g = go
   where
-    go (PhiVar v)        = PhiVar        $ v
-    go (PhiVarTC v)      = PhiVarTC      $ v
-    go (PhiVarTy (v,t))  = PhiVarTy      $ (v, ntrans f g t)
-    go (PhiPost v)       = PhiPost       $ v
-    go (TypInst x y ts)  = TypInst x y   $ ntrans f g <$> ts
-    go (EltOverload x m) = EltOverload x $ ntrans f g m
-    go (Overload x i)    = Overload x i
-    go (VarAnn l a t)    = VarAnn l a    $ ntrans f g <$> t
-    go (FieldAnn t)      = FieldAnn      $ ntrans f g t
-    go (MethAnn t)       = MethAnn       $ ntrans f g t
-    go (CtorAnn t)       = CtorAnn       $ ntrans f g t
-    go (UserCast t)      = UserCast      $ ntrans f g t
-    go (SigAnn l t)      = SigAnn l      $ ntrans f g t
-    go (TCast x c)       = TCast x       $ ntrans f g c
-    go (ClassAnn l t)    = ClassAnn l    $ ntrans f g t
-    go (InterfaceAnn t)  = InterfaceAnn  $ ntrans f g t
-    go (ModuleAnn m)     = ModuleAnn     $ m
-    go (EnumAnn e)       = EnumAnn       $ e
-    go (BypassUnique)    = BypassUnique
+    go (PhiVar v)        = pure $ PhiVar v
+    go (PhiVarTC v)      = pure $ PhiVarTC v
+    go (PhiPost v)       = pure $ PhiPost v
+    go (Overload x i)    = pure $ Overload x i
+    go (ModuleAnn m)     = pure $ ModuleAnn m
+    go (EnumAnn e)       = pure $ EnumAnn e
+    go (BypassUnique)    = pure $ BypassUnique
+    go (PhiVarTy (v,t))  = PhiVarTy      <$> (v,) <$>  ntrans f g t
+    go (TypInst x y ts)  = TypInst x y   <$> mapM (ntrans f g) ts
+    go (EltOverload x m) = EltOverload x <$> ntrans f g m
+    go (VarAnn l a t)    = VarAnn l a    <$> T.mapM (ntrans f g) t
+    go (FieldAnn t)      = FieldAnn      <$> ntrans f g t
+    go (MethAnn t)       = MethAnn       <$> ntrans f g t
+    go (CtorAnn t)       = CtorAnn       <$> ntrans f g t
+    go (UserCast t)      = UserCast      <$> ntrans f g t
+    go (SigAnn l t)      = SigAnn l      <$> ntrans f g t
+    go (TCast x c)       = TCast x       <$> ntrans f g c
+    go (ClassAnn l t)    = ClassAnn l    <$> ntrans f g t
+    go (InterfaceAnn t)  = InterfaceAnn  <$> ntrans f g t
 
-ntransCast :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> CastQ p r -> CastQ q r
+ntransCast :: (Monad m, Applicative m, F.Reftable r)
+           => (QN p -> m (QN q)) -> (QP p -> m (QP q)) -> CastQ p r -> m (CastQ q r)
 ntransCast f g = go
   where
-    go CNo         = CNo
-    go (CDead e t) = CDead e $ ntrans f g t
-    go (CUp t1 t2) = CUp (ntrans f g t1) (ntrans f g t2)
-    go (CDn t1 t2) = CUp (ntrans f g t1) (ntrans f g t2)
+    go CNo         = pure CNo
+    go (CDead e t) = CDead e <$> ntrans f g t
+    go (CUp t1 t2) = CUp     <$> ntrans f g t1 <*> ntrans f g t2
+    go (CDn t1 t2) = CUp     <$> ntrans f g t1 <*> ntrans f g t2
 
-ntransRType :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> RTypeQ p r -> RTypeQ q r
-ntransRType f g         = go
+ntransRType :: (Monad m, Applicative m, F.Reftable r)
+            => (QN p -> m (QN q)) -> (QP p -> m (QP q)) -> RTypeQ p r -> m (RTypeQ q r)
+ntransRType f g t    = go t
   where
-    go (TPrim p r)   = TPrim p r
-    go (TVar v r)    = TVar v r
-    go (TOr ts)      = TOr ts'        where ts' = go <$> ts
-    go (TAnd ts)     = TAnd ts'       where ts' = mapSnd go <$> ts
-    go (TRef n r)    = TRef n' r      where n'  = ntrans f g n
-    go (TObj m ms r) = TObj m' ms' r  where m'  = ntrans f g m
-                                            ms' = ntrans f g ms
-    go (TClass n)    = TClass n'      where n'  = ntrans f g n
-    go (TMod p)      = TMod p'        where p'  = g p
-    go (TAll a t)    = TAll a' t'     where a'  = ntrans f g a
-                                            t'  = go t
-    go (TFun bs t r) = TFun bs' t' r  where bs' = ntrans f g <$> bs
-                                            t'  = go t
-    go (TExp e)      = TExp e
+    go (TPrim p r)   = pure $ TPrim p r
+    go (TVar v r)    = pure $ TVar v r
+    go (TExp e)      = pure $ TExp e
+    go (TOr ts)      = TOr  <$> ts'       where ts' = mapM go ts
+    go (TAnd ts)     = TAnd <$> ts'       where ts' = mapM (mapSndM go) ts
+    go (TRef n r)    = TRef <$> n'
+                            <*> pure r    where n'  = ntrans f g n
+    go (TObj m ms r) = TObj <$> m'
+                            <*> ms'
+                            <*> pure r    where m'  = ntrans f g m
+                                                ms' = ntrans f g ms
+    go (TClass n)    = TClass <$> n'      where n'  = ntrans f g n
+    go (TMod p)      = TMod   <$> p'      where p'  = g p
+    go (TAll a t)    = TAll   <$> a'
+                              <*> t'      where a'  = ntrans f g a
+                                                t'  = go t
+    go (TFun bs t r) = TFun   <$> bs'
+                              <*> t'
+                              <*> pure r  where bs' = mapM (ntrans f g) bs
+                                                t'  = go t
 
 instance NameTransformable FAnnQ where
-  ntrans f g (FA i s ys) = FA i s $ ntrans f g <$> ys
+  ntrans f g (FA i s ys) = FA i s <$> mapM (ntrans f g) ys
 
 
 --------------------------------------------------------------------------------
@@ -373,20 +393,24 @@ mapMethInfoM  f (MI o mts) = MI o <$> mapM (mapSndM f) mts
 -- | Replace all relatively qualified names/paths with absolute ones.
 --------------------------------------------------------------------------------
 
+type ReplaceState = State [Error]
+
 --------------------------------------------------------------------------------
-replaceAbsolute :: (PPR r, Data r, Typeable r) => BareRelRsc r -> BareRsc r
+replaceAbsolute :: (PPR r, Data r, Typeable r) => BareRelRsc r -> (BareRsc r, [Error])
 --------------------------------------------------------------------------------
-replaceAbsolute pgm@(Rsc { code = Src ss }) = pgm { code = Src $ (tr <$>) <$> ss }
+replaceAbsolute pgm@(Rsc { code = Src ss }) = (pgm { code = Src ss' }, sOut)
   where
+    (ss', sOut)     = runState (mapM (T.mapM (\l -> ntrans (safeAbsName l) (safeAbsPath l) l)) ss) []
     (ns, ps)        = accumNamesAndPaths ss
-    tr l            = ntrans (safeAbsName l) (safeAbsPath l) l
-    safeAbsName l a = case absAct (absoluteName ns) l a of
-                        Just a' -> a'
-                        -- If it's a type alias, don't throw error
-                        Nothing | isAlias a -> toAbsoluteName a
-                                | otherwise -> diePP $ errorUnboundName (srcPos l) a
-    safeAbsPath l a = fromMaybe (throw $ errorUnboundPath (srcPos l) a)
-                                (absAct (absolutePath ps) l a)
+
+    safeAbsName l a@(absAct (absoluteName ns) l -> n)
+      | Just a' <- n            = return a'
+      | Nothing <- n, isAlias a = return $ toAbsoluteName a
+      | otherwise               = modify (errorUnboundName (srcPos l) a:) >> pure (mkAbsName [] a)
+
+    safeAbsPath l a@(absAct (absolutePath ps) l -> n)
+      | Just a' <- n            = return a'
+      | otherwise               = modify (errorUnboundPath (srcPos l) a:) >> pure (mkAbsPath [])
 
     isAlias (QN (QP RK_ _ []) s) = envMem s $ tAlias pgm
     isAlias (QN _ _) = False

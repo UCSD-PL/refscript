@@ -86,7 +86,7 @@ declare function builtin_PrefixMinus(a: number): number;
 declare function builtin_OpSEq<A,B>(x: A, y: B): boolean;
 
 /*@ builtin_OpSNEq :: <A>  (x:A, y:A) => {v:boolean | Prop v <=> not (x ~~ y) } */
-/*@ builtin_OpSNEq :: <Α,B>(x:A, y:B) => {v:boolean | Prop v } */
+/*@ builtin_OpSNEq :: <A,B>(x:A, y:B) => {v:boolean | Prop v } */
 declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
 
 /*@ builtin_OpLAnd :: <B>  (x: undefined, y:B) => undefined */

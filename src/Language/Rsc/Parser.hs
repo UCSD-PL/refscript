@@ -70,8 +70,8 @@ parseRscFromFiles :: [FilePath] -> IO (Either FError RefScript)
 --------------------------------------------------------------------------------
 parseRscFromFiles fs =
   partitionEithers <$> mapM parseScriptFromJSON fs >>= \case
-    ([],ps) -> return $ mkRsc <$> parseAnnotations (concat ps)
-    (es,_ ) -> return $ Left $ mconcat es
+    ([],ps) -> return (parseAnnotations (concat ps) >>= mkRsc)
+    (es,_ ) -> return (Left $ mconcat es)
 
 --------------------------------------------------------------------------------
 getJSON :: MonadIO m => FilePath -> m B.ByteString
@@ -88,7 +88,6 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
         Left msg -> Left  $ F.Crash [] $ "JSON decode error:\n" ++ msg
         Right p  -> Right p
 
-
 --------------------------------------------------------------------------------
 parseIdFromJSON :: FilePath -> IO (Either (F.FixResult a) [Id (SrcSpan, [RawSpec])])
 --------------------------------------------------------------------------------
@@ -100,26 +99,28 @@ parseIdFromJSON filename = decodeOrDie <$> getJSON filename
         Right p  -> Right p
 
 --------------------------------------------------------------------------------
-mkRsc :: [Statement (SrcSpan, [Spec])] -> RefScript
+mkRsc :: [Statement (SrcSpan, [Spec])] -> Either FError RefScript
 --------------------------------------------------------------------------------
-mkRsc ss = ss
-         & mkRelRsc
-         & expandAliases
-         & replaceAbsolute
-         & replaceDotRef
-         & fixFunBinders
+mkRsc ss = let p1          = mkRelRsc        ss
+               p2          = expandAliases   p1
+               (p3, errs)  = replaceAbsolute p2
+               p4          = replaceDotRef   p3
+               p5          = fixFunBinders   p4 in
+            case errs of
+              [] -> Right p5
+              _  -> Left $ F.Unsafe errs
 
 --------------------------------------------------------------------------------
 mkRelRsc :: [Statement (SrcSpan, [Spec])] -> RelRefScript
 --------------------------------------------------------------------------------
 mkRelRsc ss = Rsc {
         code          = Src (checkTopStmt <$> ss')
-      , consts        = envFromList [ mapSnd (ntrans f g) t | MeasureSpec t <- anns ]
+      , consts        = envFromList [ mapSnd (ntransPure f g) t | MeasureSpec t <- anns ]
       , tAlias        = envFromList [ t | TypeAliasSpec      t <- anns ]
       , pAlias        = envFromList [ t | PredicateAliasSpec t <- anns ]
       , pQuals        = scrapeQuals [ t | QualifierSpec      t <- anns ] ss'
       , pOptions      =             [ t | OptionSpec         t <- anns ]
-      , invts         = [Loc (srcPos l) (ntrans f g t) | InvariantSpec l t <- anns ]
+      , invts         = [Loc (srcPos l) (ntransPure f g t) | InvariantSpec l t <- anns ]
       , maxId         = endingId
     }
   where

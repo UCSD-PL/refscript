@@ -15,6 +15,7 @@ module Language.Rsc.TypeUtilities (
     mkDotRefFunTy
   , setPropTy
   , idTy
+  , castTy
 
   ) where
 
@@ -91,3 +92,10 @@ idTy t = mkFun ([], [B sx t], t `strengthen` uexprReft sx)
   where
     sx    = F.symbol "x_"
 
+
+--------------------------------------------------------------------------------------------
+castTy :: (ExprReftable F.Symbol r, F.Reftable r) => RType r -> RType r
+--------------------------------------------------------------------------------------------
+castTy t = TFun [B sx t] (t `eSingleton` sx) fTop
+  where
+    sx    = F.symbol "x"

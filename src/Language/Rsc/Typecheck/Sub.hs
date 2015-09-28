@@ -174,7 +174,7 @@ compareObjs l γ t1@(TRef (Gen x1 (m1:t1s)) _) t2@(TRef (Gen x2 (m2:t2s)) _)
   = mconcat $ SubT : zipWith (compareTypes l γ) (m1':t1s') (m2:t2s)
 
   | otherwise
-  = SubErr [bugWeakenAncestors (srcPos l) x1 x2]
+  = SubErr [errorIncompatTypes (srcPos l) x1 x2]
 
 compareObjs l γ (TClass c1) (TClass c2) = convertTClass l γ c1 c2
 

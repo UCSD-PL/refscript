@@ -544,13 +544,9 @@ consExpr g (Cast_ l e) tCtx
 -- | <T>e
 consExpr g ex@(Cast l e) _
   | [tc] <- [ ct | UserCast ct <- fFact l ]
-  = do  opty <- fixCastTy tc <$> cgSafeEnvFindTyM (builtinOpId BICastExpr) g
-        consCall g l "Cast" [(e, Just tc)] opty -- (mkCastFunTy t)
+  = consCall g l "Cast" [(e, Just tc)] (castTy tc)
   | otherwise
   = die $ bugNoCasts (srcPos l) ex
-
-    where
-      fixCastTy tc (TAll (BTV s l _) t) = TAll (BTV s l (Just tc)) t
 
 consExpr g (IntLit l i) _
   = Just <$> cgEnvAddFresh "8" l (VI Local WriteLocal Initialized $ tNum `eSingleton` i) g

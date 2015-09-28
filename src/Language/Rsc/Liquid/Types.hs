@@ -144,7 +144,6 @@ instance RefTypable RefType where
 eSingleton      :: (F.Reftable r, F.Expression e, ExprReftable e r) => RType r -> e -> RType r
 eSingleton t e  = t `strengthen` (uexprReft e)
 
-
 pSingleton      :: (F.Predicate p) => RefType -> p -> RefType
 pSingleton t p  = t `strengthen` (F.propReft p)
 

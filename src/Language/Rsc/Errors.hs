@@ -103,6 +103,7 @@ errorUserCast l t e           = mkErr l $ printf "User cast of type '%s' on '%s'
 errorDownCast l t1 t2         = mkErr l $ printf "Downcast: %s => %s" (ppshow t1) (ppshow t2)
 errorClassExtends l x y t1 t2 = mkErr l $ printf "Type '%s' cannot extend type '%s'.\nType for '%s':\n%s\nType for '%s':\n%s" (ppshow x) (ppshow y)
                                                   (ppshow x) (ppshow t1) (ppshow y) (ppshow t2)
+errorIncompatTypes l a b      = mkErr l $ printf "Type '%s' is not assignable to '%s'." (ppshow a) (ppshow b)
 errorIncompatCovFields l a b  = mkErr l $ printf "Incompatible covariant fields when converting between elements: '%s' and '%s'." (ppshow a) (ppshow b)
 errorIncompatInvFields l a b  = mkErr l $ printf "Incompatible invariant fields when converting between elements: '%s' and '%s'." (ppshow a) (ppshow b)
 errorNonObjectType l t        = mkErr l $ printf "Type '%s' cannot be treated as an object type." (ppshow t)

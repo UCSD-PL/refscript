@@ -32,8 +32,6 @@ declare function builtin_BIArrayLit<A>(a: A): A[];
 /*@ builtin_BICondExpr :: <C,T>(c: C, t: T, x: T, y: T) => { v: T | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) } */
 declare function builtin_BICondExpr<C, T>(c: C, t: T, x: T, y: T): T;
 
-declare function builtin_BICastExpr<V>(x: V): V;
-
 /*@ builtin_OpLT :: (x:number, y:number) => {v:boolean | Prop v <=> x < y } */
 /*@ builtin_OpLT :: <T>(x:T, y:T) => boolean */
 declare function builtin_OpLT(a: any, b: any): boolean;

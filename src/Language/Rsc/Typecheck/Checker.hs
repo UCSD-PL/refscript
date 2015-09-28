@@ -682,12 +682,9 @@ tcExpr _ e _
 tcCast :: Unif r => AnnTc r -> TCEnv r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
 --------------------------------------------------------------------------------
 tcCast l γ e tc
-  = do  opTy        <- fixCastTy <$> safeEnvFindTy l γ (builtinOpId BICastExpr)
-        cid         <- freshCastId l
-        ([e'],t')   <- tcNormalCall γ l "user-cast" [(e, Just tc)] opTy
+  = do  cid         <- freshCastId l
+        ([e'],t')   <- tcNormalCall γ l "user-cast" [(e, Just tc)] (castTy tc)
         return       $ (e', t')
-    where
-      fixCastTy (TAll (BTV s l _) t) = TAll (BTV s l (Just tc)) t
 
 --------------------------------------------------------------------------------
 tcCall :: Unif r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)

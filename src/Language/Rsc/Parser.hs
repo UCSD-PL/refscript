@@ -104,7 +104,6 @@ mkRsc :: [Statement (SrcSpan, [Spec])] -> RefScript
 --------------------------------------------------------------------------------
 mkRsc ss = ss
          & mkRelRsc
-         -- & convertTVars
          & expandAliases
          & replaceAbsolute
          & replaceDotRef

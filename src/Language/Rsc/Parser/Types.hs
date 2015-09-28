@@ -87,10 +87,11 @@ idBindP :: PContext -> Parser (Id SrcSpan, RRType)
 idBindP ctx = withinSpacesP $ xyP identifierP dcolon (bareTypeP ctx)
 
 idBindP' :: PContext -> Parser (Id SrcSpan, Assignability, Maybe RRType)
-idBindP' ctx = withinSpacesP $ axyP identifierP dcolon typeOrHashP
-  where
-    typeOrHashP = try (Just <$> bareTypeP ctx)
-               <|>    (char '#' >> return Nothing)
+idBindP' ctx = withinSpacesP $ axyP identifierP dcolon (Just <$> bareTypeP ctx)
+-- idBindP' ctx = withinSpacesP $ axyP identifierP dcolon typeOrHashP)
+--   where
+--     typeOrHashP = try (Just <$> bareTypeP ctx)
+--                <|>    (char '#' >> return Nothing)
 
 
 functionExpressionP :: PContext -> Parser RRType

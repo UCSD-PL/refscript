@@ -6,7 +6,7 @@ var readline = require('readline');
 var exts=["css", "vc", "hi", "out", "js", "json", "fqout",
           "fq", "o", "err", "annot", "log", "cgi", "smt2", "html", "liquid"];
 
-var exceptions=["cleanup.js"]
+var exceptions=["cleanup.js", "tsconfig.json"]
 
 var cmd = "find . " + exts.map(function(e){return '-name "*.' + e + '" '}).join(" -o ");
 

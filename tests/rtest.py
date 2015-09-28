@@ -75,15 +75,16 @@ class TestRunner:
         else:
             ok = (status == expected_statuses)
         if ok:
-            print "\033[1;32mSUCCESS!\033[1;0m   %70s %10f seconds" % (file, runtime)
+            print "\033[1;32mSUCCESS!\033[1;0m   {0:<70} {1:.4f} seconds".format(file, runtime)
         else:
-            print "\033[1;31mFAILURE :(\033[1;0m %70s %10f seconds" % (file, runtime)
+            print "\033[1;31mFAILURE :(\033[1;0m {0:<70} {1:.4f} seconds".format(file, runtime)
         self.config.log_test(file, runtime, ok)
 
         return (file, ok, status not in self.config.valid_exits)
 
     def run_tests (self, tests):
-        results   = pmap.map (self.config.threadcount, self.run_test, tests)
+        sorted_tests = sorted(tests)
+        results   = pmap.map (self.config.threadcount, self.run_test, sorted_tests)
         self.config.finalize()
         failed    = sorted([(result[0], result[2]) for result in results if result[1] == False])
         failcount = len(failed)

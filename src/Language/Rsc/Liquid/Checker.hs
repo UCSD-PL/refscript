@@ -93,8 +93,11 @@ ppCasts (Rsc { code = Src fs })
   | isEmpty castDoc = empty
   | otherwise       = inComments (nest 2 castDoc)
   where
-    castDoc = fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
-                                            , TCast _ c <- fFact a ]
+    castDoc = fcat $ map ppEntry entries
+    ppEntry = \(s, c) -> pp s $+$ nest 4 (pp c)
+
+    entries = [ (srcPos a, c) | a <- concatMap FO.toList fs
+                              , TCast _ c <- fFact a ]
 
 
 -- | solveConstraints: Call solve with `ueqAllSorts` enabled.
@@ -806,9 +809,6 @@ consDeadCode g l es t
 consCall :: PP a => CGEnv -> AnnLq -> a -> [(Expression AnnLq, Maybe RefType)]
                  -> RefType -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
---   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in
---      output type of callee.
---
 consCall g l fn ets ft0
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts <- mapM (`cgSafeEnvFindTyM` g') xes

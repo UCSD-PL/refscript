@@ -925,13 +925,14 @@ tcCallCase :: (PP a, Unif r)
   => TCEnv r -> AnnTc r -> a -> [(ExprSSAR r, RType r)] -> RType r -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
 tcCallCase γ@(tce_ctx -> ξ) l fn (unzip -> (es, ts)) ft
-  = do  (βs, its1, ot) <- instantiateFTy l ξ fn ft
-        ts1            <- zipWithM (instantiateTy l ξ) [1..] ts
-        θ              <- unifyTypesM (srcPos l) γ ts1 its1
-        let θβ          = fromList [ (TV s l, t) | BTV s l (Just t) <- βs ]
-        let (ts2, its2) = apply θ (ts1, apply θβ its1)
-        es'            <- zipWith3M (castM γ) es ts2 its2
-        return          $ (es', apply θ ot)
+  = do  (βs, rhs, ot)   <- instantiateFTy l ξ fn ft
+        lhs             <- zipWithM (instantiateTy l ξ) [1..] ts
+        θ               <- unifyTypesM (srcPos l) γ lhs rhs
+        let θβ           = fromList [ (TV s l, t) | BTV s l (Just t) <- βs ]
+        let θ'           = θ `mappend` θβ
+        let (lhs', rhs') = apply θ' (lhs, rhs)
+        es'             <- zipWith3M (castM γ) es lhs' rhs'
+        return           $ (es', apply θ ot)
 
 --------------------------------------------------------------------------------
 instantiateTy :: Unif r => AnnTc r -> IContext -> Int -> RType r -> TCM r (RType r)

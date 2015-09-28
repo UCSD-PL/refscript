@@ -5,17 +5,11 @@
 {-# LANGUAGE TypeSynonymInstances      #-}
 
 module Language.Rsc.Transformations (
-
     Transformable (..), NameTransformable (..), AnnotTransformable (..)
   , transFmap, ntransFmap
-
   , emapReft, mapReftM, mapTypeMembersM
-
-  -- , convertTVar, convertTVars
   , replaceDotRef, replaceAbsolute
-
   , fixFunBinders
-
   ) where
 
 import           Control.Applicative          hiding (empty)
@@ -151,7 +145,7 @@ transCast f = go
     go _  _ CNo          = CNo
     go αs xs (CDead e t) = CDead e $ trans f αs xs t
     go αs xs (CUp t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
-    go αs xs (CDn t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
+    go αs xs (CDn t1 t2) = CDn (trans f αs xs t1) (trans f αs xs t2)
 
 -- | transRType :
 --
@@ -375,94 +369,9 @@ mapFieldInfoM f (FI o m t) = FI o <$> f m <*> f t
 mapMethInfoM  f (MI o mts) = MI o <$> mapM (mapSndM f) mts
 
 
-
--- --------------------------------------------------------------------------------
--- -- | Convert bound TRefs to TVars
--- --------------------------------------------------------------------------------
---
--- --------------------------------------------------------------------------------
--- convertTVars :: (PP r, F.Reftable r) => BareRelRsc r -> BareRelRsc r
--- --------------------------------------------------------------------------------
--- convertTVars = visitRsc convertTvarVisitor []
---
--- --------------------------------------------------------------------------------
--- convertTVar    :: (PP r, F.Reftable r, Transformable t) => [TVar] -> t q r -> t q r
--- --------------------------------------------------------------------------------
--- convertTVar as = trans tx as []
---   where
---     tx αs _ t@(TRef (Gen c []) r) | Just α <- mkTvar αs c = TVar α r
---     tx _  _ t = t
---
--- mkTvar :: (IsLocated a, F.Symbolic a) => [TVar] -> a -> Maybe TVar
--- mkTvar αs r = listToMaybe [ α { tv_loc = srcPos r }  | α <- αs, F.symbol α == F.symbol r]
---
--- --------------------------------------------------------------------------------
--- convertTvarVisitor :: (PP r, F.Reftable r) => Visitor () [TVar] (AnnRel r)
--- --------------------------------------------------------------------------------
--- convertTvarVisitor = defaultVisitor {
---     ctxStmt = ctxStmtTvar
---   , ctxCElt = ctxCEltTvar
---   , txStmt  = transFmap (const . convertTVar)
---   , txExpr  = transFmap (const . convertTVar)
---   , txCElt  = transFmap (const . convertTVar)
---   }
---
--- ctxStmtTvar as s = go s ++ as
---   where
---     go :: Statement (AnnRel r)  -> [TVar]
---     go s@(FunctionStmt {}) = grab s
---     go s@(InterfaceStmt {})    = grab s
---     go s@(ClassStmt {})    = grab s
---     go s@(ModuleStmt {})   = grab s
---     go _                   = []
---
---     grab :: Statement (FAnnQ q r) -> [TVar]
---     grab = concatMap factTVars . fFact . getAnnotation
---
--- ctxCEltTvar as s = go s ++ as
---   where
---     go :: ClassElt (AnnRel r)  -> [TVar]
---     go s@Constructor{}    = grab s
---     go s@MemberMethDecl{} = grab s
---     go _                  = []
---
---     grab :: ClassElt (FAnnQ q r) -> [TVar]
---     grab = concatMap factTVars . fFact . getAnnotation
---
--- --------------------------------------------------------------------------------
--- factTVars :: FactQ q r -> [TVar]
--- --------------------------------------------------------------------------------
--- factTVars = go
---   where
---     tvars t | Just ts <- bkFuns t
---             = HS.toList $ foldUnions
---             $ map HS.fromList [ btvToTV <$> t | (t, _, _) <- ts ]
---             | otherwise
---             = []
---
---     foldUnions (α:αs) = foldl HS.intersection α αs
---     foldUnions _      = HS.empty
---
---     go (VarAnn _ _ (Just t)) = tvars t
---     go (SigAnn _ t)          = tvars t
---     go (FieldAnn (FI _ _ t)) = tvars t
---     go (MethAnn (MI _ mts))  = concatMap (tvars . snd) mts
---     go (CtorAnn t)           = tvars t
---     go (ClassAnn _ sig)      = btvToTV <$> b_args (sigTRef sig)
---     go (InterfaceAnn d)      = btvToTV <$> b_args (sigTRef (typeSig d))
---     go _                     = []
-
-
 --------------------------------------------------------------------------------
 -- | Replace all relatively qualified names/paths with absolute ones.
 --------------------------------------------------------------------------------
-
--- instance NameTransformable FRsc where
---   ntrans f g (FRsc (Rsc (Src ss ) cst ta pa pq inv max opt)) =
---               FRsc (Rsc (Src ss') cst ta pa pq inv max opt)
---     where
---       ss'   = (ntrans f g <$>) <$> ss
---
 
 --------------------------------------------------------------------------------
 replaceAbsolute :: (PPR r, Data r, Typeable r) => BareRelRsc r -> BareRsc r

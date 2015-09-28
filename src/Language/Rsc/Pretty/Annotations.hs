@@ -17,7 +17,7 @@ import           Text.PrettyPrint.HughesPJ
 
 instance (PP r, F.Reftable r) => PP (Cast r) where
   pp CNo         = text "No cast"
-  pp (CDead e t) = text "Dead code:" <+> pp e <+> text "::" <+> pp t
+  pp (CDead e t) = text "Dead code:" <+> pp e $+$ pp t
   pp (CUp t1 t2) = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
   pp (CDn t1 t2) = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
 

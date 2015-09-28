@@ -1,6 +1,6 @@
 /*@ qualif CmpZ(v:int): v = 20 */
 
-/*@ glob :: # */
+/*@  glob :: number */
 var glob = 20;
 
 function zog() {

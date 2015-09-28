@@ -114,8 +114,9 @@ checkSyms m g ok x t = efoldRType h f F.emptySEnv [] t
                | s `elem` biExtra
                = Nothing
                | Just (VI _ a _ _) <- envLikeFindTy' s g
-               = if a `elem` validAsgn then Nothing
-                                         else Just $ errorAsgnInRef l x t a
+               = if a `elem` validAsgn
+                   then Nothing
+                   else Just $ errorAsgnInRef l s t a
                | otherwise
                = Just $ errorUnboundSyms l (F.symbol x) t s m
 

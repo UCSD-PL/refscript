@@ -110,17 +110,19 @@ testCategories = [
     #, ("fb",        ["--prelude", "../include/mini-prelude.ts"])
     #, ("inclusion", ["--prelude", "../include/mini-prelude.ts", "-e"])
 
-      ("objects",   [])
-    , ("arrays",    [])
-    , ("classes",   [])
-    , ("loops",     [])
-    , ("misc",      [])
-    , ("operators", [])
-    , ("simple",    [])
-    , ("unions",    [])
-    , ("typealias", [])
-    , ("fb",        [])
-    , ("inclusion", ["-e"])
+    ("simple",    ["--prelude", "../include/prelude.d.ts"])
+
+    #   ("objects",   [])
+    # , ("arrays",    [])
+    # , ("classes",   [])
+    # , ("loops",     [])
+    # , ("misc",      [])
+    # , ("operators", [])
+    # , ("simple",    [])
+    # , ("unions",    [])
+    # , ("typealias", [])
+    # , ("fb",        [])
+    # , ("inclusion", ["-e"])
 
     ## not supported: "proto", "lists"
 

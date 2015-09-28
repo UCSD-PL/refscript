@@ -50,10 +50,10 @@ instance PP AccessKind where
 --  (b) the accessed type, and
 --  [ (c) the mutability associcated with the accessed element ]
 --
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 getProp :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
         => g r -> AccessKind -> f -> RType r -> Maybe (RType r, RType r)
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 getProp γ b f t@(TPrim _ _) = getPropPrim γ b f t
 
 getProp γ b f (TOr ts) = getPropUnion γ b f ts
@@ -94,10 +94,10 @@ getProp γ _ f t@(TMod m)
 getProp _ _ _ _ = Nothing
 
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 getPropPrim :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
             => g r -> AccessKind -> f -> RType r -> Maybe (RType r, RType r)
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 getPropPrim γ b f t@(TPrim c _) =
   case c of
     TBoolean   -> Nothing
@@ -118,9 +118,9 @@ getPropPrim _ _ _ _ = error "getPropPrim should only be applied to TApp"
 --
 -- TODO: Is fixRet necessary?
 --
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 extractCtor :: (PPRD r, EnvLike r g) => g r -> RType r -> Maybe (RType r)
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 extractCtor γ t = go t
   where
     go (TClass (BGen x _)) | Just (TD _ ms) <- resolveTypeInEnv γ x
@@ -135,9 +135,9 @@ extractCtor γ t = go t
 -- retT x vs  = TRef (Gen x (tVar <$> vs)) fTop
 -- defCtor x vs = mkAll vs $ TFun Nothing [] (retT x vs) fTop
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 extractCall :: (EnvLike r g, PPRD r) => g r -> RType r -> [IOverloadSig r]
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 extractCall γ             = zip [0..] . go []
   where
     go αs   (TFun ts t _) = [(αs, ts, t)]
@@ -149,10 +149,10 @@ extractCall γ             = zip [0..] . go []
                           = go αs t
     go _  _               = []
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 accessMember :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
              => g r -> AccessKind -> StaticKind -> f -> TypeMembers r -> Maybe (RType r)
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 accessMember _ MethodAccess static m ms
   | Just (MI _ mts) <- F.lookupSEnv (F.symbol m) $ meths ms
   = Just $ mkAnd $ snd <$> mts
@@ -175,15 +175,15 @@ accessMember _ FieldAccess static f ms
     props | static == StaticK = tm_sprop
           | otherwise         = tm_prop
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 validFieldName  :: F.Symbolic f => f -> Bool
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 validFieldName f = F.symbol f `notElem` excludedFieldSymbols
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 lookupAmbientType :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s, PP f)
                   => g r -> AccessKind -> f -> s -> Maybe (RType r)
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 lookupAmbientType γ b f amb
   = do TD _ ms <- resolveTypeInEnv γ nm
        accessMember γ b InstanceK f ms
@@ -193,20 +193,20 @@ lookupAmbientType γ b f amb
 -- | Accessing the @f@ field of the union type with @ts@ as its parts, returns
 -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 getPropUnion :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
              => g r -> AccessKind -> f -> [RType r] -> Maybe (RType r, RType r)
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 getPropUnion γ b f ts =
   case unzip (catMaybes $ getProp γ b f <$> ts) of
     ([],[]) -> Nothing
     (t1s,t2s) -> Just (mkUnion t1s, mkUnion t2s)
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 getFieldMutability ::
   (ExprReftable Int r, PPR r) =>
   ClassHierarchy r -> RType r -> F.Symbol -> Maybe (RType r)
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 getFieldMutability cha t f | Just (TObj _ ms _) <- expandType Coercive cha t
                            , Just (FI _ m _)  <- F.lookupSEnv f $ tm_prop ms
                            = Just m

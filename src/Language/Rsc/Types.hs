@@ -127,8 +127,9 @@ data FieldInfoQ q r   = FI Optionality                  -- Optional
                            (RTypeQ q r)                 -- Type
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data MethodInfoQ q r  = MI Optionality                          -- Optional
-                           [(MutabilityMod, RTypeQ q r)]        -- Mutability, Type
+data MethodInfoQ q r  = MI { m_opt :: Optionality                          -- Optional
+                           , m_ty  :: [(MutabilityMod, RTypeQ q r)]        -- Mutability, Type
+                           }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data MutabilityMod    = Mutable

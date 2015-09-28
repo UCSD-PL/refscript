@@ -152,7 +152,7 @@ instance PP MutabilityMod where
   pp ReadOnly      = text "RO"
 
 instance (PP r, F.Reftable r) => PP (TypeDeclQ q r) where
-  pp (TD s m) = pp s <+> lbrace $+$ nest 2 (pp m) $+$ rbrace
+  pp (TD s m) = pp s <+> lbrace $+$ nest 4 (pp m) $+$ rbrace
 
 instance (PP r, F.Reftable r) => PP (TypeSigQ q r) where
   pp (TS k n h) = pp k <+> pp n <+> ppHeritage h
@@ -189,16 +189,12 @@ instance (F.Reftable r, PP r) => PP (VarInfo r) where
 
 instance (PP r, F.Reftable r) => PP (ModuleDef r) where
   pp (ModuleDef vars tys enums path) =
-          text ""
-      $+$ pp (take 80 (repeat '='))
+          pp (take 80 (repeat '-'))
       $+$ text "module" <+> pp path
-      $+$ pp (take 80 (repeat '='))
-      $+$ text "VARIABLES"
-      $+$ pp vars
-      $+$ text "TYPES"
-      $+$ pp tys
-      $+$ text "ENUMERATIONS"
-      $+$ pp enums
+      $+$ pp (take 80 (repeat '-'))
+      $+$ text "Variables"    $+$ nest 4 (pp vars)
+      $+$ text "Types"        $+$ nest 4 (pp tys)
+      $+$ text "Enums"        $+$ nest 4 (pp enums)
 
 instance PP IContext where
   pp (IC x) = text "Context: " <+> pp x
@@ -211,16 +207,16 @@ instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body
 
 instance (PP r, F.Reftable r) => PP (Rsc a r) where
-  pp pgm@(Rsc {code = (Src s) })
-    =   text "/*"
-    $+$ text "\nCONSTANTS"          $+$ nest 2 (pp (consts pgm))
-    $+$ text "\nPREDICATE ALIASES"  $+$ nest 2 (pp (pAlias pgm))
-    $+$ text "\nTYPE ALIASES"       $+$ nest 2 (pp (tAlias pgm))
-    $+$ text "\nQUALIFIERS"         $+$ nest 2 (vcat (F.toFix <$> take 3 (pQuals pgm)))
-    $+$ text "..."
-    $+$ text "\nINVARIANTS"         $+$ nest 2 (vcat (pp <$> invts pgm))
-    $+$ text "*/"
-    $+$ text "\n// CODE"            $+$ pp s
+  pp pgm@(Rsc {code = (Src s) }) =  inComments extras
+                                $+$ text "\n// CODE"
+                                $+$ pp s
+    where
+      extras =  text "\nCONSTANTS"          $+$ nest 4 (pp (consts pgm))
+            $+$ text "\nPREDICATE ALIASES"  $+$ nest 4 (pp (pAlias pgm))
+            $+$ text "\nTYPE ALIASES"       $+$ nest 4 (pp (tAlias pgm))
+            $+$ text "\nQUALIFIERS"         $+$ nest 4 (vcat (F.toFix <$> take 3 (pQuals pgm)))
+            $+$ text "..."
+            $+$ text "\nINVARIANTS"         $+$ nest 4 (vcat (pp <$> invts pgm))
 
 instance (F.Reftable r, PP r) => PP (RSubst r) where
   pp (Su m) | HM.null m      = text "empty"

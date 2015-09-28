@@ -162,8 +162,8 @@ ppStatement s = case s of
 
   FunctionStmt _ name args Nothing
                             -> Nothing
-  ClassStmt _ name body     -> Just $ headerWithBlock (text "class" <+> ppId name) (classEltList body)
-  ModuleStmt _ name body    -> Just $ text "module" <+> ppId name $$ ssAsBlock body
+  ClassStmt _ name body     -> Just $ headerWithBlock (text "class"  <+> ppId name) (classEltList body)
+  ModuleStmt _ name body    -> Just $ headerWithBlock (text "module" <+> ppId name) (stmtList     body)
   InterfaceStmt _ x         -> Nothing
   EnumStmt _ name elts      -> Just $ text "enumeration" <+> ppId name <+>
                                       braces (cat $ punctuate comma (map ppEnumElt elts))

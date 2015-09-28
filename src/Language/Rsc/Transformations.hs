@@ -1,16 +1,17 @@
-{-# LANGUAGE ConstraintKinds      #-}
-{-# LANGUAGE DeriveFunctor        #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE DeriveFunctor             #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
 
 module Language.Rsc.Transformations (
 
-    Transformable (..), NameTransformable (..)
+    Transformable (..), NameTransformable (..), AnnotTransformable (..)
   , transFmap, ntransFmap
 
   , emapReft, mapReftM, mapTypeMembersM
 
-  , convertTVar, convertTVars
+  -- , convertTVar, convertTVars
   , replaceDotRef, replaceAbsolute
 
   , fixFunBinders
@@ -375,81 +376,81 @@ mapMethInfoM  f (MI o mts) = MI o <$> mapM (mapSndM f) mts
 
 
 
---------------------------------------------------------------------------------
--- | Convert bound TRefs to TVars
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
-convertTVars :: (PP r, F.Reftable r) => BareRelRsc r -> BareRelRsc r
---------------------------------------------------------------------------------
-convertTVars = visitRsc convertTvarVisitor []
-
---------------------------------------------------------------------------------
-convertTVar    :: (PP r, F.Reftable r, Transformable t) => [TVar] -> t q r -> t q r
---------------------------------------------------------------------------------
-convertTVar as = trans tx as []
-  where
-    tx αs _ t@(TRef (Gen c []) r) | Just α <- mkTvar αs c = TVar α r
-    tx _  _ t = t
-
-mkTvar :: (IsLocated a, F.Symbolic a) => [TVar] -> a -> Maybe TVar
-mkTvar αs r = listToMaybe [ α { tv_loc = srcPos r }  | α <- αs, F.symbol α == F.symbol r]
-
---------------------------------------------------------------------------------
-convertTvarVisitor :: (PP r, F.Reftable r) => Visitor () [TVar] (AnnRel r)
---------------------------------------------------------------------------------
-convertTvarVisitor = defaultVisitor {
-    ctxStmt = ctxStmtTvar
-  , ctxCElt = ctxCEltTvar
-  , txStmt  = transFmap (const . convertTVar)
-  , txExpr  = transFmap (const . convertTVar)
-  , txCElt  = transFmap (const . convertTVar)
-  }
-
-ctxStmtTvar as s = go s ++ as
-  where
-    go :: Statement (AnnRel r)  -> [TVar]
-    go s@(FunctionStmt {}) = grab s
-    go s@(InterfaceStmt {})    = grab s
-    go s@(ClassStmt {})    = grab s
-    go s@(ModuleStmt {})   = grab s
-    go _                   = []
-
-    grab :: Statement (FAnnQ q r) -> [TVar]
-    grab = concatMap factTVars . fFact . getAnnotation
-
-ctxCEltTvar as s = go s ++ as
-  where
-    go :: ClassElt (AnnRel r)  -> [TVar]
-    go s@Constructor{}    = grab s
-    go s@MemberMethDecl{} = grab s
-    go _                  = []
-
-    grab :: ClassElt (FAnnQ q r) -> [TVar]
-    grab = concatMap factTVars . fFact . getAnnotation
-
---------------------------------------------------------------------------------
-factTVars :: FactQ q r -> [TVar]
---------------------------------------------------------------------------------
-factTVars = go
-  where
-    tvars t | Just ts <- bkFuns t
-            = HS.toList $ foldUnions
-            $ map HS.fromList [ btvToTV <$> t | (t, _, _) <- ts ]
-            | otherwise
-            = []
-
-    foldUnions (α:αs) = foldl HS.intersection α αs
-    foldUnions _      = HS.empty
-
-    go (VarAnn _ _ (Just t)) = tvars t
-    go (SigAnn _ t)          = tvars t
-    go (FieldAnn (FI _ _ t)) = tvars t
-    go (MethAnn (MI _ mts))  = concatMap (tvars . snd) mts
-    go (CtorAnn t)           = tvars t
-    go (ClassAnn _ sig)      = btvToTV <$> b_args (sigTRef sig)
-    go (InterfaceAnn d)      = btvToTV <$> b_args (sigTRef (typeSig d))
-    go _                     = []
+-- --------------------------------------------------------------------------------
+-- -- | Convert bound TRefs to TVars
+-- --------------------------------------------------------------------------------
+--
+-- --------------------------------------------------------------------------------
+-- convertTVars :: (PP r, F.Reftable r) => BareRelRsc r -> BareRelRsc r
+-- --------------------------------------------------------------------------------
+-- convertTVars = visitRsc convertTvarVisitor []
+--
+-- --------------------------------------------------------------------------------
+-- convertTVar    :: (PP r, F.Reftable r, Transformable t) => [TVar] -> t q r -> t q r
+-- --------------------------------------------------------------------------------
+-- convertTVar as = trans tx as []
+--   where
+--     tx αs _ t@(TRef (Gen c []) r) | Just α <- mkTvar αs c = TVar α r
+--     tx _  _ t = t
+--
+-- mkTvar :: (IsLocated a, F.Symbolic a) => [TVar] -> a -> Maybe TVar
+-- mkTvar αs r = listToMaybe [ α { tv_loc = srcPos r }  | α <- αs, F.symbol α == F.symbol r]
+--
+-- --------------------------------------------------------------------------------
+-- convertTvarVisitor :: (PP r, F.Reftable r) => Visitor () [TVar] (AnnRel r)
+-- --------------------------------------------------------------------------------
+-- convertTvarVisitor = defaultVisitor {
+--     ctxStmt = ctxStmtTvar
+--   , ctxCElt = ctxCEltTvar
+--   , txStmt  = transFmap (const . convertTVar)
+--   , txExpr  = transFmap (const . convertTVar)
+--   , txCElt  = transFmap (const . convertTVar)
+--   }
+--
+-- ctxStmtTvar as s = go s ++ as
+--   where
+--     go :: Statement (AnnRel r)  -> [TVar]
+--     go s@(FunctionStmt {}) = grab s
+--     go s@(InterfaceStmt {})    = grab s
+--     go s@(ClassStmt {})    = grab s
+--     go s@(ModuleStmt {})   = grab s
+--     go _                   = []
+--
+--     grab :: Statement (FAnnQ q r) -> [TVar]
+--     grab = concatMap factTVars . fFact . getAnnotation
+--
+-- ctxCEltTvar as s = go s ++ as
+--   where
+--     go :: ClassElt (AnnRel r)  -> [TVar]
+--     go s@Constructor{}    = grab s
+--     go s@MemberMethDecl{} = grab s
+--     go _                  = []
+--
+--     grab :: ClassElt (FAnnQ q r) -> [TVar]
+--     grab = concatMap factTVars . fFact . getAnnotation
+--
+-- --------------------------------------------------------------------------------
+-- factTVars :: FactQ q r -> [TVar]
+-- --------------------------------------------------------------------------------
+-- factTVars = go
+--   where
+--     tvars t | Just ts <- bkFuns t
+--             = HS.toList $ foldUnions
+--             $ map HS.fromList [ btvToTV <$> t | (t, _, _) <- ts ]
+--             | otherwise
+--             = []
+--
+--     foldUnions (α:αs) = foldl HS.intersection α αs
+--     foldUnions _      = HS.empty
+--
+--     go (VarAnn _ _ (Just t)) = tvars t
+--     go (SigAnn _ t)          = tvars t
+--     go (FieldAnn (FI _ _ t)) = tvars t
+--     go (MethAnn (MI _ mts))  = concatMap (tvars . snd) mts
+--     go (CtorAnn t)           = tvars t
+--     go (ClassAnn _ sig)      = btvToTV <$> b_args (sigTRef sig)
+--     go (InterfaceAnn d)      = btvToTV <$> b_args (sigTRef (typeSig d))
+--     go _                     = []
 
 
 --------------------------------------------------------------------------------
@@ -571,4 +572,163 @@ fixFunBindersInType _ bs = go
 
 -- When costructing the substitution haskmap, if the list contains duplicate
 -- mappings, the later mappings take precedence.
+
+
+--------------------------------------------------------------------------------
+-- | Spec Transformer
+--------------------------------------------------------------------------------
+
+class AnnotTransformable t where
+  strans :: (ctx -> a -> b) -> (ctx -> b -> ctx) -> ctx -> t a -> t b
+
+instance AnnotTransformable Statement where
+  strans = stransStatement
+
+instance AnnotTransformable Expression where
+  strans = stransExpression
+
+instance AnnotTransformable Id where
+  strans = stransId
+
+instance AnnotTransformable ForInInit where
+  strans = stransForInInit
+
+instance AnnotTransformable ForInit where
+  strans = stransForInit
+
+instance AnnotTransformable CatchClause where
+  strans = stransCatchClause
+
+instance AnnotTransformable VarDecl where
+  strans = stransVarDecl
+
+instance AnnotTransformable ClassElt where
+  strans = stransClassElt
+
+instance AnnotTransformable EnumElt where
+  strans = stransEnumElt
+
+instance AnnotTransformable Prop where
+  strans = stransProp
+
+instance AnnotTransformable LValue where
+  strans = stransLvalue
+
+stransStatement f g ctx st = go st
+  where
+    a    = getAnnotation st
+    b    = f ctx a
+    ctx' = g ctx b
+    ss   = strans f g ctx'
+    go (BlockStmt a sts)         = BlockStmt b (ss <$> sts)
+    go (EmptyStmt a)             = EmptyStmt b
+    go (ExprStmt a e)            = ExprStmt b (ss e)
+    go (IfStmt a e s1 s2)        = IfStmt b (ss e) (ss s1) (ss s2)
+    go (IfSingleStmt a e s)      = IfSingleStmt b (ss e) (ss s)
+    go (WhileStmt a e s)         = WhileStmt b (ss e) (ss s)
+    go (DoWhileStmt a s e)       = DoWhileStmt b (ss s) (ss e)
+    go (BreakStmt a i)           = BreakStmt b (ss <$> i)
+    go (ContinueStmt a i)        = ContinueStmt b (ss <$> i)
+    go (LabelledStmt a i s)      = LabelledStmt b (ss i) (ss s)
+    go (ForInStmt a fi e s)      = ForInStmt b (ss fi) (ss e) (ss s)
+    go (ForStmt a fi me1 me2 s)  = ForStmt b (ss fi) (ss <$> me1) (ss <$> me2) (ss s)
+    go (TryStmt a s mcc ms)      = TryStmt b (ss s) (ss <$> mcc) (ss <$> ms)
+    go (ThrowStmt a e)           = ThrowStmt b (ss e)
+    go (ReturnStmt a me)         = ReturnStmt b (ss <$> me)
+    go (WithStmt a e s)          = WithStmt b (ss e) (ss s)
+    go (VarDeclStmt a vs)        = VarDeclStmt b (ss <$> vs)
+    go (FunctionStmt a i is mss) = FunctionStmt b (ss i) (ss <$> is) ((ss <$>) <$> mss)
+    go (ClassStmt a i cs)        = ClassStmt b (ss i) (ss <$> cs)
+    go (ModuleStmt a i sts)      = ModuleStmt b (ss i) (ss <$> sts)
+    go (InterfaceStmt a i)       = InterfaceStmt b (ss i)
+    go (EnumStmt a i es)         = EnumStmt b (ss i) (ss <$> es)
+    go s                         = error $ "[unimplemented] stransStatement for " ++ ppshow s
+
+stransExpression f g ctx exp = go exp
+  where
+    a    = getAnnotation exp
+    b    = f ctx a
+    ctx' = g ctx b
+    ss   = strans f g ctx'
+    go (StringLit _ s)          = StringLit b s
+    go (RegexpLit _ s b1 b2)    = RegexpLit b s b1 b2
+    go (NumLit _ d)             = NumLit b d
+    go (IntLit _ i)             = IntLit b i
+    go (BoolLit _ bl)           = BoolLit b bl
+    go (NullLit a)              = NullLit b
+    go (ArrayLit _ es)          = ArrayLit b (ss <$> es)
+    go (ObjectLit _ pes)        = ObjectLit b ((\(p,e) -> (ss p, ss e)) <$> pes)
+    go (HexLit _ s)             = HexLit b s
+    go (ThisRef a)              = ThisRef b
+    go (VarRef _ i)             = VarRef b (ss i)
+    go (DotRef _ e i)           = DotRef b (ss e) (ss i)
+    go (BracketRef _ e1 e2)     = BracketRef b (ss e1) (ss e2)
+    go (NewExpr _ e es)         = NewExpr b (ss e) (ss <$> es)
+    go (PrefixExpr _ op e)      = PrefixExpr b op (ss e)
+    go (UnaryAssignExpr _ op l) = UnaryAssignExpr b op (ss l)
+    go (InfixExpr _ op e1 e2)   = InfixExpr b op (ss e1) (ss e2)
+    go (CondExpr _ e1 e2 e3)    = CondExpr b (ss e1) (ss e2) (ss e3)
+    go (AssignExpr _ op l e)    = AssignExpr b op (ss l) (ss e)
+    go (ListExpr _ es)          = ListExpr b (ss <$> es)
+    go (CallExpr _ e es)        = CallExpr b (ss e) (ss <$> es)
+    go (SuperRef a)             = SuperRef b
+    go (FuncExpr _ mi is sts)   = FuncExpr b (ss <$> mi) (ss <$> is) (ss <$> sts)
+    go (Cast _ e)               = Cast b (ss e)
+    go (Cast_ _ e)              = Cast_ b (ss e)
+
+stransId f _ ctx (Id a s) = Id (f ctx a) s
+
+stransForInInit f g ctx (ForInVar i) = ForInVar (strans f g ctx i)
+
+stransForInit _ _ _   NoInit        = NoInit
+stransForInit f g ctx (VarInit vs)  = VarInit (strans f g ctx <$> vs)
+stransForInit f g ctx (ExprInit e)  = ExprInit (strans f g ctx e)
+
+stransCatchClause f g ctx (CatchClause a i s) = CatchClause b (ss i) (ss s)
+  where
+    b    = f ctx a
+    ctx' = g ctx b
+    ss   = strans f g ctx'
+
+stransVarDecl f g ctx (VarDecl a i me) = VarDecl b (ss i) (ss <$> me)
+  where
+    b    = f ctx a
+    ctx' = g ctx b
+    ss   = strans f g ctx'
+
+stransClassElt f g ctx ce = go ce
+  where
+    a    = getAnnotation ce
+    b    = f ctx a
+    ctx' = g ctx b
+    ss   = strans f g ctx'
+    go (Constructor a is sts)         = Constructor b (ss <$> is) (ss <$> sts)
+    go (MemberVarDecl a st i me)      = MemberVarDecl b st (ss i) (ss <$> me)
+    go (MemberMethDecl a st i is sts) = MemberMethDecl b st (ss i) (ss <$> is) (ss <$> sts)
+
+stransEnumElt f g ctx (EnumElt a i e) = EnumElt b (ss i) (ss e)
+  where
+    b    = f ctx a
+    ctx' = g ctx b
+    ss   = strans f g ctx'
+
+stransProp f g ctx p = go p
+  where
+    a    = getAnnotation p
+    b    = f ctx a
+    ctx' = g ctx b
+    ss   = strans f g ctx'
+    go (PropId a i)     = PropId b (ss i)
+    go (PropString a s) = PropString b s
+    go (PropNum a i)    = PropNum b i
+
+stransLvalue f g ctx lv = go lv
+  where
+    a    = getAnnotation lv
+    b    = f ctx a
+    ctx' = g ctx b
+    ss   = strans f g ctx'
+    go (LVar _ s)         = LVar b s
+    go (LDot _ e s)       = LDot b (ss e) s
+    go (LBracket _ e1 e2) = LBracket b (ss e1) (ss e2)
 

@@ -29,11 +29,11 @@ module Language.Rsc.Typecheck.Types (
   , rTypeR
 
   -- Bounded type variables
-  , btvToTV
+  , btvToTV, tvToBTV
 
   -- * Mutability primitives
   , tMut, tUqMut, tImm, tIM, tRO, trMut, trImm, trIM, trRO
-  , isRO, isMut, isImm, isUM, isUMRef, mutRelated
+  , isRO, isMut, isImm, isUM, isUMRef, mutRelated, mutRelatedBVar
 
   -- * Primitive Types
 
@@ -119,6 +119,10 @@ isUMRef t | TRef (Gen _ (m:_)) _ <- t, isUM m
           = False
 
 mutRelated t = isMut t || isImm t || isUM t || isRO t
+
+mutRelatedBVar (BTV _ _ (Just m)) = mutRelated m
+mutRelatedBVar _                  = False
+
 
 
 ---------------------------------------------------------------------
@@ -206,20 +210,20 @@ mkAndOpt ts     = Just $ mkAnd ts
 mkTCons         = (`TObj` fTop)
 
 ----------------------------------------------------------------------------------------
-mkUnion :: (F.Reftable r) => [RType r] -> RType r
+mkUnion :: F.Reftable r => [RTypeQ q r] -> RTypeQ q r
 ----------------------------------------------------------------------------------------
 mkUnion [ ] = TPrim TBot fTop
 mkUnion [t] = t
 mkUnion ts  = flattenUnions $ TOr ts
 
 ----------------------------------------------------------------------------------------
-bkUnion :: RType r -> [RType r]
+bkUnion :: RTypeQ q t -> [RTypeQ q t]
 ----------------------------------------------------------------------------------------
 bkUnion (TOr ts) = concatMap bkUnion ts
 bkUnion t        = [t]
 
 ----------------------------------------------------------------------------------------
-flattenUnions :: RType r -> RType r
+flattenUnions :: RTypeQ q r -> RTypeQ q r
 ----------------------------------------------------------------------------------------
 flattenUnions t@(TOr _) = TOr $ bkUnion t
 flattenUnions t         = t
@@ -346,10 +350,12 @@ btvToTV :: BTVarQ q r -> TVar
 -----------------------------------------------------------------------
 btvToTV  (BTV s l _ ) = TV s l
 
+tvToBTV  (TV s l)     = BTV s l Nothing
+
 tVar :: (F.Reftable r) => TVar -> RType r
 tVar = (`TVar` fTop)
 
-btVar :: (F.Reftable r) => BTVar r -> RType r
+btVar :: (F.Reftable r) => BTVarQ q r -> RType r
 btVar = tVar . btvToTV
 
 tNum, tBV32, tBool, tString, tTop, tVoid, tBot, tUndef, tNull, tAny, tErr :: F.Reftable r => RTypeQ q r

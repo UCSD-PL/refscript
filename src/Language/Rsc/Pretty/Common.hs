@@ -4,7 +4,15 @@
 {-# LANGUAGE OverlappingInstances #-}
 
 -- | Pretty-printing JavaScript.
-module Language.Rsc.Pretty.Common ( ppArgs, ppshow, pprint, PP (..), PPR, diePP ) where
+module Language.Rsc.Pretty.Common (
+    ppArgs
+  , ppshow
+  , pprint
+  , PP (..)
+  , PPR
+  , diePP
+  , inComments
+  ) where
 
 import           Control.Applicative           ((<$>))
 import           Control.Exception.Base
@@ -96,7 +104,7 @@ instance PP (QN l) where
   pp (QN p s) = pp p <> dot <> pp s
 
 instance PP (QP l) where
-  pp (QP _ _ []) = pp "<global>"
+  pp (QP _ _ []) = pp "[Top-Level]"
   pp (QP _ _ ms) = hcat $ punctuate dot $ map pp ms
 
 instance (Ord a, F.Fixpoint a) => PP (F.FixResult a) where
@@ -128,4 +136,10 @@ instance PP a => Show (EString a) where
 
 diePP :: (PP e, Typeable e) => e -> a
 diePP = throw . EString
+
+
+inComments p
+  =   text "/*"
+  $+$ p
+  $+$ text "*/"
 

@@ -270,7 +270,7 @@ functionInterface    = mkAbsName [] $ F.symbol "Function"
 emptyObjectInterface = mkAbsName [] $ F.symbol "EmptyObject"
 
 --------------------------------------------------------------------------------
--- resolveModule :: ClassHierarchy r -> AbsPath -> Maybe (ModuleDef r)
+-- RESolveModule :: ClassHierarchy r -> AbsPath -> Maybe (ModuleDef r)
 -- resolveType   :: ClassHierarchy r -> AbsName -> Maybe (TypeDeclQ AK r)
 -- resolveEnum   :: ClassHierarchy r -> AbsName -> Maybe EnumDef
 --------------------------------------------------------------------------------
@@ -283,7 +283,7 @@ typeMembersOfType :: (ExprReftable Int r, PPR r) => ClassHierarchy r -> RType r 
 typeMemersOfTDecl :: PPR r => ClassHierarchy r -> TypeDecl r -> TypeMembers r
 --------------------------------------------------------------------------------
 typeMembersOfType cha t
-  | Just (TObj _ ms _) <- tracePP ("EXPAND " ++ ppshow t) $ expandType Coercive cha t
+  | Just (TObj _ ms _) <- expandType Coercive cha t
   = ms
   | otherwise
   = mempty
@@ -309,8 +309,8 @@ data CoercionKind = Coercive | NonCoercive
 --  * If @c@ is `Coercive`, then primitive types will be treated as their
 --    object counterparts, i.e. String, Number, Boolean.
 ---------------------------------------------------------------------------
--- expandType :: (ExprReftable Int r, F.Reftable r)
---            => CoercionKind -> ClassHierarchy r -> RType r -> Maybe (RType r)
+expandType :: (ExprReftable Int r, PPR r)
+           => CoercionKind -> ClassHierarchy r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
 expandType _ _ t@(TObj _ _ _) = Just t
 
@@ -493,13 +493,14 @@ getSuperType cha (TRef (Gen nm ts) _)
 
 
 instance (F.Reftable r, PP r) => PP (ClassHierarchy r) where
-  pp (CHA g _ _)   =  text ""
+  pp (CHA g _ ms)  =  text ""
                   $+$ pp (take 80 (repeat '='))
                   $+$ text "Class Hierarchy"
                   $+$ pp (take 80 (repeat '-'))
                   $+$ vcat (ppEdge <$> edges g)
                   $+$ pp (take 80 (repeat '='))
+                  $+$ vcat (pp . snd <$> qenvToList ms)
     where
-      ppEdge (a,b) =  ppNode a <+> text "->" <+> ppNode b
-      ppNode       =  pp . lab' . context g
+      ppEdge (a,b) = ppNode a <+> text "->" <+> ppNode b
+      ppNode       = pp . lab' . context g
 

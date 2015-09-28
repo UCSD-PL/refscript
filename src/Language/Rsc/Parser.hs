@@ -25,7 +25,7 @@ import           Data.Either                      (partitionEithers)
 import qualified Data.Foldable                    as FO
 import qualified Data.List                        as L
 import           Data.Maybe                       (catMaybes)
-import           Data.Monoid                      (mconcat)
+import           Data.Monoid
 import           Data.Traversable                 (mapAccumL)
 import           Data.Tuple
 import           Language.Fixpoint.Errors
@@ -42,9 +42,11 @@ import           Language.Rsc.Misc                ((&))
 import           Language.Rsc.Names
 import           Language.Rsc.Parser.Annotations
 import           Language.Rsc.Parser.Declarations ()
+import           Language.Rsc.Parser.Types        (pCtxFromList)
 import           Language.Rsc.Program
 import           Language.Rsc.Transformations
 import           Language.Rsc.Traversals
+import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Language.Rsc.Visitor
 import           Prelude                          hiding (mapM)
@@ -102,7 +104,7 @@ mkRsc :: [Statement (SrcSpan, [Spec])] -> RefScript
 --------------------------------------------------------------------------------
 mkRsc ss = ss
          & mkRelRsc
-         & convertTVars
+         -- & convertTVars
          & expandAliases
          & replaceAbsolute
          & replaceDotRef
@@ -151,41 +153,55 @@ extractFact fs = map go fs
     go _                                   = Nothing
 
 
-type PState = Integer
-
 --------------------------------------------------------------------------------
 parseAnnotations :: [Statement (SrcSpan, [RawSpec])] -> Either FError [Statement (SrcSpan, [Spec])]
 --------------------------------------------------------------------------------
-parseAnnotations ss =
-  case mapAccumL (mapAccumL f) (0,[]) ss of
-    ((_,[]),b) -> Right b
-    ((_,es),_) -> Left  $ F.Unsafe es
+parseAnnotations ss
+  | [] <- errs = Right ss'
+  | otherwise  = Left (F.Unsafe errs)
   where
-    f st (ss,sp) = mapSnd (ss,) $ L.mapAccumL (parse ss) st sp
+    ses     = strans f g mempty <$> ss
+    errs    = concatMap (FO.concatMap fst) ses
+    ss'     = fmap snd <$> ses
+
+    f :: PContext -> (SrcSpan, [RawSpec]) -> ([Error], (SrcSpan, [Spec]))
+    f ctx (ss, specs) = mapSnd (ss,) $ L.mapAccumL (\errs spec -> parse ctx errs spec) [] specs
+
+    g :: PContext -> ([Error], (SrcSpan, [Spec])) -> PContext
+    g ctx = (ctx `mappend`) . mconcat . map h . snd . snd
+
+    h :: Spec -> PContext
+    h (FunctionDeclarationSpec t) = pCtxFromList $ fst $ bkAll $ snd t
+    h (FunctionExpressionSpec t)  = pCtxFromList $ fst $ bkAll t
+    h (InterfaceSpec t)           = pCtxFromList $ b_args $ sigTRef $ typeSig t
+    h (ClassSpec t)               = pCtxFromList $ b_args $ sigTRef t
+    h (MethodSpec t)              = mconcat $ pCtxFromList . fst . bkAll . snd <$> m_ty t
+    h _                           = mempty
+
 
 --------------------------------------------------------------------------------
-parse :: SrcSpan -> (PState, [Error]) -> RawSpec -> ((PState, [Error]), Spec)
+parse :: PContext -> [Error] -> RawSpec -> ([Error], Spec)
 --------------------------------------------------------------------------------
-parse _ (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
+parse ctx errs rawspec = failLeft $ runParser (parseRawSpec ctx rawspec) 0 f (getSpecString rawspec)
   where
-    parser s = do a     <- parseSpec s
-                  state <- getState
-                  it    <- getInput
-                  case it of
-                    ""  -> return (state, a)
-                    _   -> unexpected $ "trailing input: " ++ it
-
-    failLeft (Left err)      = ((st, fromError err : errs), ErrorSpec)
-    failLeft (Right (s, r))  = ((s, errs), r)
-
-    -- Slight change from this one:
+    failLeft (Left err) = (fromError err : errs, ErrorSpec)
+    failLeft (Right r)  = (errs, r)
+    f = sourceName $ sp_start ss
+    fromError err = mkErr ss   $ showErr err
+                              ++ "\n\nWhile parsing: "
+                              ++ show (getSpecString rawspec)
+    ss = srcPos rawspec
     --
+    -- Slight change from this one:
     -- http://hackage.haskell.org/package/parsec-3.1.5/docs/src/Text-Parsec-Error.html#ParseError
     --
     showErr = showErrorMessages "or" "unknown parse error" "expecting"
                 "unexpected" "end of input" . errorMessages
-    fromError err = mkErr ss   $ showErr err
-                              ++ "\n\nWhile parsing: "
-                              ++ show (getSpecString c)
-    ss = srcPos c
-    f = sourceName $ sp_start ss
+
+parseRawSpec ctx s
+  = do  a     <- parseSpec ctx s
+        it    <- getInput
+        case it of
+          ""  -> return a
+          _   -> unexpected $ "trailing input: " ++ it
+

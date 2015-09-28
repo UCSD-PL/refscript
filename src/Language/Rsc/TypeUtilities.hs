@@ -63,8 +63,6 @@ mkDotRefFunTy l g f tObj tField
   = return $ mkFun ([], [B x tObj], substThis x tField)
   where
     x = F.symbol "x"
-mkDotRefFunTy l _ f tObj _
-  = die $ errorMissingFld (srcPos l) f tObj
 
 
 -- | setProp<A, M extends Mutable>(o: { f[M]: A }, x: A) => A

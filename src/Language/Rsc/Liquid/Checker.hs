@@ -75,7 +75,7 @@ verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
       ssa <- EitherIO   $ ssaTransform p cha
       _   <- liftIO     $ donePhase Loud "Typecheck"
       tc  <- EitherIO   $ typeCheck cfg ssa cha
-      _   <- liftIO     $ dumpJS f "-tc" tc
+      _   <- liftIO     $ dumpJS f cha "-tc" tc
       _   <- liftIO     $ donePhase Loud "Generate Constraints"
       cgi <- pure       $ generateConstraints cfg tc cha
       res <- liftIO     $ solveConstraints tc f cgi
@@ -84,16 +84,17 @@ verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
 
 -- | Debug info
 --
-dumpJS f s p = writeFile (extFileName Ts (dropExtension f ++ s))
-                         (ppshow p ++ show (ppCasts p))
+dumpJS f cha s p = writeFile (extFileName Ts (dropExtension f ++ s)) $ show
+                 $  pp p
+                $+$ inComments (pp cha)
+                $+$ ppCasts p
 
 ppCasts (Rsc { code = Src fs })
-   =  text ""
-  $+$ text "/*"
-  $+$ nest 2 (fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+  | isEmpty castDoc = empty
+  | otherwise       = inComments (nest 2 castDoc)
+  where
+    castDoc = fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
                                             , TCast _ c <- fFact a ]
-             )
-  $+$ text "*/"
 
 
 -- | solveConstraints: Call solve with `ueqAllSorts` enabled.

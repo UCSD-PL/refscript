@@ -101,7 +101,7 @@ errorUniqueTypeParams l       = mkErr l $ printf "Only unique type paramteres ar
 -- Subtyping
 errorUserCast l t e           = mkErr l $ printf "User cast of type '%s' on '%s' failed." (ppshow t) (ppshow e)
 errorDownCast l t1 t2         = mkErr l $ printf "Downcast: %s => %s" (ppshow t1) (ppshow t2)
-errorClassExtends l x y t1 t2 = mkErr l $ printf "Type '%s' cannot extend type '%s'.\nType for '%s':\n%s\nType for '%s':\n%s" (ppshow x) (ppshow y)
+errorClassExtends l x y t1 t2 = mkErr l $ printf "Type '%s' cannot extend type '%s'. Type for '%s': '%s'. Type for '%s': '%s'" (ppshow x) (ppshow y)
                                                   (ppshow x) (ppshow t1) (ppshow y) (ppshow t2)
 errorIncompatTypes l a b      = mkErr l $ printf "Type '%s' is not assignable to '%s'." (ppshow a) (ppshow b)
 errorIncompatCovFields l a b  = mkErr l $ printf "Incompatible covariant fields when converting between elements: '%s' and '%s'." (ppshow a) (ppshow b)
@@ -118,7 +118,7 @@ errorIncompMutElt l f         = mkErr l $ printf "Property '%s' has incompatible
 errorOptionalElt l p t t'     = mkErr l $ printf "Unmatching optionality values for property '%s' in types '%s' and '%s'." (ppshow p) (ppshow t) (ppshow t')
 errorIncompatOptional l f     = mkErr l $ printf "Property '%s' has incompatible optionality modifiers." (ppshow f)
 errorConstrMissing l t        = mkErr l $ printf "Could not find constructor for type '%s'." (ppshow t)
-errorSubtype l t t'           = mkErr l $ printf "Type \n%s\n is not a subtype of\n%s" (ppshow t) (ppshow t')
+errorSubtype l t t'           = mkErr l $ printf "Type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
 errorTClassSubtype l s s'     = mkErr l $ printf "Type 'typeof %s' is not a subtype of 'typeof %s'" (ppshow s) (ppshow s')
 errorTEnumSubtype l s s'      = mkErr l $ printf "Type 'enum %s' is not a subtype of 'enum %s'." (ppshow s) (ppshow s')
 errorTModule l s s'           = mkErr l $ printf "Modules '%s' and '%s' are incompatible." (ppshow s) (ppshow s')
@@ -128,7 +128,7 @@ errorObjSubtype l t t' fs     = mkErr l $ printf "Object type '%s' is not a subt
 errorFuncSubtype l t t'       = mkErr l $ printf "Function type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
 
 -- Typechecking
-errorCallNotSup l fn ft es ts = mkErr l $ printf "Cannot call '%s' of type \n%s\nwith argument(s):\n%s\nof type:\n%s" (ppshow fn) (ppshow ft)
+errorCallNotSup l fn ft es ts = mkErr l $ printf "Cannot call '%s' of type '%s' with argument(s): %s of type: %s" (ppshow fn) (ppshow ft)
                                                   (show $ intersperse comma $ map pp es)
                                                   (show $ intersperse comma $ map pp ts)
 errorCallNotFound l e f       = mkErr l $ printf "Cannot find callable property '%s' of object '%s'." (ppshow f) (ppshow e)

@@ -46,7 +46,7 @@ type CGEnv = CGEnvR F.Reft
 
 type CGEnvEntry = EnvEntry F.Reft
 
-instance EnvLike r CGEnvR where
+instance CheckingEnvironment r CGEnvR where
   envNames  = cge_names
   envBounds = cge_bounds
   envCHA    = cge_cha
@@ -113,7 +113,7 @@ checkSyms m g ok x t = efoldRType h f F.emptySEnv [] t
                = Nothing
                | s `elem` biExtra
                = Nothing
-               | Just (VI _ a _ _) <- envLikeFindTy' s g
+               | Just (VI _ a _ _) <- chkEnvFindTy' s g
                = if a `elem` validAsgn
                    then Nothing
                    else Just $ errorAsgnInRef l s t a
@@ -150,5 +150,9 @@ initClassMethEnv :: MutabilityMod -> TypeSig F.Reft -> CGEnv -> CGEnv
 -------------------------------------------------------------------------------
 initClassMethEnv m (TS _ (BGen nm bs) _) γ
   = γ { cge_mut  = Just m
-      , cge_this = Just $ TRef (Gen nm (map btVar bs)) fTop }
+      , cge_this = Just tThis
+      }
+  where
+    tThis = TRef (Gen nm (map btVar bs)) fTop
+
 

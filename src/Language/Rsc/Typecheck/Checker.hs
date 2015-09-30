@@ -418,7 +418,10 @@ tcClassElt γ (TD sig ms) c@(MemberMethDecl l True x xs body)
 
 -- | Instance method
 --
--- TODO: check method mutability
+--   TODO: check method mutability
+--   TODO: The method's mutability should influence the type of tThis that is used
+--         as a binder to this.
+--   TODO: Also might not need 'tce_this'
 --
 tcClassElt γ (TD sig ms) c@(MemberMethDecl l False x xs bd)
   | Just (MI _ mts) <- F.lookupSEnv (F.symbol x) (tm_meth ms)
@@ -430,7 +433,16 @@ tcClassElt γ (TD sig ms) c@(MemberMethDecl l False x xs bd)
   | otherwise
   = fatal (errorClassEltAnnot (srcPos l) (sig) x) c
   where
-    mkEnv m = γ & initClassInstanceEnv sig & initClassMethEnv m sig
+    mkEnv m     = γ
+                & initClassInstanceEnv sig
+                & initClassMethEnv m sig
+                & tcEnvAdds [eThis]
+    TS _ bgen _ = sig
+    BGen nm bs  = bgen
+    tThis       = TRef (Gen nm (map btVar bs)) fTop
+    idThis      = Id l "this"
+    eThis       = (idThis, VI Local RdOnly Initialized tThis)
+
 
 
 --------------------------------------------------------------------------------
@@ -784,37 +796,28 @@ tcCall _ (CallExpr _ (SuperRef _)  _)
 -- | `e.m(es)`
 --
 tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
-  = runFailM (tcExpr γ e Nothing) >>= go
+  | isVariadicCall f
+  = fatal (unimplemented l "Variadic" ex) (ex, tBot)
+  | otherwise
+  = runFailM (tcExpr γ e Nothing) >>= \case
+      Right (_, t) | Just (t',tF)   <- getProp γ FieldAccess f t          -- Function field
+                   , isTFun tF ->
+                      do  (e', _ )  <- tcExprT l1 (ppshow em) γ e t'
+                          (es',to)  <- tcNormalCall γ l ex (es `zip` nths) tF
+                          return     $ (CallExpr l (DotRef l1 e' f) es', to)
+
+                   | Just (t', tF)  <- getProp γ MethodAccess f t ->     -- Invoking a method
+                      do  (e', _ )  <- tcExprT l1 (ppshow em) γ e t'
+                          (es', to) <- tcNormalCall γ l  ex (es `zip` nths) tF
+                          return     $ (CallExpr l (DotRef l1 e' f) es', to)
+
+                   | otherwise ->
+                      fatal (errorCallNotFound (srcPos l1) e f) (ex, tBot)
+
+      Left err ->
+            fatal err (ex,tBot)
   where
-    -- Variadic call
-    go (Right (_, t))
-      | isVariadicCall f, v:vs <- es
-      = do (e', _) <- tcExpr γ e Nothing
-           (v':vs', t') <- tcNormalCall γ l em ((v:vs) `zip` nths) t
-           return $ (CallExpr l (DotRef l1 e' f) (v':vs'), t')
-
-    -- Accessing and calling a function field
-    go (Right (_, t))
-      | Just (o,ft) <- getProp γ FieldAccess f t, isTFun ft
-      = do e' <- castM γ e t o
-           (es',t') <- tcNormalCall γ l ex (args es) ft
-           return $ (CallExpr l (DotRef l1 e' f) es', t')
-
-    -- Invoking a method
-    go (Right (_, t))
-      | Just (o,ft) <- getProp γ MethodAccess f t, isTFun ft
-      = do e' <- castM γ e t o
-           (e'':es', t') <- tcNormalCall γ l  ex ((e':es) `zip` nths) ft
-           return $ (CallExpr l (DotRef l1 e'' f) es', t')
-
-    go (Right (_,_))
-      = tcError $ errorCallNotFound (srcPos l) e f
-
-    go (Left err)
-      = fatal err (ex,tBot)
-
     isVariadicCall f = F.symbol f == F.symbol "call"
-    args = (`zip` nths)
 
 -- | `e(es)`
 tcCall γ (CallExpr l e es)

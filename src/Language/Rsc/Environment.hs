@@ -8,9 +8,9 @@
 
 module Language.Rsc.Environment (
 
-    EnvLike (..)
+    CheckingEnvironment (..)
   , EnvEntry
-  , envLikeFindTy, envLikeFindTy'
+  , chkEnvFindTy, chkEnvFindTy'
   , safeEnvFindTy
   , envFindBound
   , resolveModuleInEnv, resolveTypeInEnv, resolveEnumInEnv
@@ -45,7 +45,7 @@ import           Text.PrettyPrint.HughesPJ
 
 type EnvEntry r = VarInfo r
 
-class EnvLike r t where
+class CheckingEnvironment r t where
   --
   -- | Bindings in scope
   --
@@ -79,31 +79,31 @@ class EnvLike r t where
 
 
 -------------------------------------------------------------------------------
-envLikeFindTy' :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (EnvEntry r)
+chkEnvFindTy' :: (CheckingEnvironment r t, Symbolic a) => a -> t r -> Maybe (EnvEntry r)
 -------------------------------------------------------------------------------
-envLikeFindTy' x (envNames -> γ) = envFindTy x γ
+chkEnvFindTy' x (envNames -> γ) = envFindTy x γ
 
 -------------------------------------------------------------------------------
-envLikeFindTy :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (RType r)
+chkEnvFindTy :: (CheckingEnvironment r t, Symbolic a) => a -> t r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-envLikeFindTy x = fmap v_type . envLikeFindTy' x
+chkEnvFindTy x = fmap v_type . chkEnvFindTy' x
 
 -------------------------------------------------------------------------------
-envFindBound :: (EnvLike r t, Symbolic a) => a -> t r -> Maybe (RType r)
+envFindBound :: (CheckingEnvironment r t, Symbolic a) => a -> t r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 envFindBound x (envBounds -> b) = envFindTy x b
 
 --------------------------------------------------------------------------------
-resolveModuleInEnv  :: (PPR r, EnvLike r t) => t r -> AbsPath -> Maybe (ModuleDef r)
-resolveTypeInEnv    :: (PPR r, EnvLike r t) => t r -> AbsName -> Maybe (TypeDecl r)
-resolveEnumInEnv    :: (PPR r, EnvLike r t) => t r -> AbsName -> Maybe EnumDef
+resolveModuleInEnv  :: (PPR r, CheckingEnvironment r t) => t r -> AbsPath -> Maybe (ModuleDef r)
+resolveTypeInEnv    :: (PPR r, CheckingEnvironment r t) => t r -> AbsName -> Maybe (TypeDecl r)
+resolveEnumInEnv    :: (PPR r, CheckingEnvironment r t) => t r -> AbsName -> Maybe EnumDef
 --------------------------------------------------------------------------------
 resolveModuleInEnv (envCHA -> c) = resolveModule c
 resolveTypeInEnv   (envCHA -> c) = resolveType c
 resolveEnumInEnv   (envCHA -> c) = resolveEnum c
 
 
-instance (PP r, F.Reftable r, EnvLike r t) => PP (t r) where
+instance (PP r, F.Reftable r, CheckingEnvironment r t) => PP (t r) where
   pp = pp . envNames
 
 --------------------------------------------------------------------------------
@@ -115,9 +115,9 @@ toFgn = envMap go
     go v = v
 
 --------------------------------------------------------------------------------
-safeEnvFindTy :: (EnvLike r t, IsLocated l, Symbolic x, Monad m) => l -> t r -> x -> m (RType r)
+safeEnvFindTy :: (CheckingEnvironment r t, IsLocated l, Symbolic x, Monad m) => l -> t r -> x -> m (RType r)
 --------------------------------------------------------------------------------
-safeEnvFindTy l γ x | Just t <- envLikeFindTy x γ = return t
+safeEnvFindTy l γ x | Just t <- chkEnvFindTy x γ = return t
                     | otherwise = die $ bugEnvFindTy (srcPos l) (F.symbol x)
 
 globalLengthType γ = safeEnvFindTy (def::SrcSpan) γ "builtin_getLength"

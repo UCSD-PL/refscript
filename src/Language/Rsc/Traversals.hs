@@ -10,7 +10,7 @@ module Language.Rsc.Traversals (
     foldReft, efoldReft, efoldRType
 
   -- * Accumulators
-  , accumNamesAndPaths, accumModuleStmts, accumVars
+  , accumNamesAndPaths, accumModuleStmts, accumVars, accumVars'
 
   -- * Check well-formedness
   , checkTypeWF
@@ -293,6 +293,12 @@ accumVars s = [ (fSrc <$> n, k, VI loc a i t) | (n,l,k,a,i) <- hoistBindings s
     annToType (SigAnn   l t)          = [(l, t)]              -- Function
     annToType (VarAnn   l _ (Just t)) = [(l, t)]              -- Variables
     annToType _                       = [ ]
+
+--------------------------------------------------------------------------------
+accumVars' :: F.Reftable r => [Statement (AnnR r)] -> [(Id SrcSpan, Assignability)]
+--------------------------------------------------------------------------------
+accumVars' s = [ (fSrc <$> n, a) | (n,l,k,a,i) <- hoistBindings s ]
+
 
 type BindInfo a = (Id a, a, SyntaxKind, Assignability, Initialization)
 

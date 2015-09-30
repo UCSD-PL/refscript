@@ -397,7 +397,7 @@ indexP = xyP id colon sn
 --
 propP c
   = do  s     <- option InstanceK (reserved "static" *> return StaticK)
-        x     <- symbol <$> binderP
+        x     <- symbol <$> withinSpacesP binderP
         o     <- option Req (withinSpacesP (char '?') *> return Opt)
         _     <- colon
         m     <- option ambMut (mutabilityP c)
@@ -411,7 +411,7 @@ propP c
 -- | [STATIC] [MUTABILITY] m[<A..>](x:t,..): t
 methP c
   = do  s     <- option InstanceK (reserved "static" *> return StaticK)
-        m     <- methMutabilityP
+        m     <- withinSpacesP methMutabilityP
         x     <- symbol <$> identifierP
         o     <- option Req (withinSpacesP (char '?') *> return Opt)
         t     <- methSigP c

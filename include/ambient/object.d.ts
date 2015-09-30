@@ -106,7 +106,7 @@ interface ObjectConstructor<M extends ReadOnly> {
 declare var Object: ObjectConstructor<ReadOnly>;
 
 
-interface PropertyDescriptor<M> {
+interface PropertyDescriptor<M extends ReadOnly> {
     configurable?: boolean;
     enumerable?: boolean;
     value?: any;

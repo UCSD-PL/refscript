@@ -67,7 +67,7 @@ data TCEnv r  = TCE {
 
 type TCEnvO r = Maybe (TCEnv r)
 
-instance EnvLike r TCEnv where
+instance CheckingEnvironment r TCEnv where
   envNames  = tce_names
   envBounds = tce_bounds
   envPath   = tce_path

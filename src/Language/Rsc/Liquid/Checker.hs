@@ -71,8 +71,10 @@ verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
       _   <- liftIO     $ donePhase Loud "Parse Files"
       _   <- pure       $ checkTypeWF p
       cha <- liftEither $ mkCHA p
+      _   <- liftIO     $ dumpJS f cha "-parse" p
       _   <- liftIO     $ donePhase Loud "SSA Transform"
       ssa <- EitherIO   $ ssaTransform p cha
+      _   <- liftIO     $ dumpJS f cha "-ssa" ssa
       _   <- liftIO     $ donePhase Loud "Typecheck"
       tc  <- EitherIO   $ typeCheck cfg ssa cha
       _   <- liftIO     $ dumpJS f cha "-tc" tc
@@ -94,7 +96,7 @@ ppCasts (Rsc { code = Src fs })
   | otherwise       = inComments (nest 2 castDoc)
   where
     castDoc = fcat $ map ppEntry entries
-    ppEntry = \(s, c) -> pp s $+$ nest 4 (pp c)
+    ppEntry = \(_, c) -> pp c
 
     entries = [ (srcPos a, c) | a <- concatMap FO.toList fs
                               , TCast _ c <- fFact a ]
@@ -495,18 +497,32 @@ consClassElt g (TD sig ms) (MemberMethDecl l True x xs body)
 
 -- | Instance method
 --
+--   TODO: The method's mutability should influence the type of tThis that is used
+--         as a binder to this.
+--   TODO: Also might not need 'cge_this'
+--
 consClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
   | Just (MI _ mts) <- F.lookupSEnv (F.symbol x) (tm_meth ms)
   = do  let (ms, ts) = unzip mts
         its         <- cgFunTys l x xs $ mkAnd ts
         let mts'     = zip ms its
-        mapM_ (\(m,t) -> consCallable l (mkEnv m) x xs body t) mts'
+        mapM_ (\(m,t) -> do
+            let g = mkEnv m
+            g'   <- cgEnvAdds "consClassElt-meth" [eThis] g
+            consCallable l g' x xs body t
+          ) mts'
 
   | otherwise
   = cgError $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
   where
-    mkEnv m = g & initClassInstanceEnv sig & initClassMethEnv m sig
-
+    mkEnv m     = g
+                & initClassInstanceEnv sig
+                & initClassMethEnv m sig
+    TS _ bgen _ = sig
+    BGen nm bs  = bgen
+    tThis       = TRef (Gen nm (map btVar bs)) fTop
+    idThis      = Id l "this"
+    eThis       = (idThis, VI Local RdOnly Initialized tThis)
 
 --------------------------------------------------------------------------------
 consAsgn :: AnnLq -> CGEnv -> Id AnnLq -> Expression AnnLq -> CGM (Maybe CGEnv)
@@ -636,36 +652,32 @@ consExpr g (CallExpr l (SuperRef _) es) _
   where
 
 -- | e.m(es)
-consExpr g c@(CallExpr l em@(DotRef _ e f) es) _
-  = mseq (consExpr g e Nothing) $ \(x,g') -> cgSafeEnvFindTyM x g' >>= go g' x
+consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
+  | isVariadicCall f
+  = cgError (unimplemented l "Variadic" ex)
+  | otherwise
+  = mseq (consExpr g e Nothing) $ \(x,g') -> do
+      ft     <- cgSafeEnvFindTyM x g'
+      go g' x ft
   where
-             -- Variadic call error
-    go g x t | isVariadicCall f, [] <- es
-             = cgError $ errorVariadicNoArgs (srcPos l) em
-
-             -- Variadic call
-             | isVariadicCall f, v:vs <- es
-             = consCall g l em (argsThis v vs) t
-
-             -- Accessing and calling a function field
+    go g x t
+             -- Function field
              --
-             -- TODO: 'this' should not appear in ft
-             --        Add check for this.
+             -- TODO: 'this' should not appear in ft. Add check for this.
              --
-             | Just (_,ft) <- getProp g FieldAccess f t, isTFun ft
-             = consCall g l c (args es) ft
+             | Just (_,ft) <- getProp g FieldAccess f t
+             , isTFun ft
+             = consCall g l ex (args es) ft
 
              -- Invoking a method
              | Just (_,ft) <- getProp g MethodAccess f t
-             = consCall g l c (argsThis (vr x) es) ft
+             = consCall g l ex (args es) ft
 
              | otherwise
              = cgError $ errorCallNotFound (srcPos l) e f
 
     isVariadicCall f = F.symbol f == F.symbol "call"
     args vs          = (,Nothing) <$> vs
-    argsThis v vs    = (v:vs) `zip` nths
-    vr               = VarRef $ getAnnotation e
 
 -- | e(es)
 --

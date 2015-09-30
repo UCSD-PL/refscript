@@ -16,19 +16,16 @@ import           Prelude                    hiding (maybe)
 import           Text.PrettyPrint.HughesPJ
 
 instance (PP r, F.Reftable r) => PP (Cast r) where
-  pp CNo         = text "No cast"
-  pp (CDead e t) = text "Dead code:" <+> pp e $+$ pp t
-  pp (CUp t1 t2) = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
-  pp (CDn t1 t2) = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
+  pp CNo          = text "No cast"
+  pp (CDead es t) = vcat $ map (\e -> text "Fatal" <+> pp e) es
+  pp (CUp t1 t2)  = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
+  pp (CDn t1 t2)  = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
 
 instance PP SubTRes where
   pp EqT        = text "="
   pp (SubErr _) = text "dead"
   pp SubT       = text "UP"
   pp SupT       = text "DN"
-
-instance PP (SsaInfo r) where
-  pp (SI i) =  pp $ fmap (const ()) i
 
 instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)                 = text "phi"             <+> pp x

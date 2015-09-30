@@ -45,13 +45,14 @@ instance PP AccessKind where
 
 
 -- | `getProp γ b x s t` performs the access `x.f`, where @t@ is the type
--- assigned to @x@ and returns a triplet containing:
---  (a) the subtype of @t@ for which the access of field @f@ is successful,
---  (b) the accessed type, and
---  [ (c) the mutability associcated with the accessed element ]
+--   assigned to @x@ and returns a triplet containing:
+--
+--   (a) the subtype of @t@ for which the access of field @f@ is successful, and
+--
+--   (b) the accessed type.
 --
 --------------------------------------------------------------------------------
-getProp :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
+getProp :: (PPRD r, CheckingEnvironment r g, F.Symbolic f, PP f)
         => g r -> AccessKind -> f -> RType r -> Maybe (RType r, RType r)
 --------------------------------------------------------------------------------
 getProp γ b f t@(TPrim _ _) = getPropPrim γ b f t
@@ -95,7 +96,7 @@ getProp _ _ _ _ = Nothing
 
 
 --------------------------------------------------------------------------------
-getPropPrim :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
+getPropPrim :: (PPRD r, CheckingEnvironment r g, F.Symbolic f, PP f)
             => g r -> AccessKind -> f -> RType r -> Maybe (RType r, RType r)
 --------------------------------------------------------------------------------
 getPropPrim γ b f t@(TPrim c _) =
@@ -119,7 +120,7 @@ getPropPrim _ _ _ _ = error "getPropPrim should only be applied to TApp"
 -- TODO: Is fixRet necessary?
 --
 --------------------------------------------------------------------------------
-extractCtor :: (PPRD r, EnvLike r g) => g r -> RType r -> Maybe (RType r)
+extractCtor :: (PPRD r, CheckingEnvironment r g) => g r -> RType r -> Maybe (RType r)
 --------------------------------------------------------------------------------
 extractCtor γ t = go t
   where
@@ -136,7 +137,7 @@ extractCtor γ t = go t
 -- defCtor x vs = mkAll vs $ TFun Nothing [] (retT x vs) fTop
 
 --------------------------------------------------------------------------------
-extractCall :: (EnvLike r g, PPRD r) => g r -> RType r -> [IOverloadSig r]
+extractCall :: (CheckingEnvironment r g, PPRD r) => g r -> RType r -> [IOverloadSig r]
 --------------------------------------------------------------------------------
 extractCall γ             = zip [0..] . go []
   where
@@ -150,7 +151,7 @@ extractCall γ             = zip [0..] . go []
     go _  _               = []
 
 --------------------------------------------------------------------------------
-accessMember :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
+accessMember :: (PPRD r, CheckingEnvironment r g, F.Symbolic f, PP f)
              => g r -> AccessKind -> StaticKind -> f -> TypeMembers r -> Maybe (RType r)
 --------------------------------------------------------------------------------
 accessMember _ MethodAccess static m ms
@@ -170,7 +171,7 @@ accessMember _ FieldAccess static f ms
   , validFieldName f
   = Just t
   | otherwise
-  = error $ "Not found: " ++ ppshow f
+  = Nothing
   where
     props | static == StaticK = tm_sprop
           | otherwise         = tm_prop
@@ -181,7 +182,7 @@ validFieldName  :: F.Symbolic f => f -> Bool
 validFieldName f = F.symbol f `notElem` excludedFieldSymbols
 
 --------------------------------------------------------------------------------
-lookupAmbientType :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s, PP f)
+lookupAmbientType :: (PPRD r, CheckingEnvironment r g, F.Symbolic f, F.Symbolic s, PP f)
                   => g r -> AccessKind -> f -> s -> Maybe (RType r)
 --------------------------------------------------------------------------------
 lookupAmbientType γ b f amb
@@ -194,7 +195,7 @@ lookupAmbientType γ b f amb
 -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 --------------------------------------------------------------------------------
-getPropUnion :: (PPRD r, EnvLike r g, F.Symbolic f, PP f)
+getPropUnion :: (PPRD r, CheckingEnvironment r g, F.Symbolic f, PP f)
              => g r -> AccessKind -> f -> [RType r] -> Maybe (RType r, RType r)
 --------------------------------------------------------------------------------
 getPropUnion γ b f ts =

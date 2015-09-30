@@ -6,7 +6,7 @@
 module Language.Rsc.Annotations (
 
   -- * SSA
-    SsaInfo(..), Var
+    Var
 
   , NodeId
   , UFact, FactQ (..), Fact, phiVarsAnnot
@@ -173,11 +173,6 @@ type UAnnSSA   = AnnSSA  ()
 type UAnnTc    = AnnTc ()
 type UAnnInfo  = AnnInfo ()
 
-
-newtype SsaInfo r = SI (Var r) deriving (Typeable, Data)
-
-instance Eq (SsaInfo r) where
-  SI i1 == SI i2 = i1 == i2
 
 type Var r = Id (AnnSSA r)
 

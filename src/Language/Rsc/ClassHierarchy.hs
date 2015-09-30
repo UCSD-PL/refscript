@@ -335,8 +335,10 @@ expandType _ cha t@(TRef (Gen n ts@(mut:_)) r)
   | isClassType cha t = (\m -> TObj mut m r) . fltInst <$> ms
   | otherwise         = (\m -> TObj mut m r)           <$> ms
   where
-    ms = expandWithSubst cha <$> resolveType cha n <*> return ts
-    fltInst (TM p _ m _ _ _ s n) = TM p mempty m mempty Nothing Nothing s n
+    ms      =  expandWithSubst cha
+           <$> resolveType cha n
+           <*> return ts
+    fltInst = \(TM p m _ _ _ _ s n) -> TM p m mempty mempty Nothing Nothing s n
 
 -- | Ambient type: String, Number, etc.
 --
@@ -345,14 +347,14 @@ expandType _ cha t@(TRef (Gen n []) r)
   | otherwise         = (\m -> TObj tImm m r)           <$> ms
   where
     ms = typeMemersOfTDecl cha <$> resolveType cha n
-    fltInst (TM p _ m _ _ _ s n) = TM p mempty m mempty Nothing Nothing s n
+    fltInst (TM p m _ _ _ _ s n) = TM p m mempty mempty Nothing Nothing s n
 
 expandType _ cha (TClass (BGen n ts))
   = (\m -> TObj tImm m fTop) . fltStat <$> ms
   where
     ms  = expandWithSubst cha <$> resolveType cha n <*> return ts'
     ts' = [ tVar $ TV x s | BTV x s _ <- ts ] -- these shouldn't matter anyway
-    fltStat (TM _ p _ m c k _ _) = TM mempty p mempty m c k Nothing Nothing
+    fltStat (TM _ _ p m c k _ _) = TM mempty mempty p m c k Nothing Nothing
 
 expandType _ cha (TMod n)
   = (\m -> TObj tImm m fTop) <$> tmFromFields

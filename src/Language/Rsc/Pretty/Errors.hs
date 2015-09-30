@@ -1,19 +1,19 @@
-{-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverlappingInstances      #-}
 
 module Language.Rsc.Pretty.Errors where
 
-import Debug.Trace
-import Text.Printf 
-import Text.PrettyPrint.HughesPJ
-import Language.Rsc.Locations
-import Language.Rsc.Pretty.Common
+import           Debug.Trace
+import           Language.Rsc.Locations
+import           Language.Rsc.Pretty.Common
+import           Text.PrettyPrint.HughesPJ
+import           Text.Printf
 
-import Language.Fixpoint.Errors
-import Language.Fixpoint.Misc
-import Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Misc
+import           Language.Fixpoint.PrettyPrint
 
 
 ---------------------------------------------------------------------
@@ -27,9 +27,9 @@ ltracePP     ::  (PP a, IsLocated l) => l -> String -> a -> a
 ltracePP l s x = trace (printf "\nTrace: [%s: %s]: %s" (ppshow (srcPos l)) s (ppshow x)) x
 
 instance PP Error where
-  pp = pprint
+  pp e = pp (errLoc e) <+> pp (errMsg e)
 
 convertError tgt e  = errortext $ msg <+> pp e
-  where 
+  where
     msg             = text $ "Cannot convert to: " ++ tgt
 

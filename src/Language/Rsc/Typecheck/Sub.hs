@@ -33,7 +33,7 @@ import           Language.Rsc.Pretty
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 
-type FE g = (EnvLike () g, Functor g)
+type FE g = (CheckingEnvironment () g, Functor g)
 
 --------------------------------------------------------------------------------
 isSubtype :: (PPR r, FE g) => g r -> RType r -> RType r -> Bool

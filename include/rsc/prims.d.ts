@@ -130,6 +130,7 @@ declare function builtin_OpLAnd(x: any, y: any): any;
 //
 // /*   predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
 
+declare function builtin_BICtorExit(): void;
 
 // RUN-TIME TAGS
 

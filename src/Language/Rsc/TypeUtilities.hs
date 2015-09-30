@@ -46,7 +46,7 @@ import           Text.PrettyPrint.HughesPJ
 -- | Dot ref
 --
 ---------------------------------------------------------------------------------
-mkDotRefFunTy :: (PP r, EnvLike r t, PP f, IsLocated l, F.Symbolic f, Monad m
+mkDotRefFunTy :: (PP r, CheckingEnvironment r t, PP f, IsLocated l, F.Symbolic f, Monad m
                  , ExprReftable F.Expr r, ExprReftable Int r, F.Reftable r)
               => l -> t r -> f -> RType r -> RType r -> m (RType r)
 ---------------------------------------------------------------------------------

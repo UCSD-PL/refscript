@@ -4,11 +4,10 @@ function foo(f: { f: any }) {
 
 }
 
-/*@ x :: [Immutable]
-         {  f: /\ ({ string | v = "aaa"})=>string
-               /\ ({ number | v > 0    })=>number 
-         } */
+/*@ x :: {
+            f: ({ string | v = "aaa"}) => string
+            f: ({ number | v > 0    }) => number
+        } */
 declare var x;
 
 foo(x);
-

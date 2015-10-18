@@ -21,7 +21,7 @@ import qualified Data.Foldable                      as FD
 import           Data.Function                      (on)
 import           Data.Generics
 import qualified Data.IntMap.Strict                 as I
-import           Data.List                          (find, nub, sortBy)
+import           Data.List                          (any, find, nub, sortBy)
 import qualified Data.Map.Strict                    as M
 import           Data.Maybe                         (catMaybes, fromMaybe, maybeToList)
 import           Data.Monoid                        (mappend, mempty)
@@ -376,7 +376,7 @@ tcVarDecl γ v@(VarDecl _ x Nothing)
 tcClassElt :: Unif r => TCEnv r -> TypeDecl r -> ClassElt (AnnTc r) -> TCM r (ClassElt (AnnTc r))
 --------------------------------------------------------------------------------
 -- | Constructor
-tcClassElt γ (TD sig@(TS _ (BGen _ bs) _) ms) (Constructor l xs body)
+tcClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
   = do  its    <- tcFunTys l ctor xs ctorTy
         body'  <- foldM (tcCallable γ' l ctor xs) body its
         return  $ Constructor l xs body'
@@ -384,8 +384,19 @@ tcClassElt γ (TD sig@(TS _ (BGen _ bs) _) ms) (Constructor l xs body)
     γ'     = γ
            & initClassInstanceEnv sig
            & initClassCtorEnv sig
+           & tcEnvAdd cExit viExit
            -- TODO: TEST THIS
     ctor   = builtinOpId BICtor
+
+    thisT = TRef (Gen nm (map btVar bs)) fTop
+    cExit = builtinOpId BICtorExit
+    viExit = VI Local Ambient Initialized $ mkFun (bs, xts, ret)
+    ret   = thisT
+    xts   = sortBy c_sym [ B x t' | (x, FI _ _ t) <- F.toListSEnv (tm_prop ms)
+                                  , let t' = t ] -- unqualifyThis g0 thisT t ]
+    out   = [ f | (f, FI _ m _) <- F.toListSEnv (tm_prop ms), isImm m ]
+    v_sym = F.symbol $ F.vv Nothing
+    c_sym = on compare b_sym
     ctorTy = fromMaybe (die $ unsupportedNonSingleConsTy (srcPos l)) (tm_ctor ms)
 
 -- | Static field
@@ -557,7 +568,7 @@ tcExpr γ e@(VarRef l x) _
   | Just t <- to, isCastId x  -- Avoid TC added casts
   = return (e,t)
 
-  | Just t <- to, disallowed t
+  | Just t <- to, isUMRef t
   = fatal (errorAssignsFields (fSrc l) x t) (e, tBot)
 
   | Just t <- to
@@ -567,8 +578,6 @@ tcExpr γ e@(VarRef l x) _
   = fatal (errorUnboundId (fSrc l) x) (VarRef l x, tBot)
   where
     to = tcEnvFindTy x γ
-    disallowed (TRef (Gen _ (m:_)) _) = isUM m
-    disallowed _ = False
 
 -- | e ? e1 : e2
 --
@@ -930,7 +939,7 @@ tcCallCase γ@(tce_ctx -> ξ) l fn (unzip -> (es, ts)) ft
         θ               <- unifyTypesM (srcPos l) γ lhs rhs
         let θβ           = fromList [ (TV s l, t) | BTV s l (Just t) <- βs ]
         let θ'           = θ `mappend` θβ
-        let (lhs', rhs') = apply θ' (lhs, rhs)
+        let (lhs', rhs') = apply θ' $ (lhs, rhs)
         es'             <- zipWith3M (castM γ) es lhs' rhs'
         return           $ (es', apply θ ot)
 
@@ -1052,28 +1061,36 @@ unifyPhiTypes l γ x t1 t2 θ
   , on (==) (apply θ') t1 t2
   = setSubst θ' >> return (apply θ' t1)
 
+  | Right θ' <- substE
+  = do  setSubst θ'
+        let t1' = apply θ' t1
+            t2' = apply θ' t2
+            to  = go t1' t2'
+        case to of
+          Right t -> return t
+          Left  e -> tcError e
+
   | otherwise
   = fatal (errorEnvJoin (srcPos l) x (toType t1) (toType t2)) t1
-
-    -- Right θ' | isTUndef t1 -> setSubst θ' >> return (apply θ' $ orUndef t2)
-    --          | isTUndef t2 -> setSubst θ' >> return (apply θ' $ orUndef t1)
-    --          | isTNull  t1 -> setSubst θ' >> return (apply θ' $ orNull  t2)
-    --          | isTNull  t2 -> setSubst θ' >> return (apply θ' $ orNull  t1)
-    --          | on (==) (apply θ') t1 t2   -> setSubst θ' >> return (apply θ' t1)
-    --          | on (==) (apply θ') t1' t2' -> setSubst θ'
-    --                                       >> return (apply θ' $ fillNullOrUndef t1 t2 t1)
-    --          | otherwise   -> tcError $ errorEnvJoin (srcPos l) x (toType t1) (toType t2)
   where
-    substE                  = unifys (srcPos l) γ θ [t1] [t2]
-    -- (t1', t2')              = mapPair (mkUnion . clear . bkUnion) (t1, t2)
-    -- fillNullOrUndef t1 t2 t | any isMaybeNull  [t1,t2] = fillUndef t1 t2 $ orNull t
-    --                         | otherwise                = t
-    -- fillUndef t1 t2 t       | any isMaybeUndef [t1,t2] = orUndef t
-    --                         | otherwise                = t
-    -- isMaybeUndef            = any isUndef . bkUnion
-    -- isMaybeNull             = any isNull  . bkUnion
-    -- clear ts                = [ t | t <- ts, not (isNull t) && not (isUndef t) ]
+    go a b  | isTUndef a   = Right $ orUndef b
+            | isTUndef b   = Right $ orUndef a
+            | isTNull a    = Right $ orNull b
+            | isTNull b    = Right $ orNull a
+            | maybeNull a  = orNull  <$> go (cleanNull a) b
+            | maybeNull b  = orNull  <$> go a (cleanNull b)
+            | maybeUndef a = orUndef <$> go (cleanUndef a) b
+            | maybeUndef b = orUndef <$> go a (cleanUndef b)
+            | a `equiv` b  = Right a
+            | otherwise    = Left $ errorEnvJoin (srcPos l) x (toType t1) (toType t2)
 
+    substE      = unifys (srcPos l) γ θ [t1] [t2]
+    clean       = cleanNull . cleanUndef
+    cleanNull   = mkUnion . filter (not . isTNull)  . bkUnion
+    cleanUndef  = mkUnion . filter (not . isTUndef) . bkUnion
+    equiv a b   = isSubtype γ a b && isSubtype γ b a
+    maybeNull   = any isTNull . bkUnion
+    maybeUndef  = any isTNull . bkUnion
 
 --------------------------------------------------------------------------------
 postfixStmt :: a -> [Statement a] -> Statement a -> Statement a

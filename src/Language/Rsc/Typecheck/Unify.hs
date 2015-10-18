@@ -99,30 +99,29 @@ unify l γ θ t1 t2
 unify _ _ θ _  _ = return θ
 
 -----------------------------------------------------------------------------
-unifyUnions :: Unif r
-            => SrcSpan
-            -> TCEnv r
-            -> RSubst r
-            -> RType r
-            -> RType r
-            -> Either Error (RSubst r)
+unifyUnions :: Unif r => SrcSpan -> TCEnv r
+            -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 unifyUnions l γ θ t1 t2
-  | [v1] <- v1s
-  , [  ] <- v2s
+  | [  ] <- v1s, [  ] <- v2s
+  = unifys l γ θ c1s' c2s'
+
+  | [v1] <- v1s, [  ] <- v2s
   = unify l γ θ v1 (mkUnion unmatched2) >>= \θ1 ->
     unifys l γ θ1 c1s' c2s'
-  | [  ] <- v1s
-  , [v2] <- v2s
+
+  | [  ] <- v1s, [v2] <- v2s
   = unify l γ θ (mkUnion unmatched1) v2 >>= \θ1 ->
      unifys l γ θ1 c1s' c2s'
-  | [v1] <- v1s
-  , [v2] <- v2s
+
+  | [v1] <- v1s, [v2] <- v2s
   = do  θ1 <- unify l γ θ  v1 (mkUnion unmatched2)
         θ2 <- unify l γ θ1 (mkUnion unmatched1) v2
         unifys l γ θ2 c1s' c2s'
+
   | length v1s > 1
   = Left $ unsupportedUnionTVar (srcPos l) t1
+
   | otherwise
   = Left $ unsupportedUnionTVar (srcPos l) t2
   where

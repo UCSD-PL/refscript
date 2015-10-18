@@ -146,6 +146,7 @@ extractFact fs = map go fs
     go (FunctionExpressionSpec t)          = Just $ SigAnn loc t
     go (InterfaceSpec t)                   = Just $ InterfaceAnn t
     go (ClassSpec t)                       = Just $ ClassAnn loc t
+    go (ModuleSpec t)                      = Just $ ModuleAnn loc t
     go (ConstructorSpec t)                 = Just $ CtorAnn t
     go (CastSpec _ t)                      = Just $ UserCast t
     go (FieldSpec f)                       = Just $ FieldAnn f
@@ -170,6 +171,7 @@ parseAnnotations ss
     g :: PContext -> ([Error], (SrcSpan, [Spec])) -> PContext
     g ctx = (ctx `mappend`) . mconcat . map h . snd . snd
 
+    -- Update the tvar context
     h :: Spec -> PContext
     h (FunctionDeclarationSpec t) = pCtxFromList $ fst $ bkAll $ snd t
     h (FunctionExpressionSpec t)  = pCtxFromList $ fst $ bkAll t

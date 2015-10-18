@@ -289,10 +289,11 @@ accumVars s = [ (fSrc <$> n, k, VI loc a i t) | (n,l,k,a,i) <- hoistBindings s
                                               , fact        <- fFact l
                                               , (loc, t)    <- annToType fact ]
   where
-    annToType (ClassAnn l (TS _ b _)) = [(l, TClass b)]       -- Class
-    annToType (SigAnn   l t)          = [(l, t)]              -- Function
-    annToType (VarAnn   l _ (Just t)) = [(l, t)]              -- Variables
-    annToType _                       = [ ]
+    annToType (ClassAnn   l (TS _ b _)) = [(l, TClass b)]       -- Class
+    annToType (SigAnn     l t         ) = [(l, t)]              -- Function
+    annToType (VarAnn     l _ (Just t)) = [(l, t)]              -- Variables
+    annToType (ModuleAnn  l q         ) = [(l, TMod q)]         -- Modules
+    annToType _                         = [ ]
 
 --------------------------------------------------------------------------------
 accumVars' :: F.Reftable r => [Statement (AnnR r)] -> [(Id SrcSpan, Assignability)]
@@ -310,14 +311,14 @@ hoistBindings = snd . visitStmts vs ()
   where
     vs = scopeVisitor { accStmt = acs, accVDec = acv }
 
-    acs _ (FunctionStmt a x _ (Just _)) = [(x, a, FuncDeclKind, RdOnly, Initialized)]
-    acs _ (FunctionStmt a x _ Nothing ) = [(x, a, FuncDeclKind, Ambient, Initialized)]
-    acs _ (ClassStmt a x _)  = [(x, a, ClassDeclKind, RdOnly, Initialized)]
-    acs _ (ModuleStmt a x _) = [(x, a { fFact = modAnn x a }, ModuleDeclKind, RdOnly, Initialized)]
-    acs _ (EnumStmt a x _)   = [(x, a { fFact = enumAnn x a }, EnumDeclKind, RdOnly, Initialized)]
-    acs _ _                  = []
+    acs _ (FunctionStmt a x _ (Just _)) = [(x, a, FuncDeclKind  , RdOnly , Initialized)]
+    acs _ (FunctionStmt a x _ Nothing ) = [(x, a, FuncDeclKind  , Ambient, Initialized)]
+    acs _ (ClassStmt    a x _         ) = [(x, a, ClassDeclKind , RdOnly , Initialized)]
+    acs _ (ModuleStmt   a x _         ) = [(x, a, ModuleDeclKind, RdOnly , Initialized)]
+    acs _ (EnumStmt     a x _         ) = [(x, a, EnumDeclKind  , RdOnly , Initialized)]
+    acs _ _                             = []
 
-    acv _ (VarDecl l n ii)   = [(n, l, VarDeclKind, varAsgn l, inited l ii)]
+    acv _ (VarDecl l n ii)              = [(n, l, VarDeclKind, varAsgn l, inited l ii)]
 
     inited l _        | any isAmbient (fFact l)
                       = Initialized
@@ -327,11 +328,7 @@ hoistBindings = snd . visitStmts vs ()
     isAmbient (VarAnn _ Ambient _) = True
     isAmbient _                    = False
 
-    varAsgn l = fromMaybe WriteLocal $ listToMaybe [ a | VarAnn _ a _ <- fFact l ]
-
-    modAnn  n l = ModuleAnn (F.symbol n) : fFact l
-    enumAnn n l = EnumAnn   (F.symbol n) : fFact l
-
+    varAsgn   l = fromMaybe WriteLocal $ listToMaybe [ a | VarAnn _ a _ <- fFact l ]
 
 
 --------------------------------------------------------------------------------

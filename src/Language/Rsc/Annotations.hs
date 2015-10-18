@@ -117,7 +117,7 @@ data FactQ q r
   | ClassAnn      Locality (TypeSigQ q r)
   | InterfaceAnn  (TypeDeclQ q r)
 
-  | ModuleAnn     (F.Symbol)
+  | ModuleAnn     Locality (QP q)
   | EnumAnn       (F.Symbol)
 
   -- Auxiliary

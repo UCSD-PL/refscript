@@ -58,6 +58,7 @@ import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
+import           Language.Rsc.Pretty.Annotations
 import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Pretty.Errors
 import           Language.Rsc.Pretty.Types
@@ -105,7 +106,7 @@ instance Functor ClassHierarchy where
 
 
 --------------------------------------------------------------------------------
--- mkCHA :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (ClassHierarchy r)
+mkCHA :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (ClassHierarchy r)
 --------------------------------------------------------------------------------
 mkCHA rsc = accumModules rsc >>= pure . fromModuleDef
 
@@ -118,7 +119,7 @@ mkCHA rsc = accumModules rsc >>= pure . fromModuleDef
 --    * m_types with: classes and interfaces
 --
 --------------------------------------------------------------------------------
--- accumModules :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (QEnv (ModuleDef r))
+accumModules :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (QEnv (ModuleDef r))
 --------------------------------------------------------------------------------
 accumModules (Rsc { code = Src stmts }) =
     (qenvFromList . map toQEnvList) `liftM` mapM mkMod (accumModuleStmts stmts)
@@ -131,18 +132,38 @@ accumModules (Rsc { code = Src stmts }) =
     vStmts   = concatMap . vStmt
 
     vStmt _ (VarDeclStmt _ vds)
-      = [(ss x, VarDeclKind  , VI loc a Uninitialized t ) | VarDecl l x _ <- vds
-                                                          , VarAnn loc a (Just t) <- fFact l ]
-    -- The Assignabilities below are overwitten to default values
+      = [ ( ss x
+          , VarDeclKind
+          , VI loc a Uninitialized t
+          )
+          | VarDecl l x _ <- vds
+          , VarAnn loc a (Just t) <- fFact l
+        ]
     vStmt _ (FunctionStmt l x _ _)
-      = [(ss x, FuncDeclKind  , VI loc Ambient Initialized t) | VarAnn loc _ (Just t) <- fFact l ]
+      = [ ( ss x
+          , FuncDeclKind
+          , VI loc Ambient Initialized t
+          )
+          | SigAnn loc t <- fFact l
+        ]
     vStmt _ (ClassStmt l x _)
-      = [(ss x, ClassDeclKind , VI loc Ambient Initialized $ TClass b) | ClassAnn loc (TS _ b _) <- fFact l ]
+      = [ ( ss x
+          , ClassDeclKind
+          , VI loc Ambient Initialized (TClass b)
+          )
+          | ClassAnn loc (TS _ b _) <- fFact l
+        ]
     -- TODO: Fix the Locality in the following two
     vStmt p (ModuleStmt l x _)
-      = [(ss x, ModuleDeclKind, VI Local Ambient Initialized $ TMod $ pathInPath l p x)]
+      = [ ( ss x
+          , ModuleDeclKind
+          , VI Local Ambient Initialized (TMod (pathInPath l p x)))
+        ]
     vStmt p (EnumStmt _ x _)
-      = [(ss x, EnumDeclKind  , VI Local Ambient Initialized $ TRef (Gen (QN p $ F.symbol x) []) fTop) ]
+      = [ ( ss x
+          , EnumDeclKind
+          , VI Local Ambient Initialized (TRef (Gen (QN p $ F.symbol x) []) fTop))
+        ]
     vStmt _ _ = []
 
     -- | Type Definitions
@@ -210,16 +231,24 @@ declOfStmt s         = Left $ F.Unsafe $ single
 
 -- | Given a list of class elements, returns a @TypeMembers@ structure
 --------------------------------------------------------------------------------
--- typeMembers :: F.Reftable r => [ClassElt (AnnR r)] -> TypeMembers r
+typeMembers :: F.Reftable r => [ClassElt (AnnR r)] -> TypeMembers r
 --------------------------------------------------------------------------------
 typeMembers cs = TM ps ms sps sms call ctor sidx nidx
   where
-    -- XXX: Overloads here?
-    ps         = F.fromListSEnv [(F.symbol x, f) | MemberVarDecl  l False x _   <- cs, FieldAnn f <- fFact l]
-    sps        = F.fromListSEnv [(F.symbol x, f) | MemberVarDecl  l True  x _   <- cs, FieldAnn f <- fFact l]
-    -- Create intersection types of the
-    ms         = F.fromListSEnv [(F.symbol x, mconcat [ m | MethAnn m <- fFact l ]) | MemberMethDecl l False x _ _ <- cs ]
-    sms        = F.fromListSEnv [(F.symbol x, mconcat [ m | MethAnn m <- fFact l ]) | MemberMethDecl l True  x _ _ <- cs ]
+    ps         = F.fromListSEnv [ ( F.symbol x, f )
+                                  | MemberVarDecl  l False x _   <- cs
+                                  , FieldAnn f <- fFact l
+                                ]
+    sps        = F.fromListSEnv [ ( F.symbol x, f )
+                                  | MemberVarDecl  l True  x _   <- cs
+                                  , FieldAnn f <- fFact l
+                                ]
+    ms         = F.fromListSEnv [ ( F.symbol x, mconcat [ m | MethAnn m <- fFact l ] )
+                                  | MemberMethDecl l False x _ _ <- cs
+                                ]
+    sms        = F.fromListSEnv [ ( F.symbol x, mconcat [ m | MethAnn m <- fFact l ] )
+                                  | MemberMethDecl l True  x _ _ <- cs
+                                ]
     call       = Nothing
     ctor       = mkAndOpt [ t | Constructor l _ _ <- cs, CtorAnn t <- fFact l ]
     -- XXX: This could be added

@@ -156,6 +156,10 @@ classDeclP
   = do  _     <- reserved "class"
         typeSignatureP mempty ClassTDK
 
+moduleDeclP
+  = do  _     <- reserved "module"
+        withSpan (QP RK_) $ sepBy1 qSymbolP (char '.')
+
 -- Mutability parameter should be included here.
 typeSignatureP :: PContext -> TypeDeclKind -> Parser (TypeSigQ RK F.Reft)
 typeSignatureP c k

@@ -147,7 +147,7 @@ initModuleEnv :: (Unif r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (Ann
 --------------------------------------------------------------------------------
 initModuleEnv γ n s = TCE nms bnds ctx pth cha mut tThis
   where
-    nms   = mkVarEnv (accumVars s)
+    nms   = mkVarEnv (accumVars s) `envUnion` toFgn (envNames γ)
     bnds  = envBounds γ
     ctx   = envCtx γ
     pth   = extendAbsPath (envPath γ) n
@@ -162,7 +162,8 @@ initClassCtorEnv :: Unif r => TypeSigQ AK r -> TCEnv r -> TCEnv r
 initClassCtorEnv (TS _ (BGen nm bs) _) γ
   = γ { tce_names = envNames γ
       , tce_mut   = Just AssignsFields
-      , tce_this  = Just tThis }
+      , tce_this  = Just tThis
+      }
   &  tcEnvAdd ctorExit ctorExitVI
   where
     ctorExitVI = VI Local Ambient Initialized exitTy

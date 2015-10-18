@@ -898,6 +898,9 @@ splitW (W g i t@(TRef (Gen _ ts) _))
 splitW (W g i (TAnd (map snd -> ts)))
   = concatMapM splitW [W g i t | t <- ts]
 
+splitW (W g i (TOr ts))
+  = concatMapM splitW [W g i t | t <- ts]
+
 splitW (W g i t@(TObj _ ms _))
   = do let bws = bsplitW g t i
        -- TODO: add field bindings in g?
@@ -910,7 +913,8 @@ splitW (W _ _ (TClass _ ))
 splitW (W _ _ (TMod _ ))
   = return []
 
-splitW (W _ _ t) = error $ render $ text "Not supported in splitW: " <+> pp t
+splitW (W _ _ t)
+  = error $ render $ text "Not supported in splitW: " <+> pp t
 
 bsplitW g t i
   | F.isNonTrivial r'

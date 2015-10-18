@@ -71,74 +71,7 @@ ssaRsc cha p@(Rsc { code = Src fs })
                       , maxId = ast_cnt }
     where
       g = initGlobSsaEnv fs cha
-      -- allGlobs = I.fromList $ getAnnotation <$> fmap fId <$> writeGlobalVars fs
-      --
-      --
-      -- TODO: can't the patching be done inline???
-      --
       patch ms (FA i l fs) = FA i l (fs ++ IM.findWithDefault [] i ms)
-
-
-
-
--- -- | `writeGlobalVars p` returns symbols that have `WriteMany` status, i.e. may be
--- -- re-assigned multiple times in non-local scope, and hence
--- --  * cannot be SSA-ed
--- --  * cannot appear in refinements
--- --  * can only use a single monolithic type (declared or inferred)
--- -------------------------------------------------------------------------------
--- writeGlobalVars           :: Data r => [Statement (AnnSSA r)] -> [Id (AnnSSA r)]
--- -------------------------------------------------------------------------------
--- writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
---   where
---     fromVD (VarDecl l x _) = [ x | VarAnn _ _ _  <- fFact l ]
---                           -- ++ [ x | AmbVarAnn _ <- fFact l ]  -- TODO
-
-
-
-
--- -- | Find all language level bindings in the scope of @s@.
--- --   This includes:
--- --
--- --    * function definitions/declarations,
--- --    * classes,
--- --    * modules,
--- --    * variables
--- --
--- --   E.g. declarations in the If-branch of a conditional expression. Note how
--- --   declarations do not escape module or function blocks.
--- --
--- ----------------------------------------------------------------------------------
--- varsInScope :: Data r => [Statement (AnnSSA r)] -> Env Assignability
--- ----------------------------------------------------------------------------------
--- varsInScope s = envFromList' [ (x,a) | (x,_,_,a,_) <- foldStmts vs () s ]
---   where
---     vs = scopeVisitor { accStmt = as, accVDec = av }
---
---     as _ (FunctionStmt l n _ (Just _)) = [(n, l, FuncDeclKind, RdOnly, Initialized)]
---     as _ (FunctionStmt l n _ Nothing ) = [(n, l, FuncDeclKind, Ambient, Initialized)]
---     as _ (ClassStmt l n _ ) = [(n, l, ClassDeclKind, RdOnly, Initialized)]
---     as _ (ModuleStmt l n _) = [(n, l { fFact = modAnn  n l }, ModuleDeclKind, RdOnly, Initialized)]
---     as _ (EnumStmt l n _)   = [(n, l { fFact = enumAnn n l }, EnumDeclKind, RdOnly, Initialized)]
---     as _ _                  = []
---
---     av _ (VarDecl l n init) = [(n, l, VarDeclKind, varAsgn l, fromInit init)]
---           --  ++ [(n, l, VarDeclKind, WriteGlobal, fromInit init) | AmbVarAnn _ <- fFact l] -- TODO
---
---     fromInit (Just _) = Initialized
---     fromInit _        = Uninitialized
---     varAsgn l         = fromMaybe WriteLocal
---                       $ listToMaybe [ a | VarAnn _ a _ <- fFact l ]
---
---     modAnn  n l = ModuleAnn (F.symbol n) : fFact l
---     enumAnn n l = EnumAnn   (F.symbol n) : fFact l
---
-
--- γOuter : vars from outer scope
--- γScope  : vars defined in current scope
--- arg  : `arguments` variable
--- xs   : formal parameters
-
 
 
 -------------------------------------------------------------------------------------
@@ -421,7 +354,7 @@ ssaStmt g c@(ClassStmt l n bd)
 
 -- module M { ... }
 ssaStmt g (ModuleStmt l n body)
-  = (True,) . ModuleStmt l n . snd <$> ssaStmts g body
+  = (True,) . ModuleStmt l n . snd <$> ssaStmts g' body
   where
     g' = initModuleSsaEnv l g n body
 

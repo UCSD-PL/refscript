@@ -44,7 +44,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (MethAnn (MI _ mts))       = text "Method Ann"      <+> pp mts
   pp (InterfaceAnn _)           = text "UNIMPLEMENTED:pp:InterfaceAnn"
   pp (ClassAnn _ _)             = text "UNIMPLEMENTED:pp:ClassAnn"
-  pp (ModuleAnn s)              = text "module"          <+> pp s
+  pp (ModuleAnn l s)            = text "module"          <+> pp s
   pp (EnumAnn s)                = text "enum"            <+> pp s
   pp (BypassUnique)             = text "BypassUnique"
 

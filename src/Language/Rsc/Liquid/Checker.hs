@@ -67,19 +67,24 @@ import           Debug.Trace                     hiding (traceShow)
 verifyFile :: Config -> FilePath -> [FilePath] -> IO (A.UAnnSol RefType, FError)
 --------------------------------------------------------------------------------
 verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
-  do  p   <- EitherIO   $ parseRscFromFiles fs
+  do  _   <- liftIO     $ startPhase Loud "Parse files"
+      p   <- EitherIO   $ parseRscFromFiles fs
       _   <- liftIO     $ donePhase Loud "Parse Files"
       _   <- pure       $ checkTypeWF p
       cha <- liftEither $ mkCHA p
-      _   <- liftIO     $ dumpJS f cha "-parse" p
-      _   <- liftIO     $ donePhase Loud "SSA Transform"
+      -- _   <- liftIO     $ dumpJS f cha "-parse" p
+      _   <- liftIO     $ startPhase Loud "SSA Transform"
       ssa <- EitherIO   $ ssaTransform p cha
+      _   <- liftIO     $ donePhase Loud "SSA Transform"
       _   <- liftIO     $ dumpJS f cha "-ssa" ssa
-      _   <- liftIO     $ donePhase Loud "Typecheck"
+      _   <- liftIO     $ startPhase Loud "Typecheck"
       tc  <- EitherIO   $ typeCheck cfg ssa cha
+      _   <- liftIO     $ donePhase Loud "Typecheck"
       _   <- liftIO     $ dumpJS f cha "-tc" tc
-      _   <- liftIO     $ donePhase Loud "Generate Constraints"
+      _   <- liftIO     $ startPhase Loud "Generate Constraints"
       cgi <- pure       $ generateConstraints cfg tc cha
+      _   <- liftIO     $ startPhase Loud "Solve Constraints"
+      _   <- liftIO     $ donePhase Loud "Solve Constraints"
       res <- liftIO     $ solveConstraints tc f cgi
       return res
 
@@ -97,7 +102,6 @@ ppCasts (Rsc { code = Src fs })
   where
     castDoc = fcat $ map ppEntry entries
     ppEntry = \(_, c) -> pp c
-
     entries = [ (srcPos a, c) | a <- concatMap FO.toList fs
                               , TCast _ c <- fFact a ]
 
@@ -162,7 +166,7 @@ initGlobalEnv :: RefScript -> ClassHierarchy F.Reft -> CGM CGEnv
 initGlobalEnv pgm@(Rsc { code = Src ss }) cha = freshenCGEnvM g
   where
     g     = CGE nms bnds ctx pth cha fenv grd cst mut thisT
-    nms   = mkVarEnv (accumVars ss)    -- modules ?
+    nms   = mkVarEnv (accumVars ss)
     bnds  = mempty
     ctx   = emptyContext
     pth   = mkAbsPath []
@@ -179,7 +183,7 @@ initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnLq] -> CGM 
 initModuleEnv g n s = freshenCGEnvM g'
   where
     g'    = CGE nms bnds ctx pth cha fenv grd cst mut thisT
-    nms   = mkVarEnv (accumVars s)
+    nms   = mkVarEnv (accumVars s) `envUnion` toFgn (envNames g)
     bnds  = envBounds g
     ctx   = cge_ctx g
     pth   = extendAbsPath (cge_path g) n

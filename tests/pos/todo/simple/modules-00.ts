@@ -1,24 +1,22 @@
-module K {
+module KKKK {
 
     export function foo(): void { }
 
     export module L {
 
-      export function baz(): void { }
-    
-      export module M { 
+        export function baz(): void { }
 
-          export function bar(): void {
-            foo();
-            K.foo();
-
-            L.baz();
-            K.L.baz();
-          } 
-      }
+        export module M {
+            export function bar(): void {
+                foo();
+                KKKK.foo();
+                L.baz();
+                KKKK.L.baz();
+            }
+        }
     }
 }
 
-K.foo();
+KKKK.foo();
 
-K.L.M.bar();
+KKKK.L.M.bar();

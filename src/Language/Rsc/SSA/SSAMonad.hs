@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TupleSections             #-}
@@ -33,10 +32,10 @@ module Language.Rsc.SSA.SSAMonad (
    , findSsaEnv
 
    -- , extSsaEnv
-   , setSsaVars, getSsaVars
+   , setSsaVars
+   , getSsaVars
    -- , setSsaEnvGlob
    , ssaVars
-   , getSsaVars
    -- , getSsaEnvGlob
    , getAstCount
    , ssaEnvIds
@@ -63,12 +62,9 @@ module Language.Rsc.SSA.SSAMonad (
 import           Control.Applicative         ((<$>), (<*>))
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
-import           Data.Generics
 import qualified Data.HashSet                as S
 import qualified Data.IntMap.Strict          as IM
 import qualified Data.IntSet                 as I
-import           Data.Maybe                  (fromMaybe)
-import           Data.Typeable
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types     as F
 import           Language.Rsc.Annotations
@@ -94,12 +90,11 @@ type SSAM r     = ExceptT Error (State (SsaState r))
 -- | SSA Monad state
 --
 data SsaState r = SsaST {
-    cnt      :: !Int                      -- ^ Fresh index for SSA vars
-  , ssaVars  :: Env (Var r)               -- ^ Program var -> latest SSA name
-  , anns     :: !(AnnInfo r)              -- ^ Map of annotation
-  , glob_ids :: I.IntSet                  -- ^ Global definition ids          ??? Do I need this
-  , meas     :: S.HashSet F.Symbol        -- ^ Measures
-  , ast_cnt  :: !NodeId                   -- ^ Fresh AST index
+    cnt     :: !Int                      -- ^ Fresh index for SSA vars
+  , ssaVars :: Env (Var r)               -- ^ Program var -> latest SSA name
+  , anns    :: !(AnnInfo r)              -- ^ Map of annotation
+  , meas    :: S.HashSet F.Symbol        -- ^ Measures
+  , ast_cnt :: !NodeId                   -- ^ Fresh AST index
   }
 
 -- | SSA Environment
@@ -136,7 +131,7 @@ toFgn a          = a
 
 initModuleSsaEnv l g m ss = SsaEnv env cha cls path
   where
-    env  = envFromList (accumVars' ss)
+    env  = envFromList (accumVars' ss) `envUnion` envMap toFgn (asgn g)
     cha  = ssaCHA g
     cls  = curClass g
     path = pathInPath l (curPath g) m
@@ -193,8 +188,6 @@ updSsaEnv g a@(srcPos -> l) x
     go m@ForeignLocal = ssaError $ errorWriteImmutable l m x
     go m@ReturnVar    = ssaError $ errorWriteImmutable l m x
 
--- updSsaEnv' l x = (,) <$> getAssignability x <*> updSsaEnv l x
-
 -------------------------------------------------------------------------------------
 updSsaEnvLocal :: SsaEnv r -> AnnSSA r -> Var r -> SSAM r (Var r)
 -------------------------------------------------------------------------------------
@@ -204,13 +197,6 @@ updSsaEnvLocal g a x
        modify $ \st -> st { ssaVars = envAdds [(x, x')] (ssaVars st) }
                           { cnt     = 1 + n }
        return x'
-
--- -------------------------------------------------------------------------------------
--- updSsaEnvGlobal :: AnnSSA r -> Var r -> SSAM r (Var r)
--- -------------------------------------------------------------------------------------
--- updSsaEnvGlobal _ x
---   = do modify $ \st -> st {glob_names = envAdds [(x, SI x)] (glob_names st)}
---        return x
 
 -------------------------------------------------------------------------------------
 freshenAnn :: IsLocated l => l -> SSAM r (AnnSSA r)
@@ -237,16 +223,12 @@ findSsaEnv x
 
 addAnn l f = modify $ \st -> st { anns = IM.insertWith (++) (fId l) [f] (anns st) }
 
--- setGlobs g = modify $ \st -> st { ssa_globs = g }
-
 setMeas m  = modify $ \st -> st { meas= m }
 getMeas    = meas   <$> get
 
 getAnns    = anns   <$> get
 
 getCHA     = ssaCHA <$> get
-
--- getAsgn    = assign <$> get
 
 -------------------------------------------------------------------------------------
 ssaError :: Error -> SSAM r a
@@ -268,5 +250,5 @@ tryAction act = get >>= return . runState (runExceptT act)
 -------------------------------------------------------------------------------------
 initState :: BareRsc r -> ClassHierarchy r -> SsaState r
 -------------------------------------------------------------------------------------
-initState p cha = SsaST 0 envEmpty IM.empty I.empty S.empty (maxId p)
+initState p cha = SsaST 0 envEmpty IM.empty S.empty (maxId p)
 

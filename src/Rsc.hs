@@ -75,7 +75,8 @@ withExistingFile cfg f
     oks            = [".ts", ".js"]
     mkArgs libs    = [ "--outDir", tempDirectory f
                      , "--module", moduleKind
-                     , "--refscript" ] ++
+                     , "--refscript", "cmdline"
+                     ] ++
                      concat [ ["--lib", lib] | lib <- libs ] ++
                      [ f ]
     moduleKind      = "commonjs" -- also 'amd', 'system', 'umd'

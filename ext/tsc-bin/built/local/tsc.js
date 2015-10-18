@@ -553,6 +553,11 @@ var ts;
         ModuleKind[ModuleKind["System"] = 4] = "System";
     })(ts.ModuleKind || (ts.ModuleKind = {}));
     var ModuleKind = ts.ModuleKind;
+    (function (RefScriptMode) {
+        RefScriptMode[RefScriptMode["Editor"] = 0] = "Editor";
+        RefScriptMode[RefScriptMode["CommandLine"] = 2] = "CommandLine";
+    })(ts.RefScriptMode || (ts.RefScriptMode = {}));
+    var RefScriptMode = ts.RefScriptMode;
     (function (JsxEmit) {
         JsxEmit[JsxEmit["None"] = 0] = "None";
         JsxEmit[JsxEmit["Preserve"] = 1] = "Preserve";
@@ -2446,7 +2451,10 @@ var ts;
         RefScript_does_not_support_the_cast_Colon_0: { code: 10037, category: ts.DiagnosticCategory.Unimplemented, key: "RefScript does not support the cast: '{0}'." },
         The_first_type_parameter_of_named_type_0_needs_to_extend_a_mutability_type: { code: 10038, category: ts.DiagnosticCategory.Error, key: "The first type parameter of named type '{0}' needs to extend a mutability type." },
         refscript_Class_declaration_needs_to_contain_a_constructor: { code: 10040, category: ts.DiagnosticCategory.Error, key: "[refscript] Class declaration needs to contain a constructor." },
-        refscript_Only_support_ModuleBlocks_inside_a_Module_s_body: { code: 10041, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Only support ModuleBlocks inside a Module's body." }
+        refscript_Only_support_ModuleBlocks_inside_a_Module_s_body: { code: 10041, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Only support ModuleBlocks inside a Module's body." },
+        refscript_0_SyntaxKind_1_not_supported_yet: { code: 10042, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript - {0}] SyntaxKind '{1}' not supported yet." },
+        Specify_use_of_refscript_Colon_editor_or_cmdline: { code: 10043, category: ts.DiagnosticCategory.Message, key: "Specify use of refscript: 'editor' or 'cmdline'" },
+        Argument_for_refscript_option_must_be_editor_or_cmdline: { code: 10044, category: ts.DiagnosticCategory.Error, key: "Argument for '--refscript' option must be 'editor' or 'cmdline'." }
     };
 })(ts || (ts = {}));
 /// <reference path="core.ts"/>
@@ -25859,20 +25867,21 @@ var ts;
         AnnotationKind[AnnotationKind["VariableDeclarationRawSpec"] = 1] = "VariableDeclarationRawSpec";
         AnnotationKind[AnnotationKind["FunctionExpressionRawSpec"] = 2] = "FunctionExpressionRawSpec";
         AnnotationKind[AnnotationKind["InterfaceRawSpec"] = 3] = "InterfaceRawSpec";
-        AnnotationKind[AnnotationKind["ClassRawSpec"] = 4] = "ClassRawSpec";
-        AnnotationKind[AnnotationKind["FieldRawSpec"] = 5] = "FieldRawSpec";
-        AnnotationKind[AnnotationKind["MethodRawSpec"] = 6] = "MethodRawSpec";
-        AnnotationKind[AnnotationKind["ConstructorRawSpec"] = 7] = "ConstructorRawSpec";
-        AnnotationKind[AnnotationKind["CallRawSpec"] = 8] = "CallRawSpec";
-        AnnotationKind[AnnotationKind["CastRawSpec"] = 9] = "CastRawSpec";
-        AnnotationKind[AnnotationKind["ExportRawSpec"] = 10] = "ExportRawSpec";
-        AnnotationKind[AnnotationKind["MeasureRawSpec"] = 11] = "MeasureRawSpec";
-        AnnotationKind[AnnotationKind["TypeAliasRawSpec"] = 12] = "TypeAliasRawSpec";
-        AnnotationKind[AnnotationKind["PredicateAliasRawSpec"] = 13] = "PredicateAliasRawSpec";
-        AnnotationKind[AnnotationKind["QualifierRawSpec"] = 14] = "QualifierRawSpec";
-        AnnotationKind[AnnotationKind["InvariantRawSpec"] = 15] = "InvariantRawSpec";
-        AnnotationKind[AnnotationKind["OptionRawSpec"] = 16] = "OptionRawSpec";
-        AnnotationKind[AnnotationKind["TypeSignatureRawSpec"] = 17] = "TypeSignatureRawSpec";
+        AnnotationKind[AnnotationKind["ModuleRawSpec"] = 4] = "ModuleRawSpec";
+        AnnotationKind[AnnotationKind["ClassRawSpec"] = 5] = "ClassRawSpec";
+        AnnotationKind[AnnotationKind["FieldRawSpec"] = 6] = "FieldRawSpec";
+        AnnotationKind[AnnotationKind["MethodRawSpec"] = 7] = "MethodRawSpec";
+        AnnotationKind[AnnotationKind["ConstructorRawSpec"] = 8] = "ConstructorRawSpec";
+        AnnotationKind[AnnotationKind["CallRawSpec"] = 9] = "CallRawSpec";
+        AnnotationKind[AnnotationKind["CastRawSpec"] = 10] = "CastRawSpec";
+        AnnotationKind[AnnotationKind["ExportRawSpec"] = 11] = "ExportRawSpec";
+        AnnotationKind[AnnotationKind["MeasureRawSpec"] = 12] = "MeasureRawSpec";
+        AnnotationKind[AnnotationKind["TypeAliasRawSpec"] = 13] = "TypeAliasRawSpec";
+        AnnotationKind[AnnotationKind["PredicateAliasRawSpec"] = 14] = "PredicateAliasRawSpec";
+        AnnotationKind[AnnotationKind["QualifierRawSpec"] = 15] = "QualifierRawSpec";
+        AnnotationKind[AnnotationKind["InvariantRawSpec"] = 16] = "InvariantRawSpec";
+        AnnotationKind[AnnotationKind["OptionRawSpec"] = 17] = "OptionRawSpec";
+        AnnotationKind[AnnotationKind["TypeSignatureRawSpec"] = 18] = "TypeSignatureRawSpec";
     })(ts.AnnotationKind || (ts.AnnotationKind = {}));
     var AnnotationKind = ts.AnnotationKind;
     (function (AnnotContext) {
@@ -25943,14 +25952,6 @@ var ts;
         return TypeAliasAnnotation;
     })(Annotation);
     ts.TypeAliasAnnotation = TypeAliasAnnotation;
-    var ClassStatementAnnotation = (function (_super) {
-        __extends(ClassStatementAnnotation, _super);
-        function ClassStatementAnnotation(sourceSpan, content) {
-            _super.call(this, sourceSpan, AnnotationKind.ClassRawSpec, content);
-        }
-        return ClassStatementAnnotation;
-    })(Annotation);
-    ts.ClassStatementAnnotation = ClassStatementAnnotation;
     var VariableDeclarationAnnotation = (function (_super) {
         __extends(VariableDeclarationAnnotation, _super);
         function VariableDeclarationAnnotation(sourceSpan, content) {
@@ -25975,6 +25976,14 @@ var ts;
         return InterfaceAnnotation;
     })(Annotation);
     ts.InterfaceAnnotation = InterfaceAnnotation;
+    var ModuleAnnotation = (function (_super) {
+        __extends(ModuleAnnotation, _super);
+        function ModuleAnnotation(sourceSpan, content) {
+            _super.call(this, sourceSpan, AnnotationKind.ModuleRawSpec, content);
+        }
+        return ModuleAnnotation;
+    })(Annotation);
+    ts.ModuleAnnotation = ModuleAnnotation;
     var ClassAnnotation = (function (_super) {
         __extends(ClassAnnotation, _super);
         function ClassAnnotation(sourceSpan, content) {
@@ -26177,36 +26186,6 @@ var ts;
         return [];
     }
     ts.makeGlobalAnnotations = makeGlobalAnnotations;
-    function toSpecKind(s) {
-        var ctx = undefined;
-        switch (s) {
-            case "measure":
-                return AnnotationKind.MeasureRawSpec;
-            case "qualif":
-                return AnnotationKind.QualifierRawSpec;
-            case "interface":
-                return AnnotationKind.InterfaceRawSpec;
-            case "type":
-                return AnnotationKind.TypeAliasRawSpec;
-            case "class":
-                return AnnotationKind.ClassRawSpec;
-            case "predicate":
-                return AnnotationKind.PredicateAliasRawSpec;
-            case "invariant":
-                return AnnotationKind.InvariantRawSpec;
-            case "cast":
-                return AnnotationKind.CastRawSpec;
-            case "<anonymous>":
-                return AnnotationKind.FunctionExpressionRawSpec;
-            case "option":
-                return AnnotationKind.OptionRawSpec;
-            default:
-                if (ctx === AnnotContext.FunctionDeclaration)
-                    return AnnotationKind.FunctionDeclarationRawSpec;
-                else
-                    return AnnotationKind.VariableDeclarationRawSpec;
-        }
-    }
     function isReservedAnnotationPrefix(s) {
         return (ts.indexOfEq(["measure", "qualif", "interface", "alias", "class", "predicate", "invariant", "cast", "<anonymous>", "option"], s) !== -1);
     }
@@ -26638,29 +26617,17 @@ var ts;
     var RsTranslationState = (function () {
         function RsTranslationState() {
             this._initValidator = new ts.InitializationValidator();
-            this._parentNode = [];
-            this._diagnostics = [];
+            this.diagnosticCollection = ts.createDiagnosticCollection();
         }
-        RsTranslationState.prototype.ctorValidate = function () {
-            this._initValidator.validate(this._document, this._diagnostics);
-        };
-        RsTranslationState.prototype.setDocument = function (document) {
-            this._document = document;
-        };
-        RsTranslationState.prototype.clearDiagnostics = function () {
-            this._diagnostics = [];
-        };
-        RsTranslationState.prototype.isLibrary = function (ast) {
-            return ts.getSourceFileOfNode(ast).text.indexOf("lib.d.ts") === -1;
-        };
-        RsTranslationState.prototype.postDiagnostic = function (ast, diagnosticMsg, _arguments, additionalLocations) {
-            if (_arguments === void 0) { _arguments = null; }
-            if (additionalLocations === void 0) { additionalLocations = null; }
-            var diagnostic = ts.createDiagnosticForNode(ast, diagnosticMsg, _arguments);
-            this._diagnostics.push(diagnostic);
+        RsTranslationState.prototype.error = function (location, message, arg0, arg1, arg2) {
+            var diagnostic = location
+                ? ts.createDiagnosticForNode(location, message, arg0, arg1, arg2)
+                : ts.createCompilerDiagnostic(message, arg0, arg1, arg2);
+            this.diagnosticCollection.add(diagnostic);
         };
         RsTranslationState.prototype.diagnostics = function () {
-            return this._diagnostics;
+            return this.diagnosticCollection.getDiagnostics();
+            ;
         };
         return RsTranslationState;
     })();
@@ -26788,20 +26755,20 @@ var ts;
         if (targetSourceFile === undefined) {
             jsonFiles = ts.map(host.getSourceFiles(), function (sourceFile) {
                 var jsonFilePath = ts.getNormalizedAbsolutePath(ts.getOwnEmitOutputFilePath(sourceFile, host, ".json"), host.getCurrentDirectory());
-                emitFile(jsonFilePath, sourceFile);
+                diagnostics = ts.concatenate(diagnostics, emitFile(jsonFilePath, sourceFile));
                 return jsonFilePath;
             });
             if (compilerOptions.outFile || compilerOptions.out) {
-                emitFile(compilerOptions.outFile || compilerOptions.out);
+                diagnostics = ts.concatenate(diagnostics, emitFile(compilerOptions.outFile || compilerOptions.out));
             }
         }
         else {
             if (ts.shouldEmitToOwnFile(targetSourceFile, compilerOptions)) {
                 var jsonFilePath = ts.getOwnEmitOutputFilePath(targetSourceFile, host, ".json");
-                emitFile(jsonFilePath, targetSourceFile);
+                diagnostics = ts.concatenate(diagnostics, emitFile(jsonFilePath, targetSourceFile));
             }
             else if (!ts.isDeclarationFile(targetSourceFile) && (compilerOptions.outFile || compilerOptions.out)) {
-                emitFile(compilerOptions.outFile || compilerOptions.out);
+                diagnostics = ts.concatenate(diagnostics, emitFile(compilerOptions.outFile || compilerOptions.out));
             }
         }
         diagnostics = ts.sortAndDeduplicateDiagnostics(diagnostics);
@@ -26812,7 +26779,7 @@ var ts;
             jsonFiles: jsonFiles
         };
         function emitFile(rscFilePath, sourceFile) {
-            emitRefScript(rscFilePath, sourceFile);
+            return emitRefScript(rscFilePath, sourceFile);
         }
         function emitRefScript(rscFilePath, root) {
             var writer = ts.createTextWriter(newLine);
@@ -26823,40 +26790,52 @@ var ts;
             var detachedCommentsInfo;
             var writeComment = ts.writeCommentRange;
             var emit = emitRefScriptWorker;
+            var diagnostics = [];
             if (root) {
-                emitSourceFile(root);
+                diagnostics = ts.concatenate(diagnostics, emitSourceFile(root));
             }
             else {
                 ts.forEach(host.getSourceFiles(), function (sourceFile) {
                     if (!ts.isExternalModuleOrDeclarationFile(sourceFile)) {
-                        emitSourceFile(sourceFile);
+                        diagnostics = ts.concatenate(diagnostics, emitSourceFile(sourceFile));
                     }
                 });
             }
             writeLine();
             writeEmittedFiles(writer.getText(), compilerOptions.emitBOM);
-            return;
+            return diagnostics;
             function emitSourceFile(sourceFile) {
                 currentSourceFile = sourceFile;
                 exportFunctionForFile = undefined;
-                emit(sourceFile);
+                return emit(sourceFile);
             }
             function emitRefScriptWorker(node) {
-                var state = new RsTranslationState();
-                var rsAST = nodeToRsAST(state, node);
-                write(PrettyJSON.stringify(rsAST.serialize(), { maxLength: 120, indent: 2 }));
+                var initState = new RsTranslationState();
+                var _a = nodeToRsASTWithState(initState, node), state = _a.state, ast = _a.ast;
+                var diagnostics = state.diagnostics();
+                if (!compilerOptions.refscript) {
+                    return diagnostics;
+                }
+                if (diagnostics && diagnostics.length > 0) {
+                    return diagnostics;
+                }
+                write(PrettyJSON.stringify(ast.serialize(), { maxLength: 120, indent: 2 }));
+                return diagnostics;
             }
             function writeRefScriptFile(emitOutput, writeByteOrderMark) {
                 ts.writeFile(host, diagnostics, rscFilePath, emitOutput, writeByteOrderMark);
             }
-            function nodeToRsAST(state, node) {
+            function nodeToRsASTWithState(state, node) {
                 switch (node.kind) {
                     case ts.SyntaxKind.SourceFile:
-                        return sourceFileNodeToRsAST(state, node);
+                        return { state: state, ast: sourceFileNodeToRsAST(state, node) };
                     case ts.SyntaxKind.PropertyAssignment:
-                        return propertyAssignmentToRsAST(state, node);
+                        return { state: state, ast: propertyAssignmentToRsAST(state, node) };
                 }
-                throw new Error("UNIMPLEMENTED nodeToRsAST for " + ts.SyntaxKind[node.kind]);
+                state.error(node, ts.Diagnostics.refscript_0_SyntaxKind_1_not_supported_yet, "nodeToRsAST", ts.SyntaxKind[node.kind]);
+            }
+            function nodeToRsAST(state, node) {
+                return nodeToRsASTWithState(state, node).ast;
             }
             function accumulateGlobalAnnotations(node) {
                 var annotations = [];
@@ -26911,8 +26890,10 @@ var ts;
                         return superKeywordToRsExp(state, node);
                     case ts.SyntaxKind.ThisKeyword:
                         return thisKeywordToRsExp(state, node);
+                    case ts.SyntaxKind.NullKeyword:
+                        return nullKeywordToRsExp(state, node);
                 }
-                throw new Error("UNIMPLEMENTED nodeToRsExp for " + ts.SyntaxKind[node.kind]);
+                state.error(node, ts.Diagnostics.refscript_0_SyntaxKind_1_not_supported_yet, "nodeToRsExp", ts.SyntaxKind[node.kind]);
             }
             function nodeToRsLval(state, node) {
                 switch (node.kind) {
@@ -26921,14 +26902,13 @@ var ts;
                     case ts.SyntaxKind.PropertyAccessExpression:
                         return propertyAccessExpressionToRsLVal(state, node);
                 }
-                throw new Error("[refscript] Unimplemented nodeToRsLval for " + ts.SyntaxKind[node.kind]);
+                state.error(node, ts.Diagnostics.refscript_0_SyntaxKind_1_not_supported_yet, "nodeToRsLVal", ts.SyntaxKind[node.kind]);
             }
             function nodeToRsStmt(state, node) {
                 switch (node.kind) {
                     case ts.SyntaxKind.FunctionDeclaration:
                         return functionDeclarationToRsStmt(state, node);
                     case ts.SyntaxKind.ExpressionStatement:
-                        state;
                         return expressionStatementToRsStmt(state, node);
                     case ts.SyntaxKind.VariableStatement:
                         return variableStatementToRsStmt(state, node);
@@ -26948,8 +26928,10 @@ var ts;
                         return classDeclarationToRsStmt(state, node);
                     case ts.SyntaxKind.ModuleDeclaration:
                         return moduleDeclarationToRsStmt(state, node);
+                    case ts.SyntaxKind.WhileStatement:
+                        return whileStatementToRsStmt(state, node);
                 }
-                throw new Error("[refscript] Unimplemented nodeToRsStmt for " + ts.SyntaxKind[node.kind]);
+                state.error(node, ts.Diagnostics.refscript_0_SyntaxKind_1_not_supported_yet, "nodeToRsStmt", ts.SyntaxKind[node.kind]);
             }
             function nodeToRsClassElts(state, node) {
                 switch (node.kind) {
@@ -26960,7 +26942,7 @@ var ts;
                     case ts.SyntaxKind.PropertyDeclaration:
                         return propertyDeclarationToRsClassElts(state, node);
                 }
-                throw new Error("[refscript] Unimplemented nodeToRsClassElts for " + ts.SyntaxKind[node.kind]);
+                state.error(node, ts.Diagnostics.refscript_0_SyntaxKind_1_not_supported_yet, "nodeToRsClassElts", ts.SyntaxKind[node.kind]);
             }
             function sourceFileNodeToRsAST(state, node) {
                 var globalAnnotations = accumulateGlobalAnnotations(node);
@@ -26978,7 +26960,7 @@ var ts;
                     case ts.SyntaxKind.Parameter:
                         return new ts.RsId(nodeToSrcSpan(node), [], ts.getTextOfNode(node.name));
                 }
-                throw new Error("UNIMPLEMENTED nodeToRsId for " + ts.SyntaxKind[node.kind]);
+                state.error(node, ts.Diagnostics.refscript_0_SyntaxKind_1_not_supported_yet, "nodeToRsId", ts.SyntaxKind[node.kind]);
             }
             function functionDeclarationToRsStmt(state, node) {
                 var isAmbient = !!(node.flags & 2);
@@ -26987,7 +26969,7 @@ var ts;
                 }
                 node.parameters.forEach(function (parameter) {
                     if (parameter.initializer) {
-                        state.postDiagnostic(node, ts.Diagnostics.Initialization_of_parameter_0_at_the_signature_site_is_not_supported, [ts.getTextOfNode(parameter)]);
+                        state.error(node, ts.Diagnostics.Initialization_of_parameter_0_at_the_signature_site_is_not_supported, [ts.getTextOfNode(parameter)]);
                     }
                 });
                 var nameText = node.name.text;
@@ -27074,6 +27056,9 @@ var ts;
             function thisKeywordToRsExp(state, node) {
                 return new ts.RsThisRef(nodeToSrcSpan(node), []);
             }
+            function nullKeywordToRsExp(state, node) {
+                return new ts.RsNullLit(nodeToSrcSpan(node), []);
+            }
             function expressionStatementToRsStmt(state, node) {
                 return new ts.RsExprStmt(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression));
             }
@@ -27095,7 +27080,7 @@ var ts;
                     case ts.SyntaxKind.EqualsToken:
                         return new ts.RsAssignExpr(nodeToSrcSpan(node), [], new ts.RsAssignOp(ts.getTextOfNode(node.operatorToken)), nodeToRsLval(state, node.left), nodeToRsExp(state, node.right));
                     default:
-                        throw new Error("[refscript] BinaryExpression toRsExp Expression for: " + node.operatorToken.kind);
+                        state.error(node, ts.Diagnostics.refscript_0_SyntaxKind_1_not_supported_yet, "nodeToRsExp", ts.SyntaxKind[node.kind]);
                 }
             }
             function literalExpressionToRsExp(state, node) {
@@ -27237,7 +27222,6 @@ var ts;
                                     var callSignature = checker.getSignatureFromDeclaration(member);
                                     return [checker.methodToRscString(callSignature, member)];
                                 }
-                            case ts.SyntaxKind.IndexSignature:
                             default:
                                 return [];
                         }
@@ -27281,10 +27265,14 @@ var ts;
             function moduleDeclarationToRsStmt(state, node) {
                 var annotations = (node.modifiers && node.modifiers.some(function (modifier) { return modifier.kind === ts.SyntaxKind.ExportKeyword; })) ?
                     [new ts.ExportedAnnotation(nodeToSrcSpan(node))] : [];
+                annotations = ts.concatenate(annotations, [new ts.ModuleAnnotation(nodeToSrcSpan(node), "module " + ts.getTextOfNode(node.name))]);
                 if (node.body.kind === ts.SyntaxKind.ModuleBlock) {
-                    return new ts.RsModuleStmt(nodeToSrcSpan(node), [], nodeToRsId(state, node.name), new ts.RsList(node.body.statements.map(function (n) { return nodeToRsStmt(state, n); })));
+                    return new ts.RsModuleStmt(nodeToSrcSpan(node), annotations, nodeToRsId(state, node.name), new ts.RsList(node.body.statements.map(function (n) { return nodeToRsStmt(state, n); })));
                 }
                 throw new Error(ts.Diagnostics.refscript_Only_support_ModuleBlocks_inside_a_Module_s_body.key);
+            }
+            function whileStatementToRsStmt(state, node) {
+                return new ts.RsWhileStmt(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression), nodeToRsStmt(state, node.statement));
             }
             function constructorDeclarationToRsClassElts(state, node) {
                 var isAmbient = !!(node.flags & 2);
@@ -27293,7 +27281,7 @@ var ts;
                 }
                 node.parameters.forEach(function (parameter) {
                     if (parameter.initializer) {
-                        state.postDiagnostic(node, ts.Diagnostics.Initialization_of_parameter_0_at_the_signature_site_is_not_supported, [ts.getTextOfNode(parameter)]);
+                        state.error(node, ts.Diagnostics.Initialization_of_parameter_0_at_the_signature_site_is_not_supported, [ts.getTextOfNode(parameter)]);
                     }
                 });
                 var containingClass = ts.getContainingClass(node);
@@ -34098,7 +34086,14 @@ var ts;
         },
         {
             name: "refscript",
-            type: "boolean"
+            shortName: "r",
+            type: {
+                "editor": ts.RefScriptMode.Editor,
+                "cmdline": ts.RefScriptMode.CommandLine
+            },
+            description: ts.Diagnostics.Specify_module_code_generation_Colon_commonjs_amd_system_or_umd,
+            paramType: ts.Diagnostics.KIND,
+            error: ts.Diagnostics.Argument_for_refscript_option_must_be_editor_or_cmdline
         },
         {
             name: "lib",
@@ -34761,6 +34756,7 @@ var ts;
                 }
             }
             else {
+                diagnostics = ts.concatenate(diagnostics, program.toRsc().diagnostics);
                 reportDiagnostics(diagnostics);
                 var emitOutput = program.emit();
                 if (emitOutput.emitSkipped) {

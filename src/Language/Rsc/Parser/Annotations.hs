@@ -48,6 +48,7 @@ data RawSpec
   | FunctionExpressionRawSpec  (SrcSpan, String)
   | InterfaceRawSpec           (SrcSpan, String)
   | ClassRawSpec               (SrcSpan, String)
+  | ModuleRawSpec              (SrcSpan, String)
   | FieldRawSpec               (SrcSpan, String)
   | MethodRawSpec              (SrcSpan, String)
   | ConstructorRawSpec         (SrcSpan, String)
@@ -71,6 +72,7 @@ data PSpec l r
   | FunctionExpressionSpec  (RTypeQ RK r)
   | InterfaceSpec           (TypeDeclQ RK r)
   | ClassSpec               (TypeSigQ RK r)
+  | ModuleSpec              RelPath
   | FieldSpec               (FieldInfoQ RK r)
   | MethodSpec              (MethodInfoQ RK r)
   | ConstructorSpec         (RTypeQ RK r)
@@ -116,6 +118,7 @@ parseSpec ctx = go
     go (FunctionExpressionRawSpec  (_ , _)) = FunctionExpressionSpec  <$> functionExpressionP ctx
     go (InterfaceRawSpec           (_ , _)) = InterfaceSpec <$> interfaceP
     go (ClassRawSpec               (_ , _)) = ClassSpec     <$> classDeclP
+    go (ModuleRawSpec              (_ , _)) = ModuleSpec    <$> moduleDeclP
     go (FieldRawSpec               (_ , _)) = FieldSpec     <$> (propP ctx >>= \(_,_,o,m,t) -> return (FI o m t))
     go (MethodRawSpec              (_ , _)) = MethodSpec    <$> (methP ctx >>= \(_,_,o,m,t) -> return (MI o [(m, t)]))
     go (ConstructorRawSpec         (_ , _)) = ConstructorSpec    <$> ctorP ctx
@@ -139,6 +142,7 @@ getSpecString = go
     go (FunctionExpressionRawSpec  (_, s)) = s
     go (InterfaceRawSpec           (_, s)) = s
     go (ClassRawSpec               (_, s)) = s
+    go (ModuleRawSpec              (_, s)) = s
     go (FieldRawSpec               (_, s)) = s
     go (MethodRawSpec              (_, s)) = s
     go (ConstructorRawSpec         (_, s)) = s
@@ -157,6 +161,7 @@ instance IsLocated RawSpec where
   srcPos (FunctionExpressionRawSpec  (s,_)) = s
   srcPos (InterfaceRawSpec           (s,_)) = s
   srcPos (ClassRawSpec               (s,_)) = s
+  srcPos (ModuleRawSpec              (s,_)) = s
   srcPos (FieldRawSpec               (s,_)) = s
   srcPos (MethodRawSpec              (s,_)) = s
   srcPos (ConstructorRawSpec         (s,_)) = s

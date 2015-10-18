@@ -31,6 +31,7 @@ Executable rsc
                     Haskell2010
 
   build-depends:    base
+                  , data-default
                   , containers
                   , pretty 
                   , split

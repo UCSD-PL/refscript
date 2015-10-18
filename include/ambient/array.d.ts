@@ -13,6 +13,8 @@ interface Array<M extends ReadOnly, T> {
       * Appends new elements to an array, and returns the new length of the array.
       * @param items New elements of the Array.
       */
+    push(x: T): number;
+
     // push<N>(...items: Array<T>): number;
     // /**
     //   * Removes the last element from an array and returns it.

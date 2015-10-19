@@ -67,26 +67,23 @@ import           Debug.Trace                     hiding (traceShow)
 verifyFile :: Config -> FilePath -> [FilePath] -> IO (A.UAnnSol RefType, FError)
 --------------------------------------------------------------------------------
 verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
-  do  _   <- liftIO     $ startPhase Loud "Parse files"
-      p   <- EitherIO   $ parseRscFromFiles fs
-      _   <- liftIO     $ donePhase Loud "Parse Files"
-      _   <- pure       $ checkTypeWF p
-      cha <- liftEither $ mkCHA p
-      -- _   <- liftIO     $ dumpJS f cha "-parse" p
-      _   <- liftIO     $ startPhase Loud "SSA Transform"
-      ssa <- EitherIO   $ ssaTransform p cha
-      _   <- liftIO     $ donePhase Loud "SSA Transform"
-      _   <- liftIO     $ dumpJS f cha "-ssa" ssa
-      _   <- liftIO     $ startPhase Loud "Typecheck"
-      tc  <- EitherIO   $ typeCheck cfg ssa cha
-      _   <- liftIO     $ donePhase Loud "Typecheck"
-      _   <- liftIO     $ dumpJS f cha "-tc" tc
-      _   <- liftIO     $ startPhase Loud "Generate Constraints"
-      cgi <- pure       $ generateConstraints cfg tc cha
-      _   <- liftIO     $ startPhase Loud "Solve Constraints"
-      _   <- liftIO     $ donePhase Loud "Solve Constraints"
-      res <- liftIO     $ solveConstraints tc f cgi
+  do  p   <- announce "parse" $ EitherIO   $ parseRscFromFiles fs
+      _   <- pure (checkTypeWF p)
+      cha <- liftEither (mkCHA p)
+      -- _   <- liftIO (dumpJS f cha "-parse" p)
+      ssa <- announce "ssa" (EitherIO (ssaTransform p cha))
+      _   <- liftIO (dumpJS f cha "-ssa" ssa)
+      tc  <- announce "Typecheck" (EitherIO  (typeCheck cfg ssa cha))
+      _   <- liftIO (dumpJS f cha "-tc" tc)
+      cgi <- announce "Generate Constraints" (pure (generateConstraints cfg tc cha))
+      res <- announce "Solve Constraints" (liftIO (solveConstraints tc f cgi))
       return res
+
+announce s a
+  = do  _ <- liftIO     $ startPhase Loud s
+        r <- a
+        _ <- liftIO     $ donePhase Loud s
+        return r
 
 
 -- | Debug info

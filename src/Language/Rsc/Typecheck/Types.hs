@@ -207,6 +207,10 @@ mkAnd ts        = TAnd $ zip [0..] ts
 mkAndOpt []     = Nothing
 mkAndOpt ts     = Just $ mkAnd ts
 
+instance F.Reftable r => Monoid (RType r) where
+  mempty        = tBot
+  mappend t t'  = mkAnd $ bkAnd t ++ bkAnd t'
+
 mkTCons         = (`TObj` fTop)
 
 ----------------------------------------------------------------------------------------

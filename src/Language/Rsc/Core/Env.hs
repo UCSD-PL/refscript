@@ -12,7 +12,7 @@ module Language.Rsc.Core.Env (
     Env, QEnv
 
   -- * Env API
-  , envFromList, envFromList', envFromListWithKey
+  , envFromList, envFromListConcat, envFromList', envFromListWithKey
   , envToList
   , envAdd, envAdds
   , envDel, envDels
@@ -45,12 +45,12 @@ module Language.Rsc.Core.Env (
 
 import           Control.Applicative
 import           Data.Data
-import qualified Data.HashMap.Strict      as M
-import qualified Data.List                as L
-import           Data.Maybe               (isJust)
-import           Data.Monoid              (Monoid (..))
+import qualified Data.HashMap.Strict     as M
+import qualified Data.List               as L
+import           Data.Maybe              (isJust)
+import           Data.Monoid             (Monoid (..))
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types  as F
+import qualified Language.Fixpoint.Types as F
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
@@ -94,14 +94,22 @@ envAddWith f i t γ = case envFind i γ of
 envSEnv           :: Env a -> F.SEnv a
 envSEnv            = F.fromListSEnv . map (mapFst F.symbol) . envToList
 
-envFromList       :: (IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t
-envFromList        = L.foldl' step envEmpty
+envFromList_ f l      = L.foldl' step envEmpty l
   where
-    step γ (i, t)  = case envFindLoc i γ of
-                       Nothing -> envAdd i t γ
-                       Just l' | l' /= srcPos i -> error "Duplicate specification" -- TODO: remove this error
-                               -- | l' /= srcPos i -> throw $ errorDuplicate i (srcPos i) l'
-                               | otherwise      -> γ
+    step γ (i, t)  = case envFind i γ of
+                       Nothing          -> envAdd i t γ
+                       Just (Loc l' t') -> f γ i (srcPos i, t) (l', t')
+
+envFromList          :: (IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t
+envFromList           = envFromList_ f
+  where
+    f γ _ (l,_) (l', _) | l /= l'   = error "Duplicate specification"
+                        | otherwise = γ
+
+
+envFromListConcat l = envFromList_ f l
+  where
+    f γ i (l,t) (l',t') = envAdd i (t `mappend` t') γ
 
 -- Allows duplicates in list -- last one in list will be used
 envFromList'      :: (IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t

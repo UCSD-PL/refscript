@@ -266,7 +266,13 @@ instance Monoid (ModuleDefQ q r) where
 -}
 
 data Assignability = RdOnly | Ambient | WriteLocal | ForeignLocal | WriteGlobal | ReturnVar
+                   | {- internal -} ErrorAssignability
                      deriving (Show, Eq, Data, Typeable)
+
+instance Monoid Assignability where
+  mempty = ErrorAssignability
+  mappend a1 a2 | a1 == a2  = a1
+                | otherwise = ErrorAssignability
 
 
 --------------------------------------------------------------------------------

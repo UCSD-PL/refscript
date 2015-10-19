@@ -113,12 +113,12 @@ instance PP (SsaEnv r) where
 initGlobSsaEnv :: F.Reftable r => [Statement (AnnR r)] -> ClassHierarchy r -> SsaEnv r
 -------------------------------------------------------------------------------------
 initGlobSsaEnv fs cha
-  = SsaEnv (envFromList (accumVars' fs)) cha Nothing emptyPath
+  = SsaEnv (envFromListConcat (accumVars' fs)) cha Nothing emptyPath
 
 initCallableSsaEnv l g arg ret xs bd = SsaEnv env cha cls path
   where
     env  = envMap toFgn (asgn g)
-         & envUnion (envFromList (accumVars' bd))
+         & envUnion (envFromListConcat (accumVars' bd))
          & envAdd ret ReturnVar
          & envAdd arg RdOnly
          & envAdds (xs `zip` repeat WriteLocal)
@@ -131,7 +131,7 @@ toFgn a          = a
 
 initModuleSsaEnv l g m ss = SsaEnv env cha cls path
   where
-    env  = envFromList (accumVars' ss) `envUnion` envMap toFgn (asgn g)
+    env  = envFromListConcat (accumVars' ss) `envUnion` envMap toFgn (asgn g)
     cha  = ssaCHA g
     cls  = curClass g
     path = pathInPath l (curPath g) m

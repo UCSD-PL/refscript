@@ -144,6 +144,7 @@ instance PP Assignability where
   pp ForeignLocal = text "ForeignLocal"
   pp WriteGlobal  = text "WriteGlobal"
   pp ReturnVar    = text "ReturnVar"
+  pp _            = text "ErrorAssignability"
 
 instance PP MutabilityMod where
   pp Mutable       = text "MU"

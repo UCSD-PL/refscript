@@ -185,7 +185,7 @@ accumModules (Rsc { code = Src stmts }) =
     ss                       = fmap fSrc
 
 --------------------------------------------------------------------------------
-mkVarEnv :: F.Symbolic s => [(s, SyntaxKind, VarInfo r)] -> Env (VarInfo r)
+mkVarEnv :: (PPR r, F.Symbolic s) => [(s, SyntaxKind, VarInfo r)] -> Env (VarInfo r)
 --------------------------------------------------------------------------------
 mkVarEnv = envMap snd
          . envFromListWithKey mergeVarInfo
@@ -202,8 +202,11 @@ mkVarEnv = envMap snd
                 [(s, (k, v)) | (k@EnumDeclKind  , v) <- vs]
 
     mergeVarInfo x (k1, VI l1 a1 i1 t1) (k2, VI l2 a2 i2 t2)
-      | l1 == l2, k1 == k2, a1 == a2, i1 == i2
-      = (k1, VI l1 a1 i1 $ mkAnd $ bkAnd t1 ++ bkAnd t2)
+      | l1 == l2
+      , k1 == k2
+      , a1 == a2
+      , i1 == i2
+      = (k1, VI l1 a1 i1 (t1 `mappend` t2))
     mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
 
 --------------------------------------------------------------------------------

@@ -13,7 +13,7 @@ class HTMLDivElt<M extends ReadOnly> extends HTMLElt<M> {
 
 export function foo<M extends ReadOnly>(elt: HTMLElt<M>): HTMLDivElt<M> {
     if (elt instanceof HTMLDivElt) {
-        var div = <HTMLDivElt<M>>elt;
+        let div = <HTMLDivElt<M>>elt;
         return div;
     }
 

@@ -48,6 +48,9 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (EnumAnn s)                = text "enum"            <+> pp s
   pp (BypassUnique)             = text "BypassUnique"
 
+instance (F.Reftable r, PP r) => PP (AnnR r) where
+  pp (FA _ s fs) = vcat $ map pp fs
+
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
   pp             = vcat . (ppB <$>) . I.toList
     where

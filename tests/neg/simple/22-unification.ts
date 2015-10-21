@@ -12,10 +12,10 @@ export function snd<M extends ReadOnly, A, B>(p: Pair<M, A, B>): B {
     return p.y;
 }
 
-var o = { z: "ASDFGHJKL" }
+let o = { z: "ASDFGHJKL" }
 
-var obj = snd({ x: 1, y: o });
+let obj = snd({ x: 1, y: o });
 
-var a = obj.z;
+let a = obj.z;
 
 assert(a === "ASDFGHJK");

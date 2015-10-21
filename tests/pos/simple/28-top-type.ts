@@ -1,6 +1,6 @@
 
 /*@ resistance :: number */
-var resistance = 1000;
+let resistance = 1000;
 
 /*@ makeNum ::    (x: number) => number */
 /*@ makeNum :: <A>(x: A)      => number */

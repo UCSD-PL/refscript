@@ -49,10 +49,11 @@ module Language.Rsc.Misc (
   , (<##>), (<###>)
   , (&)
   , (<//>)
+  , (<**>)
 
 ) where
 
-import           Control.Applicative       ((<$>))
+import           Control.Applicative       (pure, (<$>), (<*>))
 import           Control.Exception.Base
 import           Control.Monad             (foldM, liftM2)
 import           Data.Data
@@ -230,6 +231,9 @@ f <##>  x = ((f <$>) <$>) x
 f <###> x = ((f <$>) <$>) <$> x
 
 justM = (Just <$>)
+
+infixl 0 <**>
+a <**> b = a <*> pure b
 
 (&) :: a -> (a -> b) -> b
 x & f = f x

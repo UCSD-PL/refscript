@@ -166,5 +166,4 @@ declare function pos(): posint;
 
 declare function alert(s: string): void;
 
-// /*@ isNaN :: (x:undefined + number) => {v:boolean | Prop v <=> (ttag(v) != "number")} */
-// declare function isNaN(x:any) : boolean;
+declare function _arguments(): number;

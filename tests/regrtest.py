@@ -110,7 +110,8 @@ testCategories = [
     #, ("fb",        ["--prelude", "../include/mini-prelude.ts"])
     #, ("inclusion", ["--prelude", "../include/mini-prelude.ts", "-e"])
 
-    ("simple",    ["--prelude", "../include/prelude.d.ts"])
+    ("simple",    ["--prelude", "../include/prelude.d.ts"]),
+    ("scope" ,    ["--prelude", "../include/prelude.d.ts"])
 
     #   ("objects",   [])
     # , ("arrays",    [])

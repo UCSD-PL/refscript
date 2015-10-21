@@ -72,9 +72,13 @@ verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
       cha <- liftEither (mkCHA p)
       -- _   <- liftIO (dumpJS f cha "-parse" p)
       ssa <- announce "ssa" (EitherIO (ssaTransform p cha))
-      _   <- liftIO (dumpJS f cha "-ssa" ssa)
+
+      cha0 <- liftEither (mkCHA ssa)
+      _   <- liftIO (dumpJS f cha0 "-ssa" ssa)
       tc  <- announce "Typecheck" (EitherIO  (typeCheck cfg ssa cha))
-      _   <- liftIO (dumpJS f cha "-tc" tc)
+
+      cha1 <- liftEither (mkCHA tc)
+      _   <- liftIO (dumpJS f cha1 "-tc" tc)
       cgi <- announce "Generate Constraints" (pure (generateConstraints cfg tc cha))
       res <- announce "Solve Constraints" (liftIO (solveConstraints tc f cgi))
       return res
@@ -208,10 +212,8 @@ initCallableEnv :: (PP x, IsLocated x, IsLocated l)
                 -> CGM CGEnv
 --------------------------------------------------------------------------------
 initCallableEnv l g f fty xs s
-  = do  g1 <- cgEnvAdds ("init-func-" ++ ppshow f ++ "-0") params g0
-        g2 <- cgEnvAdds ("init-func-" ++ ppshow f ++ "-1") arg g1
-        -- XXX: Isn't this done at CGMonad envAddGoup?
-        -- let _  = concatMap (uncurry $ checkSyms "init" g2 []) xts
+  = do  g1 <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-0") params g0
+        g2 <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-1") arg g1
         freshenCGEnvM g2
   where
     g0     = CGE nms bnds ctx pth cha fenv grd cst mut thisT
@@ -333,11 +335,13 @@ consStmt g (ReturnStmt l Nothing)
 
 -- return e
 consStmt g (ReturnStmt l (Just e))
+  -- Special case for UniqueMutable
   | VarRef lv x <- e
   , Just t <- cgEnvFindTy x g
   , isUMRef t
-  = do  g' <- cgEnvAdds "Return" [(fn, VI Local Ambient Initialized $ finalizeTy t)] g
+  = do  g' <- cgEnvAdds l "Return" [(fn, VI Local Ambient Initialized $ finalizeTy t)] g
         consStmt g' (ReturnStmt l (Just (CallExpr l (VarRef lv fn) [e])))
+  -- Normal case
   | otherwise
   = do  _ <- consCall g l "return" [(e, Just retTy)] $ returnTy retTy True
         return Nothing
@@ -394,12 +398,12 @@ consVarDecl g (VarDecl l x (Just e))
       Nothing ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           t       <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI Local WriteLocal Initialized t)] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI Local WriteLocal Initialized t)] gy
 
       Just (VI loc  WriteLocal _ t) ->
         mseq (consCall g l "consVarDecl" [(e, Just t)] $ idTy t) $ \(y,gy) -> do
           declT   <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc WriteLocal Initialized declT)] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI loc WriteLocal Initialized declT)] gy
 
       -- | Global
       Just (VI loc WriteGlobal _ t) ->
@@ -408,20 +412,20 @@ consVarDecl g (VarDecl l x (Just e))
           fta     <- freshenType WriteGlobal gy l t
           _       <- subType l (errorLiquid' l) gy ty  fta
           _       <- subType l (errorLiquid' l) gy fta t
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc WriteGlobal Initialized fta)] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI loc WriteGlobal Initialized fta)] gy
 
       -- | ReadOnly
       Just (VI loc RdOnly _ t) ->
         mseq (consCall g l "consVarDecl" [(e, Just t)] $ idTy t) $ \(y,gy) -> do
           declT   <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds "consVarDecl" [(x, VI loc RdOnly Initialized declT)] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI loc RdOnly Initialized declT)] gy
 
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 
-consVarDecl g v@(VarDecl _ x Nothing)
+consVarDecl g v@(VarDecl l x Nothing)
   = case envFindTy x (cge_names g) of
       Just (VI loc Ambient _ t) ->
-          Just <$> cgEnvAdds "consVarDecl" [(x, VI loc Ambient Initialized t)] g
+          Just <$> cgEnvAdds l "consVarDecl" [(x, VI loc Ambient Initialized t)] g
       _ ->   -- The rest should have fallen under the 'undefined' initialization case
           error "LQ: consVarDecl this shouldn't happen"
 
@@ -446,7 +450,7 @@ consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
   = do  let g = g0
               & initClassInstanceEnv sig
               & initClassCtorEnv sig
-        g'   <- cgEnvAdds "ctor" exitP g
+        g'   <- cgEnvAdds l "ctor" exitP g
         ts   <- cgFunTys l ctor xs ctorT
         mapM_ (consCallable l g' ctor xs body) ts
   where
@@ -509,7 +513,7 @@ consClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
         let mts'     = zip ms its
         mapM_ (\(m,t) -> do
             let g = mkEnv m
-            g'   <- cgEnvAdds "consClassElt-meth" [eThis] g
+            g'   <- cgEnvAdds l "consClassElt-meth" [eThis] g
             consCallable l g' x xs body t
           ) mts'
 
@@ -534,17 +538,17 @@ consAsgn l g x e =
     Just (VI loc WriteGlobal Uninitialized t) ->
       do  t' <- freshenType WriteGlobal g l t
           mseq (consExprT l g "assign" e t') $ \(_, g') -> do
-            g'' <- cgEnvAdds "consAsgn-0" [(x, VI loc WriteGlobal Initialized t')] g'
+            g'' <- cgEnvAdds l "consAsgn-0" [(x, VI loc WriteGlobal Initialized t')] g'
             return $ Just g''
 
     Just (VI _ WriteGlobal _ t) -> mseq (consExprT l g "assign" e t) $ \(_, g') ->
                                      return $ Just g'
     Just (VI loc a i t) -> mseq (consExprT l g "assign" e t) $ \(x', g') -> do
                              t      <- cgSafeEnvFindTyM x' g'
-                             Just  <$> cgEnvAdds "consAsgn-1" [(x, VI loc a i t)] g'
+                             Just  <$> cgEnvAdds l "consAsgn-1" [(x, VI loc a i t)] g'
     Nothing -> mseq (consExpr g e Nothing) $ \(x', g') -> do
                  t      <- cgSafeEnvFindTyM x' g'
-                 Just  <$> cgEnvAdds "consAsgn-1" [(x, VI Local WriteLocal Initialized t)] g'
+                 Just  <$> cgEnvAdds l "consAsgn-1" [(x, VI Local WriteLocal Initialized t)] g'
 
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh,
@@ -1051,8 +1055,8 @@ envJoin' l g g1 g2
   = do  --
         -- LOCALS: as usual
         --
-        g1'       <- cgEnvAdds "envJoin-0" (zip xls l1s) g1
-        g2'       <- cgEnvAdds "envJoin-1" (zip xls l2s) g2
+        g1'       <- cgEnvAdds l "envJoin-0" (zip xls l1s) g1
+        g2'       <- cgEnvAdds l "envJoin-1" (zip xls l2s) g2
         --
         -- t1s and t2s should have the same raw type, otherwise they wouldn't
         -- pass TC (we don't need to pad / fix them before joining).

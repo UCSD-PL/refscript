@@ -4,6 +4,7 @@
 /// <reference path="./rsc/qualifiers.d.ts"/>
 /// <reference path="./rsc/measures.d.ts"/>
 
+/// <reference path="./ambient/undefined.d.ts"/>
 /// <reference path="./ambient/object.d.ts"/>
 /// <reference path="./ambient/array.d.ts"/>
 /// <reference path="./ambient/boolean.d.ts"/>

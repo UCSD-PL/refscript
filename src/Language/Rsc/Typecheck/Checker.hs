@@ -128,7 +128,7 @@ patch :: Unif r => [Statement (AnnTc r)] -> TCM r [Statement (AnnTc r)]
 --------------------------------------------------------------------------------
 patch fs
   = do  (m, θ) <- (,) <$> getAnns <*> getSubst
-        return $ map (fmap (pa m) . apply θ) fs
+        return $ map (\f -> apply θ $ fmap (pa m) f) fs
   where
     pa m (FA i l f)   = FA i l $ f ++ filter vld (I.findWithDefault [] i m)
     vld TypInst{}     = True

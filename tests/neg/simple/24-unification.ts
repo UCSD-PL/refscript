@@ -10,7 +10,7 @@ interface ColorPair1<M extends ReadOnly, A, B> extends Pair1<M, A> {
 
 export function foo<M extends ReadOnly, A>(p: Pair1<M, A>) { }
 
-declare var p: ColorPair1<Immutable, number, string>;
+declare let p: ColorPair1<Immutable, number, string>;
 
 foo(p);
 

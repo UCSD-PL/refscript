@@ -1,18 +1,13 @@
 
 /*@ foo :: (cnd: boolean) => { number | v > 0 } */
-
-function foo(cnd: boolean): number {
- 
-  if (cnd) {
+export function foo(cnd: boolean): number {
     /*@ r :: number */
-    var r = 1;
-  }
-  else {
-    /*@ r :: number */
-    var r = 2;
-  }
-
-  return r
-
+    let r;
+    if (cnd) {
+        r = 1;
+    }
+    else {
+        r = 2;
+    }
+    return r;
 }
-

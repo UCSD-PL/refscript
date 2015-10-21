@@ -8,6 +8,7 @@
 /*@ qualif CmpZ(v:int      ): v >  0 */
 /*@ qualif CmpZ(v:int      ): v >= 0 */
 /*@ qualif CmpZ(v:int      ): v =  0 */
+/*@ qualif CmpO(v:int      ): v =  1 */
 /*@ qualif CmpZ(v:int      ): v != 0 */
 /*@ qualif Cmp(v:int, x:int): v <  x */
 /*@ qualif Cmp(v:int, x:int): v <= x */

@@ -1,6 +1,6 @@
 
 /*@ a :: posint */
-var a = 1;
-var b = a + 1;
-var c = b;
+let a = 1;
+let b = a + 1;
+let c = b;
 assert(b === c);

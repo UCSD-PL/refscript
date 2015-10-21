@@ -268,7 +268,8 @@ instance F.Reftable r => SubstitutableQ q r (FAnnQ q r) where
 appTy :: F.Reftable r => RSubstQ q r -> RTypeQ q r -> RTypeQ q r
 ---------------------------------------------------------------------------------
 appTy _        (TPrim p r)   = TPrim p r
-appTy (Su m) t@(TVar α r)    = (HM.lookupDefault t α m) `strengthen` r
+-- PV: This should operate on base types only so no need to do the strengthening
+appTy (Su m) t@(TVar α r)    = (HM.lookupDefault t α m) -- `strengthen` r
 appTy θ        (TOr ts)      = TOr (apply θ ts)
 appTy θ        (TAnd ts)     = TAnd (mapSnd (apply θ) <$> ts)
 appTy θ        (TRef n r)    = TRef (apply θ n) r

@@ -1,6 +1,6 @@
 
 /*@ glob :: posint */
-var glob = 12;
+let glob = 12;
 
 function bar() {
     glob = 7;

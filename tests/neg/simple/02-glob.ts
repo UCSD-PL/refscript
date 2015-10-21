@@ -1,6 +1,6 @@
 
 /*@ [global] glob :: posint */
-var glob = 4;
+let glob = 4;
 
 function bar() {
     glob = 7;

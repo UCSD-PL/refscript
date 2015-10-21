@@ -442,7 +442,7 @@ instance F.Symbolic (Prop a) where
 --------------------------------------------------------------------------------------------
 mkArgTy :: (F.Reftable r, IsLocated l) => l -> [RType r] -> VarInfo r
 --------------------------------------------------------------------------------------------
-mkArgTy l ts   = VI Local Ambient Initialized
+mkArgTy l ts   = VI Local RdOnly Initialized
                $ immObjectLitTy [pLen] [tLen]
   where
     ts'        = take k ts

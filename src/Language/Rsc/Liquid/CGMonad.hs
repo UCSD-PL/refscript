@@ -257,7 +257,7 @@ cgEnvAddFresh :: IsLocated l => String -> l -> VarInfo F.Reft -> CGEnv -> CGM (I
 --------------------------------------------------------------------------------
 cgEnvAddFresh msg l v g
   = do x  <- freshId l
-       g' <- cgEnvAdds ("cgEnvAddFresh: " ++ msg) [(x, v)] g
+       g' <- cgEnvAdds l ("cgEnvAddFresh: " ++ msg) [(x, v)] g
        addAnnot l x $ v_type v
        return (x, g')
 
@@ -270,19 +270,19 @@ freshenAnn l
        return $ FA n (srcPos l) []
 
 --------------------------------------------------------------------------------
-cgEnvAdds :: EnvKey x => String -> [(x, CGEnvEntry)] -> CGEnv -> CGM CGEnv
+cgEnvAdds :: (IsLocated l, EnvKey x) => l -> String -> [(x, CGEnvEntry)] -> CGEnv -> CGM CGEnv
 --------------------------------------------------------------------------------
-cgEnvAdds msg xts g = foldM (envAddGroup msg ks) g es
+cgEnvAdds l msg xts g = foldM (envAddGroup l msg ks) g es
   where
     es = objFields g <$> xts
     ks = F.symbol . fst <$> xts
 
 --------------------------------------------------------------------------------
-envAddGroup :: String -> [F.Symbol] -> CGEnv
+envAddGroup :: IsLocated l => l -> String -> [F.Symbol] -> CGEnv
             -> (F.Symbol, [(F.Symbol, CGEnvEntry)]) -> CGM CGEnv
 --------------------------------------------------------------------------------
-envAddGroup msg ks g (x, xts)
-  = do  mapM_ cgError $ concat $ zipWith (checkSyms msg g ks) xs ts
+envAddGroup l msg ks g (x, xts)
+  = do  mapM_ cgError $ concat $ zipWith (checkSyms l msg g ks) xs ts
         es    <- L.zipWith4 VI ls as is <$> zipWithM inv is ts
         ids   <- toIBindEnv . catMaybes <$> zipWithM (addFixpointBind g) xs es
         return $ g { cge_names = envAdds (zip xs es) $ cge_names g
@@ -510,7 +510,7 @@ freshTyPhis :: AnnLq -> CGEnv -> [Id AnnLq] -> [Type] -> CGM (CGEnv, [RefType])
 --------------------------------------------------------------------------------
 freshTyPhis l g xs τs
   = do ts <- mapM (freshTy "freshTyPhis") τs
-       g' <- cgEnvAdds "freshTyPhis" (zip xs (VI Local WriteLocal Initialized <$> ts)) g
+       g' <- cgEnvAdds l "freshTyPhis" (zip xs (VI Local WriteLocal Initialized <$> ts)) g
        _  <- mapM (wellFormed l g') ts
        return (g', ts)
 
@@ -521,7 +521,7 @@ freshTyPhis' :: AnnLq -> CGEnv -> [Id AnnLq] -> [EnvEntry ()] -> CGM (CGEnv, [Re
 --------------------------------------------------------------------------------
 freshTyPhis' l g xs es
   = do ts' <- mapM (freshTy "freshTyPhis") ts
-       g'  <- cgEnvAdds "freshTyPhis" (zip xs (L.zipWith4 VI ls as is ts')) g
+       g'  <- cgEnvAdds l "freshTyPhis" (zip xs (L.zipWith4 VI ls as is ts')) g
        _   <- mapM (wellFormed l g') ts'
        return (g', ts')
   where
@@ -927,7 +927,7 @@ bsplitW g t i
 
 
 envTyAdds msg l xts g
-  = cgEnvAdds (msg ++ " - envTyAdds " ++ ppshow (srcPos l))
+  = cgEnvAdds l (msg ++ " - envTyAdds " ++ ppshow (srcPos l))
       [(symbolId l x, VI Local WriteLocal Initialized t) | B x t <- xts] g
     where
       symbolId l x = Id l $ F.symbolString $ F.symbol x

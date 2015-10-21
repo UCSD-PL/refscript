@@ -10,4 +10,4 @@ interface ErrorConstructor<M extends Immutable> {
     prototype: Error<M>;
 }
 
-declare var Error: ErrorConstructor<Immutable>;
+declare let Error: ErrorConstructor<Immutable>;

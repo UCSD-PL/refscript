@@ -1,1 +1,1 @@
-var s = String(3);
+let s = String(3);

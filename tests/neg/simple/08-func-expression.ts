@@ -1,15 +1,15 @@
 
 /*@ readonly bar :: (x:number) => {number | v = x + 1} */
-var bar = function(x: number) {
+let bar = function(x: number) {
     return x + 1;
 }
 
 /*@ readonly foo :: (x:number) => {number | v = x + 2} */
-var foo = function(x: number) {
-    var a = bar(x);
-    var b = bar(a);
+let foo = function(x: number) {
+    let a = bar(x);
+    let b = bar(a);
     return b;
 }
 
-var baz = foo;
+let baz = foo;
 assert(foo(1) === baz(2));

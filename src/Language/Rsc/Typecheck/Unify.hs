@@ -4,12 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
-module Language.Rsc.Typecheck.Unify (
-
-  -- * Unification
-    unifys
-  , Unif
-  ) where
+module Language.Rsc.Typecheck.Unify (unifys) where
 
 import           Control.Applicative                ((<$>))
 import           Control.Monad                      (foldM)
@@ -42,8 +37,6 @@ import           Language.Rsc.Types
 -----------------------------------------------------------------------------
 -- | Unification
 -----------------------------------------------------------------------------
-
-type Unif r = (PP r, F.Reftable r, ExprReftable Int r, ExprReftable F.Symbol r, ExprReftable F.Expr r, Free (Fact r))
 
 -----------------------------------------------------------------------------
 unify :: (Unif r)

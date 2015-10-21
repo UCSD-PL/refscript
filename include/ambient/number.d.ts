@@ -6,7 +6,7 @@
 /*@ measure numeric_positive_infinity :: number */
 
 /*@  NaN :: { number | v = numeric_nan } */
-declare var NaN: number;
+declare let NaN: number;
 
 interface Number {
     /**
@@ -68,4 +68,4 @@ interface NumberConstructor {
 }
 
 /** An object that represents a number of any kind. All JavaScript numbers are 64-bit floating-point numbers. */
-declare var Number: NumberConstructor;
+declare let Number: NumberConstructor;

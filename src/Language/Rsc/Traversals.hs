@@ -31,6 +31,7 @@ import           Language.Rsc.Annotations     hiding (err)
 import           Language.Rsc.AST
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
+import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
@@ -283,7 +284,7 @@ accumAbsNames (QP AK_ _ ss)  = concatMap go
 
 -- TODO: Add modules as well?
 --------------------------------------------------------------------------------
-accumVars :: F.Reftable r => [Statement (AnnR r)] -> [(Id SrcSpan, SyntaxKind, VarInfo r)]
+-- accumVars :: F.Reftable r => [Statement (AnnR r)] -> [(Id SrcSpan, SyntaxKind, VarInfo r)]
 --------------------------------------------------------------------------------
 accumVars s = [ (fSrc <$> n, k, VI loc a i t) | (n,l,k,a,i) <- hoistBindings s
                                               , fact        <- fFact l

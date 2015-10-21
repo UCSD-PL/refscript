@@ -2455,7 +2455,10 @@ var ts;
         refscript_0_SyntaxKind_1_not_supported_yet: { code: 10042, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript - {0}] SyntaxKind '{1}' not supported yet." },
         Specify_use_of_refscript_Colon_editor_or_cmdline: { code: 10043, category: ts.DiagnosticCategory.Message, key: "Specify use of refscript: 'editor' or 'cmdline'" },
         Argument_for_refscript_option_must_be_editor_or_cmdline: { code: 10044, category: ts.DiagnosticCategory.Error, key: "Argument for '--refscript' option must be 'editor' or 'cmdline'." },
-        refscript_Unsupported_prefix_operator_0: { code: 10045, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Unsupported prefix operator '{0}'." }
+        refscript_Unsupported_prefix_operator_0: { code: 10045, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Unsupported prefix operator '{0}'." },
+        refscript_Does_not_supported_function_expressions_as_field_initializers: { code: 10046, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Does not supported function expressions as field initializers." },
+        refscript_Only_supports_block_scoped_variables_let_or_const: { code: 10047, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Only supports block-scoped variables (let or const)." },
+        refscript_Unsupported_postfix_operator_0: { code: 10048, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Unsupported postfix operator '{0}'." }
     };
 })(ts || (ts = {}));
 /// <reference path="core.ts"/>
@@ -12250,7 +12253,7 @@ var ts;
         }
         function typeToString(type, enclosingDeclaration, flags) {
             if (refscript) {
-                flags = 4 | 1;
+                flags = 4 | 1 | 128;
             }
             var writer = ts.getSingleLineStringWriter();
             getSymbolDisplayBuilder().buildTypeDisplay(type, writer, enclosingDeclaration, flags);
@@ -19165,6 +19168,9 @@ var ts;
         }
         function checkPropertyDeclaration(node) {
             checkGrammarDecorators(node) || checkGrammarModifiers(node) || checkGrammarProperty(node) || checkGrammarComputedPropertyName(node.name);
+            if (node.initializer && node.initializer.kind === ts.SyntaxKind.FunctionExpression) {
+                error(node, ts.Diagnostics.refscript_Does_not_supported_function_expressions_as_field_initializers);
+            }
             checkVariableLikeDeclaration(node);
         }
         function checkMethodDeclaration(node) {
@@ -20087,6 +20093,9 @@ var ts;
                 checkCollisionWithCapturedSuperVariable(node, node.name);
                 checkCollisionWithCapturedThisVariable(node, node.name);
                 checkCollisionWithRequireExportsInGeneratedCode(node, node.name);
+            }
+            if (((symbol.flags & 418) === 0) && ((node.parent.kind === ts.SyntaxKind.VariableDeclarationList) || (node.parent.kind === ts.SyntaxKind.VariableDeclaration))) {
+                error(node, ts.Diagnostics.refscript_Only_supports_block_scoped_variables_let_or_const);
             }
         }
         function checkVariableDeclaration(node) {
@@ -26863,6 +26872,8 @@ var ts;
                         return newExpressionToRsExp(state, node);
                     case ts.SyntaxKind.PrefixUnaryExpression:
                         return prefixUnaryExpressionToRsExp(state, node);
+                    case ts.SyntaxKind.PostfixUnaryExpression:
+                        return postfixUnaryExpressionToRsExp(state, node);
                     case ts.SyntaxKind.ParenthesizedExpression:
                         return parenthesizedExpressionToRsExp(state, node);
                     case ts.SyntaxKind.TrueKeyword:
@@ -26893,6 +26904,8 @@ var ts;
                         return new ts.RsLVar(nodeToSrcSpan(node), [], node.text);
                     case ts.SyntaxKind.PropertyAccessExpression:
                         return propertyAccessExpressionToRsLVal(state, node);
+                    case ts.SyntaxKind.ElementAccessExpression:
+                        return elementAccessExpressionToRsLVal(state, node);
                 }
                 state.error(node, ts.Diagnostics.refscript_0_SyntaxKind_1_not_supported_yet, "nodeToRsLVal", ts.SyntaxKind[node.kind]);
             }
@@ -26922,6 +26935,8 @@ var ts;
                         return moduleDeclarationToRsStmt(state, node);
                     case ts.SyntaxKind.WhileStatement:
                         return whileStatementToRsStmt(state, node);
+                    case ts.SyntaxKind.EmptyStatement:
+                        return emptyStatementToRsStmt(state, node);
                 }
                 state.error(node, ts.Diagnostics.refscript_0_SyntaxKind_1_not_supported_yet, "nodeToRsStmt", ts.SyntaxKind[node.kind]);
             }
@@ -27016,6 +27031,9 @@ var ts;
             function propertyAccessExpressionToRsLVal(state, node) {
                 return new ts.RsLDot(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression), ts.getTextOfNode(node.name));
             }
+            function elementAccessExpressionToRsLVal(state, node) {
+                return new ts.RsLBracket(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression), nodeToRsExp(state, node.argumentExpression));
+            }
             function stringLiteralToRsExp(state, node) {
                 return new ts.RsStringLit(nodeToSrcSpan(node), [], node.text);
             }
@@ -27032,6 +27050,16 @@ var ts;
                         return new ts.RsPrefixExpr(nodeToSrcSpan(node), [], new ts.RsPrefixOp(ts.RsPrefixOpKind.PrefixLNot), nodeToRsExp(state, node.operand));
                     default:
                         state.error(node, ts.Diagnostics.refscript_Unsupported_prefix_operator_0, ts.SyntaxKind[node.operator]);
+                }
+            }
+            function postfixUnaryExpressionToRsExp(state, node) {
+                switch (node.operator) {
+                    case ts.SyntaxKind.PlusPlusToken:
+                        return new ts.RsUnaryAssignExpr(nodeToSrcSpan(node), [], new ts.RsUnaryAssignOp(ts.RsUnaryAssignOpKind.PostfixInc), nodeToRsLval(state, node.operand));
+                    case ts.SyntaxKind.MinusMinusToken:
+                        return new ts.RsUnaryAssignExpr(nodeToSrcSpan(node), [], new ts.RsUnaryAssignOp(ts.RsUnaryAssignOpKind.PostfixDec), nodeToRsLval(state, node.operand));
+                    default:
+                        state.error(node, ts.Diagnostics.refscript_Unsupported_postfix_operator_0, ts.SyntaxKind[node.operator]);
                 }
             }
             function parenthesizedExpressionToRsExp(state, node) {
@@ -27168,12 +27196,12 @@ var ts;
                         switch (heritageClause.token) {
                             case ts.SyntaxKind.ExtendsKeyword:
                                 if (heritageClause.types && heritageClause.types.length > 0) {
-                                    return ["extends", heritageClause.types.map(function (type) { return checker.typeToString(checker.getTypeAtLocation(type)); }).join(", ")];
+                                    return [ts.getTextOfNode(heritageClause)];
                                 }
                                 break;
                             case ts.SyntaxKind.ImplementsKeyword:
                                 if (heritageClause.types && heritageClause.types.length > 0) {
-                                    return ["implements", heritageClause.types.map(function (type) { return checker.typeToString(checker.getTypeAtLocation(type)); }).join(", ")];
+                                    return [ts.getTextOfNode(heritageClause)];
                                 }
                                 break;
                         }
@@ -27288,6 +27316,9 @@ var ts;
             function whileStatementToRsStmt(state, node) {
                 return new ts.RsWhileStmt(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression), nodeToRsStmt(state, node.statement));
             }
+            function emptyStatementToRsStmt(state, node) {
+                return new ts.RsEmptyStmt(nodeToSrcSpan(node), []);
+            }
             function constructorDeclarationToRsClassElts(state, node) {
                 var isAmbient = !!(node.flags & 2);
                 if (!node.body && !isAmbient) {
@@ -27348,6 +27379,10 @@ var ts;
             function propertyDeclarationToRsClassElts(state, node) {
                 var nameText = ts.getTextOfNode(node.name);
                 var annotations = nodeAnnotations(node, ts.makePropertyAnnotations);
+                if (annotations.length === 0) {
+                    var type = checker.getTypeAtLocation(node);
+                    annotations = ts.concatenate(annotations, [new ts.PropertyAnnotation(nodeToSrcSpan(node), nameText + ": " + checker.typeToString(type, node))]);
+                }
                 var static = !!(node.flags & 128);
                 return [new ts.RsMemberVarDecl(nodeToSrcSpan(node), annotations, static, new ts.RsId(nodeToSrcSpan(node.name), [], nameText), (node.initializer) ? (new ts.RsJust(nodeToRsExp(state, node.initializer))) : new ts.RsNothing())];
             }

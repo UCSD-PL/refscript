@@ -1,8 +1,8 @@
 
 /*@ option REALS */
 
-var a = 10;
+let a = 10;
 
-var b = 19;
+let b = 19;
 
 assert(a * a + b * b > 499);

@@ -31,31 +31,20 @@ module Language.Rsc.SSA.SSAMonad (
    , freshenIdSSA
    , findSsaEnv
 
-   -- , extSsaEnv
-   , setSsaVars
    , getSsaVars
-   -- , setSsaEnvGlob
+   , setSsaVars
    , ssaVars
-   -- , getSsaEnvGlob
    , getAstCount
    , ssaEnvIds
+   , envToFgn
 
    -- * Access Annotations
    , addAnn, getAnns
-   -- , setGlobs, getGlobs
-   -- , getAsgn
    , setMeas, getMeas
    , getCHA
 
-   -- Classes / Modules
-   -- , withinClass
-   -- , getCurrentClass
-   -- , withinModule
-
    -- * Tracking Assignability
    , getAssignability
-   -- , withAssignabilities
-   -- , withAsgnEnv
 
    ) where
 
@@ -91,7 +80,7 @@ type SSAM r     = ExceptT Error (State (SsaState r))
 --
 data SsaState r = SsaST {
     cnt     :: !Int                      -- ^ Fresh index for SSA vars
-  , ssaVars :: Env (Var r)               -- ^ Program var -> latest SSA name
+  , ssaVars :: Env (Var r)               -- ^ Source var -> last SSA name
   , anns    :: !(AnnInfo r)              -- ^ Map of annotation
   , meas    :: S.HashSet F.Symbol        -- ^ Measures
   , ast_cnt :: !NodeId                   -- ^ Fresh AST index
@@ -128,6 +117,8 @@ initCallableSsaEnv l g arg ret xs bd = SsaEnv env cha cls path
 
 toFgn WriteLocal = ForeignLocal
 toFgn a          = a
+
+envToFgn = envMap toFgn
 
 initModuleSsaEnv l g m ss = SsaEnv env cha cls path
   where

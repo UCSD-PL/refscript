@@ -15,11 +15,14 @@ module Language.Rsc.Typecheck.Environment
     , tcEnvFindTy, resolveTypeM, tcEnvFindTyForAsgn
     , tcEnvFindReturn, tcEnvAdd, tcEnvAdds
     , tcEnvAddBounds
+    , Unif
     ) where
 
+import           Data.Data
 import           Data.Function                (on)
 import           Data.List                    (sortBy)
 import           Data.Monoid
+import           Data.Typeable
 import           Language.Fixpoint.Errors     (die)
 import           Language.Fixpoint.Misc       (fst3, safeZip, single)
 import qualified Language.Fixpoint.Types      as F
@@ -43,7 +46,15 @@ import           Text.PrettyPrint.HughesPJ
 -- import           Debug.Trace
 
 
-type Unif r = (PP r, F.Reftable r, ExprReftable Int r, ExprReftable F.Symbol r, Free (Fact r))
+type Unif r = ( PP r
+              , F.Reftable r
+              , ExprReftable F.Expr r
+              , ExprReftable Int r
+              , ExprReftable F.Symbol r
+              , Free (Fact r)
+              , Typeable r
+              , Data r
+              )
 
 --------------------------------------------------------------------------------
 -- | Typecheck Environment

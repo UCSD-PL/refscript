@@ -35,7 +35,7 @@ interface Function {
     caller: Function;
 }
 
-declare var Function: {
+declare let Function: {
     /**
       * Creates a new function.
       * @param args A list of arguments the function accepts.

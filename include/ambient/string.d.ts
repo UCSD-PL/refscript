@@ -165,4 +165,4 @@ interface StringConstructor {
 /**
   * Allows manipulation and formatting of text strings and determination and location of substrings within strings.
   */
-declare var String: StringConstructor;
+declare let String: StringConstructor;

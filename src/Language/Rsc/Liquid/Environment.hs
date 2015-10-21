@@ -92,9 +92,9 @@ cgEnvFindTy x   = fmap v_type . envFindTy x . cge_names
 --   * ReadOnly ... binders in the environment
 --
 ---------------------------------------------------------------------------------------
-checkSyms :: EnvKey a => String -> CGEnv -> [a] -> a -> RefType -> [Error]
+checkSyms :: (IsLocated l, EnvKey a) => l -> String -> CGEnv -> [a] -> a -> RefType -> [Error]
 ---------------------------------------------------------------------------------------
-checkSyms m g ok x t = efoldRType h f F.emptySEnv [] t
+checkSyms l m g ok x t = efoldRType h f F.emptySEnv [] t
   where
     h _        = ()
     f γ t' s   = s ++ catMaybes (fmap (chk γ t') (F.syms (noKVars $ rTypeReft t')))
@@ -120,7 +120,6 @@ checkSyms m g ok x t = efoldRType h f F.emptySEnv [] t
                | otherwise
                = Just $ errorUnboundSyms l (F.symbol x) t s m
 
-    l          = srcPos x
     biReserved = map F.symbol ["func", "obj"]
     -- TODO: Check for this
     biExtra    = map F.symbol ["bvor", "bvand", "builtin_BINumArgs", "offset", "this"]

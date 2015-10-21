@@ -103,7 +103,7 @@ interface ObjectConstructor<M extends ReadOnly> {
 /**
   * Provides functionality common to all JavaScript objects.
   */
-declare var Object: ObjectConstructor<ReadOnly>;
+declare let Object: ObjectConstructor<ReadOnly>;
 
 
 interface PropertyDescriptor<M extends ReadOnly> {

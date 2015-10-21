@@ -84,16 +84,31 @@ ssaStmts g ss = mapSnd flattenBlock <$> ssaSeq (ssaStmt g) ss
 ssaFun :: (Data r, PPR r) => SsaEnv r -> AnnSSA r -> [Var r] -> [Statement (AnnSSA r)] -> SSAM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------------
 ssaFun g l xs body
-  = do  -- γ0         <- getSsaVars
+  = do  γ0         <- getSsaVars                  -- Remember env before the function
+        setSsaVars  $ envEmpty                    -- Reset the 'local' SSA-vars count
+        body1      <- return body -- prefixArgInit l body
         arg        <- argId    <$> freshenAnn l
         ret        <- returnId <$> freshenAnn l
-        -- Extend SsaEnv with formal binders
-        let g'      = initCallableSsaEnv l g arg ret xs body
-        --
-        (_, body') <- ssaStmts g' body
-        -- Restore Outer SsaEnv
-        -- setSsaVars   $ γ0
-        return      $ body'
+        let g'      = initCallableSsaEnv l g arg ret xs body1
+        (_, body2) <- ssaStmts g' body1
+        setSsaVars  $ γ0                          -- Restore outer env
+        return      $ body2
+
+
+prefixArgInit l ss
+  = do
+        argId     <- Id           <$> freshenAnn l <**> "arguments"
+        fn        <- VarRef       <$> freshenAnn l <**> argId
+        lengthId  <- Id           <$> freshenAnn l <**> "length"
+        lengthP   <- PropId       <$> freshenAnn l <**> lengthId
+        lengthFId <- Id           <$> freshenAnn l <**> "_arguments"
+        lengthFn  <- VarRef       <$> freshenAnn l <**> lengthFId
+        lengthExp <- CallExpr     <$> freshenAnn l <**> lengthFn <**> []
+        init      <- ObjectLit    <$> freshenAnn l <**> [(lengthP, lengthExp)]
+        vd        <- VarDecl      <$> freshenAnn l <**> argId <**>  (Just init)
+        vs        <- VarDeclStmt  <$> freshenAnn l <**> [vd]
+        pure       $ vs : flattenBlock ss
+
 
 -------------------------------------------------------------------------------------
 ssaSeq :: (a -> SSAM r (Bool, a)) -> [a] -> SSAM r (Bool, [a])
@@ -140,8 +155,9 @@ ssaStmt g (IfSingleStmt l b s)
 -- if b { s1 } else { s2 }
 ssaStmt g (IfStmt l e s1 s2)
   = do  (se, e')     <- ssaExpr g e
-        (θ1, s1')    <- ssaWith (ssaStmt g) s1
-        (θ2, s2')    <- ssaWith (ssaStmt g) s2
+        θ            <- getSsaVars
+        (θ1, s1')    <- ssaWith θ (ssaStmt g) s1
+        (θ2, s2')    <- ssaWith θ (ssaStmt g) s2
         (phis, θ', φ1, φ2) <- envJoin l g θ1 θ2
         case θ' of
           Just θ''   -> do  setSsaVars    $ θ''
@@ -254,17 +270,17 @@ ssaStmt g (ForInStmt l (ForInVar v) e b) =
                                           <*> keysArr
                                           <*> justM (CallExpr <$> fr
                                                               <*> (VarRef <$> fr <*> biForInKeys)
-                                                              <*> (return [e]))
+                                                              <**> [e])
     initIdx     = VarDecl     <$> fr
                               <*> keysIdx
-                              <*> (Just      <$> (IntLit  <$> fr <*> return 0))
+                              <*> (Just      <$> (IntLit  <$> fr <**> 0))
     condition   = Just        <$> (InfixExpr <$> fr
                                              <*> return OpLT
                                              <*> (VarRef  <$> fr <*> keysIdx)
                                              <*> (DotRef  <$> fr
                                                           <*> (VarRef <$> fr <*> keysArr)
-                                             <*> (Id      <$> fr
-                                                          <*> return "length")))
+                                                          <*> (Id      <$> fr <**> "length")
+                                                 ))
     increment   = Just        <$> (UnaryAssignExpr
                                              <$> fr
                                              <*> return PostfixInc
@@ -389,7 +405,7 @@ ctorVisitor g ms          = defaultVisitor { endStmt = es } { endExpr = ee }
     te (AssignExpr la OpAssign (LDot ld (ThisRef _) s) e)
                           = AssignExpr <$> fr_ la
                                        <*> return OpAssign
-                                       <*> (LVar <$> fr_ ld <*> return (mkCtorStr s))
+                                       <*> (LVar <$> fr_ ld <**> mkCtorStr s)
                                        <*> return e
     te lv                 = return lv
 
@@ -411,27 +427,23 @@ ctorVisitor g ms          = defaultVisitor { endStmt = es } { endExpr = ee }
         parent | Just n <- curClass g,
                  Just (TD (TS _ _ ([(Gen (QN path name) _)],_)) _ ) <- resolveType cha n
                = case path of
-                   QP _ _ []     -> VarRef <$> fr <*> (Id <$> fr <*> return (F.symbolString name))
-                   QP _ _ (y:ys) -> do init <- VarRef <$> fr <*> (Id <$> fr <*> return (F.symbolString y))
+                   QP _ _ []     -> VarRef <$> fr <*> (Id <$> fr <**> F.symbolString name)
+                   QP _ _ (y:ys) -> do init <- VarRef <$> fr <*> (Id <$> fr <**> F.symbolString y)
                                        foldM (\e q -> DotRef <$> fr <*> return e
-                                                                    <*> (Id <$> fr <*> return (F.symbolString q))) init (ys ++ [name])
+                                                                    <*> (Id <$> fr <**> F.symbolString q)) init (ys ++ [name])
                | otherwise = ssaError $ bugSuperWithNoParent (srcPos l)
 
         superVS n = VarDeclStmt <$> fr <*> (single <$> superVD n)
         superVD n = VarDecl  <$> fr
                              <*> freshenIdSSA (builtinOpId BISuperVar)
-                             <*> justM (NewExpr <$> fr <*> n <*> return es)
+                             <*> justM (NewExpr <$> fr <*> n <**> es)
         asgnS x = ExprStmt   <$> fr <*> asgnE x
         asgnE x = AssignExpr <$> fr
                              <*> return OpAssign
-                             <*> (LDot <$> fr
-                                       <*> (ThisRef <$> fr)
-                                       <*> return (F.symbolString x))
+                             <*> (LDot <$> fr <*> (ThisRef <$> fr) <**> F.symbolString x)
                              <*> (DotRef <$> fr
-                                         <*> (VarRef <$> fr
-                                                     <*> freshenIdSSA (builtinOpId BISuperVar))
-                                         <*> (Id <$> fr
-                                                 <*> return (F.symbolString x)))
+                                         <*> (VarRef <$> fr <*> freshenIdSSA (builtinOpId BISuperVar))
+                                         <*> (Id <$> fr <**> F.symbolString x))
 
     ts r@(ReturnStmt l _) = BlockStmt <$> fr_ l <*> ((:[r]) <$> ctorExit l ms)
     ts r                  = return $ r
@@ -439,7 +451,7 @@ ctorVisitor g ms          = defaultVisitor { endStmt = es } { endExpr = ee }
 ctorExit l ms
   = do  m     <- VarRef <$> fr <*> freshenIdSSA (builtinOpId BICtorExit)
         es    <- mapM ((VarRef <$> fr <*>) . return . mkCtorId l) ms
-        ReturnStmt <$> fr <*> justM (CallExpr <$> fr <*> return m <*> return es)
+        ReturnStmt <$> fr <*> justM (CallExpr <$> fr <**> m <**> es)
   where
     fr = fr_ l
 
@@ -569,13 +581,14 @@ flattenBlock :: [Statement t] -> [Statement t]
 flattenBlock = concatMap f
   where
     f (BlockStmt _ ss) = ss
-    f s                = [s ]
+    f s                = [s]
 
 -------------------------------------------------------------------------------------
-ssaWith :: (a -> SSAM r (Bool, b)) -> a -> SSAM r (Maybe (Env (Var r)), b)
+ssaWith :: Env (Var r) -> (a -> SSAM r (Bool, b)) -> a -> SSAM r (Maybe (Env (Var r)), b)
 -------------------------------------------------------------------------------------
-ssaWith f x
-  = do  (b, x') <- f x
+ssaWith θ f x
+  = do  setSsaVars θ
+        (b, x') <- f x
         (,x') <$> go b x'
   where
     go b x' | b         = Just <$> getSsaVars
@@ -615,8 +628,8 @@ ssaExpr g (VarRef l x)
 ssaExpr g (CondExpr l c e1 e2)
   = do (sc, c') <- ssaExpr g c
        θ        <- getSsaVars
-       e1'      <- ssaPureExprWith g e1
-       e2'      <- ssaPureExprWith g e2
+       e1'      <- ssaPureExprWith θ g e1
+       e2'      <- ssaPureExprWith θ g e2
        return (sc, CondExpr l c' e1' e2')
 
 ssaExpr g (PrefixExpr l o e)
@@ -624,10 +637,10 @@ ssaExpr g (PrefixExpr l o e)
 
 ssaExpr g (InfixExpr l OpLOr e1 e2)
   = do  l' <- freshenAnn l
-        vid <- Id <$> freshenAnn l <*> (return $ "__InfixExpr_OpLOr_" ++ show (fId l'))
-        vr  <- VarRef <$> freshenAnn l <*> return vid
-        vd  <- VarDecl <$> freshenAnn l <*> return vid <*> return (Just e1)
-        vs  <- VarDeclStmt <$> freshenAnn l <*> return [vd]
+        vid <- Id          <$> freshenAnn l <**> ("__InfixExpr_OpLOr_" ++ show (fId l'))
+        vr  <- VarRef      <$> freshenAnn l <**> vid
+        vd  <- VarDecl     <$> freshenAnn l <**> vid <**> Just e1
+        vs  <- VarDeclStmt <$> freshenAnn l <**> [vd]
         (_, vs') <- ssaStmt g vs
         (ss,e') <- ssaExpr g (CondExpr l vr vr e2)
         return  $ (vs':ss, e')
@@ -724,7 +737,7 @@ ssaExpr1 = case1 . ssaExprs
 ssaExpr2 = case2 . ssaExprs
 ssaExpr3 = case3 . ssaExprs
 
-ssaPureExprWith g e = snd <$> ssaWith (fmap (True,) . ssaPureExpr g) e
+ssaPureExprWith θ g e = snd <$> ssaWith θ (fmap (True,) . ssaPureExpr g) e
 
 ssaPureExpr g e = do
   (s, e') <- ssaExpr g e
@@ -778,7 +791,7 @@ ssaVarDecl g (VarDecl l x (Just e)) = do
     return    (s, VarDecl l x' (Just e'))
 
 ssaVarDecl g v@(VarDecl l x Nothing)
-  | Ambient `elem` map thd4 (scrapeVarDecl v)
+  | Ambient `elem` map thd4 (scrapeVarDecl v)     -- declare var a;
   = return ([], VarDecl l x Nothing)
   | otherwise
   = ([],) <$> (VarDecl l <$> updSsaEnv g l x

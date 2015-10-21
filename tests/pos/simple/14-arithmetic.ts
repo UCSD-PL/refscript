@@ -1,7 +1,7 @@
 /*@ foo :: (x: number) => {number | v = x + 2} */
 export function foo(x: number): number {
-    var a = zogbert(x);
-    var b = zogbert(a);
+    let a = zogbert(x);
+    let b = zogbert(a);
     return b;
 }
 

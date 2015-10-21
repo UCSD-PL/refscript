@@ -1,9 +1,9 @@
 
 /*@ y :: { } */
-declare var y;
+declare let y;
 
 /*@ x :: { f: [Mutable] posint } */
-var x = { f: 1 };
+let x = { f: 1 };
 
 /*@ foo :: () => void */
 function foo(): void {

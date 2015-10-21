@@ -40,6 +40,7 @@ data CGEnvR r = CGE {
   , cge_consts :: !(Env (RType r))        -- Constants
   , cge_mut    :: !(Maybe MutabilityMod)  -- Method mutability
   , cge_this   :: !(Maybe (RType r))      -- Method mutability
+  , cge_fnid   :: !Int                    -- Enclosing fun's id
   } deriving (Functor)
 
 type CGEnv = CGEnvR F.Reft
@@ -54,6 +55,7 @@ instance CheckingEnvironment r CGEnvR where
   envCtx    = cge_ctx
   envMut    = cge_mut
   envThis   = cge_this
+  envFnId   = cge_fnid
 
 type EnvKey x = (IsLocated x, F.Symbolic x, PP x, F.Expression x)
 

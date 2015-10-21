@@ -87,7 +87,7 @@ ssaFun g l xs body
   = do  γ0         <- getSsaVars                  -- Remember env before the function
         setSsaVars  $ envEmpty                    -- Reset the 'local' SSA-vars count
         body1      <- return body -- prefixArgInit l body
-        arg        <- argId    <$> freshenAnn l
+        arg        <- argId    <$> freshenAnn l <**> fId l
         ret        <- returnId <$> freshenAnn l
         let g'      = initCallableSsaEnv l g arg ret xs body1
         (_, body2) <- ssaStmts g' body1
@@ -95,19 +95,19 @@ ssaFun g l xs body
         return      $ body2
 
 
-prefixArgInit l ss
-  = do
-        argId     <- Id           <$> freshenAnn l <**> "arguments"
-        fn        <- VarRef       <$> freshenAnn l <**> argId
-        lengthId  <- Id           <$> freshenAnn l <**> "length"
-        lengthP   <- PropId       <$> freshenAnn l <**> lengthId
-        lengthFId <- Id           <$> freshenAnn l <**> "_arguments"
-        lengthFn  <- VarRef       <$> freshenAnn l <**> lengthFId
-        lengthExp <- CallExpr     <$> freshenAnn l <**> lengthFn <**> []
-        init      <- ObjectLit    <$> freshenAnn l <**> [(lengthP, lengthExp)]
-        vd        <- VarDecl      <$> freshenAnn l <**> argId <**>  (Just init)
-        vs        <- VarDeclStmt  <$> freshenAnn l <**> [vd]
-        pure       $ vs : flattenBlock ss
+-- prefixArgInit l ss
+--   = do
+--         argId     <- Id           <$> freshenAnn l <**> "arguments"
+--         fn        <- VarRef       <$> freshenAnn l <**> argId
+--         lengthId  <- Id           <$> freshenAnn l <**> "length"
+--         lengthP   <- PropId       <$> freshenAnn l <**> lengthId
+--         lengthFId <- Id           <$> freshenAnn l <**> "_arguments"
+--         lengthFn  <- VarRef       <$> freshenAnn l <**> lengthFId
+--         lengthExp <- CallExpr     <$> freshenAnn l <**> lengthFn <**> []
+--         init      <- ObjectLit    <$> freshenAnn l <**> [(lengthP, lengthExp)]
+--         vd        <- VarDecl      <$> freshenAnn l <**> argId <**>  (Just init)
+--         vs        <- VarDeclStmt  <$> freshenAnn l <**> [vd]
+--         pure       $ vs : flattenBlock ss
 
 
 -------------------------------------------------------------------------------------
@@ -336,7 +336,7 @@ ssaStmt g (ThrowStmt l e) = do
 
 -- function f(...){ s }
 ssaStmt g (FunctionStmt l f xs (Just bd))
-  = do  arg       <- argId    <$> freshenAnn l
+  = do  arg       <- argId    <$> freshenAnn l <**> fId l
         ret       <- returnId <$> freshenAnn l
         let g'     = initCallableSsaEnv l g arg ret xs bd
         (True,) . FunctionStmt l f xs . Just <$> ssaFun g' l xs bd
@@ -486,7 +486,7 @@ ssaClassElt :: (Data r, PPR r) => SsaEnv r -> Statement (AnnSSA r)
             -> ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
 -------------------------------------------------------------------------------------
 ssaClassElt g c (Constructor l xs bd)
-  = do  arg       <- argId    <$> freshenAnn l
+  = do  arg       <- argId    <$> freshenAnn l <**> fId l
         ret       <- returnId <$> freshenAnn l
         pre       <- preM c
         fs        <- mapM symToVar fields

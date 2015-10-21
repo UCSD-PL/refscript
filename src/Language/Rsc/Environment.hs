@@ -76,6 +76,10 @@ class CheckingEnvironment r t where
   --   * Type for this
   --
   envThis   :: t r -> Maybe (RType r)
+  --
+  --   * Enclosing function's id
+  --
+  envFnId   :: t r -> Int
 
 
 -------------------------------------------------------------------------------

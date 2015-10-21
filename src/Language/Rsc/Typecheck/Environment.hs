@@ -68,6 +68,7 @@ data TCEnv r  = TCE {
   , tce_cha    :: ClassHierarchy r
   , tce_mut    :: Maybe (MutabilityMod)
   , tce_this   :: Maybe (RType r)
+  , tce_fnid   :: Int
   }
   deriving (Functor)
 
@@ -86,6 +87,7 @@ instance CheckingEnvironment r TCEnv where
   envCHA    = tce_cha
   envMut    = tce_mut
   envThis   = tce_this
+  envFnId   = tce_fnid
 
 
 --------------------------------------------------------------------------------
@@ -96,7 +98,7 @@ instance CheckingEnvironment r TCEnv where
 initGlobalEnv :: Unif r => TcRsc r -> ClassHierarchy r -> TCEnv r
 --------------------------------------------------------------------------------
 initGlobalEnv pgm@(Rsc { code = Src ss }) cha
-  = TCE nms bnds ctx pth cha mut tThis
+  = TCE nms bnds ctx pth cha mut tThis (-1)
   where
     nms   = mkVarEnv (accumVars ss)
     bnds  = mempty
@@ -116,7 +118,7 @@ initCallableEnv :: (IsLocated l, Unif r)
                 -> TCEnv r
 --------------------------------------------------------------------------------
 initCallableEnv l γ f fty xs s
-  = TCE nms bnds ctx pth cha mut tThis
+  = TCE nms bnds ctx pth cha mut tThis (fId l)
   & tcEnvAdds arg
   & tcEnvAdds varBs
   & tcEnvAdds tyBs
@@ -127,7 +129,7 @@ initCallableEnv l γ f fty xs s
 
     tyBs  = [(Loc (srcPos l) α, VI Local Ambient Initialized $ tVar α) | α <- αs]
     varBs = [(x, VI Local WriteLocal Initialized t) | (x, t) <- safeZip "initCallableEnv" xs ts]
-    arg   = single (argId $ srcPos l, mkArgTy l ts)
+    arg   = single (argId (srcPos l) (fId l), mkArgTy l ts)
     bnds  = envAdds [(s,t) | BTV s _ (Just t) <- bs] $ envBounds γ
     ctx   = pushContext i (envCtx γ)
     pth   = envPath γ
@@ -156,7 +158,7 @@ initClassMethEnv m (TS _ (BGen nm bs) _) γ
 --------------------------------------------------------------------------------
 initModuleEnv :: (Unif r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnTc r)] -> TCEnv r
 --------------------------------------------------------------------------------
-initModuleEnv γ n s = TCE nms bnds ctx pth cha mut tThis
+initModuleEnv γ n s = TCE nms bnds ctx pth cha mut tThis fnId
   where
     nms   = mkVarEnv (accumVars s) `envUnion` toFgn (envNames γ)
     bnds  = envBounds γ
@@ -165,6 +167,7 @@ initModuleEnv γ n s = TCE nms bnds ctx pth cha mut tThis
     cha   = envCHA γ
     mut   = Nothing -- 'this' gets out of scope when entering a module
     tThis = Nothing
+    fnId  = envFnId γ
 
 -- initCallable will be called later on the result
 --------------------------------------------------------------------------------

@@ -558,9 +558,12 @@ tcExpr γ e@(ThisRef l) _
       Just t  -> return (e, t)
       Nothing -> fatal (errorUnboundId (fSrc l) "this") (e, tBot)
 
-tcExpr γ e@(VarRef l x) _
+tcExpr γ e@(VarRef l x) to
   | F.symbol x == F.symbol "undefined"
   = return (e, tUndef)
+
+  | F.symbol x == F.symbol "arguments"
+  = tcExpr γ (VarRef l (Id (getAnnotation x) ("arguments_" ++ show (envFnId γ)))) to
 
   | Just t <- to, not $ null [ () | BypassUnique <- fFact l ]
   = return (e,t)

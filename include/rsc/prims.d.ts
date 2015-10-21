@@ -165,5 +165,3 @@ declare function random(): number;
 declare function pos(): posint;
 
 declare function alert(s: string): void;
-
-declare function _arguments(): number;

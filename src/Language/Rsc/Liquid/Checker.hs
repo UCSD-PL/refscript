@@ -166,7 +166,7 @@ initGlobalEnv :: RefScript -> ClassHierarchy F.Reft -> CGM CGEnv
 --------------------------------------------------------------------------------
 initGlobalEnv pgm@(Rsc { code = Src ss }) cha = freshenCGEnvM g
   where
-    g     = CGE nms bnds ctx pth cha fenv grd cst mut thisT
+    g     = CGE nms bnds ctx pth cha fenv grd cst mut thisT (-1)
     nms   = mkVarEnv (accumVars ss)
     bnds  = mempty
     ctx   = emptyContext
@@ -183,7 +183,7 @@ initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnLq] -> CGM 
 --------------------------------------------------------------------------------
 initModuleEnv g n s = freshenCGEnvM g'
   where
-    g'    = CGE nms bnds ctx pth cha fenv grd cst mut thisT
+    g'    = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
     nms   = mkVarEnv (accumVars s) `envUnion` toFgn (envNames g)
     bnds  = envBounds g
     ctx   = cge_ctx g
@@ -194,6 +194,7 @@ initModuleEnv g n s = freshenCGEnvM g'
     cst   = cge_consts g
     mut   = Nothing
     thisT = Nothing
+    fnId  = cge_fnid g
 
 -- | `initCallableEnv l f i xs (αs, ts, t) g`
 --
@@ -204,8 +205,8 @@ initModuleEnv g n s = freshenCGEnvM g'
 --    * Adds binder for the 'arguments' variable
 --
 --------------------------------------------------------------------------------
-initCallableEnv :: (PP x, IsLocated x, IsLocated l)
-                => l -> CGEnv -> x
+initCallableEnv :: (PP x, IsLocated x)
+                => AnnLq -> CGEnv -> x
                 -> IOverloadSig F.Reft
                 -> [Id (AnnR F.Reft)]
                 -> [Statement (AnnR F.Reft)]
@@ -216,7 +217,7 @@ initCallableEnv l g f fty xs s
         g2 <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-1") arg g1
         freshenCGEnvM g2
   where
-    g0     = CGE nms bnds ctx pth cha fenv grd cst mut thisT
+    g0     = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
              -- No FP binding for these
     nms    = toFgn (envNames g)
            & envUnion (mkVarEnv (accumVars s))
@@ -234,10 +235,11 @@ initCallableEnv l g f fty xs s
 
     tyBs   = [(Loc (srcPos l) α, VI Local Ambient Initialized $ tVar α) | α <- αs]
     params = [(x, VI Local WriteLocal Initialized t) | (x, t) <- safeZip "initCallableEnv" xs ts ]
-    arg    = single (argId $ srcPos l, mkArgTy l ts)
+    arg    = single (argId (srcPos l) (fId l), mkArgTy l ts)
     ts     = map b_type xts
     αs     = map btvToTV bs
     (i, (bs,xts,t)) = fty
+    fnId   = fId l
 
 
 --------------------------------------------------------------------------------
@@ -595,7 +597,7 @@ consExpr g (ThisRef l) _
   where
     this = Id l "this"
 
-consExpr g (VarRef l x) _
+consExpr g (VarRef l x) to
   -- | undefined
   | F.symbol x == F.symbol "undefined"
   = Just <$> cgEnvAddFresh "0" l (VI Local WriteLocal Initialized tUndef) g

@@ -18,6 +18,7 @@ module Language.Rsc.SSA.SSAMonad (
    , ssaError
    , execute
    , tryAction
+   , tick
 
    -- * SSA Environment
    , SsaEnv (..)
@@ -34,7 +35,7 @@ module Language.Rsc.SSA.SSAMonad (
    , getSsaVars
    , setSsaVars
    , ssaVars
-   , getAstCount
+   , getCounter
    , ssaEnvIds
    , envToFgn
 
@@ -54,6 +55,7 @@ import           Control.Monad.Trans.Except
 import qualified Data.HashSet                as S
 import qualified Data.IntMap.Strict          as IM
 import qualified Data.IntSet                 as I
+import           Data.Maybe                  (fromMaybe)
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types     as F
 import           Language.Rsc.Annotations
@@ -79,11 +81,10 @@ type SSAM r     = ExceptT Error (State (SsaState r))
 -- | SSA Monad state
 --
 data SsaState r = SsaST {
-    cnt     :: !Int                      -- ^ Fresh index for SSA vars
+    cnt     :: !Int                      -- ^ Counter for fresh ints
   , ssaVars :: Env (Var r)               -- ^ Source var -> last SSA name
   , anns    :: !(AnnInfo r)              -- ^ Map of annotation
   , meas    :: S.HashSet F.Symbol        -- ^ Measures
-  , ast_cnt :: !NodeId                   -- ^ Fresh AST index
   }
 
 -- | SSA Environment
@@ -136,7 +137,7 @@ initClassSsaEnv l g n = SsaEnv env cha cls path
     path = curPath g
 
 
-getAstCount = ast_cnt <$> get
+getCounter = cnt <$> get
 
 ssaEnvIds = envKeys
 
@@ -146,19 +147,24 @@ setSsaVars θ = modify $ \st -> st { ssaVars = θ }
 getSsaVars :: SSAM r (Env (Var r))
 getSsaVars  = ssaVars <$> get
 
+-- -------------------------------------------------------------------------------------
+-- getAssignability :: IsLocated l => SsaEnv r -> Id l -> SSAM r Assignability
+-- -------------------------------------------------------------------------------------
+-- getAssignability g@(asgn -> asgn) x
+--   | Just a <- envFindTy x asgn = return a
+--   | otherwise                  = ssaError $ errorUnboundId x x
+--
 -------------------------------------------------------------------------------------
-getAssignability :: IsLocated l => SsaEnv r -> Id l -> SSAM r Assignability
+getAssignability :: IsLocated l => SsaEnv r -> Id l -> Assignability -> Assignability
 -------------------------------------------------------------------------------------
-getAssignability g@(asgn -> asgn) x
-  | Just a <- envFindTy x asgn = return a
-  | otherwise                  = ssaError $ errorUnboundId x x
+getAssignability g@(asgn -> asgn) x defAssign
+  = fromMaybe defAssign (envFindTy x asgn)
 
 -------------------------------------------------------------------------------------
 initSsaVar   :: SsaEnv r -> AnnSSA r -> Var r -> SSAM r (Var r)
 -------------------------------------------------------------------------------------
 initSsaVar g l x
-  = do  a <- getAssignability g x
-        go a
+  = go (getAssignability g x WriteLocal)
   where
     go Ambient     = return x
     go RdOnly      = return x
@@ -169,8 +175,7 @@ initSsaVar g l x
 updSsaEnv   :: SsaEnv r -> AnnSSA r -> Var r -> SSAM r (Var r)
 -------------------------------------------------------------------------------------
 updSsaEnv g a@(srcPos -> l) x
-  = do  a <- getAssignability g x
-        go a
+  = go (getAssignability g x WriteLocal)
   where
     go   WriteLocal   = updSsaEnvLocal g a x
     go   WriteGlobal  = return x
@@ -183,19 +188,22 @@ updSsaEnv g a@(srcPos -> l) x
 updSsaEnvLocal :: SsaEnv r -> AnnSSA r -> Var r -> SSAM r (Var r)
 -------------------------------------------------------------------------------------
 updSsaEnvLocal g a x
-  = do n     <- cnt <$> get
+  = do n     <- tick
        let x' = mkSSAId a x n
        modify $ \st -> st { ssaVars = envAdds [(x, x')] (ssaVars st) }
-                          { cnt     = 1 + n }
        return x'
 
 -------------------------------------------------------------------------------------
 freshenAnn :: IsLocated l => l -> SSAM r (AnnSSA r)
 -------------------------------------------------------------------------------------
-freshenAnn l
-  = do n     <- ast_cnt <$> get
-       modify $ \st -> st { ast_cnt = 1 + n }
-       return $ FA n (srcPos l) []
+freshenAnn l = FA <$> tick <**> srcPos l <**> []
+
+-------------------------------------------------------------------------------------
+tick :: SSAM r Int
+-------------------------------------------------------------------------------------
+tick = do n     <- cnt <$> get
+          modify $ \st -> st { cnt = 1 + n }
+          return n
 
 -------------------------------------------------------------------------------------
 freshenIdSSA         :: IsLocated l => Id l -> SSAM r (Var r)
@@ -241,5 +249,5 @@ tryAction act = get >>= return . runState (runExceptT act)
 -------------------------------------------------------------------------------------
 initState :: BareRsc r -> ClassHierarchy r -> SsaState r
 -------------------------------------------------------------------------------------
-initState p cha = SsaST 0 envEmpty IM.empty S.empty (maxId p)
+initState p cha = SsaST (maxId p) envEmpty IM.empty S.empty
 

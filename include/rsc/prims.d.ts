@@ -87,20 +87,6 @@ declare function builtin_OpSEq<A,B>(x: A, y: B): boolean;
 /*@ builtin_OpSNEq :: <A,B>(x:A, y:B) => {v:boolean | Prop v } */
 declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
 
-/*@ builtin_OpLAnd :: <B>  (x: undefined, y:B) => undefined */
-/*@ builtin_OpLAnd :: <B>  (x: null, y:B) => null */
-/*@ builtin_OpLAnd :: <A>  (x: A, y: A) => { v: A   | if (Prop x) then v = y else v = x } */
-/*@ builtin_OpLAnd :: <A,B>(x: A, y: B) => { v: top | Prop v <=> (Prop x && Prop y) } */
-declare function builtin_OpLAnd(x: any, y: any): any;
-
-// /*@ builtin_OpLOr ::
-//     /\ forall A. (x: undefined, y:A) => { v:A | v ~~ y }
-//     /\ forall A. (x: null, y:A) => { v:A | v ~~ y }
-//     /\ forall A. (x:A, y:A) => { v:A | if (not (Prop x)) then (v = y) else (v = x) }
-//     /\ forall A B. (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) || Prop(y))) }
-//  */
-// declare function builtin_OpLOr(x: any, y: any): any;
-
 /*@ builtin_PrefixLNot :: <A>(x: A) => {v:boolean | Prop v <=> not (Prop x) } */
 declare function builtin_PrefixLNot<A>(x: A): boolean;
 
@@ -142,13 +128,12 @@ declare function builtin_BITruthy<A>(x: A): boolean;
 /*@ builtin_BIFalsy  :: <A>(x:A) => { v:boolean | Prop v <=> not (Prop x) } */
 declare function builtin_BIFalsy<A>(x: A): boolean;
 
-// // HACK
-// /*@ invariant {v: undefined | [(ttag(v) = "undefined"); not (Prop v) ]} */
-// /*@ invariant {v: null      | [(ttag(v) = "object"   ); not (Prop v) ]} */
-// /*@ invariant {v: boolean   | [(ttag(v) = "boolean"  )]} */
-// /*@ invariant {v: string    | [(ttag(v) = "string"   ); (Prop(v) <=> v /= "" )]} */
-// /*@ invariant {v: number    | [(ttag(v) = "number"   ); (Prop(v) <=> v /= 0  )]}	*/
-//
+/*@ invariant {v: undefined | [(ttag(v) = "undefined"); not (Prop v) ]} */
+/*@ invariant {v: null      | [(ttag(v) = "object"   ); not (Prop v) ]} */
+/*@ invariant {v: boolean   | [(ttag(v) = "boolean"  )]} */
+/*@ invariant {v: string    | [(ttag(v) = "string"   ); (Prop(v) <=> v /= "" )]} */
+/*@ invariant {v: number    | [(ttag(v) = "number"   ); (Prop(v) <=> v /= 0  )]}	*/
+
 
 // GENERAL PURPOSE AUXILIARY DEFINITIONS
 
@@ -162,6 +147,7 @@ declare function assert<A>(x: A): void;
 
 declare function random(): number;
 
+/*@ pos :: () => posint */
 declare function pos(): posint;
 
 declare function alert(s: string): void;

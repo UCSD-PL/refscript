@@ -57,7 +57,7 @@ module Language.Rsc.Typecheck.Types (
   , infixOpId, prefixOpId, builtinOpId, arrayLitTy, objLitTy, finalizeTy
 
   -- * Builtin: Binders
-  , mkId, argId, mkArgTy, returnTy
+  , mkId, argId, argIdInit, mkArgTy, returnTy
 
   -- * BitVector
   , bitVectorValue
@@ -425,6 +425,7 @@ objLitTy l ps     = mkFun (vs, bs, rt)
     aSym          = F.symbol "A"
 
 lenId l           = Id l "length"
+argIdInit l       = Id l $ "arguments"
 argId l i         = Id l $ "arguments_" ++ show i
 
 instance F.Symbolic (LValue a) where

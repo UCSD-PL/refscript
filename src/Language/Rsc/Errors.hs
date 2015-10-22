@@ -84,6 +84,7 @@ errorUninitStatFld l x        = mkErr l $ printf "Uninitialized static member '%
 errorForeignLocal l x         = mkErr l $ printf "Cannot reference local (out-of-scope) variable '%s'" (ppshow x)
 bugSuperNotHandled l e        = mkErr l $ printf "BUG: Expression '%s' should have been taken care of." (ppshow e)
 bugSuperWithNoParent l        = mkErr l $ printf "BUG: Calling 'super()' in constructor of class with no parent."
+unimplementedInfix l e        = mkErr l $ printf "UNIMPLEMENTED: Infix expression '%s' as standalone expression." (ppshow e)
 
 
 ---------------------------------------------------------------------------

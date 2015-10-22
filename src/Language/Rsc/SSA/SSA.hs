@@ -66,7 +66,7 @@ ssaRsc cha p@(Rsc { code = Src fs })
   = do  setMeas   $ S.fromList $ F.symbol <$> envIds (consts p)
         (_,fs')  <- ssaStmts g fs
         ssaAnns  <- getAnns
-        ast_cnt  <- getAstCount
+        ast_cnt  <- getCounter
         return    $ p { code  = Src $ (patch ssaAnns <$>) <$> fs'
                       , maxId = ast_cnt }
     where
@@ -87,28 +87,12 @@ ssaFun g l xs body
   = do  γ0         <- getSsaVars                  -- Remember env before the function
         setSsaVars  $ envEmpty                    -- Reset the 'local' SSA-vars count
         body1      <- return body -- prefixArgInit l body
-        arg        <- argId    <$> freshenAnn l <**> fId l
+        arg        <- argIdInit <$> freshenAnn l
         ret        <- returnId <$> freshenAnn l
         let g'      = initCallableSsaEnv l g arg ret xs body1
         (_, body2) <- ssaStmts g' body1
         setSsaVars  $ γ0                          -- Restore outer env
         return      $ body2
-
-
--- prefixArgInit l ss
---   = do
---         argId     <- Id           <$> freshenAnn l <**> "arguments"
---         fn        <- VarRef       <$> freshenAnn l <**> argId
---         lengthId  <- Id           <$> freshenAnn l <**> "length"
---         lengthP   <- PropId       <$> freshenAnn l <**> lengthId
---         lengthFId <- Id           <$> freshenAnn l <**> "_arguments"
---         lengthFn  <- VarRef       <$> freshenAnn l <**> lengthFId
---         lengthExp <- CallExpr     <$> freshenAnn l <**> lengthFn <**> []
---         init      <- ObjectLit    <$> freshenAnn l <**> [(lengthP, lengthExp)]
---         vd        <- VarDecl      <$> freshenAnn l <**> argId <**>  (Just init)
---         vs        <- VarDeclStmt  <$> freshenAnn l <**> [vd]
---         pure       $ vs : flattenBlock ss
-
 
 -------------------------------------------------------------------------------------
 ssaSeq :: (a -> SSAM r (Bool, a)) -> [a] -> SSAM r (Bool, [a])
@@ -146,11 +130,19 @@ ssaStmt g (ExprStmt l e) = do
 -- s1;s2;...;sn
 ssaStmt g (BlockStmt l stmts) = do
     (b, stmts') <- ssaStmts g stmts
-    return (b,  BlockStmt l $ flattenBlock stmts')
+    return (b,  maybeBlock l $ flattenBlock stmts')
 
 -- if b { s1 }
 ssaStmt g (IfSingleStmt l b s)
   = ssaStmt g (IfStmt l b s (EmptyStmt l))
+
+-- if (e1 || e2) { s1 } else { s2 }
+ssaStmt g (IfStmt l (InfixExpr li OpLOr e1 e2) s1 s2)
+  = ssaExpandIfStmtInfixOr l li e1 e2 s1 s2 >>= ssaStmt g
+
+-- if (e1 && e2) { s1 } else { s2 }
+ssaStmt g (IfStmt l (InfixExpr li OpLAnd e1 e2) s1 s2)
+  = ssaExpandIfStmtInfixAnd l li e1 e2 s1 s2 >>= ssaStmt g
 
 -- if b { s1 } else { s2 }
 ssaStmt g (IfStmt l e s1 s2)
@@ -182,7 +174,7 @@ ssaStmt g (IfStmt l e s1 s2)
 ssaStmt g (WhileStmt l cnd body)
   = do  (xs, x0s)         <- unzip <$> getLoopPhis g body
         xs'               <- mapM freshenIdSSA xs
-        as                <- mapM (getAssignability g) xs
+        let as            = map (\x -> getAssignability g x WriteLocal) xs
         let (l1s, l0s,_)  = unzip3 $ filter ((== WriteLocal) . thd3) (zip3 xs' x0s as)
         --
         -- SSA only the WriteLocal variables - globals will remain the same.
@@ -205,7 +197,7 @@ ssaStmt g (WhileStmt l cnd body)
         return             $ (t, asgn l'' l1s' l0s `presplice` WhileStmt l cnd' body'')
     where
         asgn _  [] _       = Nothing
-        asgn l' ls rs      = Just $ BlockStmt l' $ zipWith (mkPhiAsgn l') ls rs
+        asgn l' ls rs      = Just $ maybeBlock l' $ zipWith (mkPhiAsgn l') ls rs
 
 ssaStmt g (ForStmt _  NoInit _ _ _ )     =
     errorstar "unimplemented: ssaStmt-for-01"
@@ -261,42 +253,42 @@ ssaStmt g (ForStmt l (ExprInit e) cOpt Nothing  b) =
 ssaStmt g (ForInStmt l (ForInVar v) e b) =
     do  init_  <- initArr
         for_   <- forStmt
-        ssaStmt g $ BlockStmt l [init_, for_]
+        ssaStmt g $ maybeBlock l [init_, for_]
   where
     fr          = fr_ l
     biForInKeys = return $ builtinId "BIForInKeys"
 
-    initArr     = vStmt        $  VarDecl <$> fr
-                                          <*> keysArr
-                                          <*> justM (CallExpr <$> fr
-                                                              <*> (VarRef <$> fr <*> biForInKeys)
-                                                              <**> [e])
-    initIdx     = VarDecl     <$> fr
-                              <*> keysIdx
-                              <*> (Just      <$> (IntLit  <$> fr <**> 0))
-    condition   = Just        <$> (InfixExpr <$> fr
-                                             <*> return OpLT
-                                             <*> (VarRef  <$> fr <*> keysIdx)
-                                             <*> (DotRef  <$> fr
-                                                          <*> (VarRef <$> fr <*> keysArr)
-                                                          <*> (Id      <$> fr <**> "length")
-                                                 ))
-    increment   = Just        <$> (UnaryAssignExpr
-                                             <$> fr
-                                             <*> return PostfixInc
-                                             <*> (LVar    <$> fr
-                                                          <*> (unId <$> keysIdx)))
-    accessKeys  = vStmt        $   VarDecl <$> fr
-                                           <*> return v
-                                           <*> justM (BracketRef <$> fr
-                                                                 <*> (VarRef <$> fr <*> keysArr)
-                                                                 <*> (VarRef <$> fr <*> keysIdx))
-    forStmt     = ForStmt     <$> fr
-                              <*> (VarInit <$> single <$> initIdx)
-                              <*> condition
-                              <*> increment
-                              <*> (BlockStmt <$> fr
-                                             <*> ( (:[b]) <$> accessKeys))
+    initArr     = vStmt $ VarDecl <$> fr
+                                  <*> keysArr
+                                  <*> justM (CallExpr <$> fr
+                                                      <*> (VarRef <$> fr <*> biForInKeys)
+                                                      <**> [e])
+    initIdx     = VarDecl <$> fr
+                          <*> keysIdx
+                          <*> (Just      <$> (IntLit  <$> fr <**> 0))
+    condition   = Just    <$> (InfixExpr <$> fr
+                                         <*> return OpLT
+                                         <*> (VarRef  <$> fr <*> keysIdx)
+                                         <*> (DotRef  <$> fr
+                                                      <*> (VarRef <$> fr <*> keysArr)
+                                                      <*> (Id     <$> fr <**> "length")
+                                             ))
+    increment   = Just <$> (UnaryAssignExpr
+                                      <$> fr
+                                      <*> return PostfixInc
+                                      <*> (LVar    <$> fr
+                                                   <*> (unId <$> keysIdx)))
+    accessKeys  = vStmt $ VarDecl <$> fr
+                                  <*> return v
+                                  <*> justM (BracketRef <$> fr
+                                                        <*> (VarRef <$> fr <*> keysArr)
+                                                        <*> (VarRef <$> fr <*> keysIdx))
+    forStmt     = ForStmt <$> fr
+                          <*> (VarInit <$> single <$> initIdx)
+                          <*> condition
+                          <*> increment
+                          <*> (maybeBlock <$> fr
+                                         <*> ( (:[b]) <$> accessKeys))
 
     vStmt v     = VarDeclStmt <$> fr <*> (single <$> v)
 
@@ -317,7 +309,7 @@ ssaStmt g (VarDeclStmt l ds) = do
     crunch (ss, d) (ds, ss') = ([]  , mkStmts l ss (d:ds) ss')
     mkStmts l ss ds ss'      = ss ++ VarDeclStmt l ds : ss'
     mkStmt (ds', [] )        = VarDeclStmt l ds'
-    mkStmt (ds', ss')        = BlockStmt l $ mkStmts l [] ds' ss'
+    mkStmt (ds', ss')        = maybeBlock l (mkStmts l [] ds' ss')
 
 -- return e
 ssaStmt _ s@(ReturnStmt _ Nothing)
@@ -349,12 +341,12 @@ ssaStmt g (SwitchStmt l e xs)
   = do
       id <- updSsaEnv g (an e) (Id (an e) "__switchVar")
       let go (l, e, s) i = IfStmt (an s) (InfixExpr l OpStrictEq (VarRef l id) e) s i
-      mapSnd (BlockStmt l) <$> ssaStmts g
+      mapSnd (maybeBlock l) <$> ssaStmts g
         [ VarDeclStmt (an e) [VarDecl (an e) id (Just e)], foldr go z sss ]
   where
       an                   = getAnnotation
-      sss                  = [ (l, e, BlockStmt l $ remBr ss) | CaseClause l e ss <- xs ]
-      z                    = headWithDefault (EmptyStmt l) [BlockStmt l $ remBr ss | CaseDefault l ss <- xs]
+      sss                  = [ (l, e, maybeBlock l $ remBr ss) | CaseClause l e ss <- xs ]
+      z                    = headWithDefault (EmptyStmt l) [maybeBlock l $ remBr ss | CaseDefault l ss <- xs]
 
       remBr                = filter (not . isBr) . flattenBlock
       isBr (BreakStmt _ _) = True
@@ -414,7 +406,7 @@ ctorVisitor g ms          = defaultVisitor { endStmt = es } { endExpr = ee }
             flds    <- mapM asgnS fields
             let body = svs : flds
             l'      <- fr_ l
-            return   $ BlockStmt l' body
+            return   $ maybeBlock l' body
       where
         fr     = fr_ l
         cha    = ssaCHA g
@@ -445,7 +437,7 @@ ctorVisitor g ms          = defaultVisitor { endStmt = es } { endExpr = ee }
                                          <*> (VarRef <$> fr <*> freshenIdSSA (builtinOpId BISuperVar))
                                          <*> (Id <$> fr <**> F.symbolString x))
 
-    ts r@(ReturnStmt l _) = BlockStmt <$> fr_ l <*> ((:[r]) <$> ctorExit l ms)
+    ts r@(ReturnStmt l _) = maybeBlock <$> fr_ l <*> ((:[r]) <$> ctorExit l ms)
     ts r                  = return $ r
 
 ctorExit l ms
@@ -533,6 +525,105 @@ preM (ClassStmt _ _ cs)
     g l x e       = VarDecl     <$> fr l <*> freshenIdSSA x <*> (Just <$> pure e)
 
 
+-- | Expand: [[ if ( e1 || e2) { s1 } else { s2 } ]]
+--
+--      let r = false;
+--      if ( [[ e1 ]] ) {
+--          r = true;
+--      }
+--      else {
+--          if ( [[ e2 ]] ) {
+--              r = true;
+--          }
+--      }
+--      if ( r ) {
+--          [[ s1 ]]
+--      }
+--      else {
+--          [[ s2 ]]
+--      }
+--
+ssaExpandIfStmtInfixOr l li e1 e2 s1 s2
+  = do  n     <- ("lor_" ++) . show  <$> tick
+        -- var r_NN = false;
+        r     <- Id           <$> fr l <**> n
+        fls   <- BoolLit      <$> fr l <**> False
+        vd    <- VarDecl      <$> fr l <**> r <**> Just fls
+        vs    <- VarDeclStmt  <$> fr l <**> [vd]
+        -- r = true;
+        tru1  <- BoolLit      <$> fr l <**> True
+        lv1   <- LVar         <$> fr l <**> n
+        ae1   <- AssignExpr   <$> fr l <**> OpAssign <**> lv1 <**> tru1
+        as1   <- ExprStmt     <$> fr l <**> ae1
+        -- r = true;
+        tru2  <- BoolLit      <$> fr l <**> True
+        lv2   <- LVar         <$> fr l <**> n
+        ae2   <- AssignExpr   <$> fr l <**> OpAssign <**> lv2 <**> tru2
+        as2   <- ExprStmt     <$> fr l <**> ae2
+        -- if ( e2 ) { r = true }
+        if2   <- IfSingleStmt <$> fr l <**> e2 <**> as2
+        -- if ( e1 ) { r = true } else { if ( e2 ) { r = true } }
+        if1   <- IfStmt       <$> fr l <**> e1 <**> as1 <**> as2
+        -- if ( r ) { s1 } else { s2 }
+        r3    <- Id           <$> fr l <**> n
+        v3    <- VarRef       <$> fr l <**> r3
+        if3   <- IfStmt       <$> fr l <**> v3 <**> s1 <**> s2
+        maybeBlock            <$> fr l <**> [vs, if1, if3]
+  where
+    fr = freshenAnn
+
+-- | Expand: [[ if ( e1 && e2) { s1 } else { s2 } ]]
+--
+--      let r = true;
+--      if ( [[ e1 ]] ) {
+--          if ( [[ e2 ]] ) {
+--
+--          }
+--          else {
+--              r = false;
+--          }
+--      }
+--      else {
+--          r = false;
+--      }
+--      if ( r ) {
+--          [[ s1 ]]
+--      }
+--      else {
+--          [[ s2 ]]
+--      }
+--
+ssaExpandIfStmtInfixAnd l li e1 e2 s1 s2
+  = do  n     <- ("land_" ++) . show  <$> tick
+        -- var r_NN = true;
+        r     <- Id           <$> fr l <**> n
+        fls   <- BoolLit      <$> fr l <**> True
+        vd    <- VarDecl      <$> fr l <**> r <**> Just fls
+        vs    <- VarDeclStmt  <$> fr l <**> [vd]
+        -- r = false;
+        tru1  <- BoolLit      <$> fr l <**> False
+        lv1   <- LVar         <$> fr l <**> n
+        ae1   <- AssignExpr   <$> fr l <**> OpAssign <**> lv1 <**> tru1
+        as1   <- ExprStmt     <$> fr l <**> ae1
+        -- IF2 ::= if ( e2 ) {  } else { r = false; }
+        emp   <- EmptyStmt    <$> fr l
+        if2   <- IfStmt       <$> fr l <**> e2 <**> emp <**> as1
+        -- AS2 ::= r = false;
+        tru2  <- BoolLit      <$> fr l <**> False
+        lv2   <- LVar         <$> fr l <**> n
+        ae2   <- AssignExpr   <$> fr l <**> OpAssign <**> lv2 <**> tru2
+        as2   <- ExprStmt     <$> fr l <**> ae2
+        -- IF1 ::= if ( e1 ) { IF2 } else { AS2 }
+        if1   <- IfStmt       <$> fr l <**> e1 <**> if2 <**> as2
+        -- if ( r ) { s1 } else { s2 }
+        r3    <- Id           <$> fr l <**> n
+        v3    <- VarRef       <$> fr l <**> r3
+        if3   <- IfStmt       <$> fr l <**> v3 <**> s1 <**> s2
+        maybeBlock            <$> fr l <**> [vs, if1, if3]
+  where
+    fr = freshenAnn
+
+
 infOp OpAssign         _ _  = id
 infOp OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalExp lv)
 infOp OpAssignSub      l lv = InfixExpr l OpSub      (lvalExp lv)
@@ -566,14 +657,20 @@ splice_ _ Nothing (Just s)   = s
 splice_ _ (Just s) (Just s') = seqStmt (getAnnotation s) s s'
 
 
-seqStmt _ (BlockStmt l s) (BlockStmt _ s') = BlockStmt l (s ++ s')
-seqStmt l s s'                             = BlockStmt l [s, s']
+seqStmt _ (BlockStmt l s) (BlockStmt _ s') = maybeBlock l (s ++ s')
+seqStmt l s s'                             = maybeBlock l [s, s']
 
 -------------------------------------------------------------------------------------
 prefixStmt :: a -> [Statement a] -> Statement a -> Statement a
 -------------------------------------------------------------------------------------
-prefixStmt _ [] s = s
-prefixStmt l ss s = BlockStmt l $ flattenBlock $ ss ++ [s]
+prefixStmt l ss s = maybeBlock l (ss ++ [s])
+
+-------------------------------------------------------------------------------------
+maybeBlock :: a -> [Statement a] -> Statement a
+-------------------------------------------------------------------------------------
+maybeBlock l [ ]  = EmptyStmt l
+maybeBlock _ [s]  = s
+maybeBlock l ss   = BlockStmt l ss
 
 -------------------------------------------------------------------------------------
 flattenBlock :: [Statement t] -> [Statement t]
@@ -635,15 +732,8 @@ ssaExpr g (CondExpr l c e1 e2)
 ssaExpr g (PrefixExpr l o e)
   = ssaExpr1 g (PrefixExpr l o) e
 
-ssaExpr g (InfixExpr l OpLOr e1 e2)
-  = do  l' <- freshenAnn l
-        vid <- Id          <$> freshenAnn l <**> ("__InfixExpr_OpLOr_" ++ show (fId l'))
-        vr  <- VarRef      <$> freshenAnn l <**> vid
-        vd  <- VarDecl     <$> freshenAnn l <**> vid <**> Just e1
-        vs  <- VarDeclStmt <$> freshenAnn l <**> [vd]
-        (_, vs') <- ssaStmt g vs
-        (ss,e') <- ssaExpr g (CondExpr l vr vr e2)
-        return  $ (vs':ss, e')
+ssaExpr g e@(InfixExpr l OpLOr _ _)
+  = ssaError $ unimplementedInfix l e
 
 ssaExpr g (InfixExpr l o e1 e2)
   = ssaExpr2 g (InfixExpr l o) e1 e2
@@ -801,15 +891,15 @@ ssaVarDecl g v@(VarDecl l x Nothing)
 ssaVarRef :: (Data r, PPR r) => SsaEnv r -> AnnSSA r -> Id (AnnSSA r) -> SSAM r (Expression (AnnSSA r))
 ------------------------------------------------------------------------------------------
 ssaVarRef g l x
-  = do getAssignability g x >>= \case
-         WriteGlobal  -> return e
-         Ambient      -> return e
-         RdOnly       -> return e
-         WriteLocal   -> findSsaEnv x >>= \case
-             Just t   -> return   $ VarRef l t
-             Nothing  -> return   $ VarRef l x
-         ForeignLocal -> ssaError $ errorForeignLocal (srcPos x) x
-         ReturnVar    -> ssaError $ errorSSAUnboundId (srcPos x) x
+  = case getAssignability g x WriteLocal of
+      WriteGlobal  -> return e
+      Ambient      -> return e
+      RdOnly       -> return e
+      WriteLocal   -> findSsaEnv x >>= \case
+                        Just t   -> return   $ VarRef l t
+                        Nothing  -> return   $ VarRef l x
+      ForeignLocal -> ssaError $ errorForeignLocal (srcPos x) x
+      ReturnVar    -> ssaError $ errorSSAUnboundId (srcPos x) x
     where
        e = VarRef l x
 
@@ -846,8 +936,8 @@ envJoin' l g θ1 θ2
         θ''        <- getSsaVars
         return      ( fst <$> phis                      -- Φ-vars
                     , Just θ''
-                    , Just (BlockStmt l s1)
-                    , Just (BlockStmt l s2)
+                    , Just (maybeBlock l s1)
+                    , Just (maybeBlock l s2)
                     )
   where
     θ           = envIntersectWith meet θ1 θ2
@@ -897,10 +987,10 @@ ssaForLoop :: (Data r, PPR r)
 ssaForLoop g l vds cOpt incExpOpt b =
   do
     (b, sts') <- ssaStmts g sts
-    return     $ (b, BlockStmt l sts')
+    return     $ (b, maybeBlock l sts')
   where
     sts        = [VarDeclStmt l vds, WhileStmt l c bd]
-    bd         = BlockStmt bl $ [b] ++ catMaybes [incExpOpt]
+    bd         = maybeBlock bl $ [b] ++ catMaybes [incExpOpt]
     bl         = getAnnotation b
     c          = maybe (BoolLit l True) id cOpt
 
@@ -919,9 +1009,9 @@ ssaForLoopExpr g l exp cOpt incExpOpt b =
     l1        <- fr_ l
     (b, sts') <- ssaStmts g [ExprStmt l1 exp, WhileStmt l c bd]
     l2        <- fr_ l
-    return     $ (b, BlockStmt l2 sts')
+    return     $ (b, maybeBlock l2 sts')
   where
-    bd         = BlockStmt bl $ [b] ++ catMaybes [incExpOpt]
+    bd         = maybeBlock bl $ [b] ++ catMaybes [incExpOpt]
     bl         = getAnnotation b
     c          = maybe (BoolLit l True) id cOpt
 

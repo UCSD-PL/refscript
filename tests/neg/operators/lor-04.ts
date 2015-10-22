@@ -1,7 +1,10 @@
 
-/*@ foo :: (x:null, y:number) => number */
-export function foo(x,y) {
+/*@ foo :: (x:null, y: { number | v > 1}) => { number | v > 2 } */
+function foo(x,y) {
+
     let r = <number> (x || y);      // no contextual type here -- hence using
                                     // the explicit cast
-    return r;
+
+    return r; 
 }
+

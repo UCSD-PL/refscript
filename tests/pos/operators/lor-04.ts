@@ -1,10 +1,10 @@
 
-/*@ foo :: (x:null, y:number) => number */
-export function foo(x,y): number {
-    if (x || y) {
-        return x;
+/*@ foo :: (x:null, y:number, z: posint) => posint */
+export function foo(x, y, z): number {
+    if (x || y || z) {
+        return 1;
     }
     else {
-        return y;
+        return 0;
     }
 }

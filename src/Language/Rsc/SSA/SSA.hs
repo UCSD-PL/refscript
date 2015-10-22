@@ -137,11 +137,11 @@ ssaStmt g (IfSingleStmt l b s)
   = ssaStmt g (IfStmt l b s (EmptyStmt l))
 
 -- if (e1 || e2) { s1 } else { s2 }
-ssaStmt g (IfStmt l (InfixExpr li OpLOr e1 e2) s1 s2)
+ssaStmt g s@(IfStmt l (InfixExpr li OpLOr e1 e2) s1 s2)
   = ssaExpandIfStmtInfixOr l li e1 e2 s1 s2 >>= ssaStmt g
 
 -- if (e1 && e2) { s1 } else { s2 }
-ssaStmt g (IfStmt l (InfixExpr li OpLAnd e1 e2) s1 s2)
+ssaStmt g s@(IfStmt l (InfixExpr li OpLAnd e1 e2) s1 s2)
   = ssaExpandIfStmtInfixAnd l li e1 e2 s1 s2 >>= ssaStmt g
 
 -- if b { s1 } else { s2 }
@@ -528,12 +528,12 @@ preM (ClassStmt _ _ cs)
 -- | Expand: [[ if ( e1 || e2) { s1 } else { s2 } ]]
 --
 --      let r = false;
---      if ( [[ e1 ]] ) {
---          r = true;
+--      if ( [[ e1 ]] ) {       // IF1
+--          r = true;           // RT1
 --      }
 --      else {
---          if ( [[ e2 ]] ) {
---              r = true;
+--          if ( [[ e2 ]] ) {   // IF2
+--              r = true;       // RT2
 --          }
 --      }
 --      if ( r ) {
@@ -545,25 +545,25 @@ preM (ClassStmt _ _ cs)
 --
 ssaExpandIfStmtInfixOr l li e1 e2 s1 s2
   = do  n     <- ("lor_" ++) . show  <$> tick
-        -- var r_NN = false;
+        -- R1 ::= var r_NN = false;
         r     <- Id           <$> fr l <**> n
         fls   <- BoolLit      <$> fr l <**> False
         vd    <- VarDecl      <$> fr l <**> r <**> Just fls
         vs    <- VarDeclStmt  <$> fr l <**> [vd]
-        -- r = true;
+        -- RT1 ::= r = true;
         tru1  <- BoolLit      <$> fr l <**> True
         lv1   <- LVar         <$> fr l <**> n
         ae1   <- AssignExpr   <$> fr l <**> OpAssign <**> lv1 <**> tru1
         as1   <- ExprStmt     <$> fr l <**> ae1
-        -- r = true;
+        -- RT2 ::= r = true;
         tru2  <- BoolLit      <$> fr l <**> True
         lv2   <- LVar         <$> fr l <**> n
         ae2   <- AssignExpr   <$> fr l <**> OpAssign <**> lv2 <**> tru2
         as2   <- ExprStmt     <$> fr l <**> ae2
-        -- if ( e2 ) { r = true }
+        -- IF2 ::= if ( e2 ) { r = true } else { }
         if2   <- IfSingleStmt <$> fr l <**> e2 <**> as2
-        -- if ( e1 ) { r = true } else { if ( e2 ) { r = true } }
-        if1   <- IfStmt       <$> fr l <**> e1 <**> as1 <**> as2
+        -- IF1 ::= if ( e1 ) { r = true } else { if ( e2 ) { r = true } }
+        if1   <- IfStmt       <$> fr l <**> e1 <**> as1 <**> if2
         -- if ( r ) { s1 } else { s2 }
         r3    <- Id           <$> fr l <**> n
         v3    <- VarRef       <$> fr l <**> r3

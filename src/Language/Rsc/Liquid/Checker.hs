@@ -572,23 +572,23 @@ consExpr g ex@(Cast l e) _
   = die $ bugNoCasts (srcPos l) ex
 
 consExpr g (IntLit l i) _
-  = Just <$> cgEnvAddFresh "8" l (VI Local WriteLocal Initialized $ tNum `eSingleton` i) g
+  = Just <$> cgEnvAddFresh "8" l (tNum `eSingleton` i) g
 
 -- Assuming by default 32-bit BitVector
 consExpr g (HexLit l x) _
   | Just e <- bitVectorValue x
-  = Just <$> cgEnvAddFresh "9" l (VI Local WriteLocal Initialized $ tBV32 `strengthen` e) g
+  = Just <$> cgEnvAddFresh "9" l (tBV32 `strengthen` e) g
   | otherwise
-  = Just <$> cgEnvAddFresh "10" l (VI Local WriteLocal Initialized tBV32) g
+  = Just <$> cgEnvAddFresh "10" l tBV32 g
 
 consExpr g (BoolLit l b) _
-  = Just <$> cgEnvAddFresh "11" l (VI Local WriteLocal Initialized $ pSingleton tBool b) g
+  = Just <$> cgEnvAddFresh "11" l (pSingleton tBool b) g
 
 consExpr g (StringLit l s) _
-  = Just <$> cgEnvAddFresh "12" l (VI Local WriteLocal Initialized $ tString `eSingleton` T.pack s) g
+  = Just <$> cgEnvAddFresh "12" l (tString `eSingleton` T.pack s) g
 
 consExpr g (NullLit l) _
-  = Just <$> cgEnvAddFresh "13" l (VI Local WriteLocal Initialized tNull) g
+  = Just <$> cgEnvAddFresh "13" l tNull g
 
 consExpr g (ThisRef l) _
   = case envFindTyWithAsgn this g of
@@ -600,14 +600,14 @@ consExpr g (ThisRef l) _
 consExpr g (VarRef l x) to
   -- | undefined
   | F.symbol x == F.symbol "undefined"
-  = Just <$> cgEnvAddFresh "0" l (VI Local WriteLocal Initialized tUndef) g
+  = Just <$> cgEnvAddFresh "0" l tUndef g
 
   | Just (VI loc WriteGlobal i t) <- tInfo
-  = Just <$> cgEnvAddFresh "0" l (VI loc WriteLocal i t) g
+  = Just <$> cgEnvAddFresh "0" l t g
 
   | Just (VI loc a i t) <- tInfo
   = do  addAnnot (srcPos l) x t
-        Just <$> cgEnvAddFresh "cons VarRef" l (VI loc a i t) g
+        Just <$> cgEnvAddFresh "cons VarRef" l t g
 
   | otherwise
   = cgError $ errorUnboundId (fSrc l) x
@@ -637,7 +637,7 @@ consExpr g (InfixExpr l o e1 e2) _
 consExpr g (CondExpr l e e1 e2) to
   = do  opTy    <- mkTy to <$> cgSafeEnvFindTyM (builtinOpId BICondExpr) g
         tt'     <- freshTyFun g l (rType tt)
-        (v,g')  <- mapFst (VarRef l) <$> cgEnvAddFresh "14" l (VI Local WriteLocal Initialized tt') g
+        (v,g')  <- mapFst (VarRef l) <$> cgEnvAddFresh "14" l tt' g
         consCallCondExpr g' l BICondExpr
           [(e,Nothing), (v,Nothing), (e1,rType <$> to), (e2,rType <$> to)]
           opTy
@@ -750,7 +750,7 @@ consExpr g (NewExpr l e es) _
 consExpr g (SuperRef l) _
   | Just thisT  <- cge_this g
   , Just tSuper <- getSuperType (envCHA g) thisT
-  = Just <$> cgEnvAddFresh "15" l (VI Local WriteGlobal Initialized tSuper) g
+  = Just <$> cgEnvAddFresh "15" l tSuper g
   | otherwise
   = cgError $ errorSuper (fSrc l)
 
@@ -760,7 +760,7 @@ consExpr g (FuncExpr l fo xs body) tCtxO
   = do  kft       <-  freshTyFun g l ft
         fts       <-  cgFunTys l f xs kft
         forM_ fts  $  consCallable l g f xs body
-        Just      <$> cgEnvAddFresh "16" l (VI Local WriteLocal Initialized kft) g
+        Just      <$> cgEnvAddFresh "16" l kft g
   | otherwise
   = cgError $ errorNoFuncAnn $ srcPos l
   where
@@ -858,7 +858,7 @@ consInstantiate l g fn ft ts xes
         rhs1         <- pure (map b_type rhs0)
         lhs          <- zipWithM (instantiateTy l g) [1..] (ts ++ ts)
         _            <- zipWithM_ (subType l err g) lhs rhs1
-        Just        <$> cgEnvAddFresh "5" l (VI Local WriteLocal Initialized ot) g
+        Just        <$> cgEnvAddFresh "5" l ot g
   where
     (bs, xts, t)    = fromJust (bkFun ft)
     hasBoundedPars  = not $ null $ catMaybes $ map btv_constr bs
@@ -946,14 +946,14 @@ consCondExprArgs l g [(c,tc),(t,tt),(x,tx),(y,ty)]
                 Nothing ->
                     do ttx       <- cgSafeEnvFindTyM x_ gx
                        let tty    = fromMaybe ttx ty    -- Dummy type if ty is Nothing
-                       (y_, gy') <- cgEnvAddFresh "6" l (VI Local WriteLocal Initialized tty) gx
+                       (y_, gy') <- cgEnvAddFresh "6" l tty gx
                        return    $ Just ([c_,t_,x_,y_], gy')
           Nothing ->
               withGuard gt c_ False y ty >>= \case
                 Just (y_, gy) ->
                     do tty       <- cgSafeEnvFindTyM y_ gy
                        let ttx    = fromMaybe tty tx    -- Dummy type if tx is Nothing
-                       (x_, gx') <- cgEnvAddFresh "7" l (VI Local WriteLocal Initialized ttx) gy
+                       (x_, gx') <- cgEnvAddFresh "7" l ttx gy
                        return     $ Just ([c_,t_,x_,y_], gx')
                 Nothing       -> return $ Nothing
   where

@@ -6,7 +6,7 @@
                   => number 
  */
 function indirectIndex(x: number[], b: number[], i: number) : number {
-  var bi = b[i];
+  let bi = b[i];
   return x[bi];
 }
 

@@ -253,13 +253,15 @@ cgSafeEnvFindTyM x (envNames -> γ)
   = cgError $ bugEnvFindTy (srcPos x) x
 
 --------------------------------------------------------------------------------
-cgEnvAddFresh :: IsLocated l => String -> l -> VarInfo F.Reft -> CGEnv -> CGM (Id AnnLq, CGEnv)
+cgEnvAddFresh :: IsLocated l => String -> l -> RefType -> CGEnv -> CGM (Id AnnLq, CGEnv)
 --------------------------------------------------------------------------------
-cgEnvAddFresh msg l v g
+cgEnvAddFresh msg l t g
   = do x  <- freshId l
        g' <- cgEnvAdds l ("cgEnvAddFresh: " ++ msg) [(x, v)] g
-       addAnnot l x $ v_type v
+       addAnnot l x t
        return (x, g')
+  where
+    v = VI Local RdOnly Initialized t
 
 freshId a = Id <$> freshenAnn a <*> fresh
 
@@ -789,7 +791,7 @@ splitC (Sub g i@(Ci _ l) t1@(TObj _ m1 r1) t2@(TObj _ m2 _))
   = return []
   | otherwise
   = do  cs     <- bsplitC g i t1 t2
-        (x,g') <- cgEnvAddFresh "" l (VI Local RdOnly Initialized t1) g
+        (x,g') <- cgEnvAddFresh "" l t1 g
         cs'    <- splitTM g' (F.symbol x) i m1 m2
         return $ cs ++ cs'
 

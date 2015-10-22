@@ -1,5 +1,5 @@
 
-/*@ foo :: (x: posint, y: { string | v = "" }, z: boolean) => posint */
+/*@ foo :: (x: posint, y: { string | v = "0" }, z: boolean) => posint */
 export function foo(x: number, y: string, z: boolean) {
     if (x && (y || z)) {
         return 1;

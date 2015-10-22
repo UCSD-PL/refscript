@@ -1,4 +1,4 @@
-var garr : number[] = [1,2,3,4];
+let garr : number[] = [1,2,3,4];
 
 /*@ foo :: () => void */
 function foo() : void {
@@ -7,6 +7,6 @@ function foo() : void {
 
 /*@ bar :: ({number | (0 <= v && v <= 3)}) => {number | v > 0} */
 function bar(n : number) : number{
-  var z : number = garr[n];
+  let z : number = garr[n];
   return z;
 }

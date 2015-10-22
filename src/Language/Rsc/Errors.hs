@@ -18,6 +18,7 @@ import           Language.Fixpoint.PrettyPrint
 
 
 mkErr = err . sourceSpanSrcSpan
+-- mkDie = die . sourceSpanSrcSpan
 
 ---------------------------------------------------------------------------
 -- | Bugs

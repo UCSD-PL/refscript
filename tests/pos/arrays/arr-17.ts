@@ -3,6 +3,6 @@
 
 /*@ where :: ( ) => { IArray<number> | (len v) = 5 } */
 function where( ) {
-	var result = new Array<number>(5);
+	let result = new Array<number>(5);
 	return result;
 }

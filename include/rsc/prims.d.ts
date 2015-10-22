@@ -73,7 +73,7 @@ declare function builtin_OpDiv(a: number, b: number): number;
 
 declare function builtin_OpMod(a: number, b: number): number;
 
-/*@ builtin_PrefixPlus :: (x:number) => {v:number  | v ~~ x} */
+/*@ builtin_PrefixPlus :: (x:number) => { v:number  | v ~~ x } */
 declare function builtin_PrefixPlus(a: number): number;
 
 /*@ builtin_PrefixMinus :: (x :number) => {v:number  | v = 0 - x} */

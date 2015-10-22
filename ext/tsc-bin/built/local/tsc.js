@@ -27049,6 +27049,8 @@ var ts;
                     case ts.SyntaxKind.ExclamationToken:
                         return new ts.RsPrefixExpr(nodeToSrcSpan(node), [], new ts.RsPrefixOp(ts.RsPrefixOpKind.PrefixLNot), nodeToRsExp(state, node.operand));
                     case ts.SyntaxKind.PlusPlusToken:
+                        return new ts.RsUnaryAssignExpr(nodeToSrcSpan(node), [], new ts.RsUnaryAssignOp(ts.RsUnaryAssignOpKind.PrefixInc), nodeToRsExp(state, node.operand));
+                    case ts.SyntaxKind.PlusToken:
                         return new ts.RsPrefixExpr(nodeToSrcSpan(node), [], new ts.RsPrefixOp(ts.RsPrefixOpKind.PrefixPlus), nodeToRsExp(state, node.operand));
                     default:
                         state.error(node, ts.Diagnostics.refscript_Unsupported_prefix_operator_0, ts.SyntaxKind[node.operator]);

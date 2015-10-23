@@ -83,7 +83,7 @@ withExistingFile cfg f
 
 getIncludeLibs :: Config -> IO [FilePath]
 getIncludeLibs cfg = case prelude cfg of
-  Nothing -> (\p1 p2 -> [p1, p2]) <$> getPreludeTSPath <*> getDomTSPath
+  Nothing -> single <$> getPreludeTSPath
   Just p  -> return [p]
 
 instance FromJSON (F.FixResult Error)
@@ -115,9 +115,9 @@ runOne cfg verifyFile f
 -------------------------------------------------------------------------------
 writeResult :: (Ord a, PP a) => F.FixResult a -> IO ()
 -------------------------------------------------------------------------------
-writeResult r            = mapM_ (writeDoc c) $ zip [0..] $ resDocs r
+writeResult r         = mapM_ (writeDoc c) $ zip [0..] $ resDocs r
   where
-    c                    = F.colorResult r
+    c                 = F.colorResult r
 
 writeDoc c (i, d)    = writeBlock c i $ procDoc d
 writeBlock _ _ []    = return ()
@@ -133,7 +133,7 @@ resDocs F.Safe             = [text "SAFE"]
 resDocs (F.Crash xs s)     = text ("CRASH: " ++ s) : pprManyOrdered xs
 resDocs (F.Unsafe xs)      = text "UNSAFE"         : pprManyOrdered (nub xs)
 resDocs (F.UnknownError d) = [text "PANIC: Unexpected Error: " <+> text d, reportUrl]
-reportUrl                  = text "Please submit a bug report at: https://github.com/ucsd-pl/RefScript"
+reportUrl                  = text "Please submit a bug report at: https://github.com/ucsd-pl/refscript"
 
 pprManyOrdered = map pp . sort
 

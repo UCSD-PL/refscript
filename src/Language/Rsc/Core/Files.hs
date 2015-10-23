@@ -22,7 +22,7 @@ import           Paths_RefScript
 -------------------------------------------------------------------------------
 getPreludeTSPath, getDomTSPath, getPreludeJSONPath, getDomJSONPath :: IO FilePath
 -------------------------------------------------------------------------------
-getPreludeTSPath   = getDataFileName "include/prelude.ts"
+getPreludeTSPath   = getDataFileName "include/full-prelude.d.ts"
 getDomTSPath       = getDataFileName "include/ambient/dom.ts"
 getPreludeJSONPath = (`replaceExtension` ".json") <$> getPreludeTSPath
 getDomJSONPath     = (`replaceExtension` ".json") <$> getDomTSPath

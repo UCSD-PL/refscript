@@ -1,30 +1,30 @@
-import Control.Monad
-import Data.Maybe
-import Distribution.PackageDescription
-import Distribution.Simple
-import Distribution.Simple.LocalBuildInfo
-import Distribution.Simple.Setup
-import System.Posix.Env           hiding  (getEnvironment)
-import System.Environment                 (getEnvironment)
-import System.Process
-import System.Exit
-import Data.List                          (find)
+import           Control.Monad
+import           Data.List                          (find)
+import           Data.Maybe
+import           Distribution.PackageDescription
+import           Distribution.Simple
+import           Distribution.Simple.LocalBuildInfo
+import           Distribution.Simple.Setup
+import           System.Environment                 (getEnvironment)
+import           System.Exit
+import           System.Posix.Env                   hiding (getEnvironment)
+import           System.Process
 
-main         = defaultMainWithHooks fixHooks 
-  where 
-    fixHooks = simpleUserHooks { postCopy = copyExts 
+main         = defaultMainWithHooks fixHooks
+  where
+    fixHooks = simpleUserHooks { postCopy = copyExts
                                , postInst = copyExts }
 
 
-copyExts _ _ pkg lbi 
+copyExts _ _ pkg lbi
   = do putStrLn $ "Post Install - copy TS binaries into PATH: " ++ show binDir
-       env     <- getEnvironment 
+       env     <- getEnvironment
        let tscR = fromMaybe lTscRoot $ fmap snd $ find ((== "TSC_ROOT") . fst) env
-       putStrLn $ "Using '" ++ tscR ++ "' for `tsc` sources." 
+       putStrLn $ "Using '" ++ tscR ++ "' for `tsc` sources."
        -- Compile and copy TypeScript executables
-       executeShellCommand $ "chmod a+x " ++ tscR ++ "/bin/tsc"
+       executeShellCommand $ "chmod a+x " ++ tscR ++ "/bin/tsc-refscript"
        mapM_ executeShellCommand (map cpFile $ tscBins tscR)
-  where 
+  where
     allDirs     = absoluteInstallDirs pkg lbi NoCopyDest
     withSpaces  = concatMap $ (++) " "
     binDir      = bindir allDirs ++ "/"
@@ -32,13 +32,13 @@ copyExts _ _ pkg lbi
 
     cpFile f    = withSpaces ["cp", f, binDir]
     lTscRoot    = "ext/tsc-bin"
-    tscBins r   = map (r ++) ["/bin/tsc",
-                              "/built/local/tsc.js"]
+    tscBins r   = map (r ++) ["/bin/tsc-refscript",
+                              "/built/local/tsc-refscript.js"]
     flags       = configConfigurationsFlags $ configFlags lbi
     z3mem       = fromJust $ lookup (FlagName "z3mem") flags
 
 executeShellCommand cmd   = putStrLn ("EXEC: " ++ cmd) >> system cmd >>= check
-  where 
+  where
     check (ExitSuccess)   = return ()
-    check (ExitFailure n) = error $ "cmd: " ++ cmd ++ " failure code " ++ show n 
+    check (ExitFailure n) = error $ "cmd: " ++ cmd ++ " failure code " ++ show n
 

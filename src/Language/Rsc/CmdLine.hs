@@ -52,7 +52,7 @@ liquid = Liquid {
 
  , renderAnns   = def  &= help "Render annotations"
 
- , prelude      = def  &= help "Use given prelude.ts file (debug)"
+ , prelude      = def  &= help "Provide alternative standard prelude file (default\ninclude/full-prelude.d.ts) (debug)"
 
  } &= help    "RefScript Refinement Type Checker"
 

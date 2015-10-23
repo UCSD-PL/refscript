@@ -33172,7 +33172,7 @@ var ts;
 /// <reference path="core.ts" />
 var ts;
 (function (ts) {
-    ts.preludePath = "/home/pvekris/Documents/Research/rsc/RefScript/include/prelude.d.ts";
+    ts.preludePath = "/home/pvekris/Documents/Research/rsc/RefScript/include/full-prelude.d.ts";
     ts.programTime = 0;
     ts.emitTime = 0;
     ts.ioReadTime = 0;
@@ -33360,7 +33360,7 @@ var ts;
         outDir: "built",
         rootDir: ".",
         sourceMap: false,
-        lib: ts.preludePath
+        lib: ts.combinePaths(ts.getDirectoryPath(ts.normalizePath(ts.sys.getExecutingFilePath())), "lib.d.ts")
     };
     function createCompilerHost(options, setParentNodes) {
         var currentDirectory;
@@ -33423,7 +33423,7 @@ var ts;
                 if (options.lib) {
                     return ts.combinePaths(ts.normalizePath(ts.sys.getCurrentDirectory()), options.lib);
                 }
-                return ts.preludePath;
+                return ts.combinePaths(ts.getDirectoryPath(ts.normalizePath(ts.sys.getExecutingFilePath())), ts.getDefaultLibFileName(options));
             },
             writeFile: writeFile,
             getCurrentDirectory: function () { return currentDirectory || (currentDirectory = ts.sys.getCurrentDirectory()); },

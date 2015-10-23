@@ -110,14 +110,15 @@ interface Array<M extends ReadOnly, T> {
     //   * @param thisArg  An object to which the this keyword can refer in the callbackfn function. If thisArg is omitted, undefined is used as the this value.
     //   */
     // forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void;
-    //
-    // /**
-    //   * Calls a defined callback function on each element of an array, and returns an array that contains the results.
-    //   * @param callbackfn A function that accepts up to three arguments. The map method calls the callbackfn function one time for each element in the array.
-    //   * @param thisArg An object to which the this keyword can refer in the callbackfn function. If thisArg is omitted, undefined is used as the this value.
-    //   */
-    // map<U>(callbackfn: (value: T, index: number, array: T[]) => U, thisArg?: any): U[];
-    //
+
+    /**
+      * Calls a defined callback function on each element of an array, and returns an array that contains the results.
+      * @param callbackfn A function that accepts up to three arguments. The map method calls the callbackfn function one time for each element in the array.
+      * @param thisArg An object to which the this keyword can refer in the callbackfn function. If thisArg is omitted, undefined is used as the this value.
+      */
+    /*@ map<U,N>(callbackfn: (value: T) => U): Array<N,U> */
+    map<U>(callbackfn: (value: T, index: number, array: T[]) => U, thisArg?: any): U[];
+
     // /**
     //   * Returns the elements of an array that meet the condition specified in a callback function.
     //   * @param callbackfn A function that accepts up to three arguments. The filter method calls the callbackfn function one time for each element in the array.
@@ -174,91 +175,6 @@ declare function builtin_getLength<M extends ReadOnly,T>(a: Array<M, T>): number
 //     <T>(...items: T[]): T[];
 //     isArray(arg: any): arg is Array<any>;
 //     prototype: Array<any>;
-// }
-
-// declare var Array: ArrayConstructor;
-
-
-// interface IArray<T> extends Array<Immutable, T> {
-//
-//     /*@ concat:
-//         /\ forall M0 . (this: IArray<T>, items: IArray<T>): { Array<M0,T> | (len v) = (len this) + (len items) }
-//         /\ forall M1 M2 . (items: Array<M1, T>): { Array<M2, T> | true}
-//      */
-//     concat<U extends T[]>(...items: U[]): T[];
-    //
-    //     // concat(...items: T[]): T[];
-    //
-    //     join(separator?: string): string;
-    //
-    //     /*@ pop: (this: MArray<T>): {T | true} */
-    //     pop(): T;
-    //
-    //     /*@ push: (this: MArray<T>, items: T): {number | true} */
-    //     push(T): number;								// push(...items: T[]): number;
-    //
-    //     /*@ reverse: (): {Array<M,T> | true} */
-    //     reverse(): T[];
-    //
-    //     shift(): T;
-    //
-    //     /*@ slice : /\ forall N . (start: number, end: number): Array<N,T>
-    //                 /\ forall N . (start: number): Array<N,T>
-    //                 /\ forall N . (): Array<N,T>
-    //      */
-    //     slice(start?: number, end?: number): T[];
-    //
-    //     /*@  sort :
-    //         /\ ( ): { v : Array<M,T> | len(v) = len(this) }
-    //         /\ (compareFn: (a: T, b: T) => number): { v : Array<M,T> | len(v) = len(this) }
-    //      */
-    //     sort(compareFn?: (a: T, b: T) => number): T[];
-    //
-    //     splice(start: number): T[];
-    //
-    //     // splice(start: number, deleteCount: number, ...items: T[]): T[];
-    //
-    //     // unshift(...items: T[]): number;
-    //
-    //     indexOf(searchElement: T, fromIndex?: number): number;
-    //
-    //     lastIndexOf(searchElement: T, fromIndex?: number): number;
-    //
-    //     every(callbackfn: (value: T, index: number, array: T[]) => boolean, thisArg?: any): boolean;
-    //
-    //     some(callbackfn: (value: T, index: number, array: T[]) => boolean, thisArg?: any): boolean;
-    //
-    //     forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void;
-    //
-    //     /*@ map : forall U. (callbackfn: (value: T) => U): {IArray<U> | true} */
-    //     map<U>(callbackfn: (value: T) => U): U[];
-    //
-    //     /*@ map : forall U. (callbackfn:(value: T, index: number) => U): {IArray<U> | true} */
-    //     map<U>(callbackfn: (value: T, index: number) => U): U[];
-    //
-    //     /*@ map : forall U. (callbackfn:(value: T, index: number, array: IArray<T>) => U): {IArray<U> | true} */
-    //     map<U>(callbackfn: (value: T, index: number, array: T[]) => U): U[];
-    //
-    //     /*@ filter :
-    //         /\ forall N . (callbackfn: (value: T) => boolean): {Array<N, T> | true}
-    //         /\ forall N . (callbackfn: (value: T, index: number) => boolean): {Array<N, T> | true}
-    //         /\ forall N . (callbackfn: (value: T, index: number, array: IArray<T>) => boolean): {Array<N, T> | true} */
-    //     filter(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): T[];
-    //
-    //
-    //     // reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
-    //
-    //     //TODO why does callbackfn have 4 args in the typescript annotation but only 3 in the refscript?
-
-//     /*@ reduce : forall U . (this: IArray<T>, callback: (x: U, y: T, n: {number | 0 <= v && v < len this}) => U, init: U): U */
-//     reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
-//
-//     /*@ _get_length_ :
-//         /\ (this: Array<Immutable,T>): { v: number | v >= 0 && v = (len this) }
-//         /\ (this: Array<M,T>): { v: number | v >= 0 }
-//      */
-//     _get_length_(): number;
-//
 // }
 
 // declare var Array: {

@@ -71,7 +71,7 @@ withExistingFile cfg f
   = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
   where
     ext            = takeExtension f
-    tsCmd          = "tsc"
+    tsCmd          = "tsc-refscript"
     oks            = [".ts", ".js"]
     mkArgs libs    = [ "--outDir", tempDirectory f
                      , "--module", moduleKind

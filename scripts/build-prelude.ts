@@ -1,11 +1,9 @@
 
-declare function require(x: string): any;
-declare var __dirname: string;
-
 var exec = require('child_process').exec;
 var path = require('path');
 
-var outputFile = path.join(__dirname, "./prelude.d.ts");
+var includeDir = path.join(__dirname, "../include");
+var outputFile = path.join(includeDir, "prelude.d.ts");
 
 var files = [
     "./rsc/prims.d.ts",
@@ -23,7 +21,7 @@ var files = [
     "./ambient/iarguments.d.ts",
     "./ambient/regexp.d.ts",
     "./ambient/error.d.ts"
-].map(f => path.join(__dirname, f));
+].map(f => path.join(includeDir, f));
 
 var fileString = files.join(" ");
 

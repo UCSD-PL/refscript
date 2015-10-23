@@ -23,9 +23,15 @@ prof710:
 
 clean:
 	cabal clean
+	rm -f ./include/prelude.d.ts ./include/build-prelude.js
 
 test:
-	cd tests && ./regrtest.py -t $(THREADS) && cd ../
+	node scripts/runtests.js
+
+cleantest:
+	tsc -p tests
+	node tests/cleanup.js
+	rm -f ./tests/runtests.js ./tests/cleanup.js
 
 docs:
 	$(CABAL) haddock --executables --internal --hoogle --hyperlink-source

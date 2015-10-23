@@ -1,0 +1,12 @@
+{
+  "name": "refscript-tests",
+  "version": "0.1.0",
+  "dependencies": {
+    "bluebird": "^2.10.2",
+    "colors": "^1.1.2",
+    "glob-promise": "^1.0.4",
+    "microtime": "^2.0.0",
+    "promise": "^7.0.4",
+    "underscore": "^1.8.3"
+  }
+}

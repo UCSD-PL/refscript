@@ -5,7 +5,7 @@ declare var __dirname: string;
 var exec = require('child_process').exec;
 var path = require('path');
 
-var outputFile = path.join(__dirname, "./full-prelude.d.ts");
+var outputFile = path.join(__dirname, "./prelude.d.ts");
 
 var files = [
     "./rsc/prims.d.ts",

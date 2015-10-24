@@ -291,7 +291,7 @@ bbaseP c
  <|>     (TRef        <$> tGenP     c)     -- List<A>, Tree<A,B> etc...
   where
     ambMut | Just b <- pctx_mut c = TVar (btvToTV b) fTop
-           | otherwise            = trImm
+           | otherwise            = trIM
 
 tGenP c = Gen <$> qnameP <*> bareTyArgsP c
 
@@ -360,7 +360,7 @@ propBindP c  = sepEndBy memberP semi
            <|>     (    Call <$> callP c)
 
 data EltKind = Prop Symbol StaticKind Optionality RMutability RRType
-             | Meth Symbol StaticKind Optionality MutabilityMod RRType
+             | Meth Symbol StaticKind Optionality RMutability RRType
              | Call RRType
              | Ctor RRType
              | SIdx RRType
@@ -372,13 +372,17 @@ eltKindsToTypeMembers = foldl' go mempty
   where
     go ms (Prop f InstanceK o m t) = ms { tm_prop  = F.insertSEnv f (FI o m t) (tm_prop  ms) }
     go ms (Prop f StaticK   o m t) = ms { tm_sprop = F.insertSEnv f (FI o m t) (tm_sprop ms) }
-    go ms (Meth n InstanceK o m t) = ms { tm_meth  = F.insertSEnv n (MI o [(m,t)]) (tm_meth  ms) }
-    go ms (Meth n StaticK   o m t) = ms { tm_smeth = F.insertSEnv n (MI o [(m,t)]) (tm_smeth ms) }
-    -- TODO: Multiple overloads are dropped
-    go ms (Call t) = ms { tm_call = Just t }
+    go ms (Meth n InstanceK o m t) = ms { tm_meth  = insert (tm_meth  ms) n o (m,t) }
+    go ms (Meth n StaticK   o m t) = ms { tm_smeth = insert (tm_smeth ms) n o (m,t) }
+    go ms (Call t) = ms { tm_call = Just t `mappend` tm_call ms }
     go ms (Ctor t) = ms { tm_ctor = Just t }
     go ms (SIdx t) = ms { tm_sidx = Just t }
     go ms (NIdx t) = ms { tm_nidx = Just t }
+
+    insert g x o mt | Just (MI o' mts') <- F.lookupSEnv x g
+                    = F.insertSEnv x (MI (o `mappend` o') (mts' ++ [mt])) g
+                    | otherwise
+                    = F.insertSEnv x (MI o [mt]) g
 
 -- | [f: string]: t
 -- | [f: number]: t
@@ -409,10 +413,17 @@ propP c
         return $ (x, s, o, m, t)
   where
     ambMut | Just b <- pctx_mut c = TVar (btvToTV b) fTop
-           | otherwise            = trImm
+           | otherwise            = trIM
 
 
--- | [STATIC] [MUTABILITY] m[<A..>](x:t,..): t
+-- | [STATIC] [@MUTABILITY] m[<A..>](x:t,..): t
+--
+--  e.g.
+--
+--    static @Mutable m<A>(x: A): A
+--
+--    n(x: number): string
+--
 methP c
   = do  s     <- option InstanceK (reserved "static" *> return StaticK)
         m     <- withinSpacesP methMutabilityP
@@ -430,11 +441,11 @@ ctorP c         = withinSpacesP (reserved "new")
 
 mutabilityP     =  brackets . bareTypeP
 
-methMutabilityP =  try (reserved "Mutable"       >> return Mutable)
-               <|> try (reserved "Immutable"     >> return Immutable)
-               <|> try (reserved "ReadOnly"      >> return ReadOnly)
-               <|> try (reserved "AssignsFields" >> return AssignsFields)
-               <|>     (                            return Mutable)
+methMutabilityP =  try (reserved "@Mutable"       >> return trMU)
+               <|> try (reserved "@Immutable"     >> return trIM)
+               <|> try (reserved "@ReadOnly"      >> return trRO)
+               <|> try (reserved "@AssignsFields" >> return trAF)
+               <|>     (                             return trRO)   -- default
 
 dummyP ::  Parser (F.Reft -> b) -> Parser b
 dummyP fm = fm `ap` topP

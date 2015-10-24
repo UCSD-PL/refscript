@@ -12,9 +12,11 @@
 {-# LANGUAGE UndecidableInstances      #-}
 
 module Language.Rsc.Typecheck.Types (
+  -- Export instances of Monoid
+    Monoid(..)
 
   -- * Type operations
-    toType, ofType, rTop, strengthen, toplevel
+  , toType, ofType, rTop, strengthen, toplevel
 
   , ExprReftable(..)
 
@@ -32,8 +34,8 @@ module Language.Rsc.Typecheck.Types (
   , btvToTV, tvToBTV
 
   -- * Mutability primitives
-  , tMut, tUqMut, tImm, tIM, tRO, trMut, trImm, trIM, trRO
-  , isRO, isMut, isImm, isUM, isUMRef, mutRelated, mutRelatedBVar
+  , tMU, tUM, tIM, tAF, tRO, trMU, trIM, trAF, trRO
+  , isRO, isMU, isIM, isUM, isUMRef, mutRelated, mutRelatedBVar
 
   -- * Primitive Types
 
@@ -91,26 +93,26 @@ import           Text.Parsec.Pos             (initialPos)
 mkMut s    = TRef (Gen (mkAbsName [] s) []) fTop
 mkRelMut s = TRef (Gen (mkRelName [] s) []) fTop
 
-tMut, tUqMut, tImm, tRO, tIM :: F.Reftable r => RType r
-tMut    = mkMut "Mutable"
-tUqMut  = mkMut "UniqueMutable"
-tImm    = mkMut "Immutable"
-tRO     = mkMut "ReadOnly"
-tIM     = mkMut "InheritedMut"
+tMU, tUM, tIM, tRO, tAF :: F.Reftable r => RType r
+tMU   = mkMut "Mutable"
+tIM   = mkMut "Immutable"
+tRO   = mkMut "ReadOnly"
+tAF   = mkMut "AssignsFields"
+tUM   = mkMut "UniqueMutable"
 
-trMut, trImm, trRO, trIM :: F.Reftable r => RTypeQ RK r
-trMut   = mkRelMut "Mutable"
-trImm   = mkRelMut "Immutable"
-trRO    = mkRelMut "ReadOnly"
-trIM    = mkRelMut "InheritedMut"
+trMU, trIM, trRO, trAF :: F.Reftable r => RTypeQ RK r
+trMU  = mkRelMut "Mutable"
+trIM  = mkRelMut "Immutable"
+trRO  = mkRelMut "ReadOnly"
+trAF  = mkRelMut "AssignsFields"
 
 typeName (Gen (QN _ s) _)  = s
 
 isNamed s t | TRef n _ <- t, typeName n == F.symbol s = True | otherwise = False
 
 isRO  = isNamed "ReadOnly"
-isMut = isNamed "Mutable"
-isImm = isNamed "Immutable"
+isMU  = isNamed "Mutable"
+isIM  = isNamed "Immutable"
 isUM  = isNamed "UniqueMutable"
 
 isUMRef t | TRef (Gen _ (m:_)) _ <- t, isUM m
@@ -118,11 +120,10 @@ isUMRef t | TRef (Gen _ (m:_)) _ <- t, isUM m
           | otherwise
           = False
 
-mutRelated t = isMut t || isImm t || isUM t || isRO t
+mutRelated t = isMU t || isIM t || isUM t || isRO t
 
 mutRelatedBVar (BTV _ _ (Just m)) = mutRelated m
 mutRelatedBVar _                  = False
-
 
 
 ---------------------------------------------------------------------
@@ -207,7 +208,7 @@ mkAnd ts        = TAnd $ zip [0..] ts
 mkAndOpt []     = Nothing
 mkAndOpt ts     = Just $ mkAnd ts
 
-instance F.Reftable r => Monoid (RType r) where
+instance F.Reftable r => Monoid (RTypeQ q r) where
   mempty        = tBot
   mappend t t'  = mkAnd $ bkAnd t ++ bkAnd t'
 
@@ -416,7 +417,7 @@ objLitTy l ps     = mkFun (vs, bs, rt)
   where
     vs            = mvs ++ avs
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
-    rt            = TObj tImm tms fTop
+    rt            = TObj tIM tms fTop
     tms           = tmFromFieldList [ (s, FI Req m a) | (s,m,a) <- zip3 ss mts ats ]
     (mvs, mts)    = unzip $ map (freshBTV l mSym Nothing) [1..length ps]  -- field mutability
     (avs, ats)    = unzip $ map (freshBTV l aSym Nothing) [1..length ps]  -- field type vars
@@ -457,11 +458,11 @@ mkArgTy l ts   = VI Local RdOnly Initialized
 immObjectLitTy :: F.Reftable r => [Prop l] -> [RType r] -> RType r
 --------------------------------------------------------------------------------------------
 immObjectLitTy ps ts | length ps == length ts
-                     = TObj tImm elts fTop
+                     = TObj tIM elts fTop
                      | otherwise
                      = error "Mismatched args for immObjectLit"
   where
-    elts = tmFromFieldList [ (F.symbol p, FI Req tImm t) | (p,t) <- safeZip "immObjectLitTy" ps ts ]
+    elts = tmFromFieldList [ (F.symbol p, FI Req tIM t) | (p,t) <- safeZip "immObjectLitTy" ps ts ]
 
 --------------------------------------------------------------------------------------------
 tmFromFields :: F.SEnv (FieldInfoQ q r) -> TypeMembersQ q r

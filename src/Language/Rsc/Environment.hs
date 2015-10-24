@@ -71,7 +71,7 @@ class CheckingEnvironment r t where
   --
   --   * Method Mutability
   --
-  envMut    :: t r -> Maybe MutabilityMod
+  envMut    :: t r -> Maybe (Mutability r)
   --
   --   * Type for this
   --

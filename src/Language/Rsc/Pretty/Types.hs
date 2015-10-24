@@ -76,9 +76,9 @@ instance (F.Reftable r, PP r) => PP (TypeMembersQ q r) where
       ppNIdx nidx
 
 ppProp  = sep . map (\(x, f) -> pp x <> pp f <> semi) . F.toListSEnv
-ppMeth  = sep . map (\(x, m) -> pp x <> pp m <> semi) . F.toListSEnv
+ppMeth  = sep . map (\(x, m) -> ppMI x m <> semi) . F.toListSEnv
 ppSProp = sep . map (\(x, f) -> pp "static" <+> pp x <> pp f <> semi) . F.toListSEnv
-ppSMeth = sep . map (\(x, m) -> pp "static" <+> pp x <> pp m <> semi) . F.toListSEnv
+ppSMeth = sep . map (\(x, m) -> pp "static" <+> ppMI x m <> semi) . F.toListSEnv
 
 ppCall optT | Just t <- optT = pp t              <> semi | otherwise = empty
 ppCtor optT | Just t <- optT = pp "new" <+> pp t <> semi | otherwise = empty
@@ -93,6 +93,8 @@ instance PPR r => PP (FieldInfoQ q r) where
 
 instance PPR r => PP (MethodInfoQ q r) where
   pp (MI o mts) = pp o <> vcat (map (\(m,t) -> brackets (pp m) <> pp t) mts)
+
+ppMI x (MI o mts) = vcat (map (\(m,t) -> text "@" <> pp m <+> pp x <> pp o <> pp t) mts)
 
 instance PP Optionality where
   pp Opt = text "?"
@@ -145,12 +147,6 @@ instance PP Assignability where
   pp WriteGlobal  = text "WriteGlobal"
   pp ReturnVar    = text "ReturnVar"
   pp _            = text "ErrorAssignability"
-
-instance PP MutabilityMod where
-  pp Mutable       = text "MU"
-  pp Immutable     = text "IM"
-  pp AssignsFields = text "AF"
-  pp ReadOnly      = text "RO"
 
 instance (PP r, F.Reftable r) => PP (TypeDeclQ q r) where
   pp (TD s m) = pp s <+> lbrace $+$ nest 4 (pp m) $+$ rbrace

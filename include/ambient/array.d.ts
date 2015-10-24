@@ -16,20 +16,28 @@ interface Array<M extends ReadOnly, T> {
     push(x: T): number;
 
     // push<N>(...items: Array<T>): number;
-    // /**
-    //   * Removes the last element from an array and returns it.
-    //   */
-    // pop(): T;
-    // /**
-    //   * Combines two or more arrays.
-    //   * @param items Additional items to add to the end of array1.
-    //   */
+
+    /**
+      * Removes the last element from an array and returns it.
+      */
+    /*@ @Mutable push(): T */
+    pop(): T;
+
+    /**
+      * Combines two or more arrays.
+      * @param items Additional items to add to the end of array1.
+      */
     // concat<U extends T[]>(...items: U[]): T[];
-    // /**
-    //   * Combines two or more arrays.
-    //   * @param items Additional items to add to the end of array1.
-    //   */
+    /**
+      * Combines two or more arrays.
+      * @param items Additional items to add to the end of array1.
+      */
     // concat(...items: T[]): T[];
+
+    /*@ @Immutable concat<M0>    (items: IArray<T>  ): { Array<M0,T> | len v = len this + len items } */
+    /*@            concat<M1, M2>(items: Array<M1,T>): { Array<M2,T> | true } */
+    concat(item: T[]): T[];
+
     // /**
     //   * Adds all the elements of an array separated by the specified separator string.
     //   * @param separator A string used to separate one element of an array from the next in the resulting String. If omitted, the array elements are separated with a comma.

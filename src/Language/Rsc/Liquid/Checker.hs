@@ -291,8 +291,9 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
       t         <- cgSafeEnvFindTyM x1 g'
-      let rhsCtx = fmap snd $ getProp g' FieldAccess f t
-      fmap snd <$> consCall g' l BISetProp [(vr x1, Nothing),(e2, rhsCtx)] (setPropTy f)
+      case getProp l g' FieldAccess f t of
+        Right (_, t) -> fmap snd <$> consCall g' l BISetProp [(vr x1, Nothing), (e2, Just t)] (setPropTy f)
+        Left e       -> cgError e
   where
       vr         = VarRef $ getAnnotation e1
 
@@ -466,7 +467,7 @@ consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
     ret   = thisT `strengthen` F.reft (F.vv Nothing) (F.pAnd $ bnd <$> out)
     xts   = sortBy c_sym [ B x t' | (x, FI _ _ t) <- F.toListSEnv (tm_prop ms)
                                   , let t' = unqualifyThis g0 thisT t ]
-    out   = [ f | (f, FI _ m _) <- F.toListSEnv (tm_prop ms), isImm m ]
+    out   = [ f | (f, FI _ m _) <- F.toListSEnv (tm_prop ms), isIM m ]
     bnd f = F.PAtom F.Eq (mkOffset v_sym $ F.symbolString f) (F.eVar f)
     v_sym = F.symbol $ F.vv Nothing
     c_sym = on compare b_sym
@@ -672,12 +673,12 @@ consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
              --
              -- TODO: 'this' should not appear in ft. Add check for this.
              --
-             | Just (_,ft) <- getProp g FieldAccess f t
+             | Right (_,ft) <- getProp l g FieldAccess f t
              , isTFun ft
              = consCall g l ex (args es) ft
 
              -- Invoking a method
-             | Just (_,ft) <- getProp g MethodAccess f t
+             | Right (_,ft) <- getProp l g MethodAccess f t
              = consCall g l ex (args es) ft
 
              | otherwise
@@ -705,11 +706,11 @@ consExpr g (CallExpr l e es) _
 consExpr g ef@(DotRef l e f) _
   = mseq (consExpr g e Nothing) $ \(x,g') -> do
       te <- cgSafeEnvFindTyM x g'
-      case getProp g' FieldAccess f te of
-        Just (tObj, tField) ->
+      case getProp l g' FieldAccess f te of
+        Right (tObj, tField) ->
             do  funTy <- mkDotRefFunTy l g f tObj tField
                 consCall g' l ef [(VarRef (getAnnotation e) x, Nothing)] funTy
-        Nothing -> cgError $ errorMissingFld (srcPos l) f te
+        Left e -> cgError e
 
 -- | e1[e2]
 consExpr g e@(BracketRef l e1 e2) _

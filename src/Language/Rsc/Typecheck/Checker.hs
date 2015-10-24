@@ -235,8 +235,13 @@ tcStmt γ (ExprStmt l (AssignExpr l1 OpAssign (LVar lx x) e))
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do  z               <- runFailM ( tcExpr γ e1l Nothing )
         case z of
-          Right (_,te1) -> tcSetProp (fmap snd $ getProp γ FieldAccess f te1)
-          Left _        -> tcSetProp Nothing
+          Right (_,te1) ->
+              case getProp l γ FieldAccess f te1 of
+              -- TODO
+                Left e        -> undefined
+                Right (t, t') -> tcSetProp (Just t')
+
+          Left _ -> tcSetProp Nothing
   where
     e1l  = fmap (\a -> a { fFact = BypassUnique : fFact a }) e1
     tcSetProp rhsCtx = do
@@ -394,7 +399,7 @@ tcClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
     ret   = thisT
     xts   = sortBy c_sym [ B x t' | (x, FI _ _ t) <- F.toListSEnv (tm_prop ms)
                                   , let t' = t ] -- unqualifyThis g0 thisT t ]
-    out   = [ f | (f, FI _ m _) <- F.toListSEnv (tm_prop ms), isImm m ]
+    out   = [ f | (f, FI _ m _) <- F.toListSEnv (tm_prop ms), isIM m ]
     v_sym = F.symbol $ F.vv Nothing
     c_sym = on compare b_sym
     ctorTy = fromMaybe (die $ unsupportedNonSingleConsTy (srcPos l)) (tm_ctor ms)
@@ -790,12 +795,12 @@ tcCall γ c@(NewExpr l e es)
 tcCall γ ef@(DotRef l e f)
   = runFailM (tcExpr γ e Nothing) >>= \case
       Right (_, te) ->
-          case getProp γ FieldAccess f te of
-            Just (tObj, tField) ->
+          case getProp l γ FieldAccess f te of
+            Right (tObj, tField) ->
                 do  funTy <- mkDotRefFunTy l γ f tObj tField
                     (e':_, t') <- tcNormalCall γ l ef [(e, Nothing)] funTy
                     return (DotRef l e' f, t')
-            Nothing -> tcError $ errorMissingFld (srcPos l) f te
+            Left e -> tcError e
       Left err -> fatal err (ef, tBot)
 
 -- | `super(e1,...,en)`
@@ -812,22 +817,28 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
   = fatal (unimplemented l "Variadic" ex) (ex, tBot)
   | otherwise
   = runFailM (tcExpr γ e Nothing) >>= \case
-      Right (_, t) | Just (t',tF)   <- getProp γ FieldAccess f t          -- Function field
-                   , isTFun tF ->
-                      do  (e', _ )  <- tcExprT l1 (ppshow em) γ e t'
-                          (es',to)  <- tcNormalCall γ l ex (es `zip` nths) tF
-                          return     $ (CallExpr l (DotRef l1 e' f) es', to)
+      Right (_, t) ->
+          -- Try to access it as a field
+          case getProp l γ FieldAccess f t of
+            Right (t',tF) ->
+                if isTFun tF
+                  then
+                    do  (e', _ )  <- tcExprT l1 (ppshow em) γ e t'
+                        (es',to)  <- tcNormalCall γ l ex (es `zip` nths) tF
+                        return     $ (CallExpr l (DotRef l1 e' f) es', to)
+                  else
+                    fatal (errorCallNotFound (srcPos l1) e f) (ex, tBot)
 
-                   | Just (t', tF)  <- getProp γ MethodAccess f t ->     -- Invoking a method
-                      do  (e', _ )  <- tcExprT l1 (ppshow em) γ e t'
-                          (es', to) <- tcNormalCall γ l  ex (es `zip` nths) tF
-                          return     $ (CallExpr l (DotRef l1 e' f) es', to)
+            _ ->
+                -- Try to access it as a method
+                case getProp l γ MethodAccess f t of
+                  Right (t', tF) -> do  (e', _ )  <- tcExprT l1 (ppshow em) γ e t'
+                                        (es', to) <- tcNormalCall γ l  ex (es `zip` nths) tF
+                                        return     $ (CallExpr l (DotRef l1 e' f) es', to)
 
-                   | otherwise ->
-                      fatal (errorCallNotFound (srcPos l1) e f) (ex, tBot)
+                  Left e -> fatal e (ex, tBot)
 
-      Left err ->
-            fatal err (ex,tBot)
+      Left e -> fatal e (ex, tBot)
   where
     isVariadicCall f = F.symbol f == F.symbol "call"
 

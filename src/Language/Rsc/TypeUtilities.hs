@@ -56,7 +56,7 @@ mkDotRefFunTy l g f tObj tField
   = globalLengthType g
   -- | Case immutable field: (x: tObj) => { bField | v = x_f }
   | Just m <- getFieldMutability (envCHA g) tObj (F.symbol f)
-  , isImm m
+  , isIM m
   = return $ mkFun ([], [B x tObj], (fmap F.top tField) `eSingleton` mkOffset x f)
   -- | TODO: Case: TEnum
   -- | Rest (x: tTobj) => tField[this/x]
@@ -74,13 +74,12 @@ setPropTy :: (F.Reftable r, F.Symbolic f) => f -> RType r
 setPropTy f = mkAll [bvt, bvm] ft
   where
     ft      = TFun [b1, b2] t fTop
- -- b1      = B (F.symbol "o") $ TObj tImm (tmFromFieldList [(f, FI Opt m t)]) fTop
-    b1      = B (F.symbol "o") $ TObj tImm (tmFromFieldList [(f, FI Req m t)]) fTop
+    b1      = B (F.symbol "o") $ TObj tIM (tmFromFieldList [(f, FI Req m t)]) fTop
     b2      = B (F.symbol "x") $ t
     m       = toTTV bvm :: F.Reftable r => RType r
     t       = toTTV bvt
     bvt     = BTV (F.symbol "A") def Nothing
-    bvm     = BTV (F.symbol "M") def (Just tMut) :: F.Reftable r => BTVar r
+    bvm     = BTV (F.symbol "M") def (Just tMU) :: F.Reftable r => BTVar r
     toTTV   :: F.Reftable r => BTVar r -> RType r
     toTTV   = (`TVar` fTop) . btvToTV
 

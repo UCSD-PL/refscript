@@ -29,7 +29,7 @@ import           Data.Monoid                  hiding ((<>))
 import           Data.Text                    (pack, splitOn)
 import qualified Data.Traversable             as T
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc       (mapSnd)
+import           Language.Fixpoint.Misc       (mapPair, mapSnd)
 import           Language.Fixpoint.Names      (symSepName)
 import qualified Language.Fixpoint.Types      as F
 import qualified Language.Fixpoint.Visitor    as FV
@@ -182,7 +182,7 @@ transRType f               = go
 -- | Transform names
 --------------------------------------------------------------------------------
 
-ntransPure :: (NameTransformable t, F.Reftable r) => (QN p -> QN q) -> (QP p -> QP q) -> t p r  -> t q r
+ntransPure :: (NameTransformable t, F.Reftable r) => (QN p -> QN q) -> (QP p -> QP q) -> t p r -> t q r
 ntransPure f g a = runIdentity (ntrans f' g' a)
   where g' = return . g
         f' = return . f
@@ -233,7 +233,7 @@ instance NameTransformable FieldInfoQ where
   ntrans f g (FI o t t') = FI o <$> ntrans f g t <*> ntrans f g t'
 
 instance NameTransformable MethodInfoQ where
-  ntrans f g (MI o mts)  = MI o <$> mapM (mapSndM (ntrans f g)) mts
+  ntrans f g (MI o mts)  = MI o <$> mapM (mapPairM (ntrans f g) (ntrans f g)) mts
 
 ntransFmap ::  (F.Reftable r, Applicative m, Monad m, T.Traversable t)
            => (QN p -> m (QN q)) -> (QP p -> m (QP q)) -> t (FAnnQ p r) -> m (t (FAnnQ q r))
@@ -335,7 +335,7 @@ emapReftTM f γ (TM p m sp sm c k s n)
        (emapReft f γ <$> n)
 
 emapReftFI f γ (FI m t1 t2) = FI m (emapReft f γ t1) (emapReft f γ t2)
-emapReftMI f γ (MI m mts  ) = MI m (mapSnd (emapReft f γ) <$> mts)
+emapReftMI f γ (MI m mts  ) = MI m (mapPair (emapReft f γ) <$> mts)
 
 --------------------------------------------------------------------------------
 mapReftM :: (F.Reftable r, PP r, Applicative m, Monad m)
@@ -369,7 +369,7 @@ mapTypeMembers f (TM p m sp sm c k s n)
        <*> T.mapM (mapReftM f) n
 
 mapReftFI f (FI m t1 t2) = FI m <$> mapReftM f t1 <*> mapReftM f t2
-mapReftMI f (MI m mts  ) = MI m <$> mapM (mapSndM (mapReftM f)) mts
+mapReftMI f (MI m mts  ) = MI m <$> mapM (mapPairM (mapReftM f) (mapReftM f)) mts
 
 --------------------------------------------------------------------------------
 mapTypeMembersM :: (Applicative m, Monad m)

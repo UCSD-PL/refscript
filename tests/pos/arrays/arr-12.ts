@@ -1,5 +1,4 @@
 
-/*@ f1 :: ( IArray<number>, MArray<number>) => { IArray<number> | true } */
-function f1(a, e) {
-  return a.concat(e);
+export function f1(a1: IArray<number>, a2: MArray<number>) {
+    return a1.concat(a2);
 }

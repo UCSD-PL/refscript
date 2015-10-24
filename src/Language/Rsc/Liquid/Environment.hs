@@ -35,12 +35,12 @@ data CGEnvR r = CGE {
   , cge_ctx    :: !IContext
   , cge_path   :: !AbsPath
   , cge_cha    :: !(ClassHierarchy r)
-  , cge_fenv   :: !(F.SEnv F.IBindEnv)    -- Fixpoint bindings - XXX: Why not in monad? Remove?
-  , cge_guards :: ![F.Pred]               -- Branch target conditions
-  , cge_consts :: !(Env (RType r))        -- Constants
-  , cge_mut    :: !(Maybe MutabilityMod)  -- Method mutability
-  , cge_this   :: !(Maybe (RType r))      -- Method mutability
-  , cge_fnid   :: !Int                    -- Enclosing fun's id
+  , cge_fenv   :: !(F.SEnv F.IBindEnv)          -- Fixpoint bindings - XXX: Why not in monad? Remove?
+  , cge_guards :: ![F.Pred]                     -- Branch target conditions
+  , cge_consts :: !(Env (RType r))              -- Constants
+  , cge_mut    :: !(Maybe (Mutability r))       -- Method mutability
+  , cge_this   :: !(Maybe (RType r))            -- Method mutability
+  , cge_fnid   :: !Int                          -- Enclosing fun's id
   } deriving (Functor)
 
 type CGEnv = CGEnvR F.Reft
@@ -143,11 +143,11 @@ initClassInstanceEnv sig@(TS _ (BGen nm bs) _) γ =
 initClassCtorEnv :: TypeSig F.Reft -> CGEnv -> CGEnv
 -------------------------------------------------------------------------------
 initClassCtorEnv (TS _ (BGen nm bs) _) γ
-  = γ { cge_mut   = Just AssignsFields
+  = γ { cge_mut   = Just tAF
       , cge_this  = Just $ TRef (Gen nm (map btVar bs)) fTop }
 
 -------------------------------------------------------------------------------
-initClassMethEnv :: MutabilityMod -> TypeSig F.Reft -> CGEnv -> CGEnv
+initClassMethEnv :: Mutability F.Reft -> TypeSig F.Reft -> CGEnv -> CGEnv
 -------------------------------------------------------------------------------
 initClassMethEnv m (TS _ (BGen nm bs) _) γ
   = γ { cge_mut  = Just m

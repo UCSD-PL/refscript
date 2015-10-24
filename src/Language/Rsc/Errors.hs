@@ -162,6 +162,15 @@ errorDeadCast l t1 t2         = mkErr l $ printf "Generic deadcast error when co
 errorUqMutSubtyping l e t rt  = mkErr l $ printf "No subtyping allowed at unique mutability when returning expression '%s' of type '%s' to type '%s'." (ppshow e) (ppshow t) (ppshow rt)
 errorTypeParamConstr l f t c  = mkErr l $ printf "Call to function '%s' with type parameters '%s' does not fulfill constraints '%s'." (ppshow f) (ppshow t) (ppshow c)
 
+-- Lookup
+errorEnumLookup l e n         = mkErr l $ printf "Cannot find member '%s' in enumeration '%s'" (ppshow n) (ppshow e)
+errorPrimLookup l e n         = mkErr l $ printf "Cannot find member '%s' in primitive type '%s'" (ppshow n) (ppshow e)
+errorMethLookup l t m         = mkErr l $ printf "Cannot find method member '%s' in type '%s'" (ppshow m) (ppshow t)
+errorFieldLookup l t f        = mkErr l $ printf "Cannot find field member '%s' in type '%s'" (ppshow f) (ppshow t)
+errorGenericLookup l t f      = mkErr l $ printf "Cannot find member '%s' in type '%s'" (ppshow f) (ppshow t)
+errorAmbientLookup l t f      = mkErr l $ printf "Cannot find member '%s' in ambient element '%s'" (ppshow f) (ppshow t)
+errorUnionLookup l t f        = mkErr l $ printf "Cannot find member '%s' in any part of the union '%s'" (ppshow f) (ppshow t)
+
 ---------------------------------------------------------------------------
 -- | LIQUID
 ---------------------------------------------------------------------------

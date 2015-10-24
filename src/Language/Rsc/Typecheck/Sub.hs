@@ -153,7 +153,7 @@ compareObjs l γ t1@(TRef (Gen x1 (m1:t1s)) _) t2@(TRef (Gen x2 (m2:t2s)) _)
   -- * Both immutable, same name, non arrays: co-variant subtyping on arguments
   --
   | x1 == x2
-  , isImm m2
+  , isIM m2
   , not (isArrayType t1)
   = mconcat $ compareTypes l γ m1 m2
             : zipWith (compareTypes l γ) t1s t2s
@@ -217,7 +217,7 @@ compareMembers op l γ t1 p1 t2 p2
 compareProp l γ (f, ff@(FI o1 m1 t1, FI o2 m2 t2))
   | o1 /= o2
   = SubErr [errorIncompatOptional (srcPos l) f]
-  | isSubtype γ m1 m2 && isImm m2                         -- Co-Variance
+  | isSubtype γ m1 m2 && isIM m2                          -- Co-Variance
   = compareTypes l γ t1 t2
   | isSubtype γ m1 m2                                     -- Co-& Contra-Variance
   = compareTypes l γ t1 t2 <> compareTypes l γ t2 t1
@@ -237,11 +237,11 @@ compareCtors l γ = compareMaybe l γ compareTypes errorIncompCtorSigs
 compareSIdxs l γ = compareMaybe l γ compareTypes errorIncompSIdxSigs
 compareNIdxs l γ = compareMaybe l γ compareTypes errorIncompNIdxSigs
 
-t1 `eqMutability` t2 | isMut t1, isMut t2  = True
-                     | isImm t1, isImm t2  = True
-                     | isRO  t1, isRO  t2  = True
-                     | isUM  t1, isUM  t2  = True
-                     | otherwise           = False
+t1 `eqMutability` t2 | isMU t1, isMU t2  = True
+                     | isIM t1, isIM t2  = True
+                     | isRO t1, isRO t2  = True
+                     | isUM t1, isUM t2  = True
+                     | otherwise         = False
 
 --------------------------------------------------------------------------------
 compareFuns :: FE g => SrcSpan -> g () -> Type -> Type -> SubTRes

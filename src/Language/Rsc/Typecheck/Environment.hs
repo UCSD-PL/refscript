@@ -66,7 +66,7 @@ data TCEnv r  = TCE {
   , tce_ctx    :: IContext
   , tce_path   :: AbsPath
   , tce_cha    :: ClassHierarchy r
-  , tce_mut    :: Maybe (MutabilityMod)
+  , tce_mut    :: Maybe (Mutability r)
   , tce_this   :: Maybe (RType r)
   , tce_fnid   :: Int
   }
@@ -149,7 +149,7 @@ initClassInstanceEnv (TS _ (BGen _ bs) _) γ =
     bts = [(s,t) | BTV s _ (Just t) <- bs]
 
 --------------------------------------------------------------------------------
-initClassMethEnv :: Unif r => MutabilityMod -> TypeSig r -> TCEnv r -> TCEnv r
+initClassMethEnv :: Unif r => Mutability r -> TypeSig r -> TCEnv r -> TCEnv r
 --------------------------------------------------------------------------------
 initClassMethEnv m (TS _ (BGen nm bs) _) γ
   = γ { tce_mut  = Just m
@@ -175,7 +175,7 @@ initClassCtorEnv :: Unif r => TypeSigQ AK r -> TCEnv r -> TCEnv r
 --------------------------------------------------------------------------------
 initClassCtorEnv (TS _ (BGen nm bs) _) γ
   = γ { tce_names = envNames γ
-      , tce_mut   = Just AssignsFields
+      , tce_mut   = Just tAF
       , tce_this  = Just tThis
       }
   &  tcEnvAdd ctorExit ctorExitVI

@@ -73,7 +73,7 @@ data RTypeQ q r =
   --
   --  The mutability modifier is meant to be internal (default: Immutable)
   --
-  | TObj (RTypeQ q r) (TypeMembersQ q r) r
+  | TObj (MutabilityQ q r) (TypeMembersQ q r) r
   --
   -- Class / Enum
   --
@@ -111,34 +111,29 @@ data BindQ q r        = B { b_sym  :: F.Symbol
                           }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data TypeMembersQ q r = TM { tm_prop  :: F.SEnv (FieldInfoQ q r)    -- Properties
-                           , tm_meth  :: F.SEnv (MethodInfoQ q r)   -- Method signatures
-                           , tm_sprop :: F.SEnv (FieldInfoQ q r)    -- Static Properties
-                           , tm_smeth :: F.SEnv (MethodInfoQ q r)   -- Static Method signatures
-                           , tm_call  :: Maybe (RTypeQ q r)         -- Call signatures
-                           , tm_ctor  :: Maybe (RTypeQ q r)         -- Contructor signatures
-                           , tm_sidx  :: Maybe (RTypeQ q r)         -- String indexer
-                           , tm_nidx  :: Maybe (RTypeQ q r)         -- Numeric indexer
+data TypeMembersQ q r = TM { tm_prop  :: F.SEnv (FieldInfoQ q r)      -- Properties
+                           , tm_meth  :: F.SEnv (MethodInfoQ q r)     -- Method signatures
+                           , tm_sprop :: F.SEnv (FieldInfoQ q r)      -- Static Properties
+                           , tm_smeth :: F.SEnv (MethodInfoQ q r)     -- Static Method signatures
+                           , tm_call  :: Maybe (RTypeQ q r)           -- Call signatures
+                           , tm_ctor  :: Maybe (RTypeQ q r)           -- Contructor signatures
+                           , tm_sidx  :: Maybe (RTypeQ q r)           -- String indexer
+                           , tm_nidx  :: Maybe (RTypeQ q r)           -- Numeric indexer
                            }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data FieldInfoQ q r   = FI Optionality                  -- Optional
-                           (RTypeQ q r)                 -- Mutability
-                           (RTypeQ q r)                 -- Type
+data FieldInfoQ q r   = FI Optionality                                -- Optional
+                           (RTypeQ q r)                               -- Mutability
+                           (RTypeQ q r)                               -- Type
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data MethodInfoQ q r  = MI { m_opt :: Optionality                          -- Optional
-                           , m_ty  :: [(MutabilityMod, RTypeQ q r)]        -- Mutability, Type
+data MethodInfoQ q r  = MI { m_opt :: Optionality                     -- Optional
+                           , m_ty  :: [(MutabilityQ q r, RTypeQ q r)] -- [(Mutability, Type)]
                            }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data MutabilityMod    = Mutable
-                      | Immutable
-                      | ReadOnly
-                      | AssignsFields
-                        deriving (Eq, Data, Typeable)
-
-type Mutability r     = RType r
+type MutabilityQ q r  = RTypeQ q r
+type Mutability r     = MutabilityQ AK r
 
 data TypeSigQ q r     = TS { sigKind  :: TypeDeclKind
                            , sigTRef  :: BTGenQ q r
@@ -162,6 +157,12 @@ data StaticKind       = StaticK | InstanceK
 data Optionality      = Opt | Req
                         deriving (Eq, Ord, Show, Data, Typeable)
 
+
+instance Monoid Optionality where
+  mempty = Req
+  mappend Opt _ = Opt
+  mappend _ Opt = Opt
+  mappend _ _   = Req
 
 --------------------------------------------------------------------------------
 -- | Enumeration definition

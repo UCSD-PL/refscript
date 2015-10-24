@@ -314,7 +314,7 @@ objFields g (x, e@(VI loc a _ t))
               | otherwise = (x_sym, (x_sym,e):xts)
   where
     x_sym     = F.symbol x
-    xts       = [(mkQualSym x f, vi f o ft) | (f, FI o m ft) <- fs, isImm m ]
+    xts       = [(mkQualSym x f, vi f o ft) | (f, FI o m ft) <- fs, isIM m ]
 
     -- This should remain as is: x.f bindings are not going to change
     vi f Opt tf = VI loc a Initialized $ orUndef $ ty tf f
@@ -749,7 +749,7 @@ splitC (Sub g i t1@(TRef n1@(Gen x1 (m1:t1s)) r1) t2@(TRef n2@(Gen x2 (m2:t2s)) 
   -- * Both immutable, same name, non arrays: Co-variant subtyping
   --
   | x1 == x2
-  , isImm m2
+  , isIM m2
   , not (isArrayType t1)
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- concatMapM splitC $ safeZipWith "splitc-4" (Sub g i) t1s t2s
@@ -836,7 +836,7 @@ splitTM g x c (TM p1 m1 sp1 sm1 c1 k1 s1 n1) (TM p2 m2 sp2 sm2 c2 k2 s2 n2)
     splitT (t1,t2) = splitC (Sub g c t1 t2)
 
 splitF g i (_, (FI _ m1 t1, FI _ m2 t2))
-  | isImm m2  = splitC (Sub g i t1 t2)
+  | isIM m2  = splitC (Sub g i t1 t2)
   | otherwise = (++) <$> splitC (Sub g i t1 t2)
                      <*> splitC (Sub g i t2 t1)
 
@@ -986,7 +986,7 @@ unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
 unqualifyThis g t = F.subst $ F.mkSubst fieldSu
   where
     fieldSu | Just (TObj _ fs _) <- expandType Coercive (envCHA g) t
-            = [ subPair f | (f, FI _ m _) <- F.toListSEnv $ tm_prop fs, isImm m ]
+            = [ subPair f | (f, FI _ m _) <- F.toListSEnv $ tm_prop fs, isIM m ]
             | otherwise
             = []
     this      = F.symbol $ builtinOpId BIThis

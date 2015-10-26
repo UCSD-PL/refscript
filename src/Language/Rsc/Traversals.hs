@@ -80,13 +80,13 @@ efoldTypeMembers' :: F.Reftable r => (            RTypeQ q r -> b)         -- f
                                   -> (F.SEnv b -> r          -> a -> a)    -- h
                                   -> TypeMembersQ q r -> F.SEnv b -> a -> a
 --------------------------------------------------------------------------------
-efoldTypeMembers' g f h (TM p m sp sm c k s n) γ z =
-    L.foldl' (efold g f h γ) z $ pl ++ ml ++ spl ++ sml ++ cl ++ kl ++ sl ++ nl
+efoldTypeMembers' g f h (TM m sm c k s n) γ z =
+    L.foldl' (efold g f h γ) z $ ml ++ sml ++ cl ++ kl ++ sl ++ nl
   where
-    pl  = L.foldr (\(_, FI _ t t') -> ([t,t']      ++) ) [] $ F.toListSEnv p
-    ml  = L.foldr (\(_, MI _ mts ) -> (map snd mts ++) ) [] $ F.toListSEnv m
-    spl = L.foldr (\(_, FI _ t t') -> ([t,t']      ++) ) [] $ F.toListSEnv sp
-    sml = L.foldr (\(_, MI _ mts ) -> (map snd mts ++) ) [] $ F.toListSEnv sm
+    ml  = L.foldr step [] (F.toListSEnv m)
+    sml = L.foldr step [] (F.toListSEnv sm)
+    step (_, FI _ _ t') = ([t']        ++)
+    step (_, MI _ mts ) = (map snd mts ++)
     cl  = maybeToList c
     kl  = maybeToList k
     sl  = maybeToList s
@@ -131,14 +131,13 @@ instance Foldable BindQ where
 --         αs' = map btvToTV (b_args b) ++ αs
 
 instance Foldable TypeMembersQ where
-  fold f αs xs (TM p m sp sm c k s n) =    mconcat [ ( Ext.foldMap (fold f αs xs) p)
-                                                   , ( Ext.foldMap (fold f αs xs) m)
-                                                   , ( Ext.foldMap (fold f αs xs) sp)
-                                                   , ( Ext.foldMap (fold f αs xs) sm)
-                                                   , ( Ext.foldMap (fold f αs xs) c)
-                                                   , ( Ext.foldMap (fold f αs xs) k)
-                                                   , ( Ext.foldMap (fold f αs xs) s)
-                                                   , ( Ext.foldMap (fold f αs xs) n)]
+  fold f αs xs (TM m sm c k s n) = mconcat [ Ext.foldMap (fold f αs xs) m
+                                           , Ext.foldMap (fold f αs xs) sm
+                                           , Ext.foldMap (fold f αs xs) c
+                                           , Ext.foldMap (fold f αs xs) k
+                                           , Ext.foldMap (fold f αs xs) s
+                                           , Ext.foldMap (fold f αs xs) n
+                                           ]
 
 instance Foldable BTGenQ where
   fold f αs xs (BGen n ts) = mconcat $ fold f αs xs <$> ts
@@ -150,11 +149,9 @@ instance Foldable BTVarQ where
   fold f αs xs (BTV x l (Just t)) = fold f αs xs t
   fold f αs xs (BTV x l _)        = mempty
 
-instance Foldable FieldInfoQ where
-  fold f αs xs (FI o t t') = fold f αs xs t <> fold f αs xs t'
-
-instance Foldable MethodInfoQ where
-  fold f αs xs (MI o (mts)) = mconcat $ fold f αs xs . snd <$> mts
+instance Foldable TypeMemberQ where
+  fold f αs xs (FI _ _ t) = fold f αs xs t
+  fold f αs xs (MI o mts) = mconcat $ fold f αs xs . snd <$> mts
 --
 -- instance Foldable ModuleDefQ where
 --   trans f αs xs (ModuleDef v t e p)

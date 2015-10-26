@@ -8,10 +8,9 @@
 
 module Language.Rsc.Lookup (
     getProp
-  , getFieldMutability
+  , getFieldAssignability
   , extractCall
   , extractCtor
-  , AccessKind(..)
   ) where
 
 import           Control.Applicative          (pure, (<$>))
@@ -40,76 +39,72 @@ import           Language.Rsc.Types
 --
 excludedFieldSymbols = F.symbol <$> [ "hasOwnProperty", "prototype", "__proto__" ]
 
-type PPRD r = (ExprReftable Int r, PP r, F.Reftable r)
+type PPRD r   = (ExprReftable Int r, PP r, F.Reftable r)
+type CEnv r t = (CheckingEnvironment () t, CheckingEnvironment r t , Functor t)
 
-data AccessKind = MethodAccess | FieldAccess
-
-instance PP AccessKind where
-  pp MethodAccess = pp "MethodAccess"
-  pp FieldAccess  = pp "FieldAccess"
-
-
--- | `getProp γ b x s t` performs the access `x.f`, where @t@ is the type
---   assigned to @x@ and returns a triplet containing:
+-- | `getProp γ b x s t` performs the access `x.f`, where `x: t` and returns:
 --
 --   (a) the subtype of @t@ for which the access of field @f@ is successful, and
 --
---   (b) the accessed type.
+--   (b) possible accessed members (mutliple for union types)
 --
 --------------------------------------------------------------------------------
--- getProp :: (IsLocated l, PPRD r, CheckingEnvironment r g, F.Symbolic f, PP f)
---         => l -> g r -> AccessKind -> f -> RType r -> Either Error (RType r, RType r)
+getProp ::
+  (CEnv r t, PP r, PP f, ExprReftable Int r, IsLocated l, F.Symbolic f, F.Reftable r) =>
+  l -> t r -> f -> RType r -> Either Error [(RType r, TypeMember r)]
 --------------------------------------------------------------------------------
-getProp l γ b f t@(TPrim _ _) = getPropPrim l γ b f t
+getProp l γ f t@(TPrim _ _) = getPropPrim l γ f t
 
-getProp l γ b f (TOr ts) = getPropUnion l γ b f ts
+getProp l γ f (TOr ts) = getPropUnion l γ f ts
 
 -- | TODO: Chain up to 'Object'
-getProp l γ b f t@(TObj _ _ _)
-  = (t,) <$> accessMember l γ b InstanceK f t
+getProp l γ f t@(TObj _ _ _)
+  = fmap (map (t,)) (accessMember l γ InstanceK f t)
 
 -- | Enumeration
 -- TODO: Instead of the actual integer value, assign unique symbolic values:
 --        E.g. A_B_C_1 ...
-getProp l γ _ f t@(TRef (Gen n []) _)
+getProp l γ f t@(TRef (Gen n []) _)
   | Just e  <- resolveEnumInEnv γ n
   , Just io <- envFindTy f $ e_mapping e
   = case io of
-      IntLit _ i -> return (t, tNum `strengthen` exprReft i)
+      IntLit _ i ->
+                    Right [(t, FI Req Final (tNum `strengthen` exprReft i))]
       -- XXX : is 32-bit going to be enough ???
       -- XXX: Invalid BV values will be dropped
       HexLit _ s -> case bitVectorValue s of
-                      Just v -> Right (t, tBV32 `strengthen` v)
+                      Just v -> Right [(t, FI Req Final (tBV32 `strengthen` v))]
                       _      -> Left (errorEnumLookup l f t)
       _          -> Left (errorEnumLookup l f t)
 
-getProp l γ b f t@(TRef _ _)
-  = (t,) <$> accessMember l γ b InstanceK f t
+getProp l γ f t@(TRef _ _)
+  = fmap (map (t,)) (accessMember l γ InstanceK f t)
 
-getProp l γ b f t@(TClass _)
-  = (t,) <$> accessMember l γ b StaticK f t
+getProp l γ f t@(TClass _)
+  = fmap (map (t,)) (accessMember l γ StaticK f t)
 
-getProp l γ _ f t@(TMod m)
+getProp l γ f t@(TMod m)
   | Just m' <- resolveModuleInEnv γ m
   , Just v' <- envFindTy f (m_variables m')
-  = Right (t, v_type v')
+  = Right [(t, FI Req Final $ v_type v')]
 
-getProp l _ _ f t = Left (errorGenericLookup l f t)
+getProp l _ f t = Left (errorGenericLookup l f t)
 
 
 --------------------------------------------------------------------------------
--- getPropPrim :: (IsLocated l, PPRD r, CheckingEnvironment r g, F.Symbolic f, PP f)
---             => l -> g r -> AccessKind -> f -> RType r -> Either Error (RType r, RType r)
+getPropPrim ::
+  (CEnv r t, PP f, PP r, ExprReftable Int r, IsLocated l, F.Symbolic f, F.Reftable r) =>
+  l -> t r -> f -> RType r -> Either Error [(RType r, TypeMember r)]
 --------------------------------------------------------------------------------
-getPropPrim l γ b f t@(TPrim c _) =
+getPropPrim l γ f t@(TPrim c _) =
   case c of
-    TNumber    -> (t,) <$> lookupAmbientType l γ b f "Number"
-    TString    -> (t,) <$> lookupAmbientType l γ b f "String"
-    TStrLit _  -> (t,) <$> lookupAmbientType l γ b f "String"
-    TBV32      -> (t,) <$> lookupAmbientType l γ b f "Number"
+    TNumber    -> fmap (map (t,)) (lookupAmbientType l γ f "Number")
+    TString    -> fmap (map (t,)) (lookupAmbientType l γ f "String")
+    TStrLit _  -> fmap (map (t,)) (lookupAmbientType l γ f "String")
+    TBV32      -> fmap (map (t,)) (lookupAmbientType l γ f "Number")
     _          -> Left (errorPrimLookup l f t)
 
-getPropPrim l _ _ _ _ = error "getPropPrim should only be applied to TApp"
+getPropPrim l _ _ _ = error "getPropPrim should only be applied to TApp"
 
 
 -- | `extractCtor γ t` extracts a contructor signature from a type @t@
@@ -148,42 +143,24 @@ extractCall γ             = zip [0..] . go []
     go _  _               = []
 
 --------------------------------------------------------------------------------
--- accessMember :: (IsLocated l, PPRD r, CheckingEnvironment r g, F.Symbolic f, PP f)
---              => l -> g r -> AccessKind -> StaticKind -> f -> RType r -> Either Error (RType r)
+accessMember ::
+  (CEnv r t, PP r, PP f, ExprReftable Int r, IsLocated l, F.Symbolic f, F.Reftable r) =>
+  l -> t r -> StaticKind -> f -> RType r -> Either Error [TypeMember r]
 --------------------------------------------------------------------------------
-accessMember l γ MethodAccess static m t
+accessMember l γ static m t
   | Just (TObj mut es _) <- expandType Coercive (envCHA γ) t
-  , Just (MI _ mts)      <- F.lookupSEnv (F.symbol m) (meths es)
-  = Right (mkAnd (catMaybes (map (select mut) mts)))
-
-  | otherwise
-  = Left $ errorMethLookup l m t
-
-  where
-    meths | static == StaticK  = tm_smeth
-          | otherwise          = tm_meth
-    -- select method signatures with valid mutabilities
-    select mObj (mMeth, tMeth)
-          | isSubtype γ mObj mMeth = Just tMeth
-          | otherwise = Nothing
-
-accessMember l γ FieldAccess static f t
-  | Just (TObj mut es _) <- expandType Coercive (envCHA γ) t
-  , Just (FI o _ t)      <- F.lookupSEnv (F.symbol f) $ props es
-  = if o == Opt then Right $ orUndef t
-                else Right t
-
+  , Just m <- F.lookupSEnv (F.symbol m) (mems es)
+  = Right [m]
+  -- In the case of string indexing, build up an optional and assignable field
   | Just (TObj mut es _) <- expandType Coercive (envCHA γ) t
   , Just t               <- tm_sidx es
-  , validFieldName f
-  = Right t
-
+  , validFieldName m
+  = Right [FI Opt Assignable t]
   | otherwise
-  = Left (errorFieldLookup l t f)
-
+  = Left $ errorMemLookup l m t
   where
-    props | static == StaticK = tm_sprop
-          | otherwise         = tm_prop
+    mems | static == StaticK  = s_mems
+         | otherwise          = i_mems
 
 --------------------------------------------------------------------------------
 validFieldName  :: F.Symbolic f => f -> Bool
@@ -191,12 +168,13 @@ validFieldName  :: F.Symbolic f => f -> Bool
 validFieldName f = F.symbol f `notElem` excludedFieldSymbols
 
 --------------------------------------------------------------------------------
--- lookupAmbientType :: (IsLocated l, PPRD r, CheckingEnvironment r g, F.Symbolic f, F.Symbolic s, PP f)
---                   => l -> g r -> AccessKind -> f -> s -> Either Error (RType r)
+lookupAmbientType ::
+  (CEnv r t, PP f, PP r, PP b, ExprReftable Int r, IsLocated l, F.Symbolic f, F.Symbolic b, F.Reftable r) =>
+  l -> t r -> b -> f -> Either Error [TypeMemberQ AK r]
 --------------------------------------------------------------------------------
-lookupAmbientType l γ b f amb
+lookupAmbientType l γ f amb
   | Just (TD _ ms) <- resolveTypeInEnv γ nm
-  = accessMember l γ b InstanceK f (TObj tIM ms fTop)
+  = accessMember l γ InstanceK f (TObj tIM ms fTop)
   | otherwise
   = Left (errorAmbientLookup l f (F.symbol amb))
   where
@@ -206,22 +184,24 @@ lookupAmbientType l γ b f amb
 -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 --------------------------------------------------------------------------------
--- getPropUnion :: (IsLocated l, PPRD r, CheckingEnvironment r g, F.Symbolic f, PP f)
---              => l -> g r -> AccessKind -> f -> [RType r] -> Either Error (RType r, RType r)
+getPropUnion ::
+  (CEnv r t, PP r, PP f, ExprReftable Int r, IsLocated l, F.Symbolic f, F.Reftable r) =>
+  l -> t r -> f -> [RType r] -> Either Error [(RType r, TypeMember r)]
 --------------------------------------------------------------------------------
-getPropUnion l γ b f ts =
-  case unzip (rights $ getProp l γ b f <$> ts) of
-    ([ ], [ ]) -> Left (errorUnionLookup l f (TOr ts))
-    (t1s, t2s) -> Right (mkUnion t1s, mkUnion t2s)
+getPropUnion l γ f ts =
+  case rights (map (getProp l γ f) ts) of
+    [ ] -> Left (errorUnionLookup l f (TOr ts))
+    tfs -> Right (concat tfs)
 
 --------------------------------------------------------------------------------
-getFieldMutability ::
+getFieldAssignability ::
   (ExprReftable Int r, PPR r) =>
-  ClassHierarchy r -> RType r -> F.Symbol -> Maybe (RType r)
+  ClassHierarchy r -> RType r -> F.Symbol -> Maybe FieldAsgn
 --------------------------------------------------------------------------------
-getFieldMutability cha t f | Just (TObj _ ms _) <- expandType Coercive cha t
-                           , Just (FI _ m _)  <- F.lookupSEnv f $ tm_prop ms
-                           = Just m
-                           | otherwise
-                           = Nothing
+getFieldAssignability cha t f
+  | Just (TObj _ ms _) <- expandType Coercive cha t
+  , Just (FI _ m _   ) <- F.lookupSEnv f (i_mems ms)
+  = Just m
+  | otherwise
+  = Nothing
 

@@ -232,21 +232,32 @@ tcStmt γ (ExprStmt l (AssignExpr l1 OpAssign (LVar lx x) e))
 --
 --  We use runFail to enable contextual typing of e2.
 --
-tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
-  = do  z               <- runFailM ( tcExpr γ e1l Nothing )
-        case z of
-          Right (_,te1) ->
-              case getProp l γ FieldAccess f te1 of
-              -- TODO
-                Left e        -> undefined
-                Right (t, t') -> tcSetProp (Just t')
+tcStmt γ@(envCHA -> c) (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
+  = do  (e1'', te1) <- tcExpr γ e1' Nothing
+        case (getMutability c te1, e1) of
+          (Just m, _        ) | isMU m ->
+              case getProp l γ f te1 of
+                Left e        -> tcError e
+                Right (map snd -> fs) ->
+                    do  (e2', _) <- foldM (tcSetPropMut γ l f te1) (e2, tBot) fs
+                        return (mkAsgnExp e1'' e2', Just γ)
 
-          Left _ -> tcSetProp Nothing
+          (Just m, ThisRef _) | isAF m ->
+              case getProp l γ f te1 of
+                Left e        -> tcError e
+                Right (map snd -> fs) ->
+                    do  (e2', _) <- foldM (tcSetPropMut γ l f te1) (e2, tBot) fs
+                        return (mkAsgnExp e1'' e2', Just γ)
+
+          _ ->
+              case getProp l γ f te1 of
+                Left e        -> tcError e
+                Right (map snd -> fs) ->
+                    do  (e2', _) <- foldM (tcSetPropImm γ l f te1) (e2, tBot) fs
+                        return (mkAsgnExp e1'' e2', Just γ)
   where
-    e1l  = fmap (\a -> a { fFact = BypassUnique : fFact a }) e1
-    tcSetProp rhsCtx = do
-      ([e1',e2'],_) <- tcNormalCallWCtx γ l BISetProp [(e1l, Nothing), (e2, rhsCtx)] (setPropTy f)
-      return (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1' f) e2'), Just γ)
+    e1' = fmap (\a -> a { fFact = BypassUnique : fFact a }) e1
+    mkAsgnExp e1_ e2_ = ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1_ f) e2_)
 
 -- e
 tcStmt γ (ExprStmt l e)
@@ -397,16 +408,16 @@ tcClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
     cExit = builtinOpId BICtorExit
     viExit = VI Local Ambient Initialized $ mkFun (bs, xts, ret)
     ret   = thisT
-    xts   = sortBy c_sym [ B x t' | (x, FI _ _ t) <- F.toListSEnv (tm_prop ms)
+    xts   = sortBy c_sym [ B x t' | (x, FI _ _ t) <- F.toListSEnv (i_mems ms)
                                   , let t' = t ] -- unqualifyThis g0 thisT t ]
-    out   = [ f | (f, FI _ m _) <- F.toListSEnv (tm_prop ms), isIM m ]
+    out   = [ f | (f, FI _ Final _) <- F.toListSEnv (i_mems ms) ]
     v_sym = F.symbol $ F.vv Nothing
     c_sym = on compare b_sym
     ctorTy = fromMaybe (die $ unsupportedNonSingleConsTy (srcPos l)) (tm_ctor ms)
 
 -- | Static field
 tcClassElt γ (TD sig ms) c@(MemberVarDecl l True x (Just e))
-  | Just (FI _ _ t) <- F.lookupSEnv (F.symbol x) $ tm_sprop ms
+  | Just (FI _ _ t) <- F.lookupSEnv (F.symbol x) $ i_mems ms
   = do  ([e'],_) <- tcNormalCall γ l "field init" [(e, Just t)] $ mkInitFldTy t
         return $ MemberVarDecl l True x $ Just e'
   | otherwise
@@ -424,7 +435,7 @@ tcClassElt _ _ (MemberVarDecl l False x _)
 -- | Static method: The classes type parameters should not be included in the
 -- environment
 tcClassElt γ (TD sig ms) c@(MemberMethDecl l True x xs body)
-  | Just (MI _ mts) <- F.lookupSEnv (F.symbol x) $ tm_smeth ms
+  | Just (MI _ mts) <- F.lookupSEnv (F.symbol x) $ s_mems ms
   = do  let t = mkAnd $ map snd mts
         its <- tcFunTys l x xs t
         body' <- foldM (tcCallable γ l x xs) body its
@@ -440,7 +451,7 @@ tcClassElt γ (TD sig ms) c@(MemberMethDecl l True x xs body)
 --   TODO: Also might not need 'tce_this'
 --
 tcClassElt γ (TD sig ms) c@(MemberMethDecl l False x xs bd)
-  | Just (MI _ mts) <- F.lookupSEnv (F.symbol x) (tm_meth ms)
+  | Just (MI _ mts) <- F.lookupSEnv (F.symbol x) (i_mems ms)
   = do  let (ms, ts)  = unzip mts
         its          <- tcFunTys l x xs $ mkAnd ts
         let mts'      = zip ms its
@@ -474,12 +485,26 @@ tcAsgn l γ x e
   = do (e', to)   <- tcExprW γ e
        return      $ (e', tcEnvAddo γ x $ VI Local WriteLocal Initialized <$> to)
 
+
+tcSetPropMut γ l f t0 (e, t') (FI _ a t)
+  | a == Final
+  = fatal (errorFinalField l f t0) (e, t')
+  | otherwise
+  = tcExprT l BISetProp γ e t
+
+tcSetPropImm γ l f t0 (e, t') (FI _ a t)
+  | a == Final
+  = fatal (errorImmutableRefAsgn l f t0) (e, t')
+  | otherwise
+  = tcExprT l BISetProp γ e t
+
+
 tcExprT l fn γ e t
   = do ([e'], _) <- tcNormalCall γ l fn [(e, Just t)] $ idTy t
        return (e', t)
 
 tcEnvAddo _ _ Nothing  = Nothing
-tcEnvAddo γ x (Just t) = Just $ tcEnvAdds [(x, t)] γ
+tcEnvAddo γ x (Just t) = Just (tcEnvAdds [(x, t)] γ)
 
 --------------------------------------------------------------------------------
 -- tcExprW  :: Unif r => TCEnv r -> ExprSSAR r ->                    TCM r (ExprSSAR r, Maybe (RType r))
@@ -792,16 +817,22 @@ tcCall γ c@(NewExpr l e es)
          _ -> fatal (errorConstrMissing (srcPos l) t) (c, tBot)
 
 -- | e.f
+--
 tcCall γ ef@(DotRef l e f)
   = runFailM (tcExpr γ e Nothing) >>= \case
       Right (_, te) ->
-          case getProp l γ FieldAccess f te of
-            Right (tObj, tField) ->
-                do  funTy <- mkDotRefFunTy l γ f tObj tField
-                    (e':_, t') <- tcNormalCall γ l ef [(e, Nothing)] funTy
-                    return (DotRef l e' f, t')
+          case getProp l γ f te of
             Left e -> tcError e
+            Right tfs -> do (e', _) <- tcExprT l ef γ e $ rcvrTy tfs
+                            if isOptional tfs
+                              then return (e', mkUnion $ tUndef : typesOf tfs)
+                              else return (e', mkUnion $          typesOf tfs)
       Left err -> fatal err (ef, tBot)
+  where
+    isOptional tfs = Opt `elem` [ o | (_, FI o _ _) <- tfs ]
+    typesOf    tfs = [ t | (_, FI _ _ t) <- tfs]
+    rcvrTy         = mkUnion . map fst
+
 
 -- | `super(e1,...,en)`
 --
@@ -815,31 +846,36 @@ tcCall _ (CallExpr _ (SuperRef _)  _)
 tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
   | isVariadicCall f
   = fatal (unimplemented l "Variadic" ex) (ex, tBot)
+
   | otherwise
   = runFailM (tcExpr γ e Nothing) >>= \case
-      Right (_, t) ->
-          -- Try to access it as a field
-          case getProp l γ FieldAccess f t of
-            Right (t',tF) ->
-                if isTFun tF
-                  then
-                    do  (e', _ )  <- tcExprT l1 (ppshow em) γ e t'
-                        (es',to)  <- tcNormalCall γ l ex (es `zip` nths) tF
-                        return     $ (CallExpr l (DotRef l1 e' f) es', to)
-                  else
-                    fatal (errorCallNotFound (srcPos l1) e f) (ex, tBot)
-
-            _ ->
-                -- Try to access it as a method
-                case getProp l γ MethodAccess f t of
-                  Right (t', tF) -> do  (e', _ )  <- tcExprT l1 (ppshow em) γ e t'
-                                        (es', to) <- tcNormalCall γ l  ex (es `zip` nths) tF
-                                        return     $ (CallExpr l (DotRef l1 e' f) es', to)
-
-                  Left e -> fatal e (ex, tBot)
-
+      Right (_, te) ->
+          case getProp l γ f te of
+            Right (unzip -> (ts, fs)) ->
+                do  (e', _) <- tcExprT l1 em γ e (mkUnion ts)
+                    case getMutability (envCHA γ) te of
+                      Just mRcvr ->
+                          do  (es', t') <- foldM (callStep te mRcvr) (es, tBot) ms
+                              return (CallExpr l (DotRef l1 e' f) es', t')
+                      Nothing -> fatal (bugGetMutability l te) (ex, tBot)
+            Left e -> tcError e
       Left e -> fatal e (ex, tBot)
   where
+    callStep tRcvr _ (es, t) (FI o a ft)
+      | o == Req
+      = do  (es', t') <- tcNormalCall γ l em (es `zip` nths) ft
+            return (es', mkUnion [t, t'])
+      | otherwise
+      = fatal (errorCallOptional l f tRcvr) (es, tBot)
+
+    callStep tRcvr mRcvr (es, t) (MI o mts)
+      | o == Req
+      = do  let ft = mkAnd [ ft | (m, ft) <- mts, isSubtype γ mRcvr m ]
+            (es', t') <- tcNormalCall γ l em (es `zip` nths) ft
+            return (es', mkUnion [t, t'])
+      | otherwise
+      = fatal (errorCallOptional l f tRcvr) (es, tBot)
+
     isVariadicCall f = F.symbol f == F.symbol "call"
 
 -- | `e(es)`

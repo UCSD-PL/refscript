@@ -73,8 +73,8 @@ data PSpec l r
   | InterfaceSpec           (TypeDeclQ RK r)
   | ClassSpec               (TypeSigQ RK r)
   | ModuleSpec              RelPath
-  | FieldSpec               (FieldInfoQ RK r)
-  | MethodSpec              (MethodInfoQ RK r)
+  | FieldSpec               (TypeMemberQ RK r)
+  | MethodSpec              (TypeMemberQ RK r)
   | ConstructorSpec         (RTypeQ RK r)
   | CastSpec                l (RTypeQ RK r)
   | ExportedSpec

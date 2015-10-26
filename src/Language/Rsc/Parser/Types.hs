@@ -359,7 +359,7 @@ propBindP c  = sepEndBy memberP semi
            <|> try (unc Meth <$> methP c)
            <|>     (    Call <$> callP c)
 
-data EltKind = Prop Symbol StaticKind Optionality RMutability RRType
+data EltKind = Prop Symbol StaticKind Optionality FieldAsgn RRType
              | Meth Symbol StaticKind Optionality RMutability RRType
              | Call RRType
              | Ctor RRType
@@ -370,10 +370,10 @@ data EltKind = Prop Symbol StaticKind Optionality RMutability RRType
 eltKindsToTypeMembers :: [EltKind] -> TypeMembersQ RK F.Reft
 eltKindsToTypeMembers = foldl' go mempty
   where
-    go ms (Prop f InstanceK o m t) = ms { tm_prop  = F.insertSEnv f (FI o m t) (tm_prop  ms) }
-    go ms (Prop f StaticK   o m t) = ms { tm_sprop = F.insertSEnv f (FI o m t) (tm_sprop ms) }
-    go ms (Meth n InstanceK o m t) = ms { tm_meth  = insert (tm_meth  ms) n o (m,t) }
-    go ms (Meth n StaticK   o m t) = ms { tm_smeth = insert (tm_smeth ms) n o (m,t) }
+    go ms (Prop f InstanceK o m t) = ms { i_mems = F.insertSEnv f (FI o m t) (i_mems ms) }
+    go ms (Prop f StaticK   o m t) = ms { s_mems = F.insertSEnv f (FI o m t) (s_mems ms) }
+    go ms (Meth n InstanceK o m t) = ms { i_mems = insert (i_mems ms) n o (m,t) }
+    go ms (Meth n StaticK   o m t) = ms { s_mems = insert (s_mems ms) n o (m,t) }
     go ms (Call t) = ms { tm_call = Just t `mappend` tm_call ms }
     go ms (Ctor t) = ms { tm_ctor = Just t }
     go ms (SIdx t) = ms { tm_sidx = Just t }
@@ -399,18 +399,20 @@ indexP = xyP id colon sn
     id = symbol <$> (try lowerIdP <|> upperIdP)
     sn = withinSpacesP (string "string" <|> string "number")
 
--- | [STATIC] f[?]: [MUTABILITY] t
+-- | [STATIC] [@ASSIGNABILITY] f[?]: t
 --
---    Default value for [MUTABILITY] is Mutable
+--  e.g.
+--
+--      static
 --
 propP c
   = do  s     <- option InstanceK (reserved "static" *> return StaticK)
+        a     <- withinSpacesP fieldAsgnP
         x     <- symbol <$> withinSpacesP binderP
         o     <- option Req (withinSpacesP (char '?') *> return Opt)
         _     <- colon
-        m     <- option ambMut (mutabilityP c)
         t     <- bareTypeP c
-        return $ (x, s, o, m, t)
+        return $ (x, s, o, a, t)
   where
     ambMut | Just b <- pctx_mut c = TVar (btvToTV b) fTop
            | otherwise            = trIM
@@ -445,7 +447,11 @@ methMutabilityP =  try (reserved "@Mutable"       >> return trMU)
                <|> try (reserved "@Immutable"     >> return trIM)
                <|> try (reserved "@ReadOnly"      >> return trRO)
                <|> try (reserved "@AssignsFields" >> return trAF)
-               <|>     (                             return trRO)   -- default
+               <|>     (                             return trRO)       -- default
+
+fieldAsgnP      =  try (reserved "@Assignable"    >> return Assignable)
+               <|> try (reserved "@Final"         >> return Final     )
+               <|>     (                             return Inherited ) -- default
 
 dummyP ::  Parser (F.Reft -> b) -> Parser b
 dummyP fm = fm `ap` topP

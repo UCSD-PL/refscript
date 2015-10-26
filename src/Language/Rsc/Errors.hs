@@ -61,6 +61,7 @@ bugConsSigMissing l           = mkErr l $ printf "BUG: Constructor signature mis
 bugClassDefNotFound l x       = mkErr l $ printf "BUG: Class definition for '%s' not found." (ppshow x)
 bugEnvFindTy l x              = mkErr l $ printf "BUG: envFindTy failed to find binding '%s'" (ppshow x)
 bugZipType l t1 t2            = mkErr l $ printf "BUG: zipType of types '%s' and '%s'" (ppshow t1) (ppshow t2)
+bugGetMutability l t          = mkErr l $ printf "BUG: Cannot get mutability from type '%s'." (ppshow t)
 
 
 ---------------------------------------------------------------------------
@@ -133,9 +134,8 @@ errorFuncSubtype l t t'       = mkErr l $ printf "Function type '%s' is not a su
 errorCallNotSup l fn ft es ts = mkErr l $ printf "Cannot call '%s' of type '%s' with argument(s): %s of type: %s" (ppshow fn) (ppshow ft)
                                                   (show $ intersperse comma $ map pp es)
                                                   (show $ intersperse comma $ map pp ts)
-errorCallNotFound l e f       = mkErr l $ printf "Cannot find callable property '%s' of object '%s'." (ppshow f) (ppshow e)
+errorCallNotFound l e f       = mkErr l $ printf "Cannot find callable property '%s' of type '%s'." (ppshow f) (ppshow e)
 errorCallMatch l fn ts        = mkErr l $ printf "Could not match call to '%s' to a particular signature. Argument(s) with types '%s' are invalid." (ppshow fn) (ppshow ts)
-errorCallReceiver l e f       = mkErr l $ printf "Could not call method '%s' of '%s'." (ppshow f) (ppshow e)
 errorTypeArgsNum l n p q      = mkErr l $ printf "Type %s expects %s arguments but %s were provided" (ppshow n) (ppshow p) (ppshow q)
 errorClassMissing l x         = mkErr l $ printf "Cannot call 'new' on non-existing class '%s'." (ppshow x)
 errorParentClassMissing l x y = mkErr l $ printf "Class '%s' cannot extend missing class '%s'." (ppshow x) (ppshow y)
@@ -165,8 +165,7 @@ errorTypeParamConstr l f t c  = mkErr l $ printf "Call to function '%s' with typ
 -- Lookup
 errorEnumLookup l e n         = mkErr l $ printf "Cannot find member '%s' in enumeration '%s'" (ppshow n) (ppshow e)
 errorPrimLookup l e n         = mkErr l $ printf "Cannot find member '%s' in primitive type '%s'" (ppshow n) (ppshow e)
-errorMethLookup l t m         = mkErr l $ printf "Cannot find method member '%s' in type '%s'" (ppshow m) (ppshow t)
-errorFieldLookup l t f        = mkErr l $ printf "Cannot find field member '%s' in type '%s'" (ppshow f) (ppshow t)
+errorMemLookup l t m          = mkErr l $ printf "Cannot find member '%s' in type '%s'" (ppshow m) (ppshow t)
 errorGenericLookup l t f      = mkErr l $ printf "Cannot find member '%s' in type '%s'" (ppshow f) (ppshow t)
 errorAmbientLookup l t f      = mkErr l $ printf "Cannot find member '%s' in ambient element '%s'" (ppshow f) (ppshow t)
 errorUnionLookup l t f        = mkErr l $ printf "Cannot find member '%s' in any part of the union '%s'" (ppshow f) (ppshow t)
@@ -206,6 +205,9 @@ errorVariadicNoArgs l f       = mkErr l $ printf "Cannot make variadic call '%s'
 errorConflateTypeMembers l es = mkErr l $ printf "Cannot conflate type members '%s'." (ppshow es)
 errorCallSuperOnNonClass l x  = mkErr l $ printf "Cannot call 'super' on non class type '%s'." (ppshow x)
 errorAssignsFields l x t      = mkErr l $ printf "Variable '%s' with type '%s' can only be assigned fields or returned." (ppshow x) (ppshow t)
+errorFinalField l f t         = mkErr l $ printf "Cannot assign final field '%s' of type '%s'." (ppshow f) (ppshow t)
+errorImmutableRefAsgn l f t   = mkErr l $ printf "Cannot assign field '%s' through non-mutable reference of type '%s' [Hint: try making field '%s' assignable]." (ppshow f) (ppshow t) (ppshow f)
+errorCallOptional l m t       = mkErr l $ printf "Cannot call optional field '%s' of type '%s'." (ppshow m) (ppshow t)
 
 errorUnionMergePrims l t a b  = mkErr l $ printf "In type '%s', cannot merge primitive types '%s' and '%s'." (ppshow t) (ppshow a) (ppshow b)
 errorUnionMergeVars l t a b   = mkErr l $ printf "In type '%s', cannot merge type variables '%s' and '%s'." (ppshow t) (ppshow a) (ppshow b)

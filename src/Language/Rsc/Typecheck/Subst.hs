@@ -90,17 +90,15 @@ instance Free (TGen r) where
   free (Gen _ ts)           = free ts
 
 instance Free (TypeMembers r) where
-  free (TM fs ms sfs sms cl ct s n)
-                            = S.unions [free fs, free ms, free sfs, free sms,
+  free (TM ms sms cl ct s n)
+                            = S.unions [free ms, free sms,
                                         free cl, free ct, free s, free n]
 
 instance Free t => Free (F.SEnv t) where
   free                      = free . map snd . F.toListSEnv
 
-instance Free (FieldInfo r) where
+instance Free (TypeMember r) where
   free (FI _ _ t)           = free t
-
-instance Free (MethodInfo r) where
   free (MI _ mts)           = free $ map snd mts
 
 instance Free a => Free [a] where
@@ -115,10 +113,9 @@ instance Free (Cast r) where
 instance Free (Fact r) where
   free (PhiVarTy (_,t))     = free t
   free (TypInst _ _ ts)     = free ts
-  free (EltOverload _ t)    = free t
+  free (EltOverload _ t t') = free [t, t']
   free (VarAnn _ _ t )      = free t
-  free (FieldAnn f)         = free f
-  free (MethAnn m)          = free m
+  free (MemberAnn f)        = free f
   free (CtorAnn c)          = free c
   free (UserCast t)         = free t
   free (SigAnn _ c)         = free c
@@ -182,25 +179,22 @@ instance F.Reftable r => SubstitutableQ q r (CastQ q r) where
   apply θ (CDn t t')  = CDn (apply θ t) (apply θ t')
 
 instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
-  apply θ (PhiVarTy (v,t))  = PhiVarTy . (v,) $ apply θ t
-  apply θ (TypInst i ξ ts)  = TypInst i ξ     $ apply θ ts
-  apply θ (EltOverload ξ t) = EltOverload ξ   $ apply θ t
-  apply θ (VarAnn l a t)    = VarAnn l a      $ apply θ t
-  apply θ (FieldAnn f)      = FieldAnn        $ apply θ f
-  apply θ (MethAnn t)       = MethAnn         $ apply θ t
-  apply θ (CtorAnn t)       = CtorAnn         $ apply θ t
-  apply θ (UserCast t)      = UserCast        $ apply θ t
-  apply θ (SigAnn l t)      = SigAnn l        $ apply θ t
-  apply θ (TCast ξ t)       = TCast ξ         $ apply θ t
-  apply θ (ClassAnn l t)    = ClassAnn l      $ apply θ t
-  apply θ (InterfaceAnn t)  = InterfaceAnn    $ apply θ t
-  apply _ a                 = a
+  apply θ (PhiVarTy (v,t))     = PhiVarTy . (v,) $ apply θ t
+  apply θ (TypInst i ξ ts)     = TypInst i ξ     $ apply θ ts
+  apply θ (EltOverload ξ t t') = EltOverload ξ (apply θ t) (apply θ t')
+  apply θ (VarAnn l a t)       = VarAnn l a      $ apply θ t
+  apply θ (MemberAnn f)        = MemberAnn       $ apply θ f
+  apply θ (CtorAnn t)          = CtorAnn         $ apply θ t
+  apply θ (UserCast t)         = UserCast        $ apply θ t
+  apply θ (SigAnn l t)         = SigAnn l        $ apply θ t
+  apply θ (TCast ξ t)          = TCast ξ         $ apply θ t
+  apply θ (ClassAnn l t)       = ClassAnn l      $ apply θ t
+  apply θ (InterfaceAnn t)     = InterfaceAnn    $ apply θ t
+  apply _ a                    = a
 
-instance F.Reftable r => SubstitutableQ q r (MethodInfoQ q r) where
+instance F.Reftable r => SubstitutableQ q r (TypeMemberQ q r) where
+  apply θ (FI ms m t)       = FI ms m (apply θ t)
   apply θ (MI o mts)        = MI o (mapSnd (apply θ) <$> mts)
-
-instance F.Reftable r => SubstitutableQ q r (FieldInfoQ q r) where
-  apply θ (FI ms m t)       = FI ms (apply θ m) (apply θ t)
 
 instance SubstitutableQ q r a => SubstitutableQ q r (Maybe a) where
   apply θ (Just a)          = Just $ apply θ a
@@ -216,10 +210,10 @@ instance F.Reftable r => SubstitutableQ q r (BTVarQ q r) where
   apply θ (BTV s l c)       = BTV s l $ apply θ c
 
 instance F.Reftable r => SubstitutableQ q r (TypeMembersQ q r) where
-  apply θ (TM fs ms sfs sms cl ct s n)
-                            = TM (apply θ fs) (apply θ ms)
-                                 (apply θ sfs) (apply θ sms)
-                                 (apply θ cl) (apply θ ct) (apply θ s) (apply θ n)
+  apply θ (TM ms sms cl ct s n)
+                            = TM (apply θ ms) (apply θ sms)
+                                 (apply θ cl) (apply θ ct)
+                                 (apply θ s) (apply θ n)
 
 instance SubstitutableQ q r a => SubstitutableQ q r (F.SEnv a) where
   apply                     = fmap . apply
@@ -288,14 +282,12 @@ instance (F.Reftable r) => Eq (TGen r) where
   Gen n ts    == Gen n' ts'    = n == n' && ts == ts'
 
 instance (F.Reftable r) => Eq (TypeMembers r) where
-  TM p m sp sm c k s n == TM p' m' sp' sm' c' k' s' n' =
-    p == p' && m == m' && sp == sp' && sm == sm' && c == c' && k == k' && s == s' && n == n'
+  TM m sm c k s n == TM m' sm' c' k' s' n' =
+    m == m' && sm == sm' && c == c' && k == k' && s == s' && n == n'
 
-instance (F.Reftable r) => Eq (FieldInfo r) where
+instance (F.Reftable r) => Eq (TypeMember r) where
   FI k t1 t2 == FI k' t1' t2' = k == k' && t1 == t1' && t2 == t2'
-
-instance (F.Reftable r) => Eq (MethodInfo r) where
-  MI k mts == MI k' mts' = k == k' && mts == mts'
+  MI k mts   == MI k' mts'    = k == k' && mts == mts'
 
 instance (F.Reftable r) => Eq (Bind r) where
   B x t == B x' t' = x == x' && t == t'

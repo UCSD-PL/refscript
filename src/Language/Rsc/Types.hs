@@ -111,26 +111,28 @@ data BindQ q r        = B { b_sym  :: F.Symbol
                           }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data TypeMembersQ q r = TM { tm_prop  :: F.SEnv (FieldInfoQ q r)      -- Properties
-                           , tm_meth  :: F.SEnv (MethodInfoQ q r)     -- Method signatures
-                           , tm_sprop :: F.SEnv (FieldInfoQ q r)      -- Static Properties
-                           , tm_smeth :: F.SEnv (MethodInfoQ q r)     -- Static Method signatures
-                           , tm_call  :: Maybe (RTypeQ q r)           -- Call signatures
-                           , tm_ctor  :: Maybe (RTypeQ q r)           -- Contructor signatures
-                           , tm_sidx  :: Maybe (RTypeQ q r)           -- String indexer
-                           , tm_nidx  :: Maybe (RTypeQ q r)           -- Numeric indexer
+data TypeMembersQ q r = TM { i_mems  :: F.SEnv (TypeMemberQ q r)    -- Instance Members
+                           , s_mems  :: F.SEnv (TypeMemberQ q r)    -- Static members
+                           , tm_call :: Maybe (RTypeQ q r)           -- Call signatures
+                           , tm_ctor :: Maybe (RTypeQ q r)           -- Contructor signatures
+                           , tm_sidx :: Maybe (RTypeQ q r)           -- String indexer
+                           , tm_nidx :: Maybe (RTypeQ q r)           -- Numeric indexer
                            }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data FieldInfoQ q r   = FI Optionality                                -- Optional
-                           (RTypeQ q r)                               -- Mutability
-                           (RTypeQ q r)                               -- Type
-                        deriving (Data, Typeable, Functor, Foldable, Traversable)
-
-data MethodInfoQ q r  = MI { m_opt :: Optionality                     -- Optional
+data TypeMemberQ q r  = FI                                        -- Field Members
+                           { f_opt :: Optionality                     -- Optional
+                           , f_asg :: FieldAsgn                       -- Assignability
+                           , f_ty  :: RTypeQ q r                      -- Type
+                           }
+                      | MI                                        -- Method Members
+                           { m_opt :: Optionality                     -- Optional
                            , m_ty  :: [(MutabilityQ q r, RTypeQ q r)] -- [(Mutability, Type)]
                            }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
+
+data FieldAsgn        = Assignable | Final | Inherited
+                        deriving (Data, Typeable, Eq)
 
 type MutabilityQ q r  = RTypeQ q r
 type Mutability r     = MutabilityQ AK r
@@ -187,8 +189,7 @@ type BTVar r          = BTVarQ AK r
 
 type TypeDecl r       = TypeDeclQ AK r
 type TypeSig r        = TypeSigQ AK r
-type FieldInfo r      = FieldInfoQ AK r
-type MethodInfo r     = MethodInfoQ AK r
+type TypeMember r     = TypeMemberQ AK r
 type VarInfo r        = VarInfoQ AK r
 
 type Type             = RType ()
@@ -374,10 +375,10 @@ instance F.Symbolic (TypeSigQ q r) where
 -- | Monoid
 
 instance Monoid (TypeMembersQ q r) where
-  mempty = TM mempty mempty mempty mempty Nothing Nothing Nothing Nothing
-  TM f1 m1 sf1 sm1 c1 ct1 s1 n1 `mappend` TM f2 m2 sf2 sm2 c2 ct2 s2 n2
-    = TM (f1  `mappend` f2)  (m1  `mappend` m2)
-         (sf1 `mappend` sf2) (sm1 `mappend` sm2)
+  mempty = TM mempty mempty Nothing Nothing Nothing Nothing
+  TM m1 sm1 c1 ct1 s1 n1 `mappend` TM m2 sm2 c2 ct2 s2 n2
+    = TM (m1  `mappend` m2)
+         (sm1 `mappend` sm2)
          (c1 `orElse` c2) (ct1 `orElse` ct2)
          (s1 `orElse` s2) (n1 `orElse` n2)
     where
@@ -390,11 +391,11 @@ instance Monoid Initialization where
   _           `mappend` _             = Uninitialized
 
 
-instance Monoid (MethodInfo r) where
-  mempty                                = MI Req []
-  MI r t `mappend` MI r' t' | r == r'   = MI r   (t ++ t')
-                            | otherwise = MI Req (t ++ t')
-
+-- instance Monoid (MethodInfo r) where
+--   mempty                                = MI Req []
+--   MI r t `mappend` MI r' t' | r == r'   = MI r   (t ++ t')
+--                             | otherwise = MI Req (t ++ t')
+--
 
 --------------------------------------------------------------------------------
 -- | IContext keeps track of context of intersection-type cases

@@ -65,20 +65,16 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp (TExp e)        = pprint e
 
 instance (F.Reftable r, PP r) => PP (TypeMembersQ q r) where
-  pp (TM fs ms sfs sms cs cts sidx nidx)
-    = ppProp fs   $+$
-      ppMeth ms   $+$
-      ppSProp sfs $+$
-      ppSMeth sms $+$
+  pp (TM ms sms cs cts sidx nidx)
+    = ppMem  ms  $+$
+      ppSMem sms $+$
       ppCall cs   $+$
       ppCtor cts  $+$
       ppSIdx sidx $+$
       ppNIdx nidx
 
-ppProp  = sep . map (\(x, f) -> pp x <> pp f <> semi) . F.toListSEnv
-ppMeth  = sep . map (\(x, m) -> ppMI x m <> semi) . F.toListSEnv
-ppSProp = sep . map (\(x, f) -> pp "static" <+> pp x <> pp f <> semi) . F.toListSEnv
-ppSMeth = sep . map (\(x, m) -> pp "static" <+> ppMI x m <> semi) . F.toListSEnv
+ppMem  = sep . map (\(x, f) ->                 ppMI x f <> semi) . F.toListSEnv
+ppSMem = sep . map (\(x, f) -> pp "static" <+> ppMI x f <> semi) . F.toListSEnv
 
 ppCall optT | Just t <- optT = pp t              <> semi | otherwise = empty
 ppCtor optT | Just t <- optT = pp "new" <+> pp t <> semi | otherwise = empty
@@ -88,13 +84,17 @@ ppSIdx _        = empty
 ppNIdx (Just t) = pp "[x: number]:" <+> pp t <> semi
 ppNIdx _        = empty
 
-instance PPR r => PP (FieldInfoQ q r) where
-  pp (FI o m t) = pp o <> colon <+> brackets (ppMut m) <+> pp t
-
-instance PPR r => PP (MethodInfoQ q r) where
+instance PPR r => PP (TypeMemberQ q r) where
+  pp (FI o _ t) = pp o <> colon <+> pp t
   pp (MI o mts) = pp o <> vcat (map (\(m,t) -> brackets (pp m) <> pp t) mts)
 
+ppMI x (FI o m t) = pp m <+> pp x <> pp o <> colon <+> pp t
 ppMI x (MI o mts) = vcat (map (\(m,t) -> text "@" <> pp m <+> pp x <> pp o <> pp t) mts)
+
+instance PP FieldAsgn where
+  pp Assignable = pp "@Assignable"
+  pp _          = empty
+
 
 instance PP Optionality where
   pp Opt = text "?"

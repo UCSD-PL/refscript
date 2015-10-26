@@ -96,7 +96,7 @@ data FactQ q r
   | TCast         IContext (CastQ q r)
 
   -- Overloading
-  | EltOverload   IContext (MethodInfoQ q r)
+  | EltOverload   IContext (MutabilityQ q r) (RTypeQ q r)
   | Overload      IContext Int  -- Overload index
 
   -- ** SPECIFICATIONS **
@@ -106,8 +106,7 @@ data FactQ q r
   | VarAnn        Locality Assignability (Maybe (RTypeQ q r))
 
   -- Class member annotations
-  | FieldAnn      (FieldInfoQ q r)
-  | MethAnn       (MethodInfoQ q r)
+  | MemberAnn     (TypeMemberQ q r)
   | CtorAnn       (RTypeQ q r)
 
   -- User specifier casts
@@ -185,7 +184,7 @@ phiVarsAnnot l = concat [xs | PhiVar xs <- fFact l]
 scrapeVarDecl :: VarDecl (AnnSSA r) -> [(Locality, SyntaxKind, Assignability, Maybe (RType r))]
 ----------------------------------------------------------------------------------
 scrapeVarDecl (VarDecl l _ _)
-  = [ (loc, VarDeclKind, a, t)                | VarAnn loc a t      <- fFact l ]
- ++ [ (Local, FieldDeclKind, Ambient, Just t) | FieldAnn (FI _ _ t) <- fFact l ]
+  = [ (loc, VarDeclKind, a, t)                | VarAnn loc a t       <- fFact l ]
+ ++ [ (Local, FieldDeclKind, Ambient, Just t) | MemberAnn (FI _ _ t) <- fFact l ]
  -- PV: Assignability & Locality values are default for the field case
 

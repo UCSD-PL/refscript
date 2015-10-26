@@ -214,7 +214,7 @@ mkVarEnv = envMap snd
 -- declOfStmt :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
 --------------------------------------------------------------------------------
 declOfStmt (ClassStmt l c cs)
-  | [ts] <- cas = Right (cc, TD ts $ typeMembers cs)
+  | [ts] <- cas = Right (cc, TD ts $ extractTypeMembers cs)
   | otherwise   = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where
     cc     = fmap fSrc c
@@ -235,29 +235,32 @@ declOfStmt s         = Left $ F.Unsafe $ single
 
 -- | Given a list of class elements, returns a @TypeMembers@ structure
 --------------------------------------------------------------------------------
-typeMembers :: F.Reftable r => [ClassElt (AnnR r)] -> TypeMembers r
+extractTypeMembers :: F.Reftable r => [ClassElt (AnnR r)] -> TypeMembers r
 --------------------------------------------------------------------------------
-typeMembers cs = TM ps ms sps sms call ctor sidx nidx
+extractTypeMembers cs = TM ms sms call ctor sidx nidx
   where
-    ps         = F.fromListSEnv [ ( F.symbol x, f )
-                                  | MemberVarDecl  l False x _   <- cs
-                                  , FieldAnn f <- fFact l
-                                ]
-    sps        = F.fromListSEnv [ ( F.symbol x, f )
-                                  | MemberVarDecl  l True  x _   <- cs
-                                  , FieldAnn f <- fFact l
-                                ]
-    ms         = F.fromListSEnv [ ( F.symbol x, mconcat [ m | MethAnn m <- fFact l ] )
-                                  | MemberMethDecl l False x _ _ <- cs
-                                ]
-    sms        = F.fromListSEnv [ ( F.symbol x, mconcat [ m | MethAnn m <- fFact l ] )
-                                  | MemberMethDecl l True  x _ _ <- cs
-                                ]
-    call       = Nothing
-    ctor       = mkAndOpt [ t | Constructor l _ _ <- cs, CtorAnn t <- fFact l ]
-    -- XXX: This could be added
-    sidx       = Nothing
-    nidx       = Nothing
+    ms   = F.fromListSEnv
+         $ [ ( F.symbol x, m )
+             | MemberVarDecl l False x _ <- cs
+             , MemberAnn m <- fFact l
+           ] ++
+           [ ( F.symbol x, m )
+             | MemberMethDecl l False x _ _ <- cs
+             , MemberAnn m <- fFact l
+           ]
+    sms  = F.fromListSEnv
+         $ [ ( F.symbol x, m )
+             | MemberVarDecl l True  x _ <- cs
+             , MemberAnn m <- fFact l
+           ] ++
+           [ ( F.symbol x, m )
+             | MemberMethDecl l True  x _ _ <- cs
+             , MemberAnn m <- fFact l
+           ]
+    call = Nothing
+    ctor = mkAndOpt [ t | Constructor l _ _ <- cs, CtorAnn t <- fFact l ]
+    sidx = Nothing
+    nidx = Nothing
 
 --------------------------------------------------------------------------------
 -- fromModuleDef :: QEnv (ModuleDef r) -> ClassHierarchy r
@@ -353,11 +356,11 @@ expandType _ cha (TRef (Gen n []) _)
   | Just e <- resolveEnum cha n
   = Just $ TObj tIM (ms e) fTop
   where
-    ms  = tmFromFieldList . concatMap mkField . envToList . e_mapping
+    ms  = typeMembersFromList . concatMap mkField . envToList . e_mapping
     -- TODO
-    mkField (k, IntLit _ i) = [(k, FI Req tIM (tNum `strengthen` exprReft i))]
+    mkField (k, IntLit _ i) = [(k, FI Req Final (tNum `strengthen` exprReft i))]
     mkField (k, HexLit _ s) | Just e <- bitVectorValue s
-                            = [(k, FI Req tIM (tBV32 `strengthen` e))]
+                            = [(k, FI Req Final (tBV32 `strengthen` e))]
     mkField _               = []
 
 expandType _ _ t@(TRef _ _) | mutRelated t = Nothing
@@ -371,7 +374,7 @@ expandType _ cha t@(TRef (Gen n ts@(mut:_)) r)
     ms      =  expandWithSubst cha
            <$> resolveType cha n
            <*> return ts
-    fltInst = \(TM p m _ _ _ _ s n) -> TM p m mempty mempty Nothing Nothing s n
+    fltInst = \(TM m _ _ _ s n) -> TM m mempty Nothing Nothing s n
 
 -- | Ambient type: String, Number, etc.
 --
@@ -380,22 +383,22 @@ expandType _ cha t@(TRef (Gen n []) r)
   | otherwise         = (\m -> TObj tIM m r)           <$> ms
   where
     ms = typeMemersOfTDecl cha <$> resolveType cha n
-    fltInst (TM p m _ _ _ _ s n) = TM p m mempty mempty Nothing Nothing s n
+    fltInst (TM m _ _ _ s n) = TM m mempty Nothing Nothing s n
 
 expandType _ cha (TClass (BGen n ts))
   = (\m -> TObj tIM m fTop) . fltStat <$> ms
   where
     ms  = expandWithSubst cha <$> resolveType cha n <*> return ts'
     ts' = [ tVar $ TV x s | BTV x s _ <- ts ] -- these shouldn't matter anyway
-    fltStat (TM _ _ p m c k _ _) = TM mempty mempty p m c k Nothing Nothing
+    fltStat (TM _ m c k _ _) = TM mempty m c k Nothing Nothing
 
 expandType _ cha (TMod n)
-  = (\m -> TObj tIM m fTop) <$> tmFromFields
-                              .  fmap toFieldInfo
-                              .  m_variables
-                             <$> resolveModule cha n
+  = (\m -> TObj tIM m fTop) <$> typeMembers
+                             .  fmap toFieldInfo
+                             .  m_variables
+                            <$> resolveModule cha n
   where
-    toFieldInfo (val -> VI _ _ _ t) = FI Req tIM t
+    toFieldInfo (val -> VI _ _ _ t) = FI Req Final t
 
 -- Common cases end here. The rest are only valid if non-coercive
 expandType NonCoercive _ _ = Nothing
@@ -454,8 +457,8 @@ nonStaticFields (CHA g m modules) x
   = HS.toList . HS.unions $ HS.fromList . flds <$> ps
   where
     flds (QN p y) = [ s | ms      <- maybeToList $ qenvFindTy p modules
-                        , TD _ es <- maybeToList $ envFindTy y $ m_types ms
-                        , s       <- map fst $ F.toListSEnv $ tm_prop es ]
+                        , TD _ es <- maybeToList $ envFindTy y  $ m_types ms
+                        , s       <- map fst     $ F.toListSEnv $ i_mems  es ]
 
     ps            = [ n | cur <- maybeToList $ HM.lookup x m
                         , anc <- reachable cur g
@@ -470,7 +473,7 @@ inheritedNonStaticFields (CHA g m mod) x
   where
     flds (QN p y) = [ s | ms      <- maybeToList $ qenvFindTy p mod
                         , TD _ es <- maybeToList $ envFindTy  y $ m_types ms
-                        , s       <- map fst $ F.toListSEnv $ tm_prop es ]
+                        , s       <- map fst     $ F.toListSEnv $ i_mems  es ]
 
     ps            = [ n | cur <- maybeToList $ HM.lookup x m
                         , anc <- reachable cur g
@@ -498,7 +501,7 @@ boundKeys :: (ExprReftable Int r, PPR r)
 --------------------------------------------------------------------------------
 boundKeys cha t@(TRef _ _) | Just t <- expandType Coercive cha t = boundKeys cha t
                            | otherwise                         = []
-boundKeys _ (TObj _ es _)  = fst <$> F.toListSEnv (tm_prop es)
+boundKeys _ (TObj _ es _)  = fst <$> F.toListSEnv (i_mems es)
 boundKeys _ _              = []
 
 --------------------------------------------------------------------------------
@@ -506,7 +509,7 @@ immFields :: (ExprReftable Int r, PPR r)
           => ClassHierarchy r -> RType r -> [(F.Symbol, RType r)]
 --------------------------------------------------------------------------------
 immFields cha t | Just (TObj _ es _) <- expandType Coercive cha t
-                = [ (x,t) | (x, FI _ m t) <- F.toListSEnv $ tm_prop es, isIM m ]
+                = [ (x, t) | (x, FI _ Final t) <- F.toListSEnv $ i_mems es ]
                 | otherwise
                 = []
 

@@ -190,16 +190,14 @@ compareObjs l γ t1 t2 =
     (_       , Nothing ) -> SubErr [errorNonObjectType l t2]
 
 
-compareObjMembers l γ t1 (TM p1 m1 _ _ c1 k1 s1 n1) t2 (TM p2 m2 _ _ c2 k2 s2 n2)
-  = compareProps l γ t1 p1 t2 p2 <>
-    compareMeths l γ t1 m1 t2 m2 <>
+compareObjMembers l γ t1 (TM m1 _ c1 k1 s1 n1) t2 (TM m2 _ c2 k2 s2 n2)
+  = compareMems  l γ t1 m1 t2 m2 <>
     compareCalls l γ t1 c1 t2 c2 <>
     compareCtors l γ t1 k1 t2 k2 <>
     compareSIdxs l γ t1 s1 t2 s2 <>
     compareNIdxs l γ t1 n1 t2 n2
 
-compareProps = compareMembers compareProp
-compareMeths = compareMembers compareMeth
+compareMems = compareMembers compareMem
 
 compareMembers op l γ t1 p1 t2 p2
   | null diff12, null diff21                              -- Same exact fields in @t1@ and @t2@
@@ -214,18 +212,24 @@ compareMembers op l γ t1 p1 t2 p2
     diff12 = toListSEnv $ p1 `differenceSEnv` p2
     match  = toListSEnv $ intersectWithSEnv (,) p1 p2
 
-compareProp l γ (f, ff@(FI o1 m1 t1, FI o2 m2 t2))
+-- Take enclosing object into account??
+--
+--  TODO: check this!!!
+--
+--
+--
+compareMem l γ (f, ff@(FI o1 m1 t1, FI o2 m2 t2))
   | o1 /= o2
   = SubErr [errorIncompatOptional (srcPos l) f]
-  | isSubtype γ m1 m2 && isIM m2                          -- Co-Variance
+  | m1 == m2, m1 == Final                                 -- Co-Variance
   = compareTypes l γ t1 t2
-  | isSubtype γ m1 m2                                     -- Co-& Contra-Variance
+  | m1 == m2, m1 == Assignable                            -- Co-& Contra-Variance
   = compareTypes l γ t1 t2 <> compareTypes l γ t2 t1
   | otherwise
   = SubErr [errorIncompMutElt (srcPos l) f]
 
-compareMeth l γ (_, (m, m'))
-  = SubErr [unsupportedMethodComp (srcPos l) m m']
+compareMem l _ (_, (m1@(MI _ _), m2@(MI _ _)))
+  = SubErr [unsupportedMethodComp (srcPos l) m1 m2]
 
 
 compareMaybe l γ f _ _ (Just c1) _ (Just c2) = f l γ c1 c2

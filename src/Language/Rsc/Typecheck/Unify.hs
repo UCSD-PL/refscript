@@ -144,16 +144,14 @@ unifyMembers :: Unif r
              -> TypeMembers r
              -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
-unifyMembers l γ θ (TM p1 m1 _ _ c1 k1 s1 n1) (TM p2 m2 _ _ c2 k2 s2 n2)
-  = do  θ1 <- unifys l γ θ p1s  p2s
-        θ2 <- unifys l γ θ1 m1s m2s
-        unifys l γ θ2 r1s r2s
+unifyMembers l γ θ (TM m1 _ c1 k1 s1 n1) (TM m2 _ c2 k2 s2 n2)
+  = do  θ1 <- unifys l γ θ m1s m2s
+        unifys l γ θ1 r1s r2s
   where
-    (p1s , p2s) = unzip $ concatMap fromFI $ F.toListSEnv $ F.intersectWithSEnv (,) p1 p2
     (m1s , m2s) = unzip $ concatMap fromMI $ F.toListSEnv $ F.intersectWithSEnv (,) m1 m2
 
-    fromFI (_, (FI _ t1 t2, FI _ t1' t2')) = [(t1, t1'), (t2, t2')]
-    fromMI (_, (MI _ mts  , MI _ mts'   )) = map snd mts `zip` map snd mts'
+    fromFI (_, (FI _ _ t, FI _ _ t')) = [(t, t')]
+    fromMI (_, (MI _ mts, MI _ mts')) = map snd mts `zip` map snd mts'
     fromBoth (Just a1, Just a2)  = [(a1,a2)]
     fromBoth _                   = []
     (r1s, r2s)  = unzip $ concatMap fromBoth [(c1,c2),(k1,k2),(n1,n2)]

@@ -187,7 +187,7 @@ initClassCtorEnv (TS _ (BGen nm bs) _) γ
     --        checks at the return from the constructor.
     exitTy   = mkFun (bs, xts, tThis)
     xts      | Just (TObj _ ms _) <- expandType Coercive (envCHA γ) tThis
-             = sortBy c_sym [ B x t | (x, FI _ _ t) <- F.toListSEnv $ tm_prop ms ]
+             = sortBy c_sym [ B x t | (x, FI _ _ t) <- F.toListSEnv $ i_mems ms ]
              | otherwise
              = []
     c_sym    = on compare b_sym

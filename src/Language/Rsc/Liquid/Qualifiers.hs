@@ -58,8 +58,8 @@ scrapeQuals qs ss = qs ++ qualifiers (mkUq $ foldStmts tbv [] ss)
     gos _ _                      = []
 
     goe _ (Constructor l _ _)        = [(x, t) | CtorAnn  t <- fFact l, let x = Id l "ctor" ]
-    goe _ (MemberVarDecl l _ x _)    = [(x, t) | FieldAnn (T.FI _ _ t) <- fFact l ]
-    goe _ (MemberMethDecl l _ x _ _) = [(x, t) | MethAnn  (T.MI _ mts) <- fFact l, (_, t) <- mts ]
+    goe _ (MemberVarDecl l _ x _)    = [(x, t) | MemberAnn (T.FI _ _ t) <- fFact l ]
+    goe _ (MemberMethDecl l _ x _ _) = [(x, t) | MemberAnn (T.MI _ mts) <- fFact l, (_, t) <- mts ]
 
 mkUq = zipWith tx ([0..] :: [Int])
   where

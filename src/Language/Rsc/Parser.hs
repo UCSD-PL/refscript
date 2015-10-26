@@ -149,8 +149,8 @@ extractFact fs = map go fs
     go (ModuleSpec t)                      = Just $ ModuleAnn loc t
     go (ConstructorSpec t)                 = Just $ CtorAnn t
     go (CastSpec _ t)                      = Just $ UserCast t
-    go (FieldSpec f)                       = Just $ FieldAnn f
-    go (MethodSpec m)                      = Just $ MethAnn m
+    go (FieldSpec f)                       = Just $ MemberAnn f
+    go (MethodSpec m)                      = Just $ MemberAnn m
     go _                                   = Nothing
 
 

@@ -35,7 +35,7 @@ module Language.Rsc.Typecheck.Types (
 
   -- * Mutability primitives
   , tMU, tUM, tIM, tAF, tRO, trMU, trIM, trAF, trRO
-  , isRO, isMU, isIM, isUM, isUMRef, mutRelated, mutRelatedBVar
+  , isRO, isMU, isIM, isUM, isAF, isUMRef, mutRelated, mutRelatedBVar
 
   -- * Primitive Types
 
@@ -53,7 +53,7 @@ module Language.Rsc.Typecheck.Types (
   , fTop
 
   -- * Type Definitions
-  , tmFromFields, tmFromFieldList, typesOfTM
+  , typeMembers, typeMembersFromList, typesOfTM
 
   -- * Operator Types
   , infixOpId, prefixOpId, builtinOpId, arrayLitTy, objLitTy, finalizeTy
@@ -114,6 +114,7 @@ isRO  = isNamed "ReadOnly"
 isMU  = isNamed "Mutable"
 isIM  = isNamed "Immutable"
 isUM  = isNamed "UniqueMutable"
+isAF  = isNamed "AssignsFields"
 
 isUMRef t | TRef (Gen _ (m:_)) _ <- t, isUM m
           = True
@@ -219,7 +220,7 @@ mkUnion :: F.Reftable r => [RTypeQ q r] -> RTypeQ q r
 ----------------------------------------------------------------------------------------
 mkUnion [ ] = TPrim TBot fTop
 mkUnion [t] = t
-mkUnion ts  = flattenUnions $ TOr ts
+mkUnion ts  = flattenUnions $ TOr $ filter (not . isTBot) ts
 
 ----------------------------------------------------------------------------------------
 bkUnion :: RTypeQ q t -> [RTypeQ q t]
@@ -279,6 +280,7 @@ isTPrim t  | TPrim _ _ <- t = True | otherwise = False
 
 isTTop    = isPrim TTop
 isTUndef  = isPrim TUndefined
+isTBot    = isPrim TBot
 isTNull   = isPrim TNull
 isTAny    = isPrim TAny
 isTVoid   = isPrim TVoid
@@ -413,13 +415,11 @@ freshBTV l s b n  = (bv,t)
 --------------------------------------------------------------------------------------------
 objLitTy         :: (F.Reftable r, IsLocated a) => a -> [Prop a] -> RType r
 --------------------------------------------------------------------------------------------
-objLitTy l ps     = mkFun (vs, bs, rt)
+objLitTy l ps     = mkFun (avs, bs, rt)
   where
-    vs            = mvs ++ avs
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
     rt            = TObj tIM tms fTop
-    tms           = tmFromFieldList [ (s, FI Req m a) | (s,m,a) <- zip3 ss mts ats ]
-    (mvs, mts)    = unzip $ map (freshBTV l mSym Nothing) [1..length ps]  -- field mutability
+    tms           = typeMembersFromList [ (s, FI Req Final a) | (s, a) <- zip ss ats ]
     (avs, ats)    = unzip $ map (freshBTV l aSym Nothing) [1..length ps]  -- field type vars
     ss            = [F.symbol p | p <- ps]
     mSym          = F.symbol "M"
@@ -462,28 +462,32 @@ immObjectLitTy ps ts | length ps == length ts
                      | otherwise
                      = error "Mismatched args for immObjectLit"
   where
-    elts = tmFromFieldList [ (F.symbol p, FI Req tIM t) | (p,t) <- safeZip "immObjectLitTy" ps ts ]
+    elts = typeMembersFromList [ ( F.symbol p
+                             , FI Req Final t )
+                             | (p,t) <- safeZip "immObjectLitTy" ps ts
+                           ]
 
 --------------------------------------------------------------------------------------------
-tmFromFields :: F.SEnv (FieldInfoQ q r) -> TypeMembersQ q r
+typeMembers :: F.SEnv (TypeMemberQ q r) -> TypeMembersQ q r
 --------------------------------------------------------------------------------------------
-tmFromFields f = TM f mempty mempty mempty Nothing Nothing Nothing Nothing
+typeMembers f = TM f mempty Nothing Nothing Nothing Nothing
 
 --------------------------------------------------------------------------------------------
-tmFromFieldList :: F.Symbolic s => [(s, FieldInfo r)] -> TypeMembers r
+typeMembersFromList :: F.Symbolic s => [(s, TypeMember r)] -> TypeMembers r
 --------------------------------------------------------------------------------------------
-tmFromFieldList f = TM (F.fromListSEnv $ mapFst F.symbol <$> f)
-                     mempty mempty mempty Nothing Nothing Nothing Nothing
+typeMembersFromList f = TM (F.fromListSEnv $ mapFst F.symbol <$> f)
+                           mempty Nothing Nothing Nothing Nothing
 
 --------------------------------------------------------------------------------------------
 typesOfTM :: TypeMembers r -> [RType r]
 --------------------------------------------------------------------------------------------
-typesOfTM (TM p m sp sm c k s n) =
-  concatMap (\(FI _ t t') -> [t,t']     ) (map snd $ F.toListSEnv p) ++
-  concatMap (\(MI _ mts ) -> map snd mts) (map snd $ F.toListSEnv m) ++
-  concatMap (\(FI _ t t') -> [t,t']     ) (map snd $ F.toListSEnv sp) ++
-  concatMap (\(MI _ mts ) -> map snd mts) (map snd $ F.toListSEnv sm) ++
+typesOfTM (TM m sm c k s n) =
+  concatMap typesOfMem (map snd $ F.toListSEnv m ) ++
+  concatMap typesOfMem (map snd $ F.toListSEnv sm) ++
   concatMap maybeToList [c, k, s, n]
+
+typesOfMem (FI _ _ t) = [t]
+typesOfMem (MI _ mts) = map snd mts
 
 ---------------------------------------------------------------------------------
 returnTy :: F.Reftable r => RType r -> Bool -> RType r

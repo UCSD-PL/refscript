@@ -20,7 +20,7 @@ module Language.Nano.Misc (
   , setFst3, setSnd3, setThd3
   , setFst4, setSnd4, setThd4, setFth4
   , appFst4, appSnd4, appThd4, appFth4
-  , mapPair
+  , mapPair, mapEither
 
   -- SYB
   , everywhereM'
@@ -101,6 +101,16 @@ mapPairM f g (x,y) =  liftM2 (,) (f x) (g y)
 mapPair :: (a -> b) -> (a, a) -> (b, b)
 -------------------------------------------------------------------------------
 mapPair f (x, y) = (f x, f y)
+
+-------------------------------------------------------------------------------
+mapEither           :: (a -> Either b c) -> [a] -> ([b], [c])
+-------------------------------------------------------------------------------
+mapEither f         = go [] []
+  where
+    go ls rs []     = (reverse ls, reverse rs)
+    go ls rs (x:xs) = case f x of
+                        Left l  -> go (l:ls) rs  xs
+                        Right r -> go ls  (r:rs) xs
 
 -------------------------------------------------------------------------------
 mkEither :: Bool -> s -> a -> Either s a

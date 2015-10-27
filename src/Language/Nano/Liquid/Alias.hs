@@ -7,7 +7,7 @@ import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import           Data.Generics
 
-import           Control.Applicative ((<$>))
+-- import           Control.Applicative ((<$>))
 import           Control.Monad
 import           Control.Monad.State
 
@@ -164,7 +164,7 @@ solve :: (IsLocated a)
 
 solve defs deps exF = ex_solved $ execState act st0
   where
-    st0             = ExS defs envEmpty
+    st0             = ExS defs mempty -- envEmpty
     xs              = [x `at` d | (x, d) <- envToList defs]
     act             = forM_ xs $ solveM deps exF []
 

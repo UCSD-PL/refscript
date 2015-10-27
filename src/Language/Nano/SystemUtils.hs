@@ -33,6 +33,7 @@ import           GHC.Exts                           (groupWith, sortWith)
 import           Language.Fixpoint.Files()
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc             (inserts)
+import           Language.Fixpoint.Names            (symbolString)
 import qualified Language.Fixpoint.Types    as F
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Syntax.PrettyPrint
@@ -125,7 +126,7 @@ eInfo msg err                     = (srcPos $ errLoc err', errMsg err')
     err'                          = catMessage err msg
 
 mkAnnMapTyp (AI m)
-  = M.map (\a -> (F.symbolString $ ann_bind a, render $ pp (ann_type a)))
+  = M.map (\a -> (symbolString $ ann_bind a, render $ pp (ann_type a)))
   $ M.fromList
   $ map (head . sortWith (srcSpanEndCol . fst))
   $ groupWith (lineCol . fst)

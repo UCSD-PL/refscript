@@ -71,6 +71,7 @@ import qualified Data.Map.Strict                as M
 import qualified Data.List                      as L
 import           Data.Function                  (on)
 import           Text.PrettyPrint.HughesPJ
+import           Language.Nano.Misc             (concatMapM)
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Annots
@@ -88,6 +89,7 @@ import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Liquid.Environment
 import           Language.Nano.Liquid.Types
 
+import           Language.Fixpoint.Names (symbolText)
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Errors
@@ -408,7 +410,7 @@ addInvariant g t
     typeofReft                = F.reft  (vv t) $ F.pAnd [ typeofExpr $ F.symbol "function"
                                                         , F.eProp    $ vv t                ]
     typeofExpr s              = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
-                                             (F.expr $ F.symbolText s)
+                                             (F.expr $ symbolText s)
 
     ofRef (F.Reft (s, ra))    = F.reft s <$> F.raConjuncts ra
 
@@ -416,7 +418,7 @@ addInvariant g t
     hasProp ty                = t `nubstrengthen` keyReft (boundKeys g ty)
     keyReft ks                = F.reft (vv t) $ F.pAnd (F.PBexp . hasPropExpr <$> ks)
     hasPropExpr s             = F.EApp (F.dummyLoc (F.symbol "hasProperty"))
-                                [F.expr (F.symbolText s), F.eVar $ vv t]
+                                [F.expr (symbolText s), F.eVar $ vv t]
 
     -- | extends class / interface
     hierarchy t@(TRef c _ _)  | isClassType g t
@@ -430,7 +432,7 @@ addInvariant g t
     rExtClass t cs            = F.reft (vv t) (F.pAnd $ refa t "extends_class"     <$> cs)
     rExtIface t cs            = F.reft (vv t) (F.pAnd $ refa t "extends_interface" <$> cs)
 
-    refa t s c                = F.PBexp $ F.EApp (sym s) [ F.expr $ rTypeValueVar t, F.expr $ F.symbolText c]
+    refa t s c                = F.PBexp $ F.EApp (sym s) [ F.expr $ rTypeValueVar t, F.expr $ symbolText c]
     vv                        = rTypeValueVar
     sym s                     = F.dummyLoc $ F.symbol s
 
@@ -973,7 +975,7 @@ bsplitC' g ci t1 t2
     typeofReft t   = F.reft (vv t) $ F.pAnd [ typeofExpr (F.symbol "function") t
                                             , F.eProp $ vv t ]
     typeofExpr s t = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
-                                  (F.expr $ F.symbolText s)
+                                  (F.expr $ symbolText s)
     vv             = rTypeValueVar
 
 instance PP (F.SortedReft) where

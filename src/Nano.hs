@@ -10,7 +10,6 @@ import qualified Language.Nano.Liquid.Types         as L
 
 import           System.Console.CmdArgs     hiding  (Loud)
 
-
 import           Data.Aeson                         (eitherDecode)
 import           Data.Aeson.Types            hiding (Parser, Error, parse)
 import           Language.Nano.CmdLine

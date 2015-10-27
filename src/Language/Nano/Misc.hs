@@ -1,7 +1,5 @@
-{-# LANGUAGE DeriveDataTypeable               #-}
 {-# LANGUAGE FlexibleInstances                #-}
-{-# LANGUAGE Rank2Types                       #-} 
-{-# LANGUAGE Rank2Types                       #-} 
+{-# LANGUAGE Rank2Types                       #-}
 {-# LANGUAGE LambdaCase                       #-}
 {-# LANGUAGE NoMonomorphismRestriction        #-}
 {-# OPTIONS_GHC -fno-warn-incomplete-patterns #-}
@@ -22,42 +20,45 @@ module Language.Nano.Misc (
   , setFst3, setSnd3, setThd3
   , setFst4, setSnd4, setThd4, setFth4
   , appFst4, appSnd4, appThd4, appFth4
+  , mapPair
 
   -- SYB
   , everywhereM'
-  
+
   -- Zip
   , zipWith3M, zipWith3M_
   , unzip4
 
   -- Maybe
   , maybeM, maybeM_, fromJust', maybeToEither, mseq
-                                               
+
   -- Container operations
   , isProperSubsetOf, isEqualSet, isProperSubmapOf
   , equalKeys
 
   -- * Error message
+  , errortext
   , convertError
 
   , foldM1
-  
-  , withSingleton, withSingleton'
+
+  -- * Singleton Lists
+  , single, withSingleton, withSingleton'
 
   , dup
 
-  , mappendM, justM
+  , concatMapM, mappendM, justM
 
   , case1, case2, case3
   , (<##>), (<###>)
 
 ) where
 
-import           Control.Applicative                  ((<$>))
+-- import           Control.Applicative                  ((<$>))
 import           Control.Monad                        (liftM2, foldM)
 import           Data.Data
 import           Data.Maybe                           (isJust)
-import           Data.Monoid                          (Monoid, mappend)
+-- import           Data.Monoid                          (Monoid, mappend)
 import           Data.Generics.Aliases
 import           Data.HashSet
 import           Data.Function                        (on)
@@ -71,7 +72,7 @@ import           Language.Nano.Syntax.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 
 -------------------------------------------------------------------------------
-mapi :: (Int -> a -> b) -> [a] -> [b] 
+mapi :: (Int -> a -> b) -> [a] -> [b]
 -------------------------------------------------------------------------------
 mapi f          = go 0
   where
@@ -83,17 +84,23 @@ mapi f          = go 0
 -------------------------------------------------------------------------------
 mapFstM :: (Functor m, Monad m) => (a -> m c) -> (a, b) -> m (c, b)
 -------------------------------------------------------------------------------
-mapFstM f = mapPairM f return  
+mapFstM f = mapPairM f return
 
 -------------------------------------------------------------------------------
 mapSndM :: (Functor m, Monad m) => (b -> m c) -> (a, b) -> m (a, c)
 -------------------------------------------------------------------------------
-mapSndM = mapPairM return 
+mapSndM = mapPairM return
 
 -------------------------------------------------------------------------------
 mapPairM :: (Functor m, Monad m) => (a -> m c) -> (b -> m d) -> (a, b) -> m (c, d)
 -------------------------------------------------------------------------------
 mapPairM f g (x,y) =  liftM2 (,) (f x) (g y)
+
+
+-------------------------------------------------------------------------------
+mapPair :: (a -> b) -> (a, a) -> (b, b)
+-------------------------------------------------------------------------------
+mapPair f (x, y) = (f x, f y)
 
 -------------------------------------------------------------------------------
 mkEither :: Bool -> s -> a -> Either s a
@@ -107,7 +114,7 @@ either2Bool :: Either a b -> Bool
 either2Bool = either (const False) (const True)
 
 -------------------------------------------------------------------------------
-mseq :: (Monad m) => m (Maybe a) -> (a -> m (Maybe b)) -> m (Maybe b) 
+mseq :: (Monad m) => m (Maybe a) -> (a -> m (Maybe b)) -> m (Maybe b)
 -------------------------------------------------------------------------------
 mseq act k = do z <- act
                 case z of
@@ -119,7 +126,7 @@ mseq act k = do z <- act
 -------------------------------------------------------------------------------
 maybeM :: (Monad m) => b -> (a -> m b) -> Maybe a -> m b
 -------------------------------------------------------------------------------
-maybeM d f a = maybe (return d) f a
+maybeM = maybe . return
 
 -------------------------------------------------------------------------------
 maybeM_ :: (Monad m) => (a -> m ()) -> Maybe a -> m ()
@@ -157,7 +164,7 @@ appFth4 (a,b,c,d) f = (a,b,c,f d)
 
 instance F.Fixpoint Char where
   toFix = char
- 
+
 
 --------------------------------------------------------------------------------
 everywhereM' :: Monad m => GenericM m -> GenericM m
@@ -192,47 +199,55 @@ maybeToEither e Nothing  = Left e
 -- | Sets / maps
 
 isProperSubsetOf :: (Eq a, Hashable a) => HashSet a -> HashSet a -> Bool
-s1 `isProperSubsetOf` s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) > 0  
+s1 `isProperSubsetOf` s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) > 0
 
 isEqualSet :: (Eq a, Hashable a) => HashSet a -> HashSet a -> Bool
-s1 `isEqualSet` s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) == 0  
+s1 `isEqualSet` s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) == 0
 
 (\\) :: (Eq a, Hashable a) => HashSet a -> HashSet a -> HashSet a
 (\\) = difference
 
 isProperSubmapOf :: (Eq a, Hashable a) => M.HashMap a b -> M.HashMap a b -> Bool
-isProperSubmapOf = isProperSubsetOf `on` (fromList . M.keys) 
+isProperSubmapOf = isProperSubsetOf `on` (fromList . M.keys)
 
 equalKeys :: (Eq a, Ord a, Hashable a) => M.HashMap a b -> M.HashMap a b -> Bool
 equalKeys =  (==) `on` (L.sort . M.keys)
 
 
 convertError tgt e  = errortext $ msg <+> pp e
-  where 
+  where
     msg             = text $ "Cannot convert to: " ++ tgt
 
+
+errortext = errorstar . render
 
 
 instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
   pp (a,b,c,d) = pp a <+> text ":" <+>  pp b <+> text ":" <+> pp c <+> text ":" <+> pp d
 
 instance (PP a, PP b, PP c, PP d, PP e) => PP (a,b,c,d,e) where
-  pp (a,b,c,d,e) = pp a <+> text ":" <+>  pp b <+> text ":" <+> pp c <+> text ":" <+> pp d <+> text ":" <+> pp e 
+  pp (a,b,c,d,e) = pp a <+> text ":" <+>  pp b <+> text ":" <+> pp c <+> text ":" <+> pp d <+> text ":" <+> pp e
 
 foldM1 :: (Monad m) => (a -> a -> m a) -> [a] -> m a
 foldM1 _ [] = error "foldM1" "empty list"
 foldM1 f (x:xs) = foldM f x xs
 
-withSingleton :: Monad m => (a -> m b) -> m b -> [a] -> m b 
+single :: a -> [a]
+single x = [x]
+
+withSingleton :: Monad m => (a -> m b) -> m b -> [a] -> m b
 withSingleton f _ [x] = f x
 withSingleton _ b _   = b
 
-withSingleton' :: Monad m => m b -> (a -> m b) -> m b -> [a] -> m b 
+withSingleton' :: Monad m => m b -> (a -> m b) -> m b -> [a] -> m b
 withSingleton' b _ _  [ ] = b
 withSingleton' _ f _  [x] = f x
 withSingleton' _ _ e  _   = e
 
 dup f1 f2 a = (f1 a,f2 a)
+
+concatMapM :: (Monad m) => (a -> m [b]) -> [a] -> m [b]
+concatMapM f = fmap concat . mapM f
 
 mappendM :: (Monoid r, Monad m) => m r -> m r -> m r
 mappendM = liftM2 mappend
@@ -248,4 +263,3 @@ f <##>  x = ((f <$>) <$>) x
 f <###> x = ((f <$>) <$>) <$> x
 
 justM = (Just <$>)
-

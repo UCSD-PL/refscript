@@ -14,16 +14,24 @@ module Language.Nano.Files (
   )
   where
 
-import Control.Applicative
+-- import Control.Applicative
 import System.FilePath
 
-import Paths_RefScript
+import Paths_refscript
 
+getIncludePath :: FilePath -> IO FilePath
 getIncludePath f   = getDataFileName $ "include" </> f
+
+getPreludeTSPath   :: IO FilePath
 getPreludeTSPath   = getIncludePath "prelude.ts"
+
+getDomTSPath :: IO FilePath
 getDomTSPath       = getIncludePath "ambient/dom.ts"
 
+getPreludeJSONPath :: IO FilePath
 getPreludeJSONPath = (`replaceExtension` ".json") <$> getPreludeTSPath
+
+getDomJSONPath :: IO FilePath
 getDomJSONPath     = (`replaceExtension` ".json") <$> getDomTSPath
 
 -- getPreludeJSONPath = getDataFileName "include/prelude.json"

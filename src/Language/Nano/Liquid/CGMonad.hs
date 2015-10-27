@@ -71,7 +71,7 @@ import qualified Data.Map.Strict                as M
 import qualified Data.List                      as L
 import           Data.Function                  (on)
 import           Text.PrettyPrint.HughesPJ
-import           Language.Nano.Misc             (concatMapM)
+import           Language.Nano.Misc             (single, concatMapM)
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Annots
@@ -147,8 +147,8 @@ cgStateCInfo pgm ((fcs, fws), cg) = CGI (patchSymLits fi) (cg_ann cg)
     fi   = F.FI { F.cm       = HM.fromList $ F.addIds fcs
                 , F.ws       = fws
                 , F.bs       = binds cg
-                , F.gs       = measureEnv pgm
-                , F.lits     = []
+                , F.lits     = measureEnv pgm
+                -- , F.lits     = []
                 , F.kuts     = F.ksEmpty
                 , F.quals    = pQuals pgm
                 , F.bindInfo = mempty

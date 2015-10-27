@@ -142,19 +142,18 @@ initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invars c (max_id p)
 -------------------------------------------------------------------------------
 cgStateCInfo :: NanoRefType -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
 -------------------------------------------------------------------------------
-cgStateCInfo pgm ((fcs, fws), cg) = CGI (patchSymLits fi) (cg_ann cg)
+cgStateCInfo pgm ((fcs, fws), cg) = CGI fi (cg_ann cg)
   where
     fi   = F.FI { F.cm       = HM.fromList $ F.addIds fcs
                 , F.ws       = fws
                 , F.bs       = binds cg
                 , F.lits     = measureEnv pgm
-                -- , F.lits     = []
                 , F.kuts     = F.ksEmpty
                 , F.quals    = pQuals pgm
                 , F.bindInfo = mempty
                 }
 
-patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
+-- OLD? patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
 
 
 -- | Get binding from object type
@@ -660,8 +659,8 @@ freshenModuleDefM g (a, m)
 subType :: AnnTypeR -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l err g t1 t2 =
-  do  -- t1'    <- addInvariant g t1  -- enhance LHS with invariants
-      modify  $ \st -> st { cs = Sub g (ci err l) t1 t2 : cs st }
+  -- t1'    <- addInvariant g t1  -- enhance LHS with invariants
+  modify  $ \st -> st { cs = Sub g (ci err l) t1 t2 : cs st }
 
 
 -- FIXME: Restore this check !!!
@@ -699,19 +698,19 @@ wellFormed l g t
 class Freshable a where
   fresh   :: CGM a
   true    :: a -> CGM a
-  true    = return . id
+  true    = return
   refresh :: a -> CGM a
-  refresh = return . id
+  refresh = return
 
 instance Freshable Integer where
-  fresh = do modify $ \st -> st { cg_cnt = 1 + (cg_cnt st) }
+  fresh = do modify $ \st -> st { cg_cnt = 1 + cg_cnt st }
              cg_cnt <$> get
 
 instance Freshable F.Symbol where
   fresh = F.tempSymbol (F.symbol "nano") <$> fresh
 
 instance Freshable String where
-  fresh = F.symbolString <$> fresh
+  fresh = symbolString <$> fresh
 
 -- | Freshen up
 freshTy :: RefTypable a => s -> a -> CGM RefType

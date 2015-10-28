@@ -146,7 +146,7 @@ cgStateCInfo :: NanoRefType -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGI
 -------------------------------------------------------------------------------
 cgStateCInfo pgm ((fcs, fws), cg) = CGI finfo (cg_ann cg)
   where
-    finfo    = F.fi (error "FIXME:fcs") fws (binds cg) lits F.ksEmpty (pQuals pgm) mempty junkFile
+    finfo    = F.fi fcs fws (binds cg) lits F.ksEmpty (pQuals pgm) mempty junkFile
     lits     = F.sr_sort <$> measureEnv pgm
     junkFile = "FIXME.ts"
 -- OLD? patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
@@ -960,9 +960,9 @@ conjoinPred p r    = r {F.sr_reft = F.Reft (v, F.pAnd [pr, p]) }
 
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivial r2
-  = F.subC bs (conjoinPred p $ r1 {F.sr_reft = typeofReft t1}) r2 (error "FIXME:Nothing") [] ci
+  = F.subC bs (conjoinPred p $ r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
   | F.isNonTrivial r2
-  = F.subC bs (conjoinPred p r1) r2 (error "FIXME:Nothing") [] ci
+  = F.subC bs (conjoinPred p r1) r2 Nothing [] ci
   | otherwise
   = []
   where

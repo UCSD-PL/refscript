@@ -16,7 +16,7 @@ import           Language.Nano.CmdLine
 import           Language.Nano.Errors
 import           Language.Nano.Files
 import           Language.Nano.SystemUtils
-import           Language.Nano.Misc                 (mapi)
+import           Language.Nano.Misc                 (single, mapi)
 import           Control.Exception                  (catch)
 import           Control.Monad
 import           Data.List                          (sort, nub)

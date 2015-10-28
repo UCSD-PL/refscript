@@ -146,13 +146,13 @@ renderAnnotations srcFile res (NoAnn :: UAnnSol t)
        vimFile  = extFileName Annot (srcFile ++ ".vim")
 
 renderAnnotations srcFile res (SomeAnn ann sol)
-  = do writeFile   annFile  $ wrapStarsWithOptStars False "Constraint Templates" ++ "\n"
-       appendFile  annFile  $ ppshow ann
-       appendFile  annFile  $ wrapStarsWithOptStars False "Inferred Types"       ++ "\n"
-       appendFile  annFile  $ ppshow ann'
+  = do -- writeFile   annFile  $ wrapStarsWithOptStars False "Constraint Templates" ++ "\n"
+       -- appendFile  annFile  $ ppshow ann
+       -- appendFile  annFile  $ wrapStarsWithOptStars False "Inferred Types"       ++ "\n"
+       -- appendFile  annFile  $ ppshow ann'
        B.writeFile jsonFile $ annotByteString res ann'
        writeFile   vimFile  $ annotVimString res ann'
-       donePhaseWithOptStars False Loud "Written Inferred Annotations"
+       donePhase Loud "Written Inferred Annotations"
     where
        jsonFile = extFileName Json  srcFile
        vimFile  = extFileName Annot (srcFile ++ ".vim")

@@ -111,7 +111,6 @@ import           Control.Exception              (throw)
 
 -- import           Debug.Trace (trace)
 
-
 type PPR  r = (ExprReftable F.Symbol r, ExprReftable Int r, PP r, F.Reftable r, Data r)
 
 ---------------------------------------------------------------------

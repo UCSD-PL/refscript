@@ -10,6 +10,7 @@
 
 -- | Operations pertaining to Constraint Generation
 
+
 module Language.Nano.Liquid.CGMonad (
 
   -- * Constraint Generation Monad
@@ -64,7 +65,7 @@ import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
 
-import           Data.Maybe                     (catMaybes, maybeToList)
+import           Data.Maybe                     (fromMaybe, catMaybes, maybeToList)
 import           Data.Monoid                    (mappend, mempty)
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map.Strict                as M
@@ -89,7 +90,7 @@ import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Liquid.Environment
 import           Language.Nano.Liquid.Types
 
-import           Language.Fixpoint.Names (symbolText)
+import           Language.Fixpoint.Names (symbolString, symbolText)
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Errors
@@ -112,7 +113,7 @@ instance PP CGInfo where
   pp (CGI finfo _) = cat (map pp (HM.elems $ F.cm finfo))
 
 instance PP (F.SubC c) where
-  pp s = pp (F.lhsCs s) <+> text " <: " <+> pp (F.rhsCs s)
+  pp s = text "TODO: pp SubC" -- pp (F.clhs s) <+> text " <: " <+> pp (F.crhs s)
 
 
 -------------------------------------------------------------------------------
@@ -123,6 +124,7 @@ getCGInfo cfg pgm = cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
     fixCWs       = (,) <$> fixCs <*> fixWs
     fixCs        = get >>= concatMapM splitC . cs
     fixWs        = get >>= concatMapM splitW . ws
+
 
 execute :: Config -> NanoRefType -> CGM a -> (a, CGState)
 execute cfg pgm act
@@ -142,17 +144,11 @@ initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invars c (max_id p)
 -------------------------------------------------------------------------------
 cgStateCInfo :: NanoRefType -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
 -------------------------------------------------------------------------------
-cgStateCInfo pgm ((fcs, fws), cg) = CGI fi (cg_ann cg)
+cgStateCInfo pgm ((fcs, fws), cg) = CGI finfo (cg_ann cg)
   where
-    fi   = F.FI { F.cm       = HM.fromList $ F.addIds fcs
-                , F.ws       = fws
-                , F.bs       = binds cg
-                , F.lits     = measureEnv pgm
-                , F.kuts     = F.ksEmpty
-                , F.quals    = pQuals pgm
-                , F.bindInfo = mempty
-                }
-
+    finfo    = F.fi (error "FIXME:fcs") fws (binds cg) lits F.ksEmpty (pQuals pgm) mempty junkFile
+    lits     = F.sr_sort <$> measureEnv pgm
+    junkFile = "FIXME.ts"
 -- OLD? patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
 
 
@@ -229,12 +225,11 @@ envGetContextCast g a
   = case [c | TCast cx c <- ann_fact a, cx == cge_ctx g] of
       [ ] -> CNo
       [c] -> c
-      cs  -> case L.find isDeadCast cs of
-               Just dc -> dc
-               Nothing -> die $ errorMultipleCasts (srcPos a) cs
+      cs  -> fromMaybe (err cs) $ L.find isDeadCast cs
   where
     isDeadCast CDead{} = True
     isDeadCast _       = False
+    err cs             = die $ errorMultipleCasts (srcPos a) cs
 
 
 
@@ -395,8 +390,8 @@ addInvariant g t
   where
     -- | typeof
     typeof t@(TApp tc _ o)  i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup tc i
-    typeof t@(TRef _ _ _) _   = t `nubstrengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
-    typeof t@(TCons _ _ _) _  = t `nubstrengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
+    typeof t@(TRef {}) _      = t `nubstrengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
+    typeof t@(TCons {}) _     = t `nubstrengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
     typeof   (TFun a b c _) _ = TFun a b c typeofReft
     typeof t                _ = t
     -- | Truthy
@@ -411,7 +406,7 @@ addInvariant g t
     typeofExpr s              = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
                                              (F.expr $ symbolText s)
 
-    ofRef (F.Reft (s, ra))    = F.reft s <$> F.raConjuncts ra
+    ofRef (F.Reft (s, ra))    = F.reft s <$> F.conjuncts ra
 
     -- | { f: T } --> hasProperty("f", v)
     hasProp ty                = t `nubstrengthen` keyReft (boundKeys g ty)
@@ -686,7 +681,7 @@ subType l err g t1 t2 =
 wellFormed       :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
 wellFormed l g t
-  = do modify $ \st -> st { ws = (W g (ci err l) t) : ws st }
+  = do modify $ \st -> st { ws = W g (ci err l) t : ws st }
        return t
     where
        err = errorWellFormed (srcPos l)
@@ -716,17 +711,17 @@ instance Freshable String where
 freshTy :: RefTypable a => s -> a -> CGM RefType
 freshTy _ τ = refresh $ rType τ
 
-instance Freshable F.Refa where
-  fresh = F.Refa . (`F.PKVar` mempty) . F.intKvar <$> fresh
-
-instance Freshable [F.Refa] where
-  fresh = single <$> fresh
+instance Freshable F.Pred where
+  fresh  = kv <$> fresh
+    where
+      kv = (`F.PKVar` mempty) . F.intKvar
 
 instance Freshable F.Reft where
   fresh                  = errorstar "fresh F.Reft"
   true    (F.Reft (v,_)) = return $ F.Reft (v, mempty)
   refresh (F.Reft (_,_)) = curry F.Reft <$> freshVV <*> fresh
     where freshVV        = F.vv . Just  <$> fresh
+
 
 instance Freshable F.SortedReft where
   fresh                  = errorstar "fresh F.Reft"
@@ -850,18 +845,18 @@ splitC (Sub g i t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) r2))
 splitC (Sub g i t1@(TApp c1 t1s _) t2@(TApp c2 t2s _))
   | c1 == c2
   = do  cs    <- bsplitC g i t1 t2
-        cs'   <- concatMapM splitC ((safeZipWith "splitc-5") (Sub g i) t1s t2s)
+        cs'   <- concatMapM splitC (safeZipWith "splitc-5" (Sub g i) t1s t2s)
         return $ cs ++ cs'
   | otherwise = splitIncompatC g i t1
 
 -- | These need to be here due to the lack of a folding operation
 --
-splitC (Sub g i t1@(TRef _ _ _) t2) =
+splitC (Sub g i t1@(TRef {}) t2) =
   case expandType Coercive g t1 of
     Just t1' -> splitC (Sub g i t1' t2)
     Nothing  -> cgError $ errorUnfoldType l t1 where l = srcPos i
 
-splitC (Sub g i t1 t2@(TRef _ _ _)) =
+splitC (Sub g i t1 t2@(TRef {})) =
   case expandType Coercive g t2 of
     Just t2' -> splitC (Sub g i t1 t2')
     Nothing  -> cgError $ errorUnfoldType l t2 where l = srcPos i
@@ -958,12 +953,16 @@ bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 -- NOTE: addInvariant nonly needed in LHS
 bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant g t1 <*> return t2
 
+conjoinPred :: F.Pred -> F.SortedReft -> F.SortedReft
+conjoinPred p r    = r {F.sr_reft = F.Reft (v, F.pAnd [pr, p]) }
+  where
+    F.Reft (v, pr) = F.sr_reft r
+
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivial r2
-  -- = F.subC (cge_fenv g) F.PTrue (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
-  = F.subC bs p (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
+  = F.subC bs (conjoinPred p $ r1 {F.sr_reft = typeofReft t1}) r2 (error "FIXME:Nothing") [] ci
   | F.isNonTrivial r2
-  = F.subC bs p r1 r2 Nothing [] ci
+  = F.subC bs (conjoinPred p r1) r2 (error "FIXME:Nothing") [] ci
   | otherwise
   = []
   where
@@ -977,7 +976,9 @@ bsplitC' g ci t1 t2
                                   (F.expr $ symbolText s)
     vv             = rTypeValueVar
 
-instance PP (F.SortedReft) where
+
+
+instance PP F.SortedReft where
   pp (F.RR _ b) = pp b
 
 ---------------------------------------------------------------------------------------
@@ -1033,7 +1034,7 @@ splitW (W _ _ t) = error $ render $ text "Not supported in splitW: " <+> pp t
 
 bsplitW g t i
   | F.isNonTrivial r'
-  = [F.wfC bs r' Nothing i]
+  = F.wfC bs r' {- Nothing -} i
   | otherwise
   = []
   where
@@ -1042,9 +1043,10 @@ bsplitW g t i
        $ snd <$> F.toListSEnv (cge_fenv g)
 
 
-envTyAdds msg l xts g
-  = envAdds (msg ++ " - envTyAdds " ++ ppshow (srcPos l))
-      [(symbolId l x, EE WriteLocal Initialized t) | B x t <- xts] g
+envTyAdds msg l xts = envAdds msg' [ (symbolId l x, EE WriteLocal Initialized t)
+                                   | B x t <- xts]
+  where
+    msg' = msg ++ " - envTyAdds " ++ ppshow (srcPos l)
 
 
 ------------------------------------------------------------------------------
@@ -1053,7 +1055,7 @@ cgFunTys :: (IsLocated l, F.Symbolic b, PP x, PP [b])
          -> x
          -> [b]
          -> RefType
-         -> CGM [(Int, ([TVar], Maybe (RefType), [RefType], RefType))]
+         -> CGM [(Int, ([TVar], Maybe RefType, [RefType], RefType))]
 ------------------------------------------------------------------------------
 cgFunTys l f xs ft        | Just ts <- bkFuns ft
                           = zip ([0..] :: [Int]) <$> mapM fTy ts
@@ -1097,7 +1099,7 @@ subNoCapture _ yts xs t   = (,) <$> mapM (mapReftM ff) ts <*> mapReftM ff t
 --   FIXME: What is the purpose of this substitution ???
 --
 zipTypeUpM g x t1 t2
-  | Just (f, (F.Reft (s,ras))) <- zipType g x t1 t2
+  | Just (f, F.Reft (s, ras)) <- zipType g x t1 t2
   = let su  = F.mkSubst [(s, F.expr x)] in
     let rs  = F.simplify $ F.Reft (s, F.subst su ras) `F.meet` F.uexprReft x in
     return  $ f rs

@@ -65,6 +65,7 @@ module Language.Nano.Liquid.Types (
 
   ) where
 
+import           Control.DeepSeq
 import           Data.Maybe              (fromMaybe, catMaybes, maybeToList)
 import qualified Data.List               as L
 import qualified Data.Text               as T
@@ -117,6 +118,9 @@ type AnnTypeR    = AnnType F.Reft
 data Cinfo = Ci { ci_info    :: !Error
                 , ci_srcspan :: !SrcSpan
                 } deriving (Eq, Ord, Show)
+
+instance NFData Cinfo where
+  rnf (Ci _ s) = seq s ()
 
 ci   :: (IsLocated a) => Error -> a -> Cinfo
 ci e = Ci e . srcPos

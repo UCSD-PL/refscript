@@ -128,7 +128,7 @@ test-suite test
                     directory,
                     filepath,
                     process,
-                    refscript,
+                    -- refscript,
                     tasty >= 0.10,
                     tasty-hunit,
                     tasty-rerun >= 1.1,

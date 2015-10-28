@@ -10,7 +10,6 @@
 
 -- | Operations pertaining to Constraint Generation
 
-
 module Language.Nano.Liquid.CGMonad (
 
   -- * Constraint Generation Monad
@@ -117,13 +116,13 @@ instance PP (F.SubC c) where
 
 
 -------------------------------------------------------------------------------
-getCGInfo :: Config -> NanoRefType -> CGM a -> CGInfo
+getCGInfo :: Config -> FilePath -> NanoRefType -> CGM a -> CGInfo
 -------------------------------------------------------------------------------
-getCGInfo cfg pgm = cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
+getCGInfo cfg f p = cgStateCInfo f p . execute cfg p . (>> fixCWs)
   where
-    fixCWs       = (,) <$> fixCs <*> fixWs
-    fixCs        = get >>= concatMapM splitC . cs
-    fixWs        = get >>= concatMapM splitW . ws
+    fixCWs        = (,) <$> fixCs <*> fixWs
+    fixCs         = get >>= concatMapM splitC . cs
+    fixWs         = get >>= concatMapM splitW . ws
 
 
 execute :: Config -> NanoRefType -> CGM a -> (a, CGState)
@@ -142,13 +141,12 @@ initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invars c (max_id p)
 
 
 -------------------------------------------------------------------------------
-cgStateCInfo :: NanoRefType -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
+cgStateCInfo :: FilePath -> NanoRefType -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
 -------------------------------------------------------------------------------
-cgStateCInfo pgm ((fcs, fws), cg) = CGI finfo (cg_ann cg)
+cgStateCInfo f pgm ((fcs, fws), cg) = CGI finfo (cg_ann cg)
   where
-    finfo    = F.fi fcs fws (binds cg) lits F.ksEmpty (pQuals pgm) mempty junkFile
+    finfo    = F.fi fcs fws (binds cg) lits F.ksEmpty (pQuals pgm) mempty f
     lits     = F.sr_sort <$> measureEnv pgm
-    junkFile = "FIXME.ts"
 -- OLD? patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
 
 
@@ -958,11 +956,14 @@ conjoinPred p r    = r {F.sr_reft = F.Reft (v, F.pAnd [pr, p]) }
   where
     F.Reft (v, pr) = F.sr_reft r
 
+subCTag :: [Int]
+subCTag = [1]
+
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivial r2
-  = F.subC bs (conjoinPred p $ r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
+  = F.subC bs (conjoinPred p $ r1 {F.sr_reft = typeofReft t1}) r2 Nothing subCTag ci
   | F.isNonTrivial r2
-  = F.subC bs (conjoinPred p r1) r2 Nothing [] ci
+  = F.subC bs (conjoinPred p r1) r2 Nothing subCTag ci
   | otherwise
   = []
   where

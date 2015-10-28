@@ -64,10 +64,11 @@ type PPRS r = (PPR r, Substitutable r (Fact r))
 --------------------------------------------------------------------------------
 verifyFile    :: Config -> FilePath -> [FilePath] -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
-verifyFile cfg f fs = parse     fs
-                    $ ssa
-                    $ tc    cfg
-                    $ refTc cfg f
+verifyFile cfg f fs
+  = parse     fs
+  $ ssa
+  $ tc    cfg
+  $ refTc cfg f
 
 parse fs next
   = do  r <- parseNanoFromFiles fs
@@ -88,7 +89,7 @@ refTc cfg f p
   = do donePhase Loud "Generate Constraints"
        solveConstraints p f cgi
   where
-    cgi = generateConstraints cfg p
+    cgi = generateConstraints cfg f p
 
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x
@@ -131,9 +132,9 @@ applySolution  = fmap . fmap . tx
     -- appSol s (F.RKvar k su) = F.RConc $ F.subst su $ HM.lookupDefault F.PTop k s
 
 --------------------------------------------------------------------------------
-generateConstraints :: Config -> NanoRefType -> CGInfo
+generateConstraints :: Config -> FilePath -> NanoRefType -> CGInfo
 --------------------------------------------------------------------------------
-generateConstraints cfg pgm = getCGInfo cfg pgm $ consNano pgm
+generateConstraints cfg f pgm = getCGInfo cfg f pgm $ consNano pgm
 
 --------------------------------------------------------------------------------
 consNano :: NanoRefType -> CGM ()

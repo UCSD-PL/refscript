@@ -59,14 +59,14 @@ Executable rsc
                   , attoparsec
                   , refscript
 
-  ghc-options:    -threaded -- -W -O2  
+  -- ghc-options:    -threaded -- -W -O2  
   Main-is:        Nano.hs
   hs-source-dirs: src
 
                   
 Library
   Default-language: Haskell2010
-  ghc-options:    -threaded -- -W -O2  
+  -- ghc-options:    -threaded -- -W -O2  
   build-depends:    base
                   , containers
                   , pretty 

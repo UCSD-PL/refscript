@@ -89,6 +89,7 @@ import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Liquid.Environment
 import           Language.Nano.Liquid.Types
 
+import           Language.Fixpoint.Visitor (SymConsts (..))
 import           Language.Fixpoint.Names (symbolString, symbolText)
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
@@ -143,11 +144,17 @@ initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invars c (max_id p)
 -------------------------------------------------------------------------------
 cgStateCInfo :: FilePath -> NanoRefType -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
 -------------------------------------------------------------------------------
-cgStateCInfo f pgm ((fcs, fws), cg) = CGI finfo (cg_ann cg)
+cgStateCInfo f pgm ((fcs, fws), cg) = CGI finfo' (cg_ann cg)
   where
+    finfo'   = finfo { F.lits = symConstLits finfo ++ F.lits finfo }
     finfo    = F.fi fcs fws (binds cg) lits F.ksEmpty (pQuals pgm) mempty f
     lits     = F.sr_sort <$> measureEnv pgm
 -- OLD? patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
+
+
+symConstLits    :: F.FInfo a -> [(F.Symbol, F.Sort)]
+symConstLits fi = [(F.symbol c, F.strSort) | c <- symConsts fi]
+
 
 
 -- | Get binding from object type

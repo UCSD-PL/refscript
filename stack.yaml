@@ -5,7 +5,7 @@ resolver: nightly-2015-09-24
 # resolver: lts-2.22
 
 packages:
-- ../liquid-fixpoint
+- ./liquid-fixpoint
 - .
 
 flags:

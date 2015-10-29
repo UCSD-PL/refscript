@@ -13,11 +13,8 @@ module Language.Rsc.Lookup (
   , extractCtor
   ) where
 
-import           Control.Applicative          (pure, (<$>))
-import           Control.Monad                (liftM)
+import           Control.Applicative          ((<$>))
 import           Data.Either                  (rights)
-import           Data.Generics
-import           Data.Maybe                   (catMaybes)
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.AST
@@ -28,7 +25,6 @@ import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
-import           Language.Rsc.Typecheck.Sub
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 
@@ -83,7 +79,7 @@ getProp l γ f t@(TRef _ _)
 getProp l γ f t@(TClass _)
   = fmap (map (t,)) (accessMember l γ StaticK f t)
 
-getProp l γ f t@(TMod m)
+getProp _ γ f t@(TMod m)
   | Just m' <- resolveModuleInEnv γ m
   , Just v' <- envFindTy f (m_variables m')
   = Right [(t, FI Req Final $ v_type v')]
@@ -104,7 +100,7 @@ getPropPrim l γ f t@(TPrim c _) =
     TBV32      -> fmap (map (t,)) (lookupAmbientType l γ f "Number")
     _          -> Left (errorPrimLookup l f t)
 
-getPropPrim l _ _ _ = error "getPropPrim should only be applied to TApp"
+getPropPrim _ _ _ _ = error "getPropPrim should only be applied to TApp"
 
 
 -- | `extractCtor γ t` extracts a contructor signature from a type @t@
@@ -118,7 +114,7 @@ extractCtor γ t = go t
   where
     go (TClass (BGen x _)) | Just (TD _ ms) <- resolveTypeInEnv γ x
                            = tm_ctor ms
-    go s@(TRef _ _)        = expandType Coercive (envCHA γ) t >>= go
+    go (TRef _ _)          = expandType Coercive (envCHA γ) t >>= go
     go (TObj _ ms _)       = tm_ctor ms
     go _                   = Nothing
 
@@ -148,14 +144,14 @@ accessMember ::
   l -> t r -> StaticKind -> f -> RType r -> Either Error [TypeMember r]
 --------------------------------------------------------------------------------
 accessMember l γ static m t
-  | Just (TObj mut es _) <- expandType Coercive (envCHA γ) t
-  , Just m <- F.lookupSEnv (F.symbol m) (mems es)
-  = Right [m]
+  | Just (TObj _ es _) <- expandType Coercive (envCHA γ) t
+  , Just mem <- F.lookupSEnv (F.symbol m) (mems es)
+  = Right [mem]
   -- In the case of string indexing, build up an optional and assignable field
-  | Just (TObj mut es _) <- expandType Coercive (envCHA γ) t
-  , Just t               <- tm_sidx es
+  | Just (TObj _ es _) <- expandType Coercive (envCHA γ) t
+  , Just tIdx               <- tm_sidx es
   , validFieldName m
-  = Right [FI Opt Assignable t]
+  = Right [FI Opt Assignable tIdx]
   | otherwise
   = Left $ errorMemLookup l m t
   where

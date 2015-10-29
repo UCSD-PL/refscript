@@ -31,6 +31,7 @@ unsupportedConvFun l t1 t2    = mkErr l $ printf "Unsupported case in convertFun
 unsupportedStaticNoInit l x   = mkErr l $ printf "Unsupported uninitialized static field '%s'." (ppshow x)
 unsupportedUnionTVar l t      = mkErr l $ printf "Unsupported multiple type variables in union '%s'." (ppshow t)
 unsupportedMethodComp l m m'  = mkErr l $ printf "Unsupported method comparison between '%s' and '%s'." (ppshow m) (ppshow m')
+unsupportedUnionAccess l t f  = mkErr l $ printf "Unsupported access of field '%s' in union type '%s'." (ppshow f) (ppshow t)
 
 bug' l s                      = err   l $ printf "BUG: %s" s
 bug l s                       = mkErr l $ printf "BUG: %s" s
@@ -165,7 +166,7 @@ errorTypeParamConstr l f t c  = mkErr l $ printf "Call to function '%s' with typ
 -- Lookup
 errorEnumLookup l e n         = mkErr l $ printf "Cannot find member '%s' in enumeration '%s'" (ppshow n) (ppshow e)
 errorPrimLookup l e n         = mkErr l $ printf "Cannot find member '%s' in primitive type '%s'" (ppshow n) (ppshow e)
-errorMemLookup l t m          = mkErr l $ printf "Cannot find member '%s' in type '%s'" (ppshow m) (ppshow t)
+errorMemLookup l t m          = mkErr l $ printf "Cannot find MEmber '%s' in type '%s'" (ppshow m) (ppshow t)
 errorGenericLookup l t f      = mkErr l $ printf "Cannot find member '%s' in type '%s'" (ppshow f) (ppshow t)
 errorAmbientLookup l t f      = mkErr l $ printf "Cannot find member '%s' in ambient element '%s'" (ppshow f) (ppshow t)
 errorUnionLookup l t f        = mkErr l $ printf "Cannot find member '%s' in any part of the union '%s'" (ppshow f) (ppshow t)

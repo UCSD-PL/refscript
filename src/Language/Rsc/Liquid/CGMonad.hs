@@ -314,7 +314,7 @@ objFields g (x, e@(VI loc a _ t))
               | otherwise = (x_sym, (x_sym,e):xts)
   where
     x_sym     = F.symbol x
-    xts       = [(mkQualSym x f, vi f o ft) | (f, FI o m ft) <- fs, isIM m ]
+    xts       = [(mkQualSym x f, vi f o ft) | (f, FI o Final ft) <- fs ]
 
     -- This should remain as is: x.f bindings are not going to change
     vi f Opt tf = VI loc a Initialized $ orUndef $ ty tf f
@@ -323,7 +323,7 @@ objFields g (x, e@(VI loc a _ t))
     ty t f = substThis x t `eSingleton` mkOffset x f
 
     fs | Just (TObj _ ms _) <- expandType Coercive (envCHA g) t
-       = F.toListSEnv (tm_prop ms)
+       = F.toListSEnv (i_mems ms)
        | otherwise = []
 
 --------------------------------------------------------------------------------
@@ -819,15 +819,12 @@ splitTM :: CGEnv -> F.Symbol -> Cinfo
         -> TypeMembers F.Reft -> TypeMembers F.Reft
         -> CGM [FixSubC]
 --------------------------------------------------------------------------------
-splitTM g x c (TM p1 m1 sp1 sm1 c1 k1 s1 n1) (TM p2 m2 sp2 sm2 c2 k2 s2 n2)
-  = concatMapM (splitF g c) (ps ++ sps) +++
-    concatMapM (splitM g c) (ms ++ sms) +++
+splitTM g x c (TM m1 sm1 c1 k1 s1 n1) (TM m2 sm2 c2 k2 s2 n2)
+  = concatMapM (splitM g c) (ms ++ sms) +++
     concatMapM splitT (cs ++ ks ++ ss ++ ns)
   where
     (+++) = liftM2 (++)
-    ps  = F.toListSEnv $ F.intersectWithSEnv (,) p1 p2
     ms  = F.toListSEnv $ F.intersectWithSEnv (,) m1 m2
-    sps = F.toListSEnv $ F.intersectWithSEnv (,) sp1 sp2
     sms = F.toListSEnv $ F.intersectWithSEnv (,) sm1 sm2
     cs  = [ (t1,t2) | Just t1 <- [c1], Just t2 <- [c2] ]
     ks  = [ (t1,t2) | Just t1 <- [k1], Just t2 <- [k2] ]
@@ -836,7 +833,7 @@ splitTM g x c (TM p1 m1 sp1 sm1 c1 k1 s1 n1) (TM p2 m2 sp2 sm2 c2 k2 s2 n2)
     splitT (t1,t2) = splitC (Sub g c t1 t2)
 
 splitF g i (_, (FI _ m1 t1, FI _ m2 t2))
-  | isIM m2  = splitC (Sub g i t1 t2)
+  | m2 == Final = splitC (Sub g i t1 t2)
   | otherwise = (++) <$> splitC (Sub g i t1 t2)
                      <*> splitC (Sub g i t2 t1)
 
@@ -986,7 +983,7 @@ unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
 unqualifyThis g t = F.subst $ F.mkSubst fieldSu
   where
     fieldSu | Just (TObj _ fs _) <- expandType Coercive (envCHA g) t
-            = [ subPair f | (f, FI _ m _) <- F.toListSEnv $ tm_prop fs, isIM m ]
+            = [ subPair f | (f, FI _ Final _) <- F.toListSEnv $ i_mems fs ]
             | otherwise
             = []
     this      = F.symbol $ builtinOpId BIThis

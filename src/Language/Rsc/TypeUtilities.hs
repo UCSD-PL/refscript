@@ -13,54 +13,43 @@
 module Language.Rsc.TypeUtilities (
 
     mkDotRefFunTy
-  -- , setPropTy
-  , idTy
+  , idTy, idTys
   , castTy
 
   ) where
 
-import           Control.Applicative
-import           Data.Default
-import qualified Data.HashMap.Strict          as HM
-import qualified Data.List                    as L
-import           Data.Maybe                   (catMaybes, fromMaybe, maybeToList)
-import           Data.Monoid                  (mconcat)
-import qualified Data.Traversable             as T
-import qualified Language.Fixpoint.Bitvector  as BV
-import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types      as F
-import           Language.Rsc.AST
 import           Language.Rsc.Environment
-import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Types
-import           Language.Rsc.Locations
-import           Language.Rsc.Lookup
-import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Text.PrettyPrint.HughesPJ
-
 
 
 -- | Dot ref
 --
 ---------------------------------------------------------------------------------
-mkDotRefFunTy :: (PP r, CheckingEnvironment r t, PP f, IsLocated l, F.Symbolic f, Monad m
-                 , ExprReftable F.Expr r, ExprReftable Int r, F.Reftable r)
-              => l -> t r -> f -> RType r -> RType r -> m (RType r)
+mkDotRefFunTy ::
+  (CheckingEnvironment r t, PP r, ExprReftable F.Expr r, F.Symbolic f, F.Reftable r, Monad m) =>
+  t r -> f -> RType r -> Mutability r -> FieldAsgn -> RType r -> m (RType r)
 ---------------------------------------------------------------------------------
-mkDotRefFunTy l g f tObj tField
-  -- | Case array.length:
-  | isArrayType tObj, F.symbol "length" == F.symbol f
+mkDotRefFunTy g f tRcvr mRcvr a tf
+  -- Array
+  | isArrayType tRcvr
+  , F.symbol "length" == F.symbol f
   = globalLengthType g
-  -- | Case immutable field: (x: tObj) => { bField | v = x_f }
-  | Just Final <- getFieldAssignability (envCHA g) tObj (F.symbol f)
-  = return $ mkFun ([], [B x tObj], (fmap F.top tField) `eSingleton` mkOffset x f)
-  -- | TODO: Case: TEnum
-  -- | Rest (x: tTobj) => tField[this/x]
+
+  | isIM mRcvr
+  , a /= Assignable
+  = return $ mkFun ([], [B x tRcvr], fmap F.top tf `eSingleton` mkOffset x f)
+
+  | a == Final
+  = return $ mkFun ([], [B x tRcvr], fmap F.top tf `eSingleton` mkOffset x f)
+
+  -- TODO: Case: TEnum
+
   | otherwise
-  = return $ mkFun ([], [B x tObj], substThis x tField)
+  = return $ mkFun ([], [B x tRcvr], substThis x tf)
   where
     x = F.symbol "x"
 
@@ -73,7 +62,7 @@ mkDotRefFunTy l g f tObj tField
 -- setPropTy f = mkAll [bvt, bvm] ft
 --   where
 --     ft      = TFun [b1, b2] t fTop
---     b1      = B (F.symbol "o") $ TObj tIM (tmFromFieldList [(f, FI Req m t)]) fTop
+--     b1      = B (F.symbol "o") $ tRcvr tIM (tmFromFieldList [(f, FI Req m t)]) fTop
 --     b2      = B (F.symbol "x") $ t
 --     m       = toTTV bvm :: F.Reftable r => RType r
 --     t       = toTTV bvt
@@ -84,11 +73,14 @@ mkDotRefFunTy l g f tObj tField
 
 
 --------------------------------------------------------------------------------------------
-idTy :: (ExprReftable F.Symbol r, F.Reftable r) => RTypeQ q r -> RTypeQ q r
+idTy  :: (ExprReftable F.Symbol r, F.Reftable r) => RTypeQ q r -> RTypeQ q r
+idTys :: (ExprReftable F.Symbol r, F.Reftable r) => [RTypeQ q r] -> RTypeQ q r
 --------------------------------------------------------------------------------------------
 idTy t = mkFun ([], [B sx t], t `strengthen` uexprReft sx)
   where
     sx    = F.symbol "x_"
+
+idTys = mkAnd . map idTy
 
 
 --------------------------------------------------------------------------------------------

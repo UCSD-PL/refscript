@@ -431,11 +431,11 @@ mkKeysIdxId (Id a x) =  Id a $ keysIdxStr ++ x
 mkCtorId l (Id _ x) = Id l $ mkCtorStr x
 mkCtorStr x         = x ++ ctorStr
 
-nextStr    = "_NEXT_"
-ssaStr     = "_SSA_"
-keysIdxStr = "_KEYS_IDX_"
-keysStr    = "_KEYS_"
+nextStr    = "NEXT_"
+keysIdxStr = "KEYS_IDX_"
+keysStr    = "KEYS_"
 ctorStr    = "_CTOR_"
+ssaStr     = "_SSA_"
 
 
 

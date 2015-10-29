@@ -10,13 +10,13 @@ function d3_number(x:any):any{
 function d3_mean(array: any, f?: any): number {
 
   /*@ s :: number */
-  var s = 0,
+  let s = 0,
       n = array.length;
 
   /*@ local a :: undefined + number */
-  var a;
+  let a;
 
-  var i = 0, j = n;
+  let i = 0, j = n;
 
   while (i < n) {     
     a = f.call(array, array[i], i);

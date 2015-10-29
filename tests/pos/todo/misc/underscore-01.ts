@@ -1,5 +1,5 @@
 /* foo :: () => number */
 function foo():number {
-	var _ = 3;
+	let _ = 3;
 	return _;
 }

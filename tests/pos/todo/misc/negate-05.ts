@@ -11,7 +11,7 @@ function negate(x): any {
 
 /*@ main :: () => void */
 function main():void{
-	var a:number = negate(10);
-	var b:boolean = negate(true);
+	let a:number = negate(10);
+	let b:boolean = negate(true);
 	return;
 }

@@ -24,8 +24,8 @@ function release(l:number):number{
 
 /*@ main :: () => { void | true } */
 function main():void{
-	var x :number = random();
-	var l :number = create();
+	let x :number = random();
+	let l :number = create();
 	if (0 <= x){ l = acquire(l); }
 	if (0 <= x){ l = release(l); }
 	assert(l === 0);

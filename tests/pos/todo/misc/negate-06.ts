@@ -11,7 +11,7 @@ function negate(x): any {
 
 /*@ main :: () => boolean */
 function main() {
-	var a = negate(10);
-	var b = negate(true);
+	let a = negate(10);
+	let b = negate(true);
 	return b;
 }

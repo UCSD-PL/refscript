@@ -7,7 +7,7 @@ class Tree {
 
   /*@ foo : () : {void | true} */
   foo() {
-    var _root = this.root;
+    let _root = this.root;
     if (_root) {
       _root.bar();
     }

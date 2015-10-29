@@ -1,7 +1,7 @@
 
 /*@ abs :: ((number) => number, number) => number */ 
 function abs(f, x){
-  var r = x;
+  let r = x;
   if (x < 0){
     r = 0 - x;
   } 
@@ -15,7 +15,7 @@ function dubble(p){ return p + p }
 
 /*@ main :: (number) => {v:number | v >= 0 } */
 function main(y){
-  var y = abs(dubble, y);
+  let y = abs(dubble, y);
   assert(y >= 0);
   return y;
 }

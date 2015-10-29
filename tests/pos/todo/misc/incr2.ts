@@ -21,7 +21,7 @@ function foo(x:number):number{
 
 /*@ bar :: (x:number) => {number|v = x + 4} */
 function bar(x:number):number{
-    var z = incrBy(x++, x++);
+    let z = incrBy(x++, x++);
     z = incrBy(x++, x++);
     return x;
 }

@@ -2,7 +2,7 @@
             /\ (string, string) => string */
 function plus(x, y) {
     
-    var z = x + y;
+    let z = x + y;
     return z;
 }
 

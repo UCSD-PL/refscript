@@ -11,13 +11,13 @@ function incr(x:number):number{
 
 /*@ incrBy :: (x:number, k:number) => {number|v = x + k} */
 function incrBy(x:number, k:number):number{
-  var z = x + k;
+  let z = x + k;
   return z;
 }
 
 /*@ bar :: (x:number) => {number|v = x + 4} */
 function bar(x:number):number{
-  var z = incrBy(x++, x++);
+  let z = incrBy(x++, x++);
   z = incrBy(x++, x++);
   return x;
 }

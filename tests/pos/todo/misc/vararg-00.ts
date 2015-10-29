@@ -3,7 +3,7 @@
 */
 
 function concat(x, y) { 
-    var z = x + y;
+    let z = x + y;
     return z;
 }
 
@@ -16,10 +16,10 @@ function buildName(firstName, lastName) {
     if (typeof(lastName) === "number")
         return firstName;
    
-    var a = concat (" ", lastName);
-    var b = concat(firstName, a);
+    let a = concat (" ", lastName);
+    let b = concat(firstName, a);
     return b;
 }
 
-var a = buildName("Bob", 12);         //works correctly now
-var b = buildName("Bob", "Adams");      //ah, just right
+let a = buildName("Bob", 12);         //works correctly now
+let b = buildName("Bob", "Adams");      //ah, just right

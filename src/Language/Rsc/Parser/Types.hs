@@ -277,10 +277,10 @@ boundTypeP c
 argBind :: RRType -> BindQ RK F.Reft
 argBind t = B (rTypeValueVar t) t
 
-bareAtomP :: (PContext -> Parser (F.Reft -> a)) -> PContext -> Parser a
+-- bareAtomP :: (PContext -> Parser (F.Reft -> a)) -> PContext -> Parser a
 bareAtomP p c
-  =  try (xrefP (p c))
- <|> try (refP (p c))
+  =  try (xrefP  (p c))
+ <|> try (refP   (p c))
  <|>     (dummyP (p c))
 
 bbaseP :: PContext -> Parser (F.Reft -> RRType)

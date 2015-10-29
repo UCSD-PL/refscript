@@ -3,9 +3,9 @@
 function main(xx: number): number {
     
   /*@ readonly x :: # */
-  var x = xx;
+  let x = xx;
 
-	var rand = 10;
+	let rand = 10;
 	if (rand > 5) {
 		rand = rand + 1;
 	}
@@ -14,7 +14,7 @@ function main(xx: number): number {
 		return a + x 
 	};
 	
-	var z = plus(12);
+	let z = plus(12);
 
 	return z;
 }

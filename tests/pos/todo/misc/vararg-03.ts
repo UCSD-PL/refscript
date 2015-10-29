@@ -5,7 +5,7 @@
  */
 
 function buildName(firstName: string, lastName?: string) {
-    var zog = arguments.length;
+    let zog = arguments.length;
     
     assert (zog > 0);
 
@@ -15,5 +15,5 @@ function buildName(firstName: string, lastName?: string) {
         return firstName;
 }
 
-var result1 = buildName("Bob");                  //works correctly now
-var result3 = buildName("Bob", "Adams");         //ah, just right
+let result1 = buildName("Bob");                  //works correctly now
+let result3 = buildName("Bob", "Adams");         //ah, just right

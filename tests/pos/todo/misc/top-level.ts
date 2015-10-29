@@ -1,6 +1,6 @@
 
 /*@ readonly a :: # */
-var a = 1; 
+let a = 1; 
 
 
 /*@ foo :: () => { number | v > 0 } */

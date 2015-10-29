@@ -26,7 +26,7 @@ function work():void{
 /*@ loop :: (number, number) => number */
 function loop(n:number, l:number) {
   
-	var flag :number= random();
+	let flag :number= random();
 	if (n <= 0) {
 		return l;
 	}
@@ -41,7 +41,7 @@ function loop(n:number, l:number) {
 
 /*@ main :: ({n:number|n > 0}) => void */
 function main(n){
-	var l :number= create();
+	let l :number= create();
 	loop(n, l);
 	assert(l === 0);
 }

@@ -155,13 +155,13 @@ function run(testFile: TestFile) {
 function postProcess() {
     if (failures.length > 0) {
         console.log();
-        console.log("FAILURES".bold.red);
+        console.log((failures.length + " FAILURES").bold.red);
         failures.forEach(f => console.log(f));
     }
 
     if (exceptions.length > 0) {
         console.log();
-        console.log("EXCEPTIONS".bold.red);
+        console.log((exceptions.length + " EXCEPTIONS").bold.red);
         exceptions.forEach(f => console.log(f));
     }
 }

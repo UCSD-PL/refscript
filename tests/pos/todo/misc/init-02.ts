@@ -6,6 +6,6 @@
 
 /*@ init :: forall T. (number) => {v: T | true} */
 function init<T>(n:number):T{
-    var x:T = crash();
+    let x:T = crash();
     return x;
 }

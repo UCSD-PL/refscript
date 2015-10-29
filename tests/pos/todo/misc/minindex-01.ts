@@ -4,7 +4,7 @@
 
 function forloop<A>(lo: number, hi: number, body: (x: number, y:A) => A, accum: A): A {
 	if (lo < hi) {
-		var newAcc = body(lo, accum);
+		let newAcc = body(lo, accum);
 		return forloop(lo + 1, hi, body, newAcc);
 	}
 	return accum;
@@ -14,7 +14,7 @@ function forloop<A>(lo: number, hi: number, body: (x: number, y:A) => A, accum: 
 function minIndex(a:number[]):number{
 
   /*@ readonly aa :: # */
-  var aa = a; 
+  let aa = a; 
 
   // XXX : MAKE SURE THE NESTED FUNCTIONS arguments BINDS, INDEED SHADOW THE
   //       ENCLOSING FUNCTIONS ... 

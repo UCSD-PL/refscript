@@ -26,11 +26,11 @@ class Snake extends Animal {
 /*@ move :: (a: Animal<Immutable>) => { void | true } */
 function move(a: Animal) {
   if (a.kind === "horse") {
-    var h = <Horse>a;
+    let h = <Horse>a;
     h.gallop();
   }
   else if (a.kind === "snake") {
-    var s = <Snake>a;
+    let s = <Snake>a;
     s.sneak();
   }
 }

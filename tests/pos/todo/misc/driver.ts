@@ -41,9 +41,9 @@ function driver(l:number, newCount:number, oldCount:number){
 
 /*@ main :: () => void */
 function main():void {
-	var newCount = pos();
-	var oldCount = pos(); 
-	var l :number= create();
+	let newCount = pos();
+	let oldCount = pos(); 
+	let l :number= create();
 	if (newCount < oldCount) {
 		l = driver(l, newCount, oldCount); 
 		l = release(l);

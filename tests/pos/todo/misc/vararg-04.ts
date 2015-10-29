@@ -3,7 +3,7 @@
            /\ (x: number) => {number + undefined | true} 
  */ 
 function foo(x: any, y?: any): any {
-  var bobZooo = arguments.length;
+  let bobZooo = arguments.length;
   assert (bobZooo > 0);
   return 1;
 }

@@ -27,7 +27,7 @@ function release(l:number):number{
 
 /*@ loop :: (number, number) => number */
 function loop(n:number, l:number):number {
-	var flag :number= random();
+	let flag :number= random();
 	if (0 < n){
 		if (0 < flag){ 
 			l = acquire(l); 
@@ -42,8 +42,8 @@ function loop(n:number, l:number):number {
 
 /*@ main :: ({n:number|n > 0}) => void */
 function main(n:number):void{
-	var flag :number= random();
-	var l:number= create();
+	let flag :number= random();
+	let l:number= create();
 	loop(n, l);
 	assert(l === 0);
 }

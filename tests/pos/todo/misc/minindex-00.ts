@@ -3,7 +3,7 @@
 /*@ loop :: (#Array[#Immutable,number], number, number) => number */ 
 function loop(b: number[], min: number, i: number): number {
   if (i < b.length) {
-    var min_ = min;
+    let min_ = min;
     assert(i < b.length);
     if (b[i] < b[min]) { 
       min_ = i; 
@@ -15,7 +15,7 @@ function loop(b: number[], min: number, i: number): number {
 
 /*@ minIndex :: ({a: #Array[#Immutable,number] | 0 < (len a)}) => {v:number | (0 <= v && v < (len a))} */ 
 function minIndex(a){
-  var r = loop(a, 0, 0);
+  let r = loop(a, 0, 0);
   return r;
 }
 

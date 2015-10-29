@@ -6,8 +6,8 @@ function apply<A,B>(f: (a: A) => B, x: A): B {
 
 /*@ main :: (x:number, boolean) => { v:number |v > x} */
 function main(x:number,y:boolean) : number {
-	var yr = idt(y);
-	var xr = idt(x);
+	let yr = idt(y);
+	let xr = idt(x);
   
 	function plus(a:number): number {  
 		return a + 1;

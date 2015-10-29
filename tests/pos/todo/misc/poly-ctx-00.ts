@@ -8,6 +8,6 @@ function id(x:any):any{
            /\ (string)  => {string  | true}
  */
 function foo(y){
-  var z = id(y);
+  let z = id(y);
   return z;
 }

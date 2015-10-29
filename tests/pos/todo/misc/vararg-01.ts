@@ -15,10 +15,10 @@ function buildName(firstName:any, lastName:any) : string {
     if (typeof(lastName) === "number")
         return firstName;
   
-    var a = plus (" ", lastName);
-    var b = plus(firstName, a);
+    let a = plus (" ", lastName);
+    let b = plus(firstName, a);
     return b;
 }
 
-var a = buildName("Bob", 12);         //works correctly now
-var b = buildName("Bob", "Adams");      //ah, just right
+let a = buildName("Bob", 12);         //works correctly now
+let b = buildName("Bob", "Adams");      //ah, just right

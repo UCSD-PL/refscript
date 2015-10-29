@@ -3,7 +3,7 @@
 /*@ range :: (number, number) => IArray<number> */
 function range(lo: number, hi: number) {
     if (lo < hi) {
-        var rest: number[] = range(lo + 1, hi);
+        let rest: number[] = range(lo + 1, hi);
         return [lo].concat(rest);
     }
     return [];
@@ -14,7 +14,7 @@ function foldl(f, acc, xs) {
     if (xs.length === 0) {
         return acc;
     } else {
-        var acc_ = f(acc, xs[0]);
+        let acc_ = f(acc, xs[0]);
         return foldl(f, acc_, xs.slice(1, xs.length));
     }
 }
@@ -23,7 +23,7 @@ function foldl(f, acc, xs) {
 function minIndex(a) {
 
     /*@ readonly aa :: # */
-    var aa = a;
+    let aa = a;
 
     function step(i: number, min: number) {
         if (aa[i] < aa[min]) {

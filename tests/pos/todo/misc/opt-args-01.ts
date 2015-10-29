@@ -5,16 +5,16 @@ function foo(l?: number)
 {
 
   /*@ local loc :: number + undefined */
-  var loc = l;
+  let loc = l;
 
   if (arguments.length < 1) {
 
     /*@ local zero :: number + undefined */
-    var zero = 0;
+    let zero = 0;
     loc = zero;
   }
 
-  var l1 = <number>loc;
+  let l1 = <number>loc;
 
   assert(0 <= l1);
 }

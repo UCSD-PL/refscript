@@ -1,11 +1,6 @@
 
-// OLD STYLE
-/* qualif HasP(v:a, s:string): hasProperty(v,s) */
-/* qualif EnumP(v:a, s:string): enumProp(v,s) */
-
-// NEW STYLE
-/*@ qualif HasP[T](v:T, x:string) { hasProperty (v, s) } */
-/*@ qualif EnumP[T](v:T, s:string) { enumProp(v, s) } */
+/*@ qualif HasP(v:string, s:a): hasProperty(v,s) */
+/*@ qualif EnumP(v:string, s:a): enumProp(v,s) */
 
 /*@ extend :: (
     src:[Immutable]{[s:string]:string}

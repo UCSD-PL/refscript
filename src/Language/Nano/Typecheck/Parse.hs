@@ -576,7 +576,7 @@ parseAnnot = go
     go (RawClass    (ss, _)) = Class   <$> patch2 ss <$> classDeclP
     go (RawTAlias   (ss, _)) = TAlias  <$> patch2 ss <$> tAliasP
     go (RawPAlias   (ss, _)) = PAlias  <$> patch2 ss <$> pAliasP
-    go (RawQual     (_ , _)) = Qual    <$>               qualifierP sortP
+    go (RawQual     (_ , _)) = Qual    <$>               qualifierP btSortP
     go (RawOption   (_ , _)) = Option  <$>               optionP
     go (RawInvt     (ss, _)) = Invt               ss <$> bareTypeP
     go (RawCast     (ss, _)) = CastSp             ss <$> bareTypeP
@@ -584,8 +584,10 @@ parseAnnot = go
     go (RawReadOnly (ss, _)) = return  $ RdOnly ss
 
 
-patch2 ss (id,t)   = (fmap (const ss) id ,t)
-patch3 ss (id,a,t) = (fmap (const ss) id ,a,t)
+btSortP = rTypeSort <$> bareTypeP
+
+patch2 ss (x,t)   = (fmap (const ss) x , t)
+patch3 ss (x,a,t) = (fmap (const ss) x , a, t)
 
 getSpecString :: RawSpec -> String
 getSpecString = go
@@ -972,21 +974,21 @@ factTvars = go
   -- OLD CODE    <|> (FObj . symbol <$> lowerIdP)
 -- OLD CODE
 -- OLD CODE    varSortP  = FVar  <$> parens intP
-
-intP :: Parser Int
-intP = fromInteger <$> integer
-
-fTyConP :: Parser FTycon
-fTyConP = symbolFTycon <$> locUpperIdP
-
-fApp' :: LocSymbol -> Sort
-fApp' ls
-  | s == "int"     = intSort
-  | s == "Integer" = intSort
-  | s == "Int"     = intSort
-  | s == "int"     = intSort
-  | s == "real"    = realSort
-  | s == "bool"    = boolSort
-  | otherwise      = fTyconSort . symbolFTycon $ ls
-  where
-    s              = symbolString $ val ls
+-- OLD CODE
+-- OLD CODE intP :: Parser Int
+-- OLD CODE intP = fromInteger <$> integer
+-- OLD CODE
+-- OLD CODE fTyConP :: Parser FTycon
+-- OLD CODE fTyConP = symbolFTycon <$> locUpperIdP
+-- OLD CODE
+-- OLD CODE fApp' :: LocSymbol -> Sort
+-- OLD CODE fApp' ls
+  -- OLD CODE | s == "int"     = intSort
+  -- OLD CODE | s == "Integer" = intSort
+  -- OLD CODE | s == "Int"     = intSort
+  -- OLD CODE | s == "int"     = intSort
+  -- OLD CODE | s == "real"    = realSort
+  -- OLD CODE | s == "bool"    = boolSort
+  -- OLD CODE | otherwise      = fTyconSort . symbolFTycon $ ls
+  -- OLD CODE where
+    -- OLD CODE s              = symbolString $ val ls

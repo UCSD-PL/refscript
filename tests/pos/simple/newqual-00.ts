@@ -5,15 +5,11 @@
 
 // This fails, because currently parsed as `num @(0)` (yikes!)
 
-/* qualif Eq5(v:number): v = 5 */
-
-// GOAL: get this new syntax to work
-
-/*@ qualif Eq5(v:number) { v = 5 } */
+/*@ qualif Eq5(v:number): v = 5 */
 
 
 /*@ foo :: () => number */
-function foo():number{
+function foo(){
   return 5;
 }
 

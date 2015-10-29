@@ -1,10 +1,9 @@
 
-/*@ qualif HDP(v:a, s:string): hasDirectProperty(v,s) */
-/*@ qualif HIP(v:a, s:string): hasProperty(v,s) */
+/*@ qualif HasDP(v:string, s:a): hasDirectProperty(v,s) */
+/*@ qualif HasP(v:string, s:a): hasProperty(v,s)        */
+/*@ qualif EnumP(v:string, s:a): enumProp(v,s)          */
 
-/*@ qualif Bot(v:a, s:string): enumProp(v,s) */
-
-/*@ extend :: ( src:  [Immutable]{[s:string]: top }, dest: [Mutable]{[s:string]: top}) 
+/*@ extend :: ( src:  [Immutable]{[s:string]: top }, dest: [Mutable]{[s:string]: top})
            => { [Mutable] {[s:string]: top } | true }
  */
 function extend(src, dest) {
@@ -26,5 +25,4 @@ var this_options = extend({
     renderHighlights: false,
     renderReflections: false,
     rayDepth: 2
-  }, /*options || */{}); 
-
+  }, /*options || */{});

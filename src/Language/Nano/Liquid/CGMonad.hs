@@ -154,19 +154,12 @@ cgStateCInfo f pgm ((fcs, fws), cg) = CGI finfo (cg_ann cg)
     lits2    = cgLits bs fcs
 
 cgLits :: F.BindEnv -> [F.SubC a] -> F.SEnv F.Sort
-cgLits bs cs = F.fromListSEnv $ csLits ++ bsLits
+cgLits bs cs = F.fromListSEnv cts
   where
+    cts      = [ (F.symbol c, F.strSort) | c <- csLits ++ bsLits ]
     csLits   = concatMap symConsts cs
     bsLits   = symConsts bs
-
 -- OLD? patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
-
-
-symConstLits    :: F.FInfo a -> [(F.Symbol, F.Sort)]
-symConstLits fi = [(F.symbol c, F.strSort) | c <- symConsts fi]
-
-
-
 
 -- | Get binding from object type
 

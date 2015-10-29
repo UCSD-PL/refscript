@@ -211,7 +211,7 @@ declare function builtin_OpLShift(a: number, b: number): number;
 declare function builtin_OpSpRShift(a: number, b: number): number;
 declare function builtin_OpZfRShift(a: number, b: number): number;
 
-/*   predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
+/*   predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec Size32))) */
 
 
 /**
@@ -537,7 +537,7 @@ interface EmptyObject {
 declare function builtin_PrefixTypeof<A>(x: A): string; 
 
 /*@ builtin_BITruthy :: 
-    /\ (b: bitvector32) => { v: boolean | ((Prop v) <=> (b /= (lit "#x00000000" (BitVec (Size32 obj))))) }
+    /\ (b: bitvector32) => { v: boolean | ((Prop v) <=> (b /= (lit "#x00000000" (BitVec Size32)))) }
     /\ forall A. (x:A)  => { v: boolean | ((Prop v) <=> Prop(x)) }        
 */
 declare function builtin_BITruthy<A>(x: A): boolean; 

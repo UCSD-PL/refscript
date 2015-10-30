@@ -39,3 +39,4 @@ js/
 css/
 /tests/logs/*
 /out
+.stack-work

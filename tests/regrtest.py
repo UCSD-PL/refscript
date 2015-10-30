@@ -119,6 +119,6 @@ testCategories = [ ("objects",   [])
 testdirs = [("/".join([s, c]), p, fs) for (s, p)  in testSign 
                                       for (c, fs) in testCategories ]
 
-runner    = rtest.TestRunner (Config ("rsc", options.opts, testdirs, logfile, options.threadcount))
+runner    = rtest.TestRunner (Config ("stack exec -- rsc", options.opts, testdirs, logfile, options.threadcount))
 runner.run ()
 

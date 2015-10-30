@@ -1,8 +1,4 @@
 
-/*@ qualif Num(v : number): (v < 3) */
-/* qualif Len(v : number): (0 < (len v)) */
-
-/* junk :: { number | (0 < v && v < 40) } */
 var junk = 0;
 
 /*@ readonly arr :: # */

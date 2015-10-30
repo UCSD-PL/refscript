@@ -1,6 +1,7 @@
 // Taken from strobe
-/*@ qualif Bot(v:a,s:string): hasProperty(v,s) */
-/*@ qualif Bot(v:a,s:string): enumProp(v,s) */
+
+/*@ qualif HasP(v:string, s:A): hasProperty(v,s) */
+/*@ qualif EnumP(v:string, s:A): enumProp(v,s)    */
 
 /*@ foo :: (o: { [x:string]: string + number }) => { number | 0 < 1 } */ 
 function foo(o) {

@@ -31,7 +31,7 @@ refTypeQualifiers γ0 (l, t) = efoldRType rTypeSort addQs γ0 [] t
     addQs γ t qs  = mkQuals l γ t ++ qs
 
 mkQuals l γ t     = [ mkQual l γ v so pa | let (RR so (Reft (v, ra))) = rTypeSortedReft t
-                                         , pa                        <- conjuncts $ raPred ra
+                                         , pa                        <- conjuncts ra
                     ]
 
 mkQual l γ v so p = Q (symbol "Auto") ((v, so) : yts) (subst θ p) l0
@@ -47,4 +47,3 @@ lookupSort l  x γ = fromMaybe err $ lookupSEnv x γ
     err           = die $ bug (srcPos l) $ "Unbound variable " ++ show x ++ " in specification for " ++ show (unId l)
 
 orderedFreeVars γ = nub . filter (`memberSEnv` γ) . syms
-

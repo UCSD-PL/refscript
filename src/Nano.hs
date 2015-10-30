@@ -10,14 +10,13 @@ import qualified Language.Nano.Liquid.Types         as L
 
 import           System.Console.CmdArgs     hiding  (Loud)
 
-
 import           Data.Aeson                         (eitherDecode)
 import           Data.Aeson.Types            hiding (Parser, Error, parse)
 import           Language.Nano.CmdLine
 import           Language.Nano.Errors
 import           Language.Nano.Files
 import           Language.Nano.SystemUtils
-import           Language.Nano.Misc                 (mapi)
+import           Language.Nano.Misc                 (single, mapi)
 import           Control.Exception                  (catch)
 import           Control.Monad
 import           Data.List                          (sort, nub)
@@ -147,13 +146,13 @@ renderAnnotations srcFile res (NoAnn :: UAnnSol t)
        vimFile  = extFileName Annot (srcFile ++ ".vim")
 
 renderAnnotations srcFile res (SomeAnn ann sol)
-  = do writeFile   annFile  $ wrapStarsWithOptStars False "Constraint Templates" ++ "\n"
-       appendFile  annFile  $ ppshow ann
-       appendFile  annFile  $ wrapStarsWithOptStars False "Inferred Types"       ++ "\n"
-       appendFile  annFile  $ ppshow ann'
+  = do -- writeFile   annFile  $ wrapStarsWithOptStars False "Constraint Templates" ++ "\n"
+       -- appendFile  annFile  $ ppshow ann
+       -- appendFile  annFile  $ wrapStarsWithOptStars False "Inferred Types"       ++ "\n"
+       -- appendFile  annFile  $ ppshow ann'
        B.writeFile jsonFile $ annotByteString res ann'
        writeFile   vimFile  $ annotVimString res ann'
-       donePhaseWithOptStars False Loud "Written Inferred Annotations"
+       donePhase Loud "Written Inferred Annotations"
     where
        jsonFile = extFileName Json  srcFile
        vimFile  = extFileName Annot (srcFile ++ ".vim")

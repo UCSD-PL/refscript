@@ -42,6 +42,7 @@ import qualified Data.Foldable                    as     FO
 import           Data.Vector                             ((!))
 import           Data.Graph.Inductive.Graph
 
+import           Control.Arrow                           (first, second)
 import           Control.Monad
 import           Control.Monad.Trans                     (MonadIO,liftIO)
 import           Control.Applicative                     ((<$>), (<*>) , (<*) , (*>))
@@ -49,14 +50,15 @@ import           Control.Applicative                     ((<$>), (<*>) , (<*) , 
 import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc                  (mapEither, mapSnd, fst3, mapFst)
+import           Language.Fixpoint.Misc                  (fst3)
+import           Language.Fixpoint.Names                 (symbolString)
 
 import           Language.Nano.Annots
 import           Language.Nano.Errors
 import           Language.Nano.Env
-import           Language.Nano.Locations hiding (val)
+import           Language.Nano.Locations          hiding (val)
 import           Language.Nano.Names
-import           Language.Nano.Misc                      (fst4)
+import           Language.Nano.Misc                      (mapEither, fst4)
 import           Language.Nano.Program
 import           Language.Nano.Types              hiding (Exported)
 import           Language.Nano.Visitor
@@ -137,12 +139,12 @@ aliasVarsP =  try (brackets avarsP)
   where
     avarsP = sepBy aliasVarP comma
 
-aliasVarP     = withSpan (,) (wordP $ \_ -> True)
+aliasVarP     = withSpan (,) (wordP $ const True)
 
 aliasVarT :: (SrcSpan, Symbol) -> Either TVar Symbol
 aliasVarT (l, x)
   | isTvar x' = Left  $ tvar l x
-  | otherwise = Right $ x
+  | otherwise = Right x
   where
     x'        = symbolString x
 
@@ -244,7 +246,7 @@ assignabilityP
  <|>     (return WriteGlobal)
 
 postP p post
-  = (\x _ -> x) <$> p <*> post
+  = const <$> p <*> post
 
 ----------------------------------------------------------------------------------
 -- | RefTypes
@@ -254,11 +256,11 @@ postP p post
 ----------------------------------------------------------------------------------
 bareTypeP :: Parser (RTypeQ RK Reft)
 ----------------------------------------------------------------------------------
-bareTypeP = bareAllP $ bodyP
+bareTypeP = bareAllP bodyP
   where
     bodyP =  try bUnP
          <|> try (refP rUnP)
-         <|>     (xrefP rUnP)
+         <|>     xrefP rUnP
 
 rUnP        = mkU <$> parenNullP (bareTypeNoUnionP `sepBy1` plus) toN
   where
@@ -322,7 +324,7 @@ bareMethP
 
 bareArgP
   =   (try boundTypeP)
- <|>  (argBind <$> try (bareTypeP))
+ <|>  (argBind <$> try bareTypeP)
 
 boundTypeP = do s <- symbol <$> identifierP
                 withinSpacesP colon
@@ -391,9 +393,10 @@ tvar l x = TV x l
 
 isTvar   = not . isLower . head
 
-wordP p  = condIdP ok p
+wordP :: (String -> Bool) -> Parser Symbol
+wordP  = condIdP ok
   where
-    ok   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
+    ok  = HS.fromList $ ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
 ----------------------------------------------------------------------------------
 tConP :: Parser TCon
@@ -573,7 +576,7 @@ parseAnnot = go
     go (RawClass    (ss, _)) = Class   <$> patch2 ss <$> classDeclP
     go (RawTAlias   (ss, _)) = TAlias  <$> patch2 ss <$> tAliasP
     go (RawPAlias   (ss, _)) = PAlias  <$> patch2 ss <$> pAliasP
-    go (RawQual     (_ , _)) = Qual    <$>               (qualifierP sortP)
+    go (RawQual     (_ , _)) = Qual    <$>               qualifierP btSortP
     go (RawOption   (_ , _)) = Option  <$>               optionP
     go (RawInvt     (ss, _)) = Invt               ss <$> bareTypeP
     go (RawCast     (ss, _)) = CastSp             ss <$> bareTypeP
@@ -581,8 +584,10 @@ parseAnnot = go
     go (RawReadOnly (ss, _)) = return  $ RdOnly ss
 
 
-patch2 ss (id,t)   = (fmap (const ss) id ,t)
-patch3 ss (id,a,t) = (fmap (const ss) id ,a,t)
+btSortP = rTypeSort <$> bareTypeP
+
+patch2 ss (x,t)   = (fmap (const ss) x , t)
+patch3 ss (x,a,t) = (fmap (const ss) x , a, t)
 
 getSpecString :: RawSpec -> String
 getSpecString = go
@@ -740,7 +745,7 @@ mkCode' :: [Statement (SrcSpan, [Spec])] -> NanoBareRelR Reft
 ---------------------------------------------------------------------------------
 mkCode' ss = Nano {
         code          = Src (checkTopStmt <$> ss')
-      , consts        = envFromList [ mapSnd (ntrans f g) t | Meas t <- anns ]
+      , consts        = envFromList [ second (ntrans f g) t | Meas t <- anns ]
       , tAlias        = envFromList [ t | TAlias t <- anns ]
       , pAlias        = envFromList [ t | PAlias t <- anns ]
       , pQuals        =             [ t | Qual   t <- anns ]
@@ -776,8 +781,8 @@ extractFact = go
     go (Class   (_,t)  ) = Just $ ClassAnn  t
     go (Iface   (_,t)  ) = Just $ IfaceAnn  t
     go (CastSp  _ t    ) = Just $ UserCast  t
-    go (Exported  _    ) = Just $ ExportedElt
-    go (RdOnly  _      ) = Just $ ReadOnlyVar
+    go (Exported  _    ) = Just   ExportedElt
+    go (RdOnly  _      ) = Just   ReadOnlyVar
     go (AnFunc  t      ) = Just $ FuncAnn   t
     go _                 = Nothing
 
@@ -803,7 +808,7 @@ stmtTypeBindings _                = go
                                             , VarAnn  (_, Just t) <- ann_fact l ]
     go _                          = []
 
-celtTypeBindings _                = (mapSnd eltType <$>) . go
+celtTypeBindings _                = (second eltType <$>) . go
   where
     go (Constructor l _ _)        = [(x, e) | ConsAnn  e <- ann_fact l
                                             , let x       = Id l "ctor" ]
@@ -827,7 +832,7 @@ buildCHA pgm        = pgm { pCHA = ClassHierarchy graph namesToKeys }
     graph           = mkGraph nodes edges
     nodes           = zip ([0..] :: [Int]) $ fst3 <$> data_
     keysToTypes     = I.fromList $ zip [0..] (fst3 <$> data_)
-    namesToKeys     = HM.fromList $ mapFst t_name . swap <$> I.toList keysToTypes
+    namesToKeys     = HM.fromList $ first t_name . swap <$> I.toList keysToTypes
     edges           = concatMap toEdge data_
     toEdge (_,s,ts) = [ (σ,τ,()) | t <- ts
                                  , σ <- maybeToList $ HM.lookup s namesToKeys
@@ -855,10 +860,10 @@ parseAnnots :: [Statement (SrcSpan, [RawSpec])]
 --------------------------------------------------------------------------------------
 parseAnnots ss =
   case mapAccumL (mapAccumL f) (0,[]) ss of
-    ((_,[]),b) -> Right $ b
+    ((_,[]),b) -> Right b
     ((_,es),_) -> Left  $ Unsafe es
   where
-    f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
+    f st (ss,sp) = second (ss,) $ L.mapAccumL (parse ss) st sp
 
 --------------------------------------------------------------------------------------
 parse :: SrcSpan -> (PState, [Error]) -> RawSpec -> ((PState, [Error]), Spec)
@@ -869,10 +874,10 @@ parse _ (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
                   state <- getState
                   it    <- getInput
                   case it of
-                    ""  -> return $ (state, a)
+                    ""  -> return (state, a)
                     _   -> unexpected $ "trailing input: " ++ it
 
-    failLeft (Left err)      = ((st, (fromError err): errs), ErrorSpec)
+    failLeft (Left err)      = ((st, fromError err : errs), ErrorSpec)
     failLeft (Right (s, r))  = ((s, errs), r)
 
     -- Slight change from this one:
@@ -960,34 +965,30 @@ factTvars = go
     go _                    = []
 
 
-sortP
-  =   try (parens $ sortP)
-  <|> try (string "@"    >> varSortP)
-  -- <|> try (string "func" >> funcSortP)
- --  <|> try (fApp (Left listFTyCon) . single <$> brackets sortP)
-  <|> try bvSortP
-  -- <|> try baseSortP
-  <|> try (fApp' <$> locLowerIdP)
-  <|> try (fApp  <$> (Left <$> fTyConP) <*> sepBy sortP blanks)
-  <|> (FObj . symbol <$> lowerIdP)
-
-varSortP  = FVar  <$> parens intP
-
-intP :: Parser Int
-intP = fromInteger <$> integer
-
-fTyConP :: Parser FTycon
-fTyConP = symbolFTycon <$> locUpperIdP
-
-fApp' :: LocSymbol -> Sort
-fApp' ls
-  | s == "int"     = intSort
-  | s == "Integer" = intSort
-  | s == "Int"     = intSort
-  | s == "int"     = intSort
-  | s == "real"    = realSort
-  | s == "bool"    = boolSort
-  | otherwise      = fTyconSort . symbolFTycon $ ls
-  where
-    s              = symbolString $ val ls
-
+-- OLD CODE    sortP
+  -- OLD CODE    =   try (parens sortP)
+  -- OLD CODE    <|> try (string "@"    >> varSortP)
+  -- OLD CODE    <|> try bvSortP
+  -- OLD CODE    <|> try (fApp' <$> locLowerIdP)
+  -- OLD CODE    <|> try (fApp  <$> (Left <$> fTyConP) <*> sepBy sortP blanks)
+  -- OLD CODE    <|> (FObj . symbol <$> lowerIdP)
+-- OLD CODE
+-- OLD CODE    varSortP  = FVar  <$> parens intP
+-- OLD CODE
+-- OLD CODE intP :: Parser Int
+-- OLD CODE intP = fromInteger <$> integer
+-- OLD CODE
+-- OLD CODE fTyConP :: Parser FTycon
+-- OLD CODE fTyConP = symbolFTycon <$> locUpperIdP
+-- OLD CODE
+-- OLD CODE fApp' :: LocSymbol -> Sort
+-- OLD CODE fApp' ls
+  -- OLD CODE | s == "int"     = intSort
+  -- OLD CODE | s == "Integer" = intSort
+  -- OLD CODE | s == "Int"     = intSort
+  -- OLD CODE | s == "int"     = intSort
+  -- OLD CODE | s == "real"    = realSort
+  -- OLD CODE | s == "bool"    = boolSort
+  -- OLD CODE | otherwise      = fTyconSort . symbolFTycon $ ls
+  -- OLD CODE where
+    -- OLD CODE s              = symbolString $ val ls

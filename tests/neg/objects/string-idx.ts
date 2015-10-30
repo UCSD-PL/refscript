@@ -1,6 +1,6 @@
 
-/*@ qualif Bot(v:a, s:string): hasProperty(v,s) */
-/*@ qualif Bot(v:a, s:string): enumProp(v,s) */
+/*@ qualif HasP(v:string, s:a): hasProperty(v,s) */
+/*@ qualif EnumP(v:string, s:a): enumProp(v,s) */
 
 /*@ extend :: (
     src:[Immutable]{[s:string]:string}
@@ -25,5 +25,4 @@ var this_options = extend({
     renderHighlights: false,
     renderReflections: false,
     rayDepth: 2
-  }, options || {}); 
-
+  }, options || {});

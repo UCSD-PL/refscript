@@ -54,8 +54,10 @@ import           Language.Nano.Names
 import           Language.Nano.Types
 
 import           Language.Nano.Syntax
+import           Language.Nano.Misc (errortext)
 import           Language.Nano.Syntax.PrettyPrint
 
+import           Language.Fixpoint.Names (symbolString)
 import           Language.Fixpoint.Misc hiding (mkGraph)
 import qualified Language.Fixpoint.Types        as F
 
@@ -85,7 +87,7 @@ data Nano a r = Nano {
   --
   -- ^ Predicate aliases
   --
-  , pAlias    :: !(PAliasEnv)
+  , pAlias    :: !PAliasEnv
   --
   -- ^ Qualifiers
   --
@@ -327,7 +329,7 @@ instance IsNano (Statement a) where
 
 instance IsNano (ClassElt a) where
   isNano (Constructor _ _ ss)       = all isNano ss
-  isNano (MemberMethDecl _ _ _ _ )  = True
+  isNano (MemberMethDecl {})        = True
   isNano (MemberMethDef _ _ _ _ ss) = all isNano ss
   isNano (MemberVarDecl _ _ _ eo)   = isNano eo
 
@@ -335,7 +337,7 @@ instance IsNano a => IsNano (Maybe a) where
   isNano (Just x) = isNano x
   isNano Nothing  = True
 
-instance IsNano [(Statement a)] where
+instance IsNano [Statement a] where
   isNano = all isNano
 
 instance IsNano (ForInit a) where
@@ -355,7 +357,7 @@ isNanoExprStatement (UnaryAssignExpr _ _ lv) = isNano lv
 isNanoExprStatement (AssignExpr _ o lv e)    = isNano o && isNano lv && isNano e
 isNanoExprStatement (CallExpr _ e es)        = all isNano (e:es)
 isNanoExprStatement (Cast _ e)               = isNanoExprStatement e
-isNanoExprStatement e@(FuncExpr _ _ _ _ )    = errortext (text "Unannotated function expression" <+> pp e)
+isNanoExprStatement e@(FuncExpr {})          = errortext (text "Unannotated function expression" <+> pp e)
 isNanoExprStatement e                        = errortext (text "Not Nano ExprStmtZ!" <+> pp e)
 
 -- | Switch Statement
@@ -380,11 +382,11 @@ instance EndsWithBreak ([Statement a]) where
   endsWithBreak [] = False
   endsWithBreak xs = endsWithBreak $ last xs
 
-instance IsNano [(CaseClause a)] where
+instance IsNano [CaseClause a] where
   isNano [] = False
   isNano xs = all isNano xs && holdsInit (not . defaultC) xs
     where
-      defaultC (CaseClause _ _ _) = False
+      defaultC (CaseClause {})    = False
       defaultC (CaseDefault _ _ ) = True
 
 -- | Check if `p` hold for all xs but the last one.
@@ -401,7 +403,7 @@ checkTopStmt s | otherwise     = throw $ errorInvalidTopStmt (srcPos s) s
 
 checkBody :: [Statement a] -> Bool
 -- Adding support for loops so removing the while check
-checkBody stmts = all isNano stmts -- && null (getWhiles stmts)
+checkBody = all isNano -- && null (getWhiles stmts)
 
 flattenStmt (BlockStmt _ ss) = concatMap flattenStmt ss
 flattenStmt s                = [s]
@@ -412,7 +414,7 @@ flattenStmt s                = [s]
 --------------------------------------------------------------------------------
 
 mkSSAId :: (F.Symbolic x, IsLocated a) => a -> x -> Int -> Id a
-mkSSAId l x n = Id l (F.symbolString (F.symbol x) ++ ssaStr ++ show n)
+mkSSAId l x n = Id l (symbolString (F.symbol x) ++ ssaStr ++ show n)
 
 mkNextId :: Id a -> Id a
 mkNextId (Id a x) =  Id a $ nextStr ++ x
@@ -429,11 +431,11 @@ mkKeysIdxId (Id a x) =  Id a $ keysIdxStr ++ x
 mkCtorId l (Id _ x) = Id l $ mkCtorStr x
 mkCtorStr x         = x ++ ctorStr
 
-nextStr    = "_NEXT_"
-ssaStr     = "_SSA_"
-keysIdxStr = "_KEYS_IDX_"
-keysStr    = "_KEYS_"
+nextStr    = "NEXT_"
+keysIdxStr = "KEYS_IDX_"
+keysStr    = "KEYS_"
 ctorStr    = "_CTOR_"
+ssaStr     = "_SSA_"
 
 
 

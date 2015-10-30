@@ -7,6 +7,8 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE UndecidableInstances       #-}
 {-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE ViewPatterns               #-}
+{-# LANGUAGE OverloadedStrings          #-}
 
 -- | Module pertaining to Refinement Type descriptions and conversions
 --   Likely mergeable with @Language.Nano.Typecheck.Types@
@@ -63,15 +65,17 @@ module Language.Nano.Liquid.Types (
 
   ) where
 
+import           Control.DeepSeq
 import           Data.Maybe              (fromMaybe, catMaybes, maybeToList)
 import qualified Data.List               as L
+import qualified Data.Text               as T
 import qualified Data.HashMap.Strict     as HM
 import qualified Data.Map.Strict         as M
-import           Data.Monoid                        (mconcat)
+-- import           Data.Monoid                        (mconcat)
 import qualified Data.Traversable        as T
 import           Text.PrettyPrint.HughesPJ
 import           Text.Printf
-import           Control.Applicative
+-- import           Control.Applicative
 import           Control.Monad          (zipWithM)
 
 import           Language.Nano.Syntax
@@ -92,6 +96,7 @@ import           Language.Nano.Typecheck.Types
 
 import qualified Language.Fixpoint.Bitvector as BV
 import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Names (symbolText)
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Errors
@@ -113,6 +118,9 @@ type AnnTypeR    = AnnType F.Reft
 data Cinfo = Ci { ci_info    :: !Error
                 , ci_srcspan :: !SrcSpan
                 } deriving (Eq, Ord, Show)
+
+instance NFData Cinfo where
+  rnf (Ci _ s) = seq s ()
 
 ci   :: (IsLocated a) => Error -> a -> Cinfo
 ci e = Ci e . srcPos
@@ -228,10 +236,9 @@ bop OpMod = F.Mod
 bop o     = convertError "F.Bop" o
 
 ------------------------------------------------------------------
+pAnd, pOr :: F.Pred -> F.Pred -> F.Pred
 pAnd p q  = F.pAnd [p, q]
 pOr  p q  = F.pOr  [p, q]
-
-
 
 ------------------------------------------------------------------------
 -- | Embedding Values as RefTypes
@@ -276,28 +283,30 @@ rTypeSort (TFun Nothing  xts t _)  = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) 
 rTypeSort (TApp TBV32 _ _ )        = BV.mkSort BV.S32
 rTypeSort (TApp c ts _)            = rTypeSortApp c ts
 rTypeSort (TAnd (t:_))             = rTypeSort t
-rTypeSort (TRef (QN _ _ _ s) ts _) = F.FApp (rawStringFTycon $ F.symbolString s) (rTypeSort <$> ts)
-rTypeSort (TCons _ _ _ )           = F.FApp (rawStringFTycon $ F.symbol "Object") []
-rTypeSort (TSelf m)                = F.FApp (rawStringFTycon $ F.symbol "Self"  ) [rTypeSort m]
-rTypeSort (TClass _)               = F.FApp (rawStringFTycon $ F.symbol "class" ) []
-rTypeSort (TModule _)              = F.FApp (rawStringFTycon $ F.symbol "module") []
-rTypeSort (TEnum _)                = F.FApp (rawStringFTycon $ F.symbol "enum"  ) []
+rTypeSort (TRef (QN _ _ _ s) ts _) = F.fAppTC (rawSymbolFTycon s) (rTypeSort <$> ts)
+rTypeSort (TCons _ _ _ )           = F.fAppTC (rawSymbolFTycon objectName) []
+rTypeSort (TSelf m)                = F.fAppTC (rawSymbolFTycon selfName  ) [rTypeSort m]
+rTypeSort (TClass _)               = F.fAppTC (rawSymbolFTycon className ) []
+rTypeSort (TModule _)              = F.fAppTC (rawSymbolFTycon moduleName) []
+rTypeSort (TEnum _)                = F.fAppTC (rawSymbolFTycon enumName  ) []
 rTypeSort t                        = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
 
+
+
 rTypeSortApp TInt _                = F.intSort
-rTypeSortApp TUn  _                = F.FApp (tconFTycon TUn) []
+rTypeSortApp TUn  _                = F.fAppTC (tconFTycon TUn) []
 rTypeSortApp TFPBool _             = F.boolSort
 rTypeSortApp TString _             = F.strSort
-rTypeSortApp c ts                  = F.FApp (tconFTycon c) (rTypeSort <$> ts)
+rTypeSortApp c ts                  = F.fAppTC (tconFTycon c) (rTypeSort <$> ts)
 
 -- RJ: why are these suddenly uppercase?
 tconFTycon :: TCon -> F.FTycon
-tconFTycon TBool                   = rawStringFTycon "Boolean"
-tconFTycon TVoid                   = rawStringFTycon "Void"
-tconFTycon TUn                     = rawStringFTycon "Union"
-tconFTycon TTop                    = rawStringFTycon "Top"
-tconFTycon TNull                   = rawStringFTycon "Tull"
-tconFTycon TUndef                  = rawStringFTycon "Undefined"
+tconFTycon TBool                   = rawSymbolFTycon boolName
+tconFTycon TVoid                   = rawSymbolFTycon voidName
+tconFTycon TUn                     = rawSymbolFTycon unionName
+tconFTycon TTop                    = rawSymbolFTycon topName
+tconFTycon TNull                   = rawSymbolFTycon nullName
+tconFTycon TUndef                  = rawSymbolFTycon undefName
 tconFTycon c                       = error $ "impossible: tconFTycon " ++ show c
 
 rTypeSortForAll t                  = genSort n θ $ rTypeSort tbody
@@ -322,11 +331,11 @@ stripRTypeBase _              = Nothing
 ------------------------------------------------------------------------------------------
 noKVars :: F.Reft -> F.Reft
 ------------------------------------------------------------------------------------------
-noKVars (F.Reft (x, F.Refa p)) = F.Reft (x, F.Refa $ dropKs p)
+noKVars (F.Reft (x, p)) = F.Reft (x, dropKs p)
   where
-    dropKs                     = F.pAnd . filter (not . isK) . F.conjuncts
-    isK (F.PKVar {})           = True
-    isK _                      = False
+    dropKs              = F.pAnd . filter (not . isK) . F.conjuncts
+    isK (F.PKVar {})    = True
+    isK _               = False
 
 
 
@@ -435,8 +444,17 @@ efoldExt g xt γ             = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
 -- The only type members that can appear in refinements are immutable fields
 efoldExt' g (FieldSig f _ m t) γ
   | isImmutable m
-  = F.insertSEnv (F.qualifySymbol (F.symbol $ builtinOpId BIThis) f) (g t) γ
+  = F.insertSEnv (qualifySymbol (F.symbol $ builtinOpId BIThis) f) (g t) γ
 efoldExt' _ _ γ = γ
+
+qualifySymbol :: F.Symbol -> F.Symbol -> F.Symbol
+qualifySymbol (symbolText -> m) x'@(symbolText -> x)
+  | isQualified x  = x'
+  -- | isParened x    = symbol (wrapParens (m `mappend` "." `mappend` stripParens x))
+  | otherwise      = F.symbol (m `mappend` "." `mappend` x)
+
+isQualified y = "." `T.isInfixOf` y
+wrapParens x  = "(" `mappend` x `mappend` ")"
 
 ------------------------------------------------------------------------------------------
 efoldRType :: PPR r
@@ -484,9 +502,9 @@ isTrivialRefType' = foldReft (\r -> (f r &&)) True
 rawStringSymbol = F.locAt "RSC.Types.rawStringSymbol"
                 . F.symbol
 
-rawStringFTycon = F.symbolFTycon
+rawSymbolFTycon :: F.Symbol -> F.FTycon
+rawSymbolFTycon = F.symbolFTycon
                 . F.locAt "RSC.Types.rawStringFTycon"
-                . F.symbol
 
 
 
@@ -594,11 +612,12 @@ zipType γ x t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _)
   --
   where
     rtExt t c           = F.reft (vv t) (raExt t c)
-    raExt t c           = F.PBexp $ F.EApp (sym t) [F.expr $ vv t, F.expr $ F.symbolText c]
+    raExt t c           = F.PBexp $ F.EApp (sym t) [F.expr $ vv t, F.expr $ symbolText c]
     vv                  = rTypeValueVar
     sym t
-      | isClassType γ t = F.dummyLoc $ F.symbol "extends_class"
-      | otherwise       = F.dummyLoc $ F.symbol "extends_interface"
+      | isClassType γ t = F.dummyLoc extendsClassName
+      | otherwise       = F.dummyLoc extendsInterfaceName
+
 
 zipType _ _ t1@(TRef _ [] _) _ = error $ "zipType on " ++ ppshow t1  -- Invalid type
 zipType _ _ _ t2@(TRef _ [] _) = error $ "zipType on " ++ ppshow t2  -- Invalid type
@@ -716,7 +735,7 @@ substOffsetThis = emapReft (\_ -> V.trans vs () ()) []
   where
     vs     = V.defaultVisitor { V.txExpr = tx }
     tx _ (F.EApp o [ F.EVar x, F.ESym (F.SL f) ])
-           | F.symbol o == offsetSym, F.symbol x == thisSym
+           | F.symbol o == offsetName, F.symbol x == thisSym
            = F.eVar f
     tx _ e = e
 
@@ -737,7 +756,7 @@ substThis' g (x,t) = F.subst su
                                 , isImmutable m ]
                   | otherwise
                   = []
-    qFld x f      = F.qualifySymbol (F.symbol x) f
+    qFld x f      = qualifySymbol (F.symbol x) f
     subPair f     = (qFld this f, F.expr $ qFld x f)
 
 
@@ -754,16 +773,16 @@ unqualifyThis g t = F.subst $ F.mkSubst fieldSu
                   | otherwise
                   = []
     this          = F.symbol $ builtinOpId BIThis
-    qFld x f      = F.qualifySymbol (F.symbol x) f
+    qFld x f      = qualifySymbol (F.symbol x) f
     subPair f     = (qFld this f, F.expr f)
 
 
 -------------------------------------------------------------------------------
 mkQualSym :: (F.Symbolic x, F.Symbolic f) => x -> f -> F.Symbol
 -------------------------------------------------------------------------------
-mkQualSym    x f = F.qualifySymbol (F.symbol x) (F.symbol f)
+mkQualSym    x f = qualifySymbol (F.symbol x) (F.symbol f)
 
 -------------------------------------------------------------------------------
 mkOffset :: (F.Symbolic f, F.Expression x) => x -> f -> F.Expr
 -------------------------------------------------------------------------------
-mkOffset x f = F.EApp offsetLocSym [F.expr x, F.expr $ F.symbolText $ F.symbol f]
+mkOffset x f = F.EApp offsetLocSym [F.expr x, F.expr $ symbolText $ F.symbol f]

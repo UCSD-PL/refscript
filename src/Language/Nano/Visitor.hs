@@ -4,13 +4,8 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE DeriveDataTypeable         #-}
-{-# LANGUAGE DeriveTraversable          #-}
-{-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeSynonymInstances       #-}
-{-# LANGUAGE DeriveFoldable             #-}
 {-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE ImpredicativeTypes         #-}
 {-# LANGUAGE NoMonomorphismRestriction  #-}
 
@@ -20,7 +15,7 @@ module Language.Nano.Visitor (
 
   , NameTransformable (..)
   , ntransFmap
-    
+
   , Visitor, VisitorM (..)
   , defaultVisitor
 
@@ -52,7 +47,7 @@ import           Data.Functor.Identity          (Identity)
 import           Data.Monoid
 import           Data.Data
 import           Data.Default
-import           Data.Generics                   
+import           Data.Generics
 import qualified Data.HashSet                   as H
 import           Data.List                      (partition)
 import qualified Data.Map.Strict                as M
@@ -65,7 +60,7 @@ import           Control.Exception              (throw)
 import           Control.Monad.Trans.State      (modify, runState, StateT, runStateT)
 import           Control.Monad.Trans.Class      (lift)
 import           Control.Monad
-import           Language.Nano.Misc             (mapSndM, (<##>), (<###>))
+import           Language.Nano.Misc             (single, concatMapM, mapPair, mapSndM, (<##>), (<###>))
 import           Language.Nano.Errors
 import           Language.Nano.Syntax
 import           Language.Nano.Syntax.Annotations
@@ -80,15 +75,15 @@ import           Language.Nano.Program
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Liquid.Types     ()
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Names        (symSepName)
+import           Language.Fixpoint.Names        (symbolString, symSepName)
 import           Language.Fixpoint.Misc hiding ((<$$>))
 import qualified Language.Fixpoint.Types        as F
 import qualified Language.Fixpoint.Visitor      as V
 
 -- import           Debug.Trace                        (trace)
 
-import           Text.Printf 
-import           Text.PrettyPrint.HughesPJ 
+import           Text.Printf
+import           Text.PrettyPrint.HughesPJ
 
 --------------------------------------------------------------------------------
 -- | Top-down visitors
@@ -96,16 +91,16 @@ import           Text.PrettyPrint.HughesPJ
 
 -- RJ: rewrite *ALL* queries and transforms with these.
 -- 1. write transformer for cast/type annotations using tyvar binders from sigs.
--- 2. write IsNano using `Visitor` 
+-- 2. write IsNano using `Visitor`
 -- 3. write "everything" queries using `Visitor`
 
 data VisitorM m acc ctx b = Visitor {
-  
+
     endStmt :: Statement b -> Bool
   , endExpr :: Expression b -> Bool
 
   -- | Context @ctx@ is built up in a "top-down" fashion but not across siblings
-  , ctxStmt :: ctx -> Statement b  -> ctx 
+  , ctxStmt :: ctx -> Statement b  -> ctx
   , ctxExpr :: ctx -> Expression b -> ctx
   , ctxCElt :: ctx -> ClassElt b   -> ctx
 
@@ -122,23 +117,23 @@ data VisitorM m acc ctx b = Visitor {
   , accCElt :: ctx -> ClassElt b   -> acc
   , accVDec :: ctx -> VarDecl  b   -> acc
 
-  -- | Execute external monad - to be run after transformation has been applied 
+  -- | Execute external monad - to be run after transformation has been applied
   , mStmt   :: Statement b   -> m (Statement b)
   , mExpr   :: Expression b  -> m (Expression b)
 
   }
 
 type Visitor = VisitorM Identity
-                         
+
 ---------------------------------------------------------------------------------
 defaultVisitor :: (Monad m, Functor m, Monoid acc) => VisitorM m acc ctx b
 ---------------------------------------------------------------------------------
 defaultVisitor = Visitor {
-    endStmt = \_   -> False
-  , endExpr = \_   -> False
-  , ctxStmt = \c _ -> c
-  , ctxExpr = \c _ -> c
-  , ctxCElt = \c _ -> c
+    endStmt = const False
+  , endExpr = const False
+  , ctxStmt = const
+  , ctxExpr = const
+  , ctxCElt = const
   , txStmt  = \_ x -> x
   , txExpr  = \_ x -> x
   , txCElt  = \_ x -> x
@@ -150,11 +145,11 @@ defaultVisitor = Visitor {
   , accVDec = \_ _ -> mempty
   , mStmt   = return
   , mExpr   = return
-  }           
+  }
 
-scopeVisitor = defaultVisitor { endExpr = ee, endStmt = es } 
+scopeVisitor = defaultVisitor { endExpr = ee, endStmt = es }
   where
-    es FunctionStmt{} = True 
+    es FunctionStmt{} = True
     es FuncAmbDecl {} = True
     es FuncOverload{} = True
     es ClassStmt   {} = True
@@ -165,20 +160,20 @@ scopeVisitor = defaultVisitor { endExpr = ee, endStmt = es }
 
 
 --------------------------------------------------------------------------------
--- | Visitor API 
+-- | Visitor API
 --------------------------------------------------------------------------------
 foldNano :: (IsLocated b, Monoid a) => Visitor a ctx b -> ctx -> a -> Nano b r -> a
-foldNano v c a p = snd $ execVisitM v c a p 
+foldNano v c a p = snd $ execVisitM v c a p
 
 visitNano :: (IsLocated b, Monoid a) =>   Visitor a ctx b -> ctx -> Nano b r -> Nano b r
 visitNano v c p = fst $ execVisitM v c mempty p
- 
+
 visitStmts :: (IsLocated b, Monoid s) => Visitor s ctx b -> ctx -> [Statement b] -> ([Statement b], s)
 visitStmts v c p = runState (visitStmtsM v c p) mempty
 
-visitStmtsT :: (IsLocated b, Monoid s, Functor m, Monad m) 
+visitStmtsT :: (IsLocated b, Monoid s, Functor m, Monad m)
             => VisitorM m s ctx b -> ctx -> [Statement b] -> m [Statement b]
-visitStmtsT v c p = fst <$> runStateT (visitStmtsM v c p) mempty 
+visitStmtsT v c p = fst <$> runStateT (visitStmtsM v c p) mempty
 
 
 --------------------------------------------------------------------------------
@@ -195,81 +190,81 @@ accum = modify . mappend
 f <$$> x = T.traverse f x
 
 
-visitNanoM :: (Monad m, Functor m, Monoid a, IsLocated b) 
-           => VisitorM m a ctx b -> ctx -> Nano b r -> VisitT m a (Nano b r) 
+visitNanoM :: (Monad m, Functor m, Monoid a, IsLocated b)
+           => VisitorM m a ctx b -> ctx -> Nano b r -> VisitT m a (Nano b r)
 visitNanoM v c p = do
   c'    <- visitSource v c (code p)
   return $ p { code = c' }
 
-visitSource :: (Monad m, Functor m, Monoid a, IsLocated b) 
-            => VisitorM m a ctx b -> ctx -> Source b -> VisitT m a (Source b) 
-visitSource v c (Src ss) = Src <$> visitStmtsM v c ss 
+visitSource :: (Monad m, Functor m, Monoid a, IsLocated b)
+            => VisitorM m a ctx b -> ctx -> Source b -> VisitT m a (Source b)
+visitSource v c (Src ss) = Src <$> visitStmtsM v c ss
 
-visitStmtsM   :: (Monad m, Functor m, Monoid a, IsLocated b) 
-              => VisitorM m a ctx b -> ctx -> [Statement b] -> VisitT m a [Statement b] 
-visitStmtsM v c ss = mapM (visitStmtM v c) ss
+visitStmtsM   :: (Monad m, Functor m, Monoid a, IsLocated b)
+              => VisitorM m a ctx b -> ctx -> [Statement b] -> VisitT m a [Statement b]
+visitStmtsM v c = mapM (visitStmtM v c)
 
 
-visitStmtM   :: (Monad m, Functor m, Monoid a, IsLocated b) 
-             => VisitorM m a ctx b -> ctx -> Statement b -> VisitT m a (Statement b) 
+visitStmtM   :: (Monad m, Functor m, Monoid a, IsLocated b)
+             => VisitorM m a ctx b -> ctx -> Statement b -> VisitT m a (Statement b)
 visitStmtM v = vS
   where
-    vE      = visitExpr v   
+    vE      = visitExpr v
     vEE     = visitEnumElt v
-    vC      = visitCaseClause v   
-    vI      = visitId v   
-    vS c s  | endStmt v s 
-            = accum acc >> return s 
-            | otherwise   
+    vC      = visitCaseClause v
+    vI      = visitId v
+    vS c s  | endStmt v s
+            = accum acc >> return s
+            | otherwise
             = accum acc >> lift (mStmt v s') >>= step c' where c'   = ctxStmt v c s
                                                                s'   = txStmt  v c' s
                                                                acc  = accStmt v c' s
     step c (ExprStmt l e)           = ExprStmt     l <$> vE c e
     step c (BlockStmt l ss)         = BlockStmt    l <$> (vS c <$$> ss)
-    step c (IfSingleStmt l b s)     = IfSingleStmt l <$> (vE c b) <*> (vS c s)
-    step c (IfStmt l b s1 s2)       = IfStmt       l <$> (vE c b) <*> (vS c s1) <*> (vS c s2)
-    step c (WhileStmt l b s)        = WhileStmt    l <$> (vE c b) <*> (vS c s) 
-    step c (ForStmt l i t inc b)    = ForStmt      l <$> (visitFInit v c i) <*> (vE c <$$> t) <*> (vE c <$$> inc) <*> (vS c b)
-    step c (ForInStmt l i e b)      = ForInStmt    l <$> (visitFIInit v c i) <*> (vE c e)     <*> (vS c b)
+    step c (IfSingleStmt l b s)     = IfSingleStmt l <$> vE c b <*> vS c s
+    step c (IfStmt l b s1 s2)       = IfStmt       l <$> vE c b <*> vS c s1 <*> vS c s2
+    step c (WhileStmt l b s)        = WhileStmt    l <$> vE c b <*> vS c s
+    step c (ForStmt l i t inc b)    = ForStmt      l <$> visitFInit v c i  <*> (vE c <$$> t) <*> (vE c <$$> inc) <*> vS c b
+    step c (ForInStmt l i e b)      = ForInStmt    l <$> visitFIInit v c i <*> vE c e     <*> vS c b
     step c (VarDeclStmt l ds)       = VarDeclStmt  l <$> (visitVarDecl v c <$$> ds)
     step c (ReturnStmt l e)         = ReturnStmt   l <$> (vE c <$$> e)
-    step c (FunctionStmt l f xs b)  = FunctionStmt l <$> (vI c f) <*> (vI c <$$> xs) <*> (vS c <$$> b)
-    step c (SwitchStmt l e cs)      = SwitchStmt   l <$> (vE c e) <*> (vC c <$$> cs)
-    step c (ClassStmt l x xe xs es) = ClassStmt    l <$> (vI c x) <*> (vI c <$$> xe) <*> (vI c <$$> xs) <*> (visitClassElt v c <$$> es) 
-    step c (ThrowStmt l e)          = ThrowStmt    l <$> (vE c e)
-    step c (FuncAmbDecl l f xs)     = FuncAmbDecl  l <$> (vI c f) <*> (vI c <$$> xs)
-    step c (FuncOverload l f xs)    = FuncOverload l <$> (vI c f) <*> (vI c <$$> xs)
-    step c (ModuleStmt l m ss)      = ModuleStmt   l <$> (vI c m) <*> (vS c <$$> ss) 
-    step _ s@(IfaceStmt {})         = return s 
-    step _ s@(EmptyStmt {})         = return s 
-    step c (EnumStmt l n es)        = EnumStmt     l <$> (vI c n) <*> (vEE c <$$> es)
+    step c (FunctionStmt l f xs b)  = FunctionStmt l <$> vI c f <*> (vI c <$$> xs) <*> (vS c <$$> b)
+    step c (SwitchStmt l e cs)      = SwitchStmt   l <$> vE c e <*> (vC c <$$> cs)
+    step c (ClassStmt l x xe xs es) = ClassStmt    l <$> vI c x <*> (vI c <$$> xe) <*> (vI c <$$> xs) <*> (visitClassElt v c <$$> es)
+    step c (ThrowStmt l e)          = ThrowStmt    l <$> vE c e
+    step c (FuncAmbDecl l f xs)     = FuncAmbDecl  l <$> vI c f <*> (vI c <$$> xs)
+    step c (FuncOverload l f xs)    = FuncOverload l <$> vI c f <*> (vI c <$$> xs)
+    step c (ModuleStmt l m ss)      = ModuleStmt   l <$> vI c m <*> (vS c <$$> ss)
+    step _ s@(IfaceStmt {})         = return s
+    step _ s@(EmptyStmt {})         = return s
+    step c (EnumStmt l n es)        = EnumStmt     l <$> vI c n <*> (vEE c <$$> es)
     step _ s                        = throw $ unimplemented l "visitStatement" s  where l = srcPos $ getAnnotation s
 
 
 visitEnumElt v c (EnumElt l i n)    = EnumElt l      <$> visitId v c i <*> return n
 
 
-visitExpr :: (IsLocated b, Monoid a, Functor m, Monad m) 
+visitExpr :: (IsLocated b, Monoid a, Functor m, Monad m)
           => VisitorM m a ctx b -> ctx -> Expression b -> VisitT m a (Expression b)
 visitExpr v = vE
    where
-     vS      = visitStmtM       v   
-     vI      = visitId         v   
-     vL      = visitLValue     v   
-     vE c e  | endExpr v e 
+     vS      = visitStmtM       v
+     vI      = visitId         v
+     vL      = visitLValue     v
+     vE c e  | endExpr v e
              = accum acc >> return e
              | otherwise
              = accum acc >> lift (mExpr v s') >>= step c' where c'  = ctxExpr v c  e
                                                                 s'  = txExpr  v c' e
-                                                                acc = accExpr v c' e 
-     step _ e@(BoolLit {})           = return e 
-     step _ e@(IntLit {})            = return e 
-     step _ e@(HexLit {})            = return e 
-     step _ e@(NullLit {})           = return e 
-     step _ e@(StringLit {})         = return e 
-     step _ e@(VarRef {})            = return e 
-     step _ e@(ThisRef {})           = return e 
-     step _ e@(SuperRef {})          = return e 
+                                                                acc = accExpr v c' e
+     step _ e@(BoolLit {})           = return e
+     step _ e@(IntLit {})            = return e
+     step _ e@(HexLit {})            = return e
+     step _ e@(NullLit {})           = return e
+     step _ e@(StringLit {})         = return e
+     step _ e@(VarRef {})            = return e
+     step _ e@(ThisRef {})           = return e
+     step _ e@(SuperRef {})          = return e
      step c (ArrayLit l es)          = ArrayLit l     <$> (vE c <$$> es)
      step c (CondExpr l e1 e2 e3)    = CondExpr l     <$> (vE c e1) <*> (vE c e2) <*> (vE c e3)
      step c (InfixExpr l o e1 e2)    = InfixExpr l o  <$> (vE c e1) <*> (vE c e2)
@@ -279,18 +274,18 @@ visitExpr v = vE
      step c (DotRef l e f)           = DotRef l       <$> (vE c e)  <*> (vI c f)
      step c (BracketRef l e1 e2)     = BracketRef l   <$> (vE c e1) <*> (vE c e2)
      step c (AssignExpr l o v e)     = AssignExpr l o <$> (vL c v)  <*> (vE c e)
-     step c (UnaryAssignExpr l o v)  = UnaryAssignExpr l o <$> (vL c v) 
-     step c (FuncExpr l f xs ss)     = FuncExpr l <$> (vI c <$$> f) <*> (vI c <$$> xs) <*> (vS c <$$> ss) 
+     step c (UnaryAssignExpr l o v)  = UnaryAssignExpr l o <$> (vL c v)
+     step c (FuncExpr l f xs ss)     = FuncExpr l <$> (vI c <$$> f) <*> (vI c <$$> xs) <*> (vS c <$$> ss)
      step c (NewExpr l e es)         = NewExpr  l <$> (vE c e) <*> (vE c <$$> es)
      step c (Cast l e)               = Cast l     <$> (vE c e)
-     step _ e                        = throw $ unimplemented l "visitExpr " e  where l = srcPos $ getAnnotation e 
+     step _ e                        = throw $ unimplemented l "visitExpr " e  where l = srcPos $ getAnnotation e
 
-visitClassElt :: (Monad m, Functor m, Monoid a, IsLocated b) 
-              => VisitorM m a ctx b -> ctx -> ClassElt b -> VisitT m a (ClassElt b) 
-visitClassElt v = vCE 
+visitClassElt :: (Monad m, Functor m, Monoid a, IsLocated b)
+              => VisitorM m a ctx b -> ctx -> ClassElt b -> VisitT m a (ClassElt b)
+visitClassElt v = vCE
   where
-    vI       = visitId   v   
-    vS       = visitStmtM v   
+    vI       = visitId   v
+    vS       = visitStmtM v
     vCE c ce = accum acc >> step c' ce' where c'     = ctxCElt v c  ce
                                               ce'    = txCElt  v c' ce
                                               acc    = accCElt v c' ce
@@ -299,31 +294,31 @@ visitClassElt v = vCE
     step c (MemberMethDecl l b f xs)   = MemberMethDecl l b <$> (vI c f)       <*> (vI c <$$> xs)
     step c (MemberMethDef l b f xs ss) = MemberMethDef  l b <$> (vI c f)       <*> (vI c <$$> xs) <*> (vS c <$$> ss)
 
-visitFInit :: (Monad m, Functor m, Monoid a, IsLocated b) 
+visitFInit :: (Monad m, Functor m, Monoid a, IsLocated b)
            => VisitorM m a ctx b -> ctx -> ForInit b -> VisitT m a (ForInit b)
 visitFInit v = step
   where
     step _ NoInit       = return NoInit
-    step c (VarInit ds) = VarInit  <$> (visitVarDecl v c <$$> ds) 
+    step c (VarInit ds) = VarInit  <$> (visitVarDecl v c <$$> ds)
     step c (ExprInit e) = ExprInit <$> (visitExpr v c e)
 
-visitFIInit :: (Monad m, Functor m, Monoid a, IsLocated b) 
+visitFIInit :: (Monad m, Functor m, Monoid a, IsLocated b)
             => VisitorM m a ctx b -> ctx -> ForInInit b -> VisitT m a (ForInInit b)
 visitFIInit v = step
   where
     step c (ForInVar x)  = ForInVar  <$> visitId v c x
-    step c (ForInLVal l) = ForInLVal <$> visitLValue v c l  
+    step c (ForInLVal l) = ForInLVal <$> visitLValue v c l
 
-visitVarDecl :: (Monad m, Functor m, Monoid a, IsLocated b) 
+visitVarDecl :: (Monad m, Functor m, Monoid a, IsLocated b)
              =>  VisitorM m a ctx b -> ctx -> VarDecl b -> VisitT m a (VarDecl b)
 visitVarDecl v c d@(VarDecl l x e)
   = accum (accVDec v c d) >> VarDecl l <$> (visitId v c x) <*> (visitExpr v c <$$> e)
 
-visitId :: (Monad m, Functor m, Monoid a, IsLocated b) 
+visitId :: (Monad m, Functor m, Monoid a, IsLocated b)
         => VisitorM m a ctx b -> ctx -> Id b -> VisitT m a (Id b)
 visitId v c x = return (txId v c x)
 
-visitLValue :: (Monad m, Functor m, Monoid a, IsLocated b) 
+visitLValue :: (Monad m, Functor m, Monoid a, IsLocated b)
             => VisitorM m a ctx b -> ctx -> LValue b -> VisitT m a (LValue b)
 visitLValue v c lv = step c (txLVal v c lv)
   where
@@ -331,15 +326,15 @@ visitLValue v c lv = step c (txLVal v c lv)
     step c (LBracket l e1 e2) = LBracket l <$> (visitExpr v c e1) <*> (visitExpr v c e2)
     step _ lv@(LVar {})       = return lv
 
-      
-visitCaseClause :: (Monad m, Functor m, Monoid a, IsLocated b) 
+
+visitCaseClause :: (Monad m, Functor m, Monoid a, IsLocated b)
                 => VisitorM m a ctx b -> ctx -> CaseClause b -> VisitT m a (CaseClause b)
 visitCaseClause v = step
   where
     step c (CaseClause l e ss) = CaseClause l  <$> (visitExpr v c e)  <*> (visitStmtM v c <$$> ss)
     step c (CaseDefault l ss)  = CaseDefault l <$> (visitStmtM v c <$$> ss)
-    
-   
+
+
 --------------------------------------------------------------------------------------------
 -- | Transform types
 --------------------------------------------------------------------------------------------
@@ -352,9 +347,9 @@ instance Transformable RTypeQ where
 
 instance Transformable BindQ where
   trans f as xs b = b { b_type = trans f as xs $ b_type b }
- 
+
 instance Transformable TypeMemberQ where
-  trans f as xs = mapElt' (trans f as xs) 
+  trans f as xs = mapElt' (trans f as xs)
 
 instance Transformable FactQ where
   trans = transFact
@@ -365,25 +360,25 @@ instance Transformable CastQ where
 instance Transformable IfaceDefQ where
   trans = transIFD
 
-transIFD f as xs idf = idf { t_base = transIFDBase f as' xs  $  t_base idf  
+transIFD f as xs idf = idf { t_base = transIFDBase f as' xs  $  t_base idf
                            , t_elts = trans        f as' xs <$> t_elts idf
-                           } 
+                           }
     where
       as'            = (t_args idf) ++ as
 
 transIFDBase f as xs (es,is) = (transClassAnn1 f as xs <$> es, transClassAnn1 f as xs <$> is)
 
 
-transFact :: F.Reftable r 
+transFact :: F.Reftable r
           => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
           -> [TVar] -> [BindQ q r] -> FactQ q r -> FactQ q r
 transFact f = go
   where
     go as xs (VarAnn (a,t))    = VarAnn        $ (a,trans f as xs <$> t)
-    go as xs (AmbVarAnn t)     = AmbVarAnn     $ trans f as xs t  
+    go as xs (AmbVarAnn t)     = AmbVarAnn     $ trans f as xs t
     go as xs (FieldAnn m)      = FieldAnn      $ trans f as xs m
     go as xs (MethAnn  m)      = MethAnn       $ trans f as xs m
-    go as xs (StatAnn  m)      = StatAnn       $ trans f as xs m 
+    go as xs (StatAnn  m)      = StatAnn       $ trans f as xs m
     go as xs (ConsAnn  m)      = ConsAnn       $ trans f as xs m
     go as xs (UserCast t)      = UserCast      $ trans f as xs t
     go as xs (FuncAnn  t)      = FuncAnn       $ trans f as xs t
@@ -391,8 +386,8 @@ transFact f = go
     go as xs (ClassAnn c)      = ClassAnn      $ transClassAnn f as xs c
     go as xs (TypInst x y ts)  = TypInst x y   $ trans f as xs <$> ts
     go as xs (EltOverload x m) = EltOverload x $ trans f as xs m
-    go as xs (Overload x t)    = Overload x    $ trans f as xs t 
-    go as xs (TCast x c)       = TCast x       $ trans f as xs c 
+    go as xs (Overload x t)    = Overload x    $ trans f as xs t
+    go as xs (TCast x c)       = TCast x       $ trans f as xs c
     go _ _   t                 = t
 
 transCast f = go
@@ -401,18 +396,18 @@ transCast f = go
     go as xs (CDead e t) = CDead e $ trans f as xs t
     go as xs (CUp t1 t2) = CUp (trans f as xs t1) (trans f as xs t2)
     go as xs (CDn t1 t2) = CUp (trans f as xs t1) (trans f as xs t2)
-    
+
 transClassAnn f as xs (as',es,is) = (as', transClassAnn1 f (as' ++ as) xs <$> es
                                         , transClassAnn1 f (as' ++ as) xs <$> is)
 
 transClassAnn1 f as xs (n,ts) =  (n, trans f as xs <$> ts)
 
 
-transRType :: F.Reftable r 
-           => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r) 
+transRType :: F.Reftable r
+           => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
            ->  [TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r
 
-transRType f                  = go 
+transRType f                  = go
   where
     go as xs (TAnd ts)        = f as xs $ TAnd ts'            where ts' = go as xs <$> ts
     go as xs (TApp c ts r)    = f as xs $ TApp c ts' r        where ts' = go as xs <$> ts
@@ -422,7 +417,7 @@ transRType f                  = go
                                                                     xs' = bs ++ xs
     go as xs (TCons m ms r)   = f as xs $ TCons m' ms' r      where ms' = trans f as xs <$> ms
                                                                     m'  = toType $ trans f as xs (ofType m)
-    go as xs (TAll a t)       = f as xs $ TAll a t'           where t'  = go (a:as) xs t 
+    go as xs (TAll a t)       = f as xs $ TAll a t'           where t'  = go (a:as) xs t
     go as xs (TRef n ts r)    = f as xs $ TRef n ts' r        where ts' = go  as xs <$> ts
     go as xs (TSelf m)        = f as xs $ TSelf m'            where m'  = go  as xs m
     go _  _  t                = t
@@ -433,15 +428,15 @@ transAnnR :: F.Reftable r => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
           -> [TVar] -> AnnQ q r  -> AnnQ q r
 transAnnR f as ann = ann { ann_fact = trans f as [] <$> ann_fact ann}
 
-transFmap ::  (F.Reftable r, Functor thing) 
+transFmap ::  (F.Reftable r, Functor thing)
           => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
-          -> [TVar] 
-          -> thing (AnnQ q r)  
+          -> [TVar]
           -> thing (AnnQ q r)
-transFmap f as = fmap (transAnnR f as) 
+          -> thing (AnnQ q r)
+transFmap f as = fmap (transAnnR f as)
 
 
- 
+
 --------------------------------------------------------------------------------------------
 -- | Transform names
 --------------------------------------------------------------------------------------------
@@ -454,9 +449,9 @@ instance NameTransformable RTypeQ where
 
 instance NameTransformable BindQ where
   ntrans f g b = b { b_type = ntrans f g $ b_type b }
- 
+
 instance NameTransformable TypeMemberQ where
-  ntrans f g = mapElt' (ntrans f g) 
+  ntrans f g = mapElt' (ntrans f g)
 
 instance NameTransformable FactQ where
   ntrans = ntransFact
@@ -468,16 +463,16 @@ instance NameTransformable IfaceDefQ where
   ntrans = ntransIFD
 
 ntransFmap ::  (F.Reftable r, Functor t) => (QN p -> QN q) -> (QP p -> QP q) -> t (AnnQ p r) -> t (AnnQ q r)
-ntransFmap f g = fmap (ntransAnnR f g) 
+ntransFmap f g = fmap (ntransAnnR f g)
 
 
 ntransIFD :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> IfaceDefQ p r -> IfaceDefQ q r
 ntransIFD f g idf = idf { t_name =            f    $  t_name idf
-                        , t_base = ntransBase f g  $  t_base idf 
-                        , t_elts = ntrans     f g <$> t_elts idf } 
+                        , t_base = ntransBase f g  $  t_base idf
+                        , t_elts = ntrans     f g <$> t_elts idf }
 
 ntransBase f g (es,is) = (ntransBase1 f g <$> es, ntransBase1 f g <$> is)
-ntransBase1 :: (F.Reftable r) => (QN p -> QN q) -> (QP p -> QP q) -> (QN p, [RTypeQ p r]) -> (QN q, [RTypeQ q r]) 
+ntransBase1 :: (F.Reftable r) => (QN p -> QN q) -> (QP p -> QP q) -> (QN p, [RTypeQ p r]) -> (QN q, [RTypeQ q r])
 ntransBase1 f g (n,ts) = (f n, ntrans f g <$> ts)
 
 ntransFact f g = go
@@ -487,13 +482,13 @@ ntransFact f g = go
     go (PhiPost v)       = PhiPost       $ v
     go (PhiVarTy (v,t))  = PhiVarTy      $ (v, ntrans f g t)
     go (VarAnn (a, t))   = VarAnn        $ (a, ntrans f g <$> t)
-    go (AmbVarAnn t)     = AmbVarAnn     $ ntrans f g t  
+    go (AmbVarAnn t)     = AmbVarAnn     $ ntrans f g t
     go (ExportedElt)     = ExportedElt
     go (ReadOnlyVar)     = ReadOnlyVar
     go (BypassUnique)    = BypassUnique
     go (FieldAnn m)      = FieldAnn      $ ntrans f g m
     go (MethAnn  m)      = MethAnn       $ ntrans f g m
-    go (StatAnn  m)      = StatAnn       $ ntrans f g m 
+    go (StatAnn  m)      = StatAnn       $ ntrans f g m
     go (ConsAnn  m)      = ConsAnn       $ ntrans f g m
     go (UserCast t)      = UserCast      $ ntrans f g t
     go (FuncAnn  t)      = FuncAnn       $ ntrans f g t
@@ -503,8 +498,8 @@ ntransFact f g = go
     go (ModuleAnn c)     = ModuleAnn     $ c
     go (TypInst x y ts)  = TypInst x y   $ ntrans f g <$> ts
     go (EltOverload x m) = EltOverload x $ ntrans f g m
-    go (Overload x t)    = Overload x    $ ntrans f g t 
-    go (TCast x c)       = TCast x       $ ntrans f g c 
+    go (Overload x t)    = Overload x    $ ntrans f g t
+    go (TCast x c)       = TCast x       $ ntrans f g c
 
 
 ntransCast :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> CastQ p r -> CastQ q r
@@ -514,12 +509,12 @@ ntransCast f g = go
     go (CDead e t) = CDead e $ ntrans f g t
     go (CUp t1 t2) = CUp (ntrans f g t1) (ntrans f g t2)
     go (CDn t1 t2) = CUp (ntrans f g t1) (ntrans f g t2)
-    
+
 ntransClassAnn f g (as,es,is) = (as, ntransClassAnn1 f g <$> es, ntransClassAnn1 f g <$> is)
 ntransClassAnn1 f g (n,ts) =  (f n, ntrans f g <$> ts)
 
 ntransRType :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> RTypeQ p r -> RTypeQ q r
-ntransRType f g         = go 
+ntransRType f g         = go
   where
     go (TApp c ts r)    = TApp c ts' r        where ts' = go <$> ts
     go (TVar v r)       = TVar v r
@@ -528,7 +523,7 @@ ntransRType f g         = go
                                                     t'  = go t
     go (TCons m ms r)   = TCons m' ms' r      where ms' = ntrans f g <$> ms
                                                     m'  = ntrans f g m
-    go (TAll a t)       = TAll a t'           where t'  = go t 
+    go (TAll a t)       = TAll a t'           where t'  = go t
     go (TAnd ts)        = TAnd ts'            where ts' = go <$> ts
     go (TRef n ts r)    = TRef n' ts' r       where n'  = f n
                                                     ts' = go <$> ts
@@ -537,14 +532,14 @@ ntransRType f g         = go
     go (TModule p)      = TModule p'          where p'  = g p
     go (TEnum n)        = TEnum n'            where n'  = f n
     go (TExp e)         = TExp e
--- 
+--
 -- RJ: use newtype for AnnR and NanoBareR so we just make the below instances
 
 ntransAnnR :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> AnnQ p r -> AnnQ q r
 ntransAnnR f g ann = ann { ann_fact = ntrans f g <$> ann_fact ann}
 
 -- ntransFmap :: (Functor (t r)) => (QN p -> QN q) -> (QP p -> QP q) -> t p r -> t q r
--- ntransFmap f g = fmap (ntransAnnR f g) 
+-- ntransFmap f g = fmap (ntransAnnR f g)
 
 
 ---------------------------------------------------------------------------
@@ -554,14 +549,14 @@ ntransAnnR f g ann = ann { ann_fact = ntrans f g <$> ann_fact ann}
 type BindInfo r = (Id (AnnType r), AnnType r, SyntaxKind, Assignability, Initialization)
 
 -- | Find all language level bindings in the scope of @s@.
---   This includes: 
+--   This includes:
 --
---    * function definitions/declarations, 
+--    * function definitions/declarations,
 --    * classes,
 --    * modules,
 --    * variables
 --
---   E.g. declarations in the If-branch of a conditional expression. Note how 
+--   E.g. declarations in the If-branch of a conditional expression. Note how
 --   declarations do not escape module or function blocks.
 --
 -------------------------------------------------------------------------------
@@ -584,8 +579,8 @@ hoistBindings = snd . visitStmts vs ()
 
     fromInit (Just _) = ii
     fromInit _        = ui
-    varAsgn l         = fromMaybe WriteLocal 
-                      $ listToMaybe [ a | VarAnn (a,_) <- ann_fact l ] 
+    varAsgn l         = fromMaybe WriteLocal
+                      $ listToMaybe [ a | VarAnn (a,_) <- ann_fact l ]
 
     vdk  = VarDeclKind
     fdk  = FuncDefKind
@@ -619,7 +614,7 @@ hoistGlobals :: Data r => [Statement (AnnType r)] -> [Id (AnnType r)]
 -------------------------------------------------------------------------------
 hoistGlobals = snd . visitStmts (scopeVisitor { accVDec = accVDec' }) ()
   where
-    accVDec' _ (VarDecl l x _) = [ x | VarAnn (WriteGlobal,_) <- ann_fact l ] 
+    accVDec' _ (VarDecl l x _) = [ x | VarAnn (WriteGlobal,_) <- ann_fact l ]
                               ++ [ x | AmbVarAnn _            <- ann_fact l ]
 
 -- | Summarise all nodes in top-down, left-to-right order, carrying some state
@@ -638,7 +633,7 @@ everythingButWithContext s0 f q x
 -- | AST Folds
 ---------------------------------------------------------------------------
 
--- Only descend down modules 
+-- Only descend down modules
 -------------------------------------------------------------------------------
 collectModules :: (IsLocated a, Data a) => [Statement a] -> [(AbsPath, [Statement a])]
 -------------------------------------------------------------------------------
@@ -646,7 +641,7 @@ collectModules ss = topLevel : rest ss
   where
     rest                      = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
     f e@(ModuleStmt _ x ms) s = let p = s ++ [F.symbol x] in
-                                ([(QP AK_ (srcPos e) p, ms)], p, False) 
+                                ([(QP AK_ (srcPos e) p, ms)], p, False)
     f _                    s  = ([], s, True)
     topLevel                  = (QP AK_ (srcPos dummySpan) [], ss)
 
@@ -654,7 +649,7 @@ collectModules ss = topLevel : rest ss
 ---------------------------------------------------------------------------------------
 visibleVars :: Data r => [Statement (AnnSSA r)] -> [(Id SrcSpan, VarInfo r)]
 ---------------------------------------------------------------------------------------
-visibleVars s = [ (ann <$> n, (k,v,a,t,i))  | (n,l,k,a,i) <- hoistBindings s 
+visibleVars s = [ (ann <$> n, (k,v,a,t,i))  | (n,l,k,a,i) <- hoistBindings s
                                             , f           <- ann_fact l
                                             , t           <- annToType (ann l) n a f
                                             , let v        = visibility l ]
@@ -666,7 +661,7 @@ visibleVars s = [ (ann <$> n, (k,v,a,t,i))  | (n,l,k,a,i) <- hoistBindings s
     annToType _ _ _          _              = [ ]
 
 ---------------------------------------------------------------------------------------
-extractQualifiedNames :: PPR r => [Statement (AnnRel r)] 
+extractQualifiedNames :: PPR r => [Statement (AnnRel r)]
                                -> (H.HashSet AbsName, H.HashSet AbsPath)
 ---------------------------------------------------------------------------------------
 extractQualifiedNames stmts = (namesSet, modulesSet)
@@ -674,7 +669,7 @@ extractQualifiedNames stmts = (namesSet, modulesSet)
     allModStmts             = collectModules stmts
     modulesSet              = H.fromList $ fst <$> allModStmts
     namesSet                = H.fromList [ nm | (ap,ss) <- allModStmts
-                                              , nm <- typeNames ap ss ] 
+                                              , nm <- typeNames ap ss ]
 
 -- | Replace all relative qualified names and paths in a program with full ones.
 ---------------------------------------------------------------------------------------
@@ -682,7 +677,7 @@ replaceAbsolute :: PPR r => NanoBareRelR r -> NanoBareR r
 ---------------------------------------------------------------------------------------
 replaceAbsolute pgm@(Nano { code      = Src ss
                           , fullNames = ns
-                          , fullPaths = ps }) 
+                          , fullPaths = ps })
                     = pgm { code = Src $ (tr <$>) <$> ss }
   where
     tr l            = ntransAnnR (safeAbsName l) (safeAbsPath l) l
@@ -695,18 +690,18 @@ replaceAbsolute pgm@(Nano { code      = Src ss
                         Just a' -> a'
                         Nothing -> throw $ errorUnboundPath (srcPos l) a
 
-    isAlias (QN RK_ _ [] s) = envMem s $ tAlias pgm 
+    isAlias (QN RK_ _ [] s) = envMem s $ tAlias pgm
     isAlias (QN _   _ _  _) = False
 
     absAct f l a    = I.lookup (ann_id l) mm >>= (`f` a)
     mm              = snd $ visitStmts vs (QP AK_ def []) ss
-    vs              = defaultVisitor { ctxStmt = cStmt } 
+    vs              = defaultVisitor { ctxStmt = cStmt }
                                      { accStmt = acc   }
                                      { accExpr = acc   }
                                      { accCElt = acc   }
                                      { accVDec = acc   }
-    cStmt (QP AK_ l p) (ModuleStmt _ x _) 
-                    = QP AK_ l $ p ++ [F.symbol x] 
+    cStmt (QP AK_ l p) (ModuleStmt _ x _)
+                    = QP AK_ l $ p ++ [F.symbol x]
     cStmt q _       = q
     acc c s         = I.singleton (ann_id a) c where a = getAnnotation s
 
@@ -715,17 +710,17 @@ replaceAbsolute pgm@(Nano { code      = Src ss
 ---------------------------------------------------------------------------------------
 replaceDotRef :: NanoBareR F.Reft -> NanoBareR F.Reft
 ---------------------------------------------------------------------------------------
-replaceDotRef p@(Nano{ code = Src fs, tAlias = ta, pAlias = pa, invts = is }) 
+replaceDotRef p@(Nano{ code = Src fs, tAlias = ta, pAlias = pa, invts = is })
     = p { code         = Src $      tf       <##>  fs
-        , tAlias       = transRType tt [] [] <###> ta 
+        , tAlias       = transRType tt [] [] <###> ta
         , pAlias       =            tt [] [] <##>  pa
         , invts        = transRType tt [] [] <##>  is
-        } 
-  where 
+        }
+  where
     tf (Ann l a facts) = Ann l a $ transFact tt [] [] <$> facts
     tt _ _             = fmap $ V.trans vs () ()
     vs                 = V.defaultVisitor { V.txExpr = tx }
-    tx _ (F.EVar s)    | (x:y:zs) <- pack "." `splitOn` pack (F.symbolString s)
+    tx _ (F.EVar s)    | (x:y:zs) <- pack "." `splitOn` pack (symbolString s)
                        = foldl offset (F.eVar x) (y:zs)
     tx _ e             = e
     offset k v         = F.EApp offsetLocSym [F.expr k, F.expr v]
@@ -733,9 +728,9 @@ replaceDotRef p@(Nano{ code = Src fs, tAlias = ta, pAlias = pa, invts = is })
 
 -- | Replace `TRef x _ _` where `x` is a name for an enumeration with `number`
 ---------------------------------------------------------------------------------------
-fixEnums :: PPR r => NanoBareR r -> NanoBareR r 
+fixEnums :: PPR r => NanoBareR r -> NanoBareR r
 ---------------------------------------------------------------------------------------
-fixEnums p@(Nano { code = Src ss, pModules = m }) 
+fixEnums p@(Nano { code = Src ss, pModules = m })
                = p { code     = Src $ (tr <$>) <$> ss
                    , pModules = qenvMap (fixEnumsInModule p) m}
   where
@@ -759,7 +754,7 @@ fixEnumsInModule p m@(ModuleDef { m_variables = mv, m_types = mt })
 
 -- | Add a '#' at the end of every function binder (to avoid capture)
 --
-fixFunBinders p@(Nano { code = Src ss, pModules = m }) 
+fixFunBinders p@(Nano { code = Src ss, pModules = m })
                = p { code     = Src $ (tr <$>) <$> ss
                    , pModules = qenvMap fixFunBindersInModule m }
   where
@@ -767,11 +762,11 @@ fixFunBinders p@(Nano { code = Src ss, pModules = m })
     f _ _      = fixFunBindersInType
 
 fixFunBindersInType t | Just is <- bkFuns t = mkAnd $ map (mkFun . f) is
-                      | otherwise           = t 
-  where 
+                      | otherwise           = t
+  where
     f (vs,s,yts,t)    = (vs,ssm s,ssb yts,ss t)
       where
-        ks            = [ y | B y _ <- yts ] 
+        ks            = [ y | B y _ <- yts ]
         ks'           = (F.eVar . (`mappend` F.symbol [symSepName])) <$> ks
         su            = F.mkSubst $ zip ks ks'
         ss            = F.subst su
@@ -799,14 +794,14 @@ fixFunBindersInModule m@(ModuleDef { m_variables = mv, m_types = mt })
 ---------------------------------------------------------------------------------------
 scrapeModules :: PPR r => NanoBareR r -> Either (F.FixResult Error) (NanoBareR r)
 ---------------------------------------------------------------------------------------
-scrapeModules pgm@(Nano { code = Src stmts }) 
+scrapeModules pgm@(Nano { code = Src stmts })
   = do  mods  <- return $ collectModules stmts
         mods' <- mapM mkMod mods
-        
+
         return $ pgm { pModules = qenvFromList mods' }
   where
 
-    mkMod :: PPR r => (AbsPath, [Statement (AnnR r)]) -> Either (F.FixResult Error) (AbsPath, ModuleDefQ AK r) 
+    mkMod :: PPR r => (AbsPath, [Statement (AnnR r)]) -> Either (F.FixResult Error) (AbsPath, ModuleDefQ AK r)
     mkMod (p,ss)      = do  ve <- return $ varEnv p ss
                             te <- typeEnv p ss
                             ee <- return $ enumEnv ss
@@ -853,25 +848,25 @@ scrapeModules pgm@(Nano { code = Src stmts })
 
     tStmt ap c@ClassStmt{}   = single <$> resolveType ap c
     tStmt ap c@IfaceStmt{}   = single <$> resolveType ap c
-    tStmt _ _                = return $ [ ]
+    tStmt _ _                = return []
 
     eStmts                   = concatMap eStmt
 
     eStmt (EnumStmt _ n es)  = [(fmap srcPos n, EnumDef (F.symbol n) (envFromList $ sEnumElt <$> es))]
     eStmt _                  = []
-    sEnumElt (EnumElt _ s e) = (F.symbol s, fmap (const ()) e) 
+    sEnumElt (EnumElt _ s e) = (F.symbol s, fmap (const ()) e)
     ss                       = fmap ann
- 
 
-typeNames :: IsLocated a => AbsPath -> [ Statement a ] -> [ AbsName ] 
-typeNames (QP AK_ _ ss) = concatMap go 
+
+typeNames :: IsLocated a => AbsPath -> [ Statement a ] -> [ AbsName ]
+typeNames (QP AK_ _ ss) = concatMap go
   where
     go (ClassStmt l x _ _ _) = [ QN AK_ (srcPos l) ss $ F.symbol x ]
     go (EnumStmt l x _ )     = [ QN AK_ (srcPos l) ss $ F.symbol x ]
     go (IfaceStmt l x )      = [ QN AK_ (srcPos l) ss $ F.symbol x ]
     go _                     = []
 
- 
+
 -- visibility :: Annot (Fact r) a -> Visibility
 visibility l | ExportedElt `elem` ann_fact l = Exported
              | otherwise                     = Local
@@ -881,56 +876,56 @@ visibility l | ExportedElt `elem` ann_fact l = Exported
 mkVarEnv :: PPR r => F.Symbolic s => [(s, VarInfo r)] -> Env (VarInfo r)
 ---------------------------------------------------------------------------------------
 mkVarEnv                     = envFromListWithKey mergeVarInfo
-                             . concatMap f . M.toList 
+                             . concatMap f . M.toList
                              . foldl merge M.empty
   where
     merge ms (x,(s,v,a,t,i)) = M.insertWith (++) (F.symbol x) [(s,v,a,t,i)] ms
     f (s, vs)   = [ (s,(k,v,w, g t [ t' | (FuncOverloadKind, _, _, t', _) <- vs ], i))
                                     | (k@FuncDefKind    , v, w, t, i) <- vs ] ++
-              amb [ (s,(k,v,w,t,i)) | (k@FuncAmbientKind, v, w, t, i) <- vs ] ++ 
-                  [ (s,(k,v,w,t,i)) | (k@VarDeclKind    , v, w, t, i) <- vs ] ++ 
+              amb [ (s,(k,v,w,t,i)) | (k@FuncAmbientKind, v, w, t, i) <- vs ] ++
+                  [ (s,(k,v,w,t,i)) | (k@VarDeclKind    , v, w, t, i) <- vs ] ++
                   [ (s,(k,v,w,t,i)) | (k@ClassDefKind   , v, w, t, i) <- vs ] ++
                   [ (s,(k,v,w,t,i)) | (k@ModuleDefKind  , v, w, t, i) <- vs ] ++
                   [ (s,(k,v,w,t,i)) | (k@EnumDefKind    , v, w, t, i) <- vs ]
     g t []                   = t
     g _ ts                   = mkAnd ts
-    amb [ ]                  = [ ] 
+    amb [ ]                  = [ ]
     amb [a]                  = [a]
-    amb ((s,(k,v,w,t,i)):xs) = [(s,(k,v,w, mkAnd (t : map tyOf xs),i))]    
+    amb ((s,(k,v,w,t,i)):xs) = [(s,(k,v,w, mkAnd (t : map tyOf xs),i))]
     tyOf (_,(_,_,_,t,_))     = t
 
-mergeVarInfo _ (ModuleDefKind, v1, a1, t1, i1) (ModuleDefKind, v2, a2, t2, i2) 
-  | (v1, a1, t1, i1) == (v2, a2, t2, i2) = (ModuleDefKind, v1, a1, t1, i1) 
+mergeVarInfo _ (ModuleDefKind, v1, a1, t1, i1) (ModuleDefKind, v2, a2, t2, i2)
+  | (v1, a1, t1, i1) == (v2, a2, t2, i2) = (ModuleDefKind, v1, a1, t1, i1)
 mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
 
 ---------------------------------------------------------------------------------------
-resolveType :: PPR r => AbsPath 
-                     -> Statement (AnnR r) 
+resolveType :: PPR r => AbsPath
+                     -> Statement (AnnR r)
                      -> Either (F.FixResult Error) (Id SrcSpan, IfaceDef r)
 ---------------------------------------------------------------------------------------
-resolveType (QP AK_ _ ss) (ClassStmt l c _ _ cs) 
+resolveType (QP AK_ _ ss) (ClassStmt l c _ _ cs)
   | [(m:vs,e,i)]     <- classAnns
   = do  ts           <- typeMembers (TVar m fTop) cs
         return        $ (cc, ID (QN AK_ (srcPos l) ss (F.symbol c)) ClassKind (m:vs) (e,i) ts)
-  | otherwise 
+  | otherwise
   = Left              $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where
-    classAnns         = [ t | ClassAnn t <- ann_fact l ] 
+    classAnns         = [ t | ClassAnn t <- ann_fact l ]
     cc                = fmap ann c
-    errMsg            = "Invalid class annotation: " 
+    errMsg            = "Invalid class annotation: "
                      ++ show (intersperse comma (map pp classAnns))
 
-resolveType _ (IfaceStmt l c) 
+resolveType _ (IfaceStmt l c)
   | [t] <- ifaceAnns  = Right (fmap ann c,t)
   | otherwise         = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
   where
-    ifaceAnns         = [ t | IfaceAnn t <- ann_fact l ] 
-    errMsg            = "Invalid interface annotation: " 
+    ifaceAnns         = [ t | IfaceAnn t <- ann_fact l ]
+    errMsg            = "Invalid interface annotation: "
                      ++ show (intersperse comma (map pp ifaceAnns))
 
-resolveType _ s       = Left $ F.Unsafe $ single 
-                      $ err (sourceSpanSrcSpan $ getAnnotation s) 
-                      $ "Statement\n" ++ ppshow s ++ "\ncannot have a type annotation." 
+resolveType _ s       = Left $ F.Unsafe $ single
+                      $ err (sourceSpanSrcSpan $ getAnnotation s)
+                      $ "Statement\n" ++ ppshow s ++ "\ncannot have a type annotation."
 
 ---------------------------------------------------------------------------------------
 typeMembers :: PPR r => Mutability -> [ClassElt (AnnR r)] -> Either (F.FixResult Error) (TypeMembers r)
@@ -942,16 +937,16 @@ typeMembers dm                     = mkTypeMembers dm . concatMap go
     go (MemberMethDecl l s x _ )   = [(l,ss x ,sk s,MemDeclaration,f) | MethAnn  f <- ann_fact l]
     go (Constructor l _ _)         = [(l,cs   ,im  ,MemDefinition ,a) | ConsAnn  a <- ann_fact l]
 
-    sk True                        = StaticMember 
-    sk False                       = InstanceMember 
+    sk True                        = StaticMember
+    sk False                       = InstanceMember
     im                             = InstanceMember
     cs                             = ctorSymbol
     ss                             = F.symbol
 
 ---------------------------------------------------------------------------------------
-mkTypeMembers :: (Eq q, IsLocated l, PPR r) 
-              => MutabilityQ q 
-              -> [(l,F.Symbol,StaticKind, MemberKind, TypeMemberQ q r)] 
+mkTypeMembers :: (Eq q, IsLocated l, PPR r)
+              => MutabilityQ q
+              -> [(l,F.Symbol,StaticKind, MemberKind, TypeMemberQ q r)]
               -> Either (F.FixResult Error) (TypeMembersQ q r)
 ---------------------------------------------------------------------------------------
 mkTypeMembers dm l0       = do m  <- foldM addTm M.empty l0
@@ -959,44 +954,44 @@ mkTypeMembers dm l0       = do m  <- foldM addTm M.empty l0
                                return $ fixMut $ M.fromList l
   where
 
-    addTm ms (l,s,k,m,t)  | s == F.symbol t 
+    addTm ms (l,s,k,m,t)  | s == F.symbol t
                           = Right $ M.insertWith (++) (s,k) [Loc (srcPos l) (m,t)] ms
-                          | otherwise 
-                          = Left  $ F.Unsafe $ single 
-                          $ err (sourceSpanSrcSpan l) 
-                          $ printf "Member '%s' does not match with annotation: %s" 
+                          | otherwise
+                          = Left  $ F.Unsafe $ single
+                          $ err (sourceSpanSrcSpan l)
+                          $ printf "Member '%s' does not match with annotation: %s"
                               (ppshow s) (ppshow t)
 
     prtn (k,v)            = (k,) . mapPair (map $ fmap snd)
                           $ partition ((== MemDefinition) . fst . val) v
 
-    join (k,([t],[]))     = Right $ (k,val t)                   -- Single definition
-    join (k,(ds ,ts))     | length ts > 0  
-                          = Right $ (k,foldl1 joinElts $ val <$> ts)
-                          | otherwise      
-                          = Left  $ F.Unsafe 
+    join (k,([t],[]))     = Right (k,val t)                   -- Single definition
+    join (k,(ds ,ts))     | not (null ts)
+                          = Right (k,foldl1 joinElts $ val <$> ts)
+                          | otherwise
+                          = Left  $ F.Unsafe
                           $ map (\(Loc l v) -> err (sourceSpanSrcSpan l) $ msg (fst k) v) $ ds ++ ts
 
-    msg  k v              = printf "The following annotation for member '%s' is invalid:\n%s" 
+    msg  k v              = printf "The following annotation for member '%s' is invalid:\n%s"
                               (ppshow k)  (ppshow v)
-                                    
+
     fixMut                = M.map fixFldMut
 
     fixFldMut (FieldSig s o m t) | isInheritedMutability m = FieldSig s o dm t
     fixFldMut f                  = f
 
-joinElts (CallSig t1)           (CallSig t2)         = CallSig           $ joinTys t1 t2 
-joinElts (ConsSig t1)           (ConsSig t2)         = ConsSig           $ joinTys t1 t2 
+joinElts (CallSig t1)           (CallSig t2)         = CallSig           $ joinTys t1 t2
+joinElts (ConsSig t1)           (ConsSig t2)         = ConsSig           $ joinTys t1 t2
 joinElts (IndexSig x1 s1 t1)    (IndexSig _ _ t2)    = IndexSig x1 s1    $ joinTys t1 t2
-joinElts (FieldSig x1 o1 m1 t1) (FieldSig _ _ m2 t2) | m1 == m2 
-                                                     = FieldSig x1 o1 m1 $ joinTys t1 t2 
-joinElts (MethSig x1 t1)        (MethSig _ t2)       = MethSig  x1       $ joinTys t1 t2 
+joinElts (FieldSig x1 o1 m1 t1) (FieldSig _ _ m2 t2) | m1 == m2
+                                                     = FieldSig x1 o1 m1 $ joinTys t1 t2
+joinElts (MethSig x1 t1)        (MethSig _ t2)       = MethSig  x1       $ joinTys t1 t2
 joinElts t                      _                    = t
 
-joinTys t1 t2 = mkAnd $ bkAnd t1 ++ bkAnd t2 
+joinTys t1 t2 = mkAnd $ bkAnd t1 ++ bkAnd t2
 
 
--- | `writeGlobalVars p` returns symbols that have `WriteMany` status, i.e. may be 
+-- | `writeGlobalVars p` returns symbols that have `WriteMany` status, i.e. may be
 --    re-assigned multiply in non-local scope, and hence
 --    * cannot be SSA-ed
 --    * cannot appear in refinements
@@ -1005,7 +1000,7 @@ joinTys t1 t2 = mkAnd $ bkAnd t1 ++ bkAnd t2
 writeGlobalVars           :: Data r => [Statement (AnnType r)] -> [Id (AnnType r)]
 -------------------------------------------------------------------------------
 writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
-  where 
+  where
     fromVD (VarDecl l x _) = [ x | VarAnn _ <- ann_fact l ] ++ [ x | AmbVarAnn _ <- ann_fact l ]
 
 
@@ -1013,9 +1008,8 @@ writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
 ----------------------------------------------------------------------------------
 scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, Assignability, Maybe (RType r))]
 ----------------------------------------------------------------------------------
-scrapeVarDecl (VarDecl l _ _) 
-  = [ (VarDeclKind   , a       , t) | VarAnn (a, t) <- ann_fact l ] 
- ++ [ (AmbVarDeclKind, ReadOnly, Just t) | AmbVarAnn t <- ann_fact l ] 
+scrapeVarDecl (VarDecl l _ _)
+  = [ (VarDeclKind   , a       , t) | VarAnn (a, t) <- ann_fact l ]
+ ++ [ (AmbVarDeclKind, ReadOnly, Just t) | AmbVarAnn t <- ann_fact l ]
  ++ [ (FieldDefKind  , ReadOnly, Just t) | FieldAnn (FieldSig _ _ _ t) <- ann_fact l ]
  -- The last Assignability value is dummy
-

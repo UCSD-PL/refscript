@@ -2,8 +2,6 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE DeriveDataTypeable     #-}
 {-# LANGUAGE DeriveFunctor          #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE OverlappingInstances   #-}
 
 module Language.Nano.Annots (
 
@@ -27,7 +25,7 @@ module Language.Nano.Annots (
   , RscOption (..)
 
 ) where
-
+import           Control.Monad                  (void)
 import           Control.Applicative            hiding (empty)
 import           Data.Default
 import           Data.Monoid
@@ -149,8 +147,8 @@ data FactQ q r
   | ClassAnn    !(ClassSigQ q r)
   | ExportedElt
   | ReadOnlyVar
-  | ModuleAnn   !(F.Symbol)
-  | EnumAnn     !(F.Symbol)
+  | ModuleAnn   !F.Symbol
+  | EnumAnn     !F.Symbol
   -- Auxiliary
   | BypassUnique
     deriving (Eq, Show, Data, Typeable)
@@ -185,7 +183,7 @@ instance Show r => Show (SsaInfo r) where
   show (SI v) = show v
 
 instance PP (SsaInfo r) where
-  pp (SI i) =  pp $ fmap (const ()) i
+  pp (SI i) =  pp $ void i
 
 instance Eq (SsaInfo r) where
   SI i1 == SI i2 =  i1 == i2

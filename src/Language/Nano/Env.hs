@@ -8,7 +8,6 @@
 {-# LANGUAGE TupleSections        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverlappingInstances #-}
 
 module Language.Nano.Env (
   -- * Env definitions
@@ -28,11 +27,11 @@ module Language.Nano.Env (
   , envMap
   , envLefts
   , envRights
-  , envUnion
+  -- , envUnion (monoid)
   , envUnionList
   , envDiff
   , envIntersectWith
-  , envEmpty
+  -- , envEmpty (monoid)
   , envSEnv
   , envIds
   , envKeys
@@ -46,24 +45,23 @@ module Language.Nano.Env (
   , qenvMap
   ) where
 
-import           Control.Applicative
+import           Control.Arrow          (first)
 import           Control.Exception (throw)
 import           Data.Maybe             (isJust)
-import           Data.Monoid            (Monoid (..))
+-- import           Data.Monoid            (Monoid (..))
 import qualified Data.HashMap.Strict as M
 import           Data.Data
 import qualified Data.List               as L
-
 import           Language.Nano.Syntax
 import           Language.Nano.Syntax.PrettyPrint
 import           Language.Nano.Locations
 import           Language.Nano.Errors
 import           Language.Nano.Names
+import           Language.Fixpoint.Names
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
-import           Text.PrettyPrint.HughesPJ
-
+import           Text.PrettyPrint.HughesPJ hiding (first)
 
 --------------------------------------------------------------------------
 -- | Environment Definitions
@@ -90,7 +88,7 @@ envAdd   i t γ     = F.insertSEnv (F.symbol i) (Loc (srcPos i) t) γ
 envAdds  xts γ     = L.foldl' (\γ (x,t) -> envAdd x t γ) γ xts
 envDel   i   γ     = F.deleteSEnv (F.symbol i) γ
 envDels  is  γ     = L.foldl' (\γ x -> envDel x γ) γ is
-envToList  γ       = [ (Id l (F.symbolString x), t) | (x, Loc l t) <- F.toListSEnv γ]
+envToList  γ       = [ (Id l (symbolString x), t) | (x, Loc l t) <- F.toListSEnv γ]
 envAddReturn f     = envAdd (returnId (srcPos f))
 envFindReturn      = maybe msg val . F.lookupSEnv returnSymbol
   where
@@ -101,7 +99,7 @@ envAddWith f i t γ = case envFind i γ of
                        Nothing -> envAdd i t γ
 
 envSEnv           :: Env a -> F.SEnv a
-envSEnv            = F.fromListSEnv . map (mapFst F.symbol) . envToList
+envSEnv            = F.fromListSEnv . map (first F.symbol) . envToList
 
 envFromList       :: (PP x, IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t
 envFromList        = L.foldl' step envEmpty
@@ -130,12 +128,12 @@ envIntersectWith  :: (a -> b -> c) -> Env a -> Env b -> Env c
 envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))
 
 -- | Favors environment on the left
-envUnion          :: Env a -> Env a -> Env a
-envUnion           = envAdds . envToList
+-- envUnion          :: Env a -> Env a -> Env a
+-- envUnion           = envAdds . envToList
 
 envUnionList       = go envEmpty
   where
-    go acc (y:ys)  = go (envUnion acc y) ys
+    go acc (y:ys)  = go (mappend acc y) ys
     go acc []      = acc
 
 envRights         :: Env (Either a b) -> Env b
@@ -195,9 +193,9 @@ qenvKeys (QE γ)     = M.keys γ
 -- | Monoid Instance
 --------------------------------------------------------------------------------
 
-instance Monoid (Env t) where
-  mempty  = envEmpty
-  mappend = envUnion
+-- instance Monoid (Env t) where
+--  mempty  = envEmpty
+--  mappend = envUnion
 
 
 --------------------------------------------------------------------------------

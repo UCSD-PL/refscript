@@ -1,6 +1,5 @@
 
-/*@ foo :: forall A . ( MArray<A>, A ) => { MArray<A> | true } */
-function foo(a, e) {
-  a.push(e);
-  return a;
+export function foo<A>(a: MArray<A>, e: A): MArray <A> {
+    a.push(e);
+    return a;
 }

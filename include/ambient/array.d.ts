@@ -4,6 +4,12 @@ interface Array<M extends ReadOnly, T> {
       * Gets or sets the length of the array. This is a number one higher than the highest element defined in an array.
       */
     length: number;
+
+    /*@ @Immutable __getLength(): { number | v = len this } */
+    /*@            __getLength(): number */
+    __getLength(): number;
+
+
     /**
       * Returns a string representation of an array.
       */

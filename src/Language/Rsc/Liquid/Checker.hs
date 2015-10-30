@@ -670,29 +670,30 @@ consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
   = cgError (unimplemented l "Variadic" ex)
 
   | otherwise
-  = mseq (consExpr g e Nothing) $ \(x,g') -> do
-      tRcvr <- cgSafeEnvFindTyM x g'
+  = mseq (consExpr g e Nothing) $ \(xRcvr, g') -> do
+      tRcvr <- cgSafeEnvFindTyM xRcvr g'
       case getProp l g f tRcvr of
         Right (unzip -> (_, fs)) ->
             case getMutability (envCHA g) tRcvr of
-              Just mRcvr -> callOne g' tRcvr mRcvr fs
+              Just mRcvr -> callOne g' xRcvr tRcvr mRcvr fs
               Nothing -> cgError (bugGetMutability l tRcvr)
         Left er -> cgError er
   where
-    callOne g_ tRcvr _ [FI o _ ft]
+    callOne g_ _ tRcvr _ [FI o _ ft]
       | o == Req
       = consCall g_ l em (es `zip` nths) ft
       | otherwise
       = cgError (errorCallOptional l f tRcvr)
 
-    callOne g_ tRcvr mRcvr [MI o mts]
+    callOne g_ xRcvr tRcvr mRcvr [MI o mts]
       | o == Req
-      = let ft = mkAnd [ ft_ | (m, ft_) <- mts, isSubtype g_ mRcvr m ] in
+      = let ft = mkAnd [ ft_ | (m, ft_) <- mts, isSubtype g_ mRcvr m ]
+               & substThis xRcvr in
         consCall g_ l em (es `zip` nths) ft
       | otherwise
       = cgError (errorCallOptional l f tRcvr)
 
-    callOne _ _ _ _
+    callOne _ _ _ _ _
       = error "Call to multuple possible bindings not supported"
 
     isVariadicCall f_ = F.symbol f_ == F.symbol "call"
@@ -711,7 +712,7 @@ consExpr g (CallExpr l e es) _
 --
 consExpr g ef@(DotRef l e f) _
   = mseq (consExpr g e Nothing) $ \(x, g') -> do
-      tRcvr <- cgSafeEnvFindTyM x g'
+      tRcvr <- ltracePP l "tRcvr" <$> cgSafeEnvFindTyM x g'
       case getProp l g' f tRcvr of
         Right [(t, FI o a tf)] ->
             case getMutability (envCHA g) tRcvr of

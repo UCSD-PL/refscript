@@ -336,7 +336,7 @@ getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
 -------------------------------------------------------------------------------
 substThis :: (F.Expression x, F.Subable t) => x -> t -> t
 -------------------------------------------------------------------------------
-substThis x = F.subst (F.mkSubst [(thisSym,F.expr x)])
+substThis x = F.subst (F.mkSubst [(thisSym, F.expr x)])
 
 -- substOffsetThis = emapReft (\_ -> V.trans vs () ()) []
 --   where

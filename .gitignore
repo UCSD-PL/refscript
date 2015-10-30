@@ -1,5 +1,8 @@
 dist
 cabal-dev
+node_modules
+.cabal-sandbox
+scripts/typings
 *.o
 *.hi
 *.chi

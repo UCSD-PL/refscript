@@ -492,7 +492,7 @@ tcSetPropImm γ l f t0 (e, t') (FI _ a t)
 
 
 tcExprT l fn γ e t
-  = do ([e'], _) <- tcNormalCall γ l fn [(e, Just t)] $ idTy t
+  = do ([e'], _) <- tcNormalCall γ l fn [(e, Just t)] (idTy t)
        return (e', t)
 
 tcEnvAddo _ _ Nothing  = Nothing
@@ -810,13 +810,21 @@ tcCall γ c@(NewExpr l e es)
 --
 tcCall γ ef@(DotRef l e f)
   = runFailM (tcExpr γ e Nothing) >>= \case
-      Right (_, te) ->
-          case getProp l γ f te of
+      Right (_, tRcvr)
+        | isArrayType tRcvr
+        , F.symbol f == F.symbol "length" ->
+            do  l1   <- freshenAnn l
+                l2   <- freshenAnn l
+                let i = Id l2 "__getLength"
+                tcExpr γ (CallExpr l1 (DotRef l e i) []) Nothing
+
+        | otherwise -> case getProp l γ f tRcvr of
             Left er -> tcError er
-            Right tfs -> do (e', _) <- tcExprT l ef γ e $ rcvrTy tfs
+            Right tfs -> do (e', _) <- tcExprT l ef γ e (rcvrTy tfs)
                             if isOptional tfs
-                              then return (e', mkUnion $ tUndef : typesOf tfs)
-                              else return (e', mkUnion $          typesOf tfs)
+                              then return (DotRef l e' f, mkUnion $ tUndef : typesOf tfs)
+                              else return (DotRef l e' f, mkUnion $          typesOf tfs)
+
       Left er -> fatal er (ef, tBot)
   where
     isOptional tfs = Opt `elem` [ o | (_, FI o _ _) <- tfs ]

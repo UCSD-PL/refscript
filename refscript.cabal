@@ -1,6 +1,6 @@
 name:                refscript 
 version:             0.1.0.0
-Copyright:           2010-14 Regents of the University of California 
+Copyright:           2010-14 Regents of the University of California
 build-type:          Custom
 synopsis:            Refinement Types for Scripting Languages
 Description:         Refinement Types for Scripting Languages
@@ -12,7 +12,7 @@ maintainer:          Ranjit Jhala <jhala@cs.ucsd.edu>
 category:            Language
 cabal-version:       >=1.18
 
-data-files:          README.md, 
+data-files:          README.md,
                      include/ambient/*.ts,
                      include/rsc/*.ts,
                      include/*.ts
@@ -26,13 +26,13 @@ Source-Repository head
   Type:        git
   Location:    https://github.com/UCSD-PL/refscript
 
-Executable rsc 
+Executable rsc
   Default-language:
                     Haskell2010
 
   build-depends:    base
                   , containers
-                  , pretty 
+                  , pretty
                   , split
                   , vector
                   , bytestring
@@ -59,17 +59,17 @@ Executable rsc
                   , attoparsec
                   , refscript
 
-  -- ghc-options:    -threaded -- -W -O2  
+  -- ghc-options:    -threaded -- -W -O2
   Main-is:        Nano.hs
   hs-source-dirs: src
 
-                  
+
 Library
   Default-language: Haskell2010
-  -- ghc-options:    -threaded -- -W -O2  
+  -- ghc-options:    -threaded -- -W -O2
   build-depends:    base
                   , containers
-                  , pretty 
+                  , pretty
                   , split
                   , vector
                   , bytestring

@@ -36,9 +36,12 @@ _build
 /Paths_nano_js.hs
 
 TAGS
+tags
 a.out
 *.json
 js/
 css/
 /tests/logs/*
 /out
+Paths_RefScript.hs
+cabal.sandbox.config

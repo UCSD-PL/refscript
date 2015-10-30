@@ -912,7 +912,6 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 
 /*@ qualif Tag(v:a,x:string): ttag(v) = x */
 
-
 // Somewhat more controversial qualifiers (i.e. "expensive"...)
 
 /*  qualif Add(v:int,x:int,y:int): v = x + y */

@@ -1,5 +1,6 @@
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE DeriveFunctor             #-}
+{-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TupleSections             #-}
@@ -29,8 +30,7 @@ import           Data.Monoid                  hiding ((<>))
 import           Data.Text                    (pack, splitOn)
 import qualified Data.Traversable             as T
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc       (mapPair, mapSnd)
-import           Language.Fixpoint.Names      (symSepName)
+import           Language.Fixpoint.Names      (symSepName, symbolString)
 import qualified Language.Fixpoint.Types      as F
 import qualified Language.Fixpoint.Visitor    as FV
 import           Language.Rsc.Annotations
@@ -425,7 +425,7 @@ replaceDotRef p@(Rsc { code = Src fs, tAlias = ta, pAlias = pa, invts = is })
     tt _ _            = fmap $ FV.trans vs () ()
 
     vs                = FV.defaultVisitor { FV.txExpr = tx }
-    tx _ (F.EVar s)   | (x:y:zs) <- pack "." `splitOn` pack (F.symbolString s)
+    tx _ (F.EVar s)   | (x:y:zs) <- pack "." `splitOn` pack (symbolString s)
                       = foldl offset (F.eVar x) (y:zs)
     tx _ e            = e
     offset k v        = F.EApp offsetLocSym [F.expr k, F.expr v]

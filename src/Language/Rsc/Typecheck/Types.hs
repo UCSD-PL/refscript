@@ -6,7 +6,6 @@
 {-# LANGUAGE IncoherentInstances       #-}
 {-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE OverlappingInstances      #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE UndecidableInstances      #-}
@@ -76,10 +75,12 @@ import           Data.Monoid                 hiding ((<>))
 import           Data.Typeable               ()
 import qualified Language.Fixpoint.Bitvector as BV
 import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Names     (symbolString)
 import qualified Language.Fixpoint.Types     as F
 import           Language.Rsc.AST.Syntax
 import qualified Language.Rsc.Core.Env       as E
 import           Language.Rsc.Locations
+import           Language.Rsc.Misc           (mapFst, mapSnd3)
 import           Language.Rsc.Names
 import           Language.Rsc.Types
 import           Text.Parsec.Pos             (initialPos)
@@ -390,7 +391,7 @@ arrayLitTy :: F.Subable (RType r) => Int -> RType r -> RType r
 arrayLitTy n (TAll μ (TAll α (TFun [B x t_] t r))) = mkAll [μ,α] $ TFun αs rt r
   where αs       = [B (x_ i) t_ | i <- [1..n]]
         rt       = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
-        xs       = F.symbolString x
+        xs       = symbolString x
         x_       = F.symbol . (xs ++) . show
 arrayLitTy _ _ = error "Bad Type for ArrayLit Constructor"
 

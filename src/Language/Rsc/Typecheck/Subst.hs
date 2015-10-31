@@ -29,12 +29,13 @@ import           Control.Applicative          ((<$>))
 import qualified Data.HashMap.Strict          as HM
 import qualified Data.HashSet                 as S
 import           Data.Monoid                  hiding ((<>))
-import           Language.Fixpoint.Misc       (intersperse, mapSnd)
+import           Language.Fixpoint.Misc       (intersperse)
 import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Locations
+import           Language.Rsc.Misc            (mapSnd)
 import           Language.Rsc.Names
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types

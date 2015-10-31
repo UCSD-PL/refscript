@@ -27,7 +27,7 @@ refTypeQualifiers γ0 (l, t) = efoldRType rTypeSort addQs γ0 [] t
 
 mkQuals l γ t     = [ mkQual l γ v so pa | False
                                          , let (RR so (Reft (v, ra))) = rTypeSortedReft t
-                                         , pa                        <- conjuncts $ raPred ra
+                                         , pa                        <- conjuncts ra
                     ]
 
 mkQual l γ v so p = Q (symbol "Auto") ((v, so) : yts) (subst θ p) l0

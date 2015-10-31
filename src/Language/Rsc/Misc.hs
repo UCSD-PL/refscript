@@ -17,10 +17,13 @@ module Language.Rsc.Misc (
 
   -- Tuples
   , fst4, snd4, thd4, fth4
+  , mapFst, mapSnd
+  , mapFst3, mapSnd3, mapThd3
   , mapFstM, mapSndM, mapPairM
   , setFst3, setSnd3, setThd3
   , setFst4, setSnd4, setThd4, setFth4
   , appFst4, appSnd4, appThd4, appFth4
+  , mapPair, mapEither
 
   -- SYB
   , everywhereM'
@@ -42,7 +45,7 @@ module Language.Rsc.Misc (
 
   , dup
 
-  , mappendM, justM
+  , concatMapM, mappendM, justM
 
   -- Convenience
   , case1, case2, case3
@@ -83,6 +86,13 @@ mapFstM :: (Functor m, Monad m) => (a -> m c) -> (a, b) -> m (c, b)
 -------------------------------------------------------------------------------
 mapFstM f = mapPairM f return
 
+mapFst f (x, y)  = (f x, y)
+mapSnd f (x, y)  = (x, f y)
+
+mapFst3 f (x, y, z) = (f x, y, z)
+mapSnd3 f (x, y, z) = (x, f y, z)
+mapThd3 f (x, y, z) = (x, y, f z)
+
 -------------------------------------------------------------------------------
 mapSndM :: (Functor m, Monad m) => (b -> m c) -> (a, b) -> m (a, c)
 -------------------------------------------------------------------------------
@@ -92,6 +102,22 @@ mapSndM = mapPairM return
 mapPairM :: (Functor m, Monad m) => (a -> m c) -> (b -> m d) -> (a, b) -> m (c, d)
 -------------------------------------------------------------------------------
 mapPairM f g (x,y) =  liftM2 (,) (f x) (g y)
+
+
+-------------------------------------------------------------------------------
+mapPair :: (a -> b) -> (a, a) -> (b, b)
+-------------------------------------------------------------------------------
+mapPair f (x, y) = (f x, f y)
+
+-------------------------------------------------------------------------------
+mapEither           :: (a -> Either b c) -> [a] -> ([b], [c])
+-------------------------------------------------------------------------------
+mapEither f         = go [] []
+  where
+    go ls rs []     = (reverse ls, reverse rs)
+    go ls rs (x:xs) = case f x of
+                        Left l  -> go (l:ls) rs  xs
+                        Right r -> go ls  (r:rs) xs
 
 -------------------------------------------------------------------------------
 mkEither :: Bool -> s -> a -> Either s a
@@ -217,6 +243,9 @@ withSingleton' _ _ e  _   = e
 
 dup f1 f2 a = (f1 a,f2 a)
 
+concatMapM :: (Monad m) => (a -> m [b]) -> [a] -> m [b]
+concatMapM f = fmap concat . mapM f
+
 mappendM :: (Monoid r, Monad m) => m r -> m r -> m r
 mappendM = liftM2 mappend
 
@@ -241,4 +270,3 @@ x & f = f x
 nths = repeat Nothing
 
 s1 <//> s2 = s1 ++ "\n" ++ s2
-

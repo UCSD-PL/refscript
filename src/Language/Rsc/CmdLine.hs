@@ -65,7 +65,7 @@ config = modes [
                ]
             &= help    "rsc is an optional refinement type checker for TypeScript"
             &= program "rsc"
-            &= summary "rsc © Copyright 2013-14 Regents of the University of California."
+            &= summary "rsc © Copyright 2013-15 Regents of the University of California."
             &= verbosity
 
 -- getOpts :: IO Config

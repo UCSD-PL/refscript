@@ -20,13 +20,13 @@ import           Data.Foldable                 (Foldable)
 import           Data.Generics                 (Data, Typeable)
 import           Data.Traversable              (Traversable)
 import           GHC.Generics
-import           Language.Fixpoint.Misc        (errortext)
 import           Language.Fixpoint.PrettyPrint
 import           Language.Rsc.AST.Annotations  ()
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Pretty.Common
+import           Language.Rsc.Pretty.Errors
 import           Language.Rsc.Pretty.Syntax
 import           Text.Parsec.Pos               (SourcePos)
 import           Text.PrettyPrint.HughesPJ

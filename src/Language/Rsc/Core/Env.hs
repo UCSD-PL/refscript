@@ -25,11 +25,11 @@ module Language.Rsc.Core.Env (
   , envMap
   , envLefts
   , envRights
-  , envUnion
+  -- , envUnion (monoid)
   , envUnionList
   , envDiff
   , envIntersectWith
-  , envEmpty
+  -- , envEmpty (monoid)
   , envSEnv
   , envIds
   , envKeys
@@ -44,17 +44,20 @@ module Language.Rsc.Core.Env (
   ) where
 
 import           Control.Applicative
+import           Control.Arrow                 (first)
 import           Data.Data
-import qualified Data.HashMap.Strict     as M
-import qualified Data.List               as L
-import           Data.Maybe              (isJust)
-import           Data.Monoid             (Monoid (..))
+import qualified Data.HashMap.Strict           as M
+import qualified Data.List                     as L
+import           Data.Maybe                    (isJust)
+import           Data.Monoid                   (Monoid (..))
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types as F
+import           Language.Fixpoint.Names       (symbolString)
+import           Language.Fixpoint.PrettyPrint
+import qualified Language.Fixpoint.Types       as F
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
-
+import           Text.PrettyPrint.HughesPJ     hiding (first)
 
 --------------------------------------------------------------------------
 -- | Environment Definitions
@@ -81,7 +84,7 @@ envAdd   i t γ     = F.insertSEnv (F.symbol i) (Loc (srcPos i) t) γ
 envAdds  xts γ     = L.foldl' (\γ (x,t) -> envAdd x t γ) γ xts
 envDel   i   γ     = F.deleteSEnv (F.symbol i) γ
 envDels  is  γ     = L.foldl' (\γ x -> envDel x γ) γ is
-envToList  γ       = [ (Id l (F.symbolString x), t) | (x, Loc l t) <- F.toListSEnv γ]
+envToList  γ       = [ (Id l (symbolString x), t) | (x, Loc l t) <- F.toListSEnv γ]
 envAddReturn f     = envAdd (returnId (srcPos f))
 envFindReturn      = maybe msg val . F.lookupSEnv returnSymbol
   where
@@ -92,9 +95,9 @@ envAddWith f i t γ = case envFind i γ of
                        Nothing -> envAdd i t γ
 
 envSEnv           :: Env a -> F.SEnv a
-envSEnv            = F.fromListSEnv . map (mapFst F.symbol) . envToList
+envSEnv            = F.fromListSEnv . map (first F.symbol) . envToList
 
-envFromList_ f l      = L.foldl' step envEmpty l
+envFromList_ f l   = L.foldl' step envEmpty l
   where
     step γ (i, t)  = case envFind i γ of
                        Nothing          -> envAdd i t γ
@@ -128,12 +131,12 @@ envIntersectWith  :: (a -> b -> c) -> Env a -> Env b -> Env c
 envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))
 
 -- | Favors environment on the left
-envUnion          :: Env a -> Env a -> Env a
-envUnion           = envAdds . envToList
+-- envUnion          :: Env a -> Env a -> Env a
+-- envUnion           = envAdds . envToList
 
 envUnionList       = go envEmpty
   where
-    go acc (y:ys)  = go (envUnion acc y) ys
+    go acc (y:ys)  = go (mappend acc y) ys
     go acc []      = acc
 
 envRights         :: Env (Either a b) -> Env b
@@ -177,4 +180,3 @@ qenvAdd q t (QE γ)  = QE (M.insert q (Loc (srcPos q) t) γ)
 qenvMap f (QE γ)    = QE $ M.map (fmap f) γ
 
 qenvKeys (QE γ)     = M.keys γ
-

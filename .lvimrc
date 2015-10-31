@@ -4,7 +4,8 @@
 "   Thanks to: http://lpaste.net/94999
 "
 
-let g:syntastic_haskell_hdevtools_args = '-g-i../liquid-fixpoint/src -g-isrc -g-package-conf='.glob(finddir('.cabal-sandbox', './;').'/*-packages.conf.d').' \
+" let g:syntastic_haskell_hdevtools_args = '-g-iliquid-fixpoint/src -g-isrc -g-package-conf='.glob(finddir('.cabal-sandbox', './;').'/*-packages.conf.d').' \
+let g:syntastic_haskell_hdevtools_args = ' \
   \-g-XTypeSynonymInstances  
   \-g-XFlexibleInstances 
   \-g-XFlexibleContexts 

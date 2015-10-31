@@ -45,3 +45,4 @@ css/
 /out
 Paths_RefScript.hs
 cabal.sandbox.config
+.stack-work

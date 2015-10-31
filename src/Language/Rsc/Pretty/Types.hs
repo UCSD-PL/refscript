@@ -232,5 +232,5 @@ instance PP F.Reft where
   pp = pprint
 
 instance PP (F.SubC c) where
-  pp s = pp (F.lhsCs s) <+> text " <: " <+> pp (F.rhsCs s)
+  pp s = text "TODO PP F.SubC" -- pp (F.lhsCs s) <+> text " <: " <+> pp (F.rhsCs s)
 

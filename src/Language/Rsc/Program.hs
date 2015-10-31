@@ -30,6 +30,7 @@ import           Control.Applicative      hiding (empty)
 import           Data.Generics
 import           Data.List                (stripPrefix)
 import           Data.Monoid              hiding ((<>))
+import           Language.Fixpoint.Names  (symbolString)
 import qualified Language.Fixpoint.Types  as F
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
@@ -133,7 +134,7 @@ instance Functor Source where
 --------------------------------------------------------------------------------
 
 mkSSAId :: (F.Symbolic x, IsLocated a) => a -> x -> Int -> Id a
-mkSSAId l x n = Id l (F.symbolString (F.symbol x) ++ ssaStr ++ show n)
+mkSSAId l x n = Id l (symbolString (F.symbol x) ++ ssaStr ++ show n)
 
 mkNextId :: Id a -> Id a
 mkNextId (Id a x) =  Id a $ nextStr ++ x

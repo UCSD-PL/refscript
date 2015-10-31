@@ -4,9 +4,11 @@
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE UndecidableInstances      #-}
+{-# LANGUAGE ViewPatterns              #-}
 
 -- | Module pertaining to Refinement Type descriptions and conversions
 --   Likely mergeable with @Language.Rsc.Typecheck.Types@
@@ -43,8 +45,6 @@ module Language.Rsc.Liquid.Types (
   -- , unqualifyThis
   , mkQualSym
   , mkOffset
-  -- , substOffsetThis
-  , mkCastFunTy
 
   ) where
 
@@ -54,7 +54,9 @@ import qualified Data.HashMap.Strict          as HM
 import qualified Data.List                    as L
 import           Data.Maybe                   (catMaybes, fromMaybe)
 import           Data.Monoid                  (mconcat)
+import qualified Data.Text                    as T
 import qualified Language.Fixpoint.Bitvector  as BV
+import           Language.Fixpoint.Names      (symbolText)
 import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.AST
 import           Language.Rsc.Names
@@ -167,22 +169,22 @@ rTypeSort (TVar α _)          = F.FObj $ F.symbol α
 rTypeSort (TAll v t)          = rTypeSortForAll $ TAll v t
 rTypeSort (TFun xts t _)      = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TPrim c _)         = rTypeSortPrim c
-rTypeSort (TOr ts)            = F.FApp (rawStringFTycon $ F.symbol "union") $ L.sort $ rTypeSort <$> ts
-rTypeSort (TAnd ts)           = F.FApp (rawStringFTycon $ F.symbol "intersection") $ L.sort $ rTypeSort <$> map snd ts
-rTypeSort (TRef (Gen n ts) _) = F.FApp (rawStringFTycon $ F.symbol n) (rTypeSort <$> ts)
-rTypeSort (TObj _ _ _ )       = F.FApp (rawStringFTycon $ F.symbol "Object") []
-rTypeSort (TClass _)          = F.FApp (rawStringFTycon $ F.symbol "class" ) []
-rTypeSort (TMod _)            = F.FApp (rawStringFTycon $ F.symbol "module") []
+rTypeSort (TOr ts)            = F.fAppTC (rawStringFTycon unionName) []
+rTypeSort (TAnd ts)           = F.fAppTC (rawStringFTycon intersName) []
+rTypeSort (TRef (Gen n ts) _) = F.fAppTC (rawSymbolFTycon (F.symbol n)) (rTypeSort <$> ts)
+rTypeSort (TObj _ _ _ )       = F.fAppTC (rawStringFTycon objectName) []
+rTypeSort (TClass _)          = F.fAppTC (rawStringFTycon className ) []
+rTypeSort (TMod _)            = F.fAppTC (rawStringFTycon moduleName) []
 rTypeSort t                   = error $ render $ text ("BUG: Unsupported in rTypeSort " ++ ppshow t)
 
 rTypeSortPrim TBV32      = BV.mkSort BV.S32
 rTypeSortPrim TNumber    = F.intSort
 rTypeSortPrim TString    = F.strSort
-rTypeSortPrim TBoolean   = F.FApp (rawStringFTycon "boolean") []
-rTypeSortPrim TVoid      = F.FApp (rawStringFTycon "void") []
-rTypeSortPrim TTop       = F.FApp (rawStringFTycon "top") []
-rTypeSortPrim TNull      = F.FApp (rawStringFTycon "null") []
-rTypeSortPrim TUndefined = F.FApp (rawStringFTycon "undefined") []
+rTypeSortPrim TBoolean   = F.fAppTC (rawStringFTycon boolName) []
+rTypeSortPrim TVoid      = F.fAppTC (rawStringFTycon voidName) []
+rTypeSortPrim TTop       = F.fAppTC (rawStringFTycon topName) []
+rTypeSortPrim TNull      = F.fAppTC (rawStringFTycon nullName) []
+rTypeSortPrim TUndefined = F.fAppTC (rawStringFTycon undefName) []
 rTypeSortPrim TFPBool    = F.boolSort
 rTypeSortPrim c          = error $ "impossible: rTypeSortPrim " ++ show c
 
@@ -208,11 +210,11 @@ stripRTypeBase _            = Nothing
 ------------------------------------------------------------------------------------------
 noKVars :: F.Reft -> F.Reft
 ------------------------------------------------------------------------------------------
-noKVars (F.Reft (x, F.Refa p)) = F.Reft (x, F.Refa $ dropKs p)
+noKVars (F.Reft (x, p))     = F.Reft (x, dropKs p)
   where
-    dropKs                     = F.pAnd . filter (not . isK) . F.conjuncts
-    isK (F.PKVar {})           = True
-    isK _                      = False
+    dropKs                  = F.pAnd . filter (not . isK) . F.conjuncts
+    isK (F.PKVar {})        = True
+    isK _                   = False
 
 
 ------------------------------------------------------------------------------------------
@@ -368,29 +370,29 @@ substThis x = F.subst (F.mkSubst [(thisSym, F.expr x)])
 --
 --
 
+qualifySymbol :: F.Symbol -> F.Symbol -> F.Symbol
+qualifySymbol (symbolText -> m) x'@(symbolText -> x)
+  | isQualified x  = x'
+  -- | isParened x    = symbol (wrapParens (m `mappend` "." `mappend` stripParens x))
+  | otherwise      = F.symbol (m `mappend` "." `mappend` x)
+
+isQualified y = "." `T.isInfixOf` y
+wrapParens x  = "(" `mappend` x `mappend` ")"
+
 
 -------------------------------------------------------------------------------
 mkQualSym :: (F.Symbolic x, F.Symbolic f) => x -> f -> F.Symbol
 -------------------------------------------------------------------------------
-mkQualSym    x f = F.qualifySymbol (F.symbol x) (F.symbol f)
+mkQualSym    x f = qualifySymbol (F.symbol x) (F.symbol f)
 
 -------------------------------------------------------------------------------
 -- mkOffset :: (F.Symbolic f, F.Expression x) => x -> f -> F.Expr
 -------------------------------------------------------------------------------
-mkOffset x f = F.EApp offsetLocSym [F.expr x, F.expr $ F.symbolText $ F.symbol f]
+mkOffset x f = F.EApp offsetLocSym [F.expr x, F.expr $ symbolText $ F.symbol f]
 
 
--- | Cast function
---
----------------------------------------------------------------------------------
-mkCastFunTy :: RefType -> RefType
----------------------------------------------------------------------------------
-mkCastFunTy t
-  = TAll (BTV a def (Just t))
-  $ TFun [B x α] (α `strengthen` (F.uexprReft x))  fTop
-  where
-    a = F.symbol "A"
-    α = TVar (TV a def) fTop
-    x = F.symbol "x"
 
+rawSymbolFTycon :: F.Symbol -> F.FTycon
+rawSymbolFTycon = F.symbolFTycon
+                . F.locAt "RSC.Types.rawStringFTycon"
 

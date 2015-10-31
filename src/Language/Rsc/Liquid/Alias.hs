@@ -158,7 +158,7 @@ solve :: (IsLocated a)
 
 solve defs deps exF = ex_solved $ execState act st0
   where
-    st0             = ExS defs envEmpty
+    st0             = ExS defs mempty -- envEmpty
     xs              = [x `at` d | (x, d) <- envToList defs]
     act             = forM_ xs $ solveM deps exF []
 

@@ -23,9 +23,8 @@ import           Data.List                     (isPrefixOf, sortBy)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types       as F
--- import           Language.Rsc.Pretty
 import           Language.Fixpoint.PrettyPrint
+import qualified Language.Fixpoint.Types       as F
 import qualified Language.Fixpoint.Types       as F
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Locations
@@ -33,6 +32,7 @@ import           Language.Rsc.Names
 import           Prelude                       hiding (maybe)
 import           Text.PrettyPrint.HughesPJ
 
+dot = text "."
 
 class PP a where
   pp :: a -> Doc

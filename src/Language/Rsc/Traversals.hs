@@ -19,7 +19,7 @@ module Language.Rsc.Traversals (
 import           Control.Applicative          hiding (empty)
 import           Control.Monad                (forM_)
 import           Data.Default
-import qualified Data.Foldable                as Ext
+import qualified Data.Foldable                as Fld
 import           Data.Generics
 import qualified Data.HashSet                 as H
 import qualified Data.List                    as L
@@ -103,136 +103,136 @@ efoldTypeMembers' g f h (TM m sm c k s n) γ z =
 --------------------------------------------------------------------------------
 
 
-class Foldable t where
-  fold :: (F.Reftable r, Monoid a)
-       => ([TVar] -> [BindQ q r] -> RTypeQ q r -> a)
-       ->  [TVar] -> [BindQ q r] -> t q r  -> a
-
-instance Foldable RTypeQ where
-  fold = foldRType
-
-instance Foldable BindQ where
-  fold f αs xs (B _ t) = fold f αs xs t
-
--- instance Foldable FactQ where
---   trans = transFact
+-- class Foldable t where
+--   fold :: (F.Reftable r, Monoid a)
+--        => ([TVar] -> [BindQ q r] -> RTypeQ q r -> a)
+--        ->  [TVar] -> [BindQ q r] -> t q r  -> a
 --
--- instance Foldable CastQ where
---   trans = transCast
+-- instance Foldable RTypeQ where
+--   fold = foldRType
 --
--- instance Foldable TypeDeclQ where
---   trans f αs xs (TD s@(TS _ b _) es) = TD (trans f αs xs s) (trans f αs' xs es)
---     where
---       αs' = map btvToTV (b_args b) ++ αs
+-- instance Foldable BindQ where
+--   fold f αs xs (B _ t) = fold f αs xs t
 --
--- instance Foldable TypeSigQ where
---   trans f αs xs (TS k b h) = TS k (trans f αs xs b) (transIFDBase f αs' xs h)
---       where
---         αs' = map btvToTV (b_args b) ++ αs
-
-instance Foldable TypeMembersQ where
-  fold f αs xs (TM m sm c k s n) = mconcat [ Ext.foldMap (fold f αs xs) m
-                                           , Ext.foldMap (fold f αs xs) sm
-                                           , Ext.foldMap (fold f αs xs) c
-                                           , Ext.foldMap (fold f αs xs) k
-                                           , Ext.foldMap (fold f αs xs) s
-                                           , Ext.foldMap (fold f αs xs) n
-                                           ]
-
-instance Foldable BTGenQ where
-  fold f αs xs (BGen n ts) = mconcat $ fold f αs xs <$> ts
-
-instance Foldable TGenQ where
-  fold f αs xs (Gen n ts) = mconcat $ fold f αs xs <$> ts
-
-instance Foldable BTVarQ where
-  fold f αs xs (BTV x l (Just t)) = fold f αs xs t
-  fold f αs xs (BTV x l _)        = mempty
-
-instance Foldable TypeMemberQ where
-  fold f αs xs (FI _ _ t) = fold f αs xs t
-  fold f αs xs (MI o mts) = mconcat $ fold f αs xs . snd <$> mts
+-- -- instance Foldable FactQ where
+-- --   trans = transFact
+-- --
+-- -- instance Foldable CastQ where
+-- --   trans = transCast
+-- --
+-- -- instance Foldable TypeDeclQ where
+-- --   trans f αs xs (TD s@(TS _ b _) es) = TD (trans f αs xs s) (trans f αs' xs es)
+-- --     where
+-- --       αs' = map btvToTV (b_args b) ++ αs
+-- --
+-- -- instance Foldable TypeSigQ where
+-- --   trans f αs xs (TS k b h) = TS k (trans f αs xs b) (transIFDBase f αs' xs h)
+-- --       where
+-- --         αs' = map btvToTV (b_args b) ++ αs
 --
--- instance Foldable ModuleDefQ where
---   trans f αs xs (ModuleDef v t e p)
---     = ModuleDef (envMap (trans f αs xs) v) (envMap (trans f αs xs) t) e p
+-- instance Foldable TypeMembersQ where
+--   fold f αs xs (TM m sm c k s n) = mconcat [ Fld.foldMap (fold f αs xs) m
+--                                            , Fld.foldMap (fold f αs xs) sm
+--                                            , Fld.foldMap (fold f αs xs) c
+--                                            , Fld.foldMap (fold f αs xs) k
+--                                            , Fld.foldMap (fold f αs xs) s
+--                                            , Fld.foldMap (fold f αs xs) n
+--                                            ]
 --
--- instance Foldable VarInfoQ where
---   trans f αs xs (VI l a i t) = VI l a i $ trans f αs xs t
+-- instance Foldable BTGenQ where
+--   fold f αs xs (BGen n ts) = mconcat $ fold f αs xs <$> ts
 --
--- instance Foldable FAnnQ where
---   trans f αs xs (FA i s ys) = FA i s $ trans f αs xs <$> ys
+-- instance Foldable TGenQ where
+--   fold f αs xs (Gen n ts) = mconcat $ fold f αs xs <$> ts
 --
--- transFmap ::  (F.Reftable r, Functor thing)
---           => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
---           -> [TVar] -> thing (FAnnQ q r) -> thing (FAnnQ q r)
--- transFmap f αs = fmap (trans f αs [])
+-- instance Foldable BTVarQ where
+--   fold f αs xs (BTV x l (Just t)) = fold f αs xs t
+--   fold f αs xs (BTV x l _)        = mempty
 --
--- transIFDBase f αs xs (es,is) = (trans f αs xs <$> es, trans f αs xs <$> is)
+-- instance Foldable TypeMemberQ where
+--   fold f αs xs (FI _ _ t) = fold f αs xs t
+--   fold f αs xs (MI o mts) = mconcat $ fold f αs xs . snd <$> mts
+-- --
+-- -- instance Foldable ModuleDefQ where
+-- --   trans f αs xs (ModuleDef v t e p)
+-- --     = ModuleDef (envMap (trans f αs xs) v) (envMap (trans f αs xs) t) e p
+-- --
+-- -- instance Foldable VarInfoQ where
+-- --   trans f αs xs (VI l a i t) = VI l a i $ trans f αs xs t
+-- --
+-- -- instance Foldable FAnnQ where
+-- --   trans f αs xs (FA i s ys) = FA i s $ trans f αs xs <$> ys
+-- --
+-- -- transFmap ::  (F.Reftable r, Functor thing)
+-- --           => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
+-- --           -> [TVar] -> thing (FAnnQ q r) -> thing (FAnnQ q r)
+-- -- transFmap f αs = fmap (trans f αs [])
+-- --
+-- -- transIFDBase f αs xs (es,is) = (trans f αs xs <$> es, trans f αs xs <$> is)
+-- --
+-- -- transFact :: F.Reftable r => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
+-- --                           -> [TVar] -> [BindQ q r] -> FactQ q r -> FactQ q r
+-- -- transFact f = go
+-- --   where
+-- --     go αs xs (PhiVarTy (v,t))  = PhiVarTy      $ (v, trans f αs xs t)
+-- --
+-- --     go αs xs (TypInst x y ts)  = TypInst x y   $ trans f αs xs <$> ts
+-- --
+-- --     go αs xs (EltOverload x m) = EltOverload x $ trans f αs xs m
+-- --     go αs xs (Overload x t)    = Overload x    $ trans f αs xs t
+-- --
+-- --     go αs xs (VarAnn l a t)    = VarAnn l a    $ trans f αs xs <$> t
+-- --
+-- --     go αs xs (FieldAnn t)      = FieldAnn      $ trans f αs xs t
+-- --     go αs xs (MethAnn t)       = MethAnn       $ trans f αs xs t
+-- --     go αs xs (CtorAnn t)       = CtorAnn       $ trans f αs xs t
+-- --
+-- --     go αs xs (UserCast t)      = UserCast      $ trans f αs xs t
+-- --     go αs xs (SigAnn l t)      = SigAnn l      $ trans f αs xs t
+-- --     go αs xs (TCast x c)       = TCast x       $ trans f αs xs c
+-- --
+-- --     go αs xs (ClassAnn l ts)   = ClassAnn l    $ trans f αs xs ts
+-- --     go αs xs (InterfaceAnn td) = InterfaceAnn  $ trans f αs xs td
+-- --
+-- --     go _ _   t                 = t
+-- --
+-- -- transCast f = go
+-- --   where
+-- --     go _  _ CNo          = CNo
+-- --     go αs xs (CDead e t) = CDead e $ trans f αs xs t
+-- --     go αs xs (CUp t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
+-- --     go αs xs (CDn t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
 --
--- transFact :: F.Reftable r => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
---                           -> [TVar] -> [BindQ q r] -> FactQ q r -> FactQ q r
--- transFact f = go
+--
+-- -- TODO instance Foldable FRsc where
+-- -- TODO   fold f αs xs (FRsc (Rsc (Src ss ) cst ta pa pq inv max opt)) =
+-- -- TODO     foldStmts visitor ([], []) ss
+-- -- TODO       where
+-- -- TODO         visitor = defaultVisitor
+--
+--
+-- -- | foldRType
+-- --
+-- --  Binds (αs and bs) accumulate on the left.
+-- --
+-- foldRType :: (F.Reftable r, Monoid a)
+--           => ([TVar] -> [BindQ q r] -> RTypeQ q r -> a)
+--           ->  [TVar] -> [BindQ q r] -> RTypeQ q r -> a
+-- foldRType f                   = go
 --   where
---     go αs xs (PhiVarTy (v,t))  = PhiVarTy      $ (v, trans f αs xs t)
---
---     go αs xs (TypInst x y ts)  = TypInst x y   $ trans f αs xs <$> ts
---
---     go αs xs (EltOverload x m) = EltOverload x $ trans f αs xs m
---     go αs xs (Overload x t)    = Overload x    $ trans f αs xs t
---
---     go αs xs (VarAnn l a t)    = VarAnn l a    $ trans f αs xs <$> t
---
---     go αs xs (FieldAnn t)      = FieldAnn      $ trans f αs xs t
---     go αs xs (MethAnn t)       = MethAnn       $ trans f αs xs t
---     go αs xs (CtorAnn t)       = CtorAnn       $ trans f αs xs t
---
---     go αs xs (UserCast t)      = UserCast      $ trans f αs xs t
---     go αs xs (SigAnn l t)      = SigAnn l      $ trans f αs xs t
---     go αs xs (TCast x c)       = TCast x       $ trans f αs xs c
---
---     go αs xs (ClassAnn l ts)   = ClassAnn l    $ trans f αs xs ts
---     go αs xs (InterfaceAnn td) = InterfaceAnn  $ trans f αs xs td
---
---     go _ _   t                 = t
---
--- transCast f = go
---   where
---     go _  _ CNo          = CNo
---     go αs xs (CDead e t) = CDead e $ trans f αs xs t
---     go αs xs (CUp t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
---     go αs xs (CDn t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
-
-
--- TODO instance Foldable FRsc where
--- TODO   fold f αs xs (FRsc (Rsc (Src ss ) cst ta pa pq inv max opt)) =
--- TODO     foldStmts visitor ([], []) ss
--- TODO       where
--- TODO         visitor = defaultVisitor
-
-
--- | foldRType
---
---  Binds (αs and bs) accumulate on the left.
---
-foldRType :: (F.Reftable r, Monoid a)
-          => ([TVar] -> [BindQ q r] -> RTypeQ q r -> a)
-          ->  [TVar] -> [BindQ q r] -> RTypeQ q r -> a
-foldRType f                   = go
-  where
-    go αs xs t@(TPrim _ _)    = f αs xs t
-    go αs xs t@(TVar _ _)     = f αs xs t
-    go αs xs t@(TOr ts)       = f αs xs t <> Ext.foldMap (go αs xs) ts
-    go αs xs t@(TAnd ts)      = f αs xs t <> Ext.foldMap (go αs xs) (map snd ts)
-    go αs xs t@(TRef n r)   = f αs xs t <> fold f αs xs n
-    go αs xs t@(TObj m ms r)  = f αs xs t <> fold f αs xs ms <> fold f αs xs m
-    go αs xs t@(TClass n)     = f αs xs t <> fold f αs xs n
-    go αs xs t@(TMod _)       = f αs xs t
-    go αs xs t@(TAll a t')    = f αs xs t <> fold f αs' xs t'
-                                where αs' = αs ++ [btvToTV a]
-    go αs xs t@(TFun bs t' r) = f αs xs t <> Ext.foldMap (fold f αs xs') bs <> fold f αs xs' t'
-                                where xs' = bs ++ xs
-    go αs xs t@(TExp e)       = f αs xs t
+--     go αs xs t@(TPrim _ _)    = f αs xs t
+--     go αs xs t@(TVar _ _)     = f αs xs t
+--     go αs xs t@(TOr ts)       = f αs xs t <> Fld.foldMap (go αs xs) ts
+--     go αs xs t@(TAnd ts)      = f αs xs t <> Fld.foldMap (go αs xs) (map snd ts)
+--     go αs xs t@(TRef n r)   = f αs xs t <> fold f αs xs n
+--     go αs xs t@(TObj m ms r)  = f αs xs t <> fold f αs xs ms <> fold f αs xs m
+--     go αs xs t@(TClass n)     = f αs xs t <> fold f αs xs n
+--     go αs xs t@(TMod _)       = f αs xs t
+--     go αs xs t@(TAll a t')    = f αs xs t <> fold f αs' xs t'
+--                                 where αs' = αs ++ [btvToTV a]
+--     go αs xs t@(TFun bs t' r) = f αs xs t <> Fld.foldMap (fold f αs xs') bs <> fold f αs xs' t'
+--                                 where xs' = bs ++ xs
+--     go αs xs t@(TExp e)       = f αs xs t
 
 
 type PPRD r = (F.Reftable r, Data r, Typeable r)

@@ -5,6 +5,8 @@ FASTOPTS="-O0"
 DISTOPTS="-W -O2 -XStandaloneDeriving"
 PROFOPTS="-rtsopts -auto-all -caf-all"
 
+TASTY=./dist/build/test/test
+
 ##############################################################################
 ##############################################################################
 ##############################################################################
@@ -41,3 +43,14 @@ lint:
 
 tags:
 	hasktags -b src/
+
+tasty:
+	cabal configure -fdevel --enable-tests --disable-library-profiling
+	cabal build
+	$(TASTY)
+
+tasty-dist:
+	cabal configure -fdevel --enable-tests --disable-library-profiling -O2
+	cabal build
+	$(TASTY)
+

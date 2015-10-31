@@ -33,3 +33,9 @@ convertError tgt e  = errortext $ msg <+> pp e
   where
     msg             = text $ "Cannot convert to: " ++ tgt
 
+---------------------------------------------------------------------
+errortext :: Doc -> c
+---------------------------------------------------------------------
+errortext = errorstar . render
+
+

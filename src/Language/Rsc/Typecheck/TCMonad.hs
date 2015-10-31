@@ -50,6 +50,7 @@ module Language.Rsc.Typecheck.TCMonad (
   )  where
 
 
+import           Control.Arrow                      (second)
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad.Except               (catchError)
 import           Control.Monad.State

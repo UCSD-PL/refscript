@@ -5,6 +5,7 @@
 {-# LANGUAGE DeriveTraversable    #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Rsc.Names (
@@ -38,17 +39,18 @@ module Language.Rsc.Names (
   , absolutePath
 
   , toAbsoluteName
-  , toLocSym
   , extClassSym
   , extInterfaceSym
   , offsetLocSym
-  , offsetSym
-  , ttagSym
-  , hasPropertySym
   , protoSym
   , thisSym
   , thisId
   , undefinedId
+
+  , boolName, voidName, unionName, intersName, topName, nullName, undefName
+  , objectName, selfName, className, moduleName, enumName
+  , extendsClassName, extendsInterfaceName
+  , offsetName
 
   ) where
 
@@ -60,7 +62,7 @@ import           Data.Hashable
 import qualified Data.HashSet              as H
 import           Data.List                 (find)
 import           Data.Traversable
-import           GHC.Generics
+import           Language.Fixpoint.Names   (symbolString)
 import qualified Language.Fixpoint.Types   as F
 import           Language.Rsc.Locations
 import           Text.PrettyPrint.HughesPJ
@@ -135,7 +137,7 @@ returnName :: String
 returnName = "$result"
 
 data Id a = Id a String
-          deriving (Show,Data,Typeable,Functor,Foldable,Traversable,Generic)
+          deriving (Show,Data,Typeable,Functor,Foldable,Traversable)
 
 unId :: Id a -> String
 unId (Id _ s) = s
@@ -147,7 +149,7 @@ instance IsLocated a => IsLocated (Id a) where
   srcPos (Id l _) = srcPos l
 
 symbolId :: (IsLocated l, F.Symbolic x) => l -> x -> Id l
-symbolId l x = Id l $ F.symbolString $ F.symbol x
+symbolId l x = Id l $ symbolString $ F.symbol x
 
 returnId   :: a -> Id a
 returnId x = Id x returnName
@@ -216,15 +218,45 @@ absolutePath ps (QP AK_ _ p) (QP RK_ _ ss) =
 
 toAbsoluteName (QN (QP RK_ l ss) s) = QN (QP AK_ l ss) s
 
-toLocSym        = F.dummyLoc . F.symbol
-extClassSym     = toLocSym "extends_class"
-extInterfaceSym = toLocSym "extends_interface"
-offsetLocSym    = toLocSym "offset"
-offsetSym       = F.symbol "offset"
-ttagSym         = toLocSym "ttag"
-hasPropertySym  = toLocSym "hasProperty"
+
+-- toLocSym        = F.dummyLoc . F.symbol
+extClassSym     = F.dummyLoc extendsClassName     -- "extends_class"
+extInterfaceSym = F.dummyLoc extendsInterfaceName --  "extends_interface"
+offsetLocSym    = F.dummyLoc offsetName
+
+-- ttagSym         = F.dummyLoc "ttag"
+-- hasPropertySym  = F.dummyLoc "hasProperty"
 
 undefinedId     = Id (srcPos dummySpan) "undefined"
 thisId          = Id (srcPos dummySpan) "this"
-thisSym         = F.symbol "this"
-protoSym        = F.symbol "__proto__"
+
+offsetName, thisSym, protoSym :: F.Symbol
+thisSym    = "this"
+protoSym   = "__proto__"
+offsetName = "offset"
+
+----------------------------------------------------------------------
+-- | Global Names
+----------------------------------------------------------------------
+
+
+
+boolName, voidName, unionName, topName, nullName, undefName :: F.Symbol
+boolName  = "Boolean"
+voidName  = "Void"
+unionName = "Union"
+topName   = "Top"
+nullName  = "Tull"
+undefName = "Undefined"
+
+objectName, selfName, className, moduleName, enumName, intersName:: F.Symbol
+objectName = "Object"
+selfName   = "Self"
+className  = "class"
+moduleName = "module"
+enumName   = "enum"
+intersName = "intersection"
+
+extendsClassName, extendsInterfaceName :: F.Symbol
+extendsClassName     = "extends_class"
+extendsInterfaceName = "extends_interface"

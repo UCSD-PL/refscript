@@ -126,7 +126,7 @@ eInfo msg err                     = (srcPos $ errLoc err', errMsg err')
     err'                          = catMessage err msg
 
 mkAnnMapTyp (AI m)
-  = M.map (\a -> (F.symbolString $ ann_bind a, render $ pp (ann_type a)))
+  = M.map (\a -> (symbolString $ ann_bind a, render $ pp (ann_type a)))
   $ M.fromList
   $ map (head . sortWith (srcSpanEndCol . fst))
   $ groupWith (lineCol . fst)
@@ -233,4 +233,3 @@ toVim (AnnMap _ ty _) = mconcat $ L.intersperse "\n" $ ss <$> lines
 
 isDeclarationFile :: IsLocated a => a -> Bool
 isDeclarationFile = L.isSuffixOf ".d.ts" . sourceName . sp_start . srcPos
-

@@ -47,7 +47,7 @@ import           Control.Monad
 import           Control.Monad.Trans                     (MonadIO,liftIO)
 import           Control.Applicative                     ((<$>), (<*>) , (<*) , (*>))
 
-import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
+import           Language.Fixpoint.Types          hiding (quals, Loc, Expression, Located)
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc                  (fst3)
@@ -151,7 +151,7 @@ aliasVarT (l, x)
 --
 -- PV: Insert your option parser here
 --
-optionP   = string "REALS" >> return RealOption
+-- optionP   = string "REALS" >> return RealOption
 
 iFaceP   :: Parser (Id SrcSpan, IfaceDefQ RK Reft)
 iFaceP
@@ -550,7 +550,7 @@ data PSpec l r
   | TAlias  (Id l, TAlias (RTypeQ RK r))
   | PAlias  (Id l, PAlias)
   | Qual    Qualifier
-  | Option  RscOption
+  | Option  (Located String)
   | Invt    l (RTypeQ RK r)
   | CastSp  l (RTypeQ RK r)
   | Exported l
@@ -577,7 +577,7 @@ parseAnnot = go
     go (RawTAlias   (ss, _)) = TAlias  <$> patch2 ss <$> tAliasP
     go (RawPAlias   (ss, _)) = PAlias  <$> patch2 ss <$> pAliasP
     go (RawQual     (_ , _)) = Qual    <$>               qualifierP btSortP
-    go (RawOption   (_ , _)) = Option  <$>               optionP
+    go (RawOption   (ss, o)) = return   $ Option         (Loc ss o)   -- <$> optionP
     go (RawInvt     (ss, _)) = Invt               ss <$> bareTypeP
     go (RawCast     (ss, _)) = CastSp             ss <$> bareTypeP
     go (RawExported (ss, _)) = return  $ Exported ss

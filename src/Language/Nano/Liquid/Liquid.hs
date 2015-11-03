@@ -1,4 +1,5 @@
 {-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE PartialTypeSignatures     #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LambdaCase                #-}
@@ -41,6 +42,7 @@ import qualified Language.Nano.Env                  as E
 import           Language.Nano.Environment
 import           Language.Nano.Locations
 import           Language.Nano.Names
+import           Language.Nano.CmdLine
 import           Language.Nano.Program
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Types
@@ -60,39 +62,73 @@ import           System.Console.CmdArgs.Default
 
 type PPRS r = (PPR r, Substitutable r (Fact r))
 
+type Result = (A.UAnnSol RefType, F.FixResult Error)
+type Err a  = Either (F.FixResult Error) a
 
 --------------------------------------------------------------------------------
-verifyFile    :: Config -> FilePath -> [FilePath] -> IO (A.UAnnSol RefType, F.FixResult Error)
+verifyFile    :: Config -> FilePath -> [FilePath] -> IO Result
 --------------------------------------------------------------------------------
-verifyFile cfg f fs
-  = parse     fs
-  $ ssa
-  $ tc    cfg
-  $ refTc cfg f
+verifyFile cfg f fs = do
+  (cfg', p0) <- eAct $ parse cfg fs
+  p1         <- eAct $ ssa          p0
+  p2         <- eAct $ tc    cfg    p1
+  r          <-        refTc cfg f  p2
+  return r
 
-parse fs next
+--------------------------------------------------------------------------------
+parse :: Config -> [FilePath] -> IO (Err (Config, NanoBareR F.Reft))
+--------------------------------------------------------------------------------
+parse cfg fs
   = do  r <- parseNanoFromFiles fs
         donePhase Loud "Parse Files"
-        nextPhase r next
+        case r of
+          Left l  -> return (Left l)
+          Right p -> do cfg'  <- withPragmas cfg (pOptions p)
+                        return $ Right (cfg', p)
 
-ssa next p
-  = do  r <- ssaTransform p
-        donePhase Loud "SSA Transform"
-        nextPhase r next
 
-tc cfg next p
-  = do  r <- typeCheck cfg p
-        donePhase Loud "Typecheck"
-        nextPhase r next
+--------------------------------------------------------------------------------
+ssa :: NanoBareR F.Reft -> IO (Err (NanoSSAR F.Reft))
+--------------------------------------------------------------------------------
+ssa p = do
+  r <- ssaTransform p
+  donePhase Loud "SSA Transform"
+  return r
 
-refTc cfg f p
-  = do donePhase Loud "Generate Constraints"
-       solveConstraints p f cgi
-  where
-    cgi = generateConstraints cfg f p
+--------------------------------------------------------------------------------
+tc :: Config -> NanoSSAR F.Reft -> IO (Err (NanoTypeR F.Reft))
+--------------------------------------------------------------------------------
+tc cfg p = do
+  r <- typeCheck cfg p
+  donePhase Loud "Typecheck"
+  return r
 
-nextPhase (Left l)  _    = return (A.NoAnn, l)
-nextPhase (Right x) next = next x
+--------------------------------------------------------------------------------
+refTc :: Config -> FilePath -> NanoTypeR F.Reft -> IO Result
+--------------------------------------------------------------------------------
+refTc cfg f p = do
+  let cgi = generateConstraints cfg f p
+  donePhase Loud "Generate Constraints"
+  solveConstraints p f cgi
+
+result :: Either _ Result -> IO Result
+result (Left l)  = return (A.NoAnn, l)
+result (Right r) = return r
+
+(>>=>) :: IO (Either a b) -> (b -> IO c) -> IO (Either a c)
+act >>=> k = do
+  r <- act
+  case r of
+    Left l  -> return $  Left l -- (A.NoAnn, l)
+    Right x -> Right <$> k x
+
+
+eAct :: IO (Err a) -> IO a
+eAct m = do
+  x <- m
+  case x of
+    Left l  -> throw l
+    Right r -> return r
 
 
 -- | solveConstraint: solve with `ueqAllSorts` enabled.
@@ -109,10 +145,12 @@ solveConstraints p f cgi
        let sol  = applySolution s
        return (A.SomeAnn anns sol, r')
   where
-    real        = RealOption `elem` pOptions p
-    fpConf      = def { C.real        = real
+    real        = error "FIXME" -- RealOption `elem` pOptions p
+    ext         = error "FIXME"
+    fpConf      = def { C.real        = error "FIXME"
                       , C.ueqAllSorts = C.UAS True
                       , C.srcFile     = f
+                      , C.extSolver   = error "FIXME"
                       }
 
 -- withUEqAllSorts c b = c { ueqAllSorts = UAS b }

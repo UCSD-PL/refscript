@@ -27,7 +27,7 @@ data Config
            , renderAnns  :: Bool           -- ^ render annotations
            , prelude     :: Maybe FilePath -- ^ use this prelude file
            , real        :: Bool           -- ^ use real-valued SMT arithmetic
-           , extSolver   :: Bool           -- ^ use external (Ocaml) fixpoint solver
+           , native      :: Bool           -- ^ use native (Haskell) fixpoint solver
            }
   deriving (Data, Typeable, Show, Eq)
 
@@ -65,7 +65,7 @@ liquid = Liquid {
 
  , real         = def  &= help "Use real-valued SMT logic (slow!)"
 
- , extSolver    = def  &= help "Use external (Ocaml) fixpoint solver"
+ , native       = def  &= help "Use native (Haskell) fixpoint solver"
 
  } &= help    "RefScript Refinement Type Checker"
 

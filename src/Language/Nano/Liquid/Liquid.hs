@@ -144,10 +144,10 @@ solveConstraints cfg p f cgi
        let sol  = applySolution s
        return (A.SomeAnn anns sol, r')
   where
-    fpConf      = def { C.real        = real cfg -- error "FIXME"
+    fpConf      = def { C.real        = real cfg
                       , C.ueqAllSorts = C.UAS True
                       , C.srcFile     = f
-                      , C.extSolver   = extSolver cfg -- error "FIXME"
+                      , C.extSolver   = not (native cfg)
                       }
 
 -- withUEqAllSorts c b = c { ueqAllSorts = UAS b }

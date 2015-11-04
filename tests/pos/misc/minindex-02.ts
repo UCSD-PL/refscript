@@ -1,4 +1,4 @@
-/*@ qualif UBound(v:number, x:a) : v < (len x) */
+/*@ qualif UBound<A>(v:number, x:A) : v < (len x) */
 
 /*@ range :: (number, number) => IArray<number> */
 function range(lo:number, hi:number) {
@@ -26,11 +26,11 @@ function minIndex(a){
   /*@ readonly aa :: # */
   var aa = a;
 
-	function step(i: number, min: number) {
-		if (aa[i] < aa[min]) {
+	function step(i: number, acc: number) {
+		if (aa[i] < aa[acc]) {
 			return i;
 		}
-		return min;
+		return acc;
 	};
 
 	return foldl(step, 0, range(0, aa.length));

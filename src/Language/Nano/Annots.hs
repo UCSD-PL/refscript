@@ -22,7 +22,7 @@ module Language.Nano.Annots (
   , factRTypes
 
   -- Options
-  , RscOption (..)
+  -- , RscOption (..)
 
 ) where
 import           Control.Monad                  (void)
@@ -264,5 +264,6 @@ factRTypes = go
 -- | RSC Options
 -----------------------------------------------------------------------------
 
-data RscOption = RealOption
-    deriving (Eq, Show, Data, Typeable)
+--  data RscOption = OptReal
+--               | OptExtSolver
+--    deriving (Eq, Show, Data, Typeable)

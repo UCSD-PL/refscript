@@ -1,5 +1,4 @@
-/*@ qualif UBound(v:number, x:a) : v < (len x) */
-
+/*@ qualif UBound<A>(v:number, x:A) : v < (len x) */
 /*@ predicate within(v,a) = (0 <= v && v < (len a)) */
 
 function forloop<A>(lo: number, hi: number, body: (x: number, y:A) => A, accum: A): A {
@@ -10,24 +9,21 @@ function forloop<A>(lo: number, hi: number, body: (x: number, y:A) => A, accum: 
 	return accum;
 }
 
-/*@ minIndex :: ({a: IArray<number> | 0 < (len a)}) => {v:number | within(v,a) } */ 
+/*@ minIndex :: ({a: IArray<number> | 0 < (len a)}) => {v:number | within(v,a) } */
 function minIndex(a:number[]):number{
 
   /*@ readonly aa :: # */
-  var aa = a; 
+  var aa = a;
 
   // XXX : MAKE SURE THE NESTED FUNCTIONS arguments BINDS, INDEED SHADOW THE
-  //       ENCLOSING FUNCTIONS ... 
-	
-	function step(i: number, min: number) {
-  if ( aa[i]
-  < 
-  aa[min]) { 
+  //       ENCLOSING FUNCTIONS ...
+
+	function step(i: number, acc: number) {
+  if ( aa[i] < aa[acc]) {
 			return i;
-		} 
-		return min; 
+		}
+		return acc;
 	}
 
 	return forloop(0, aa.length, step, 0);
-
 }

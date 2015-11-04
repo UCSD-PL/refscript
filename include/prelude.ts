@@ -886,7 +886,7 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
  *
  ************************************************************************/
 
-/*@ qualif Bot(v:a): 0 = 1 */
+/*@ qualif Bot<A>(v:A): 0 = 1 */
 /*@ qualif Bot(v:obj): 0 = 1 */
 /*@ qualif Bot(v:boolean): 0 = 1 */
 /*@ qualif Bot(v:int): 0 = 1 */
@@ -902,9 +902,12 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 /*@ qualif Cmp(v:int,x:int): v >  x */
 /*@ qualif Cmp(v:int,x:int): v >= x */
 
-/*  qualif Cmp(v:a,x:a): v =  x */
-/*@ qualif Cmp(v:a,x:a): v ~~ x */
-/*@ qualif Cmp(v:a,x:a): v != x */
+/* qualif Cmp(v:a,x:a): v =  x */
+
+/*@ qualif CmpUEq<A>(v:A, x:A): v ~~ x */
+
+/*@ qualif Cmp<A>(v:A, x:A): v != x */
+
 /*  qualif True(v:boolean): (v) */
 /*  qualif False(v:boolean): (not v) */
 /*@ qualif True1(v:boolean): (Prop v) */
@@ -917,7 +920,7 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 /*  qualif Add(v:int,x:int,y:int): v = x + y */
 /*  qualif Sub(v:int,x:int,y:int): v = x - y */
 
-/*@  qualif Len(v:b,w:a)  : v < (len w) */
+/*@  qualif Len<A,B>(v:A, w:B)  : v < (len w) */
 
 
 

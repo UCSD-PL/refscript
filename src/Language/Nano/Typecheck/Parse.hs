@@ -47,8 +47,8 @@ import           Control.Monad
 import           Control.Monad.Trans                     (MonadIO,liftIO)
 import           Control.Applicative                     ((<$>), (<*>) , (<*) , (*>))
 
-import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
-import           Language.Fixpoint.Parse
+import           Language.Fixpoint.Types          hiding (quals, Loc, Expression, Located)
+import           Language.Fixpoint.Parse          hiding (qualifierP)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc                  (fst3)
 import           Language.Fixpoint.Names                 (symbolString)
@@ -151,7 +151,7 @@ aliasVarT (l, x)
 --
 -- PV: Insert your option parser here
 --
-optionP   = string "REALS" >> return RealOption
+-- optionP   = string "REALS" >> return RealOption
 
 iFaceP   :: Parser (Id SrcSpan, IfaceDefQ RK Reft)
 iFaceP
@@ -550,7 +550,7 @@ data PSpec l r
   | TAlias  (Id l, TAlias (RTypeQ RK r))
   | PAlias  (Id l, PAlias)
   | Qual    Qualifier
-  | Option  RscOption
+  | Option  (Located String)
   | Invt    l (RTypeQ RK r)
   | CastSp  l (RTypeQ RK r)
   | Exported l
@@ -576,15 +576,27 @@ parseAnnot = go
     go (RawClass    (ss, _)) = Class   <$> patch2 ss <$> classDeclP
     go (RawTAlias   (ss, _)) = TAlias  <$> patch2 ss <$> tAliasP
     go (RawPAlias   (ss, _)) = PAlias  <$> patch2 ss <$> pAliasP
-    go (RawQual     (_ , _)) = Qual    <$>               qualifierP btSortP
-    go (RawOption   (_ , _)) = Option  <$>               optionP
+    go (RawQual     (_ , _)) = Qual    <$>               qualifierP -- btSortP
+    go (RawOption   (ss, o)) = return   $ Option         (Loc ss o)   -- <$> optionP
     go (RawInvt     (ss, _)) = Invt               ss <$> bareTypeP
     go (RawCast     (ss, _)) = CastSp             ss <$> bareTypeP
     go (RawExported (ss, _)) = return  $ Exported ss
     go (RawReadOnly (ss, _)) = return  $ RdOnly ss
 
+qualifierP = do
+  pos     <- getPosition
+  n       <- upperIdP
+  as      <- option [] tParP -- try tParP <|> return []
+  xts     <- parens $ sepBy1 qualParamP comma
+  _       <- colon
+  body    <- predP
+  let xts' = [(x, qpSort as t) | (x, t) <- xts]
+  return  $ mkQual n xts' body pos
 
-btSortP = rTypeSort <$> bareTypeP
+qpSort as = rTypeSort . convertTvar as
+
+qualParamP = pairP symbolP colon bareTypeP
+-- btSortP    = rTypeSort <$> bareTypeP
 
 patch2 ss (x,t)   = (fmap (const ss) x , t)
 patch3 ss (x,a,t) = (fmap (const ss) x , a, t)

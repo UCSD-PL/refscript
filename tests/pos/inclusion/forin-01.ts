@@ -1,3 +1,6 @@
+
+/*@ option --extrainvs */
+
 // Taken from strobe
 /*@ qualif HasP(v:string, s:A): hasProperty(v,s) */
 /*@ qualif EnumP(v:string, s:A): enumProp(v,s)    */

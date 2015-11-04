@@ -1,4 +1,5 @@
 
+/*@ option --extrainvs */
 
 // Custom objects
 var mycar = {make: "Honda", model: "Accord", year: 1998};

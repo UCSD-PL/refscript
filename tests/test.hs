@@ -29,7 +29,7 @@ unitTests = group "Unit"
   , testGroup "pos-union"  <$> dirTests rscCmd "tests/pos/unions"     [] ExitSuccess
   , testGroup "pos-alias"  <$> dirTests rscCmd "tests/pos/typealias"  [] ExitSuccess
   , testGroup "pos-fb"     <$> dirTests rscCmd "tests/pos/fb"         [] ExitSuccess
-  , testGroup "pos-incl"   <$> dirTests eCmd   "tests/pos/inclusion"  [] ExitSuccess
+  , testGroup "pos-incl"   <$> dirTests rscCmd "tests/pos/inclusion"  [] ExitSuccess
   , testGroup "neg-object" <$> dirTests rscCmd "tests/neg/objects"    [] (ExitFailure 1)
   , testGroup "neg-array"  <$> dirTests rscCmd "tests/neg/arrays"     [] (ExitFailure 1)
   , testGroup "neg-class"  <$> dirTests rscCmd "tests/neg/classes"    [] (ExitFailure 1)
@@ -40,7 +40,7 @@ unitTests = group "Unit"
   , testGroup "neg-union"  <$> dirTests rscCmd "tests/neg/unions"     [] (ExitFailure 1)
   , testGroup "neg-alias"  <$> dirTests rscCmd "tests/neg/typealias"  [] (ExitFailure 1)
   , testGroup "neg-fb"     <$> dirTests rscCmd "tests/neg/fb"         [] (ExitFailure 1)
-  , testGroup "neg-incl"   <$> dirTests eCmd   "tests/neg/inclusion"  [] (ExitFailure 1)
+  , testGroup "neg-incl"   <$> dirTests rscCmd "tests/neg/inclusion"  [] (ExitFailure 1)
   ]
 
 isTest   :: FilePath -> Bool
@@ -55,8 +55,8 @@ type TestCmd = FilePath -> FilePath -> FilePath -> String
 rscCmd :: TestCmd
 rscCmd bin dir file = printf "cd %s && %s %s" dir bin file
 
-eCmd :: TestCmd
-eCmd bin dir file   = printf "cd %s && %s --extrainvs %s" dir bin file
+-- eCmd :: TestCmd
+-- eCmd bin dir file   = printf "cd %s && %s --extrainvs %s" dir bin file
 
 
 ---------------------------------------------------------------------------

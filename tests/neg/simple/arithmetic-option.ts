@@ -1,9 +1,5 @@
+var a = 10;
 
-/*@ option NOTREALS */
+var b = 20;
 
-var a = 10; 
-
-var b = 20; 
-
-assert(a*a + b*b > 499);
-
+assert(a*a + b*b > 599);

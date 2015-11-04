@@ -1,3 +1,4 @@
+/*@ option --extrainvs */
 
 /*@ qualif HasP<A>(v:string, s:A): hasProperty(v,s) */
 /*@ qualif EnumP<A>(v:string, s:A): enumProp(v,s)    */

@@ -1,5 +1,7 @@
 
-/*@ foo :: (o: IArray<number>) => {number | true} */
+/*@ option --extrainvs */
+
+/*@ foo :: (o: IArray<number>) => {number | 1 > 0} */
 function foo(o) {
     var ret = 0;
 

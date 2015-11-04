@@ -1,5 +1,3 @@
-//XXX: WORKS with this line - some qualifier scraping is missing...
-/*@ qualif Length(v:number): (len v) = 3 */
 
 /*@ a :: IArray<number> */
 var a = [1, 2, 3];

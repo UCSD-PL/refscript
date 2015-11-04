@@ -72,8 +72,7 @@ verifyFile cfg f fs = do
   (cfg', p0) <- eAct $ parse cfg fs
   p1         <- eAct $ ssa          p0
   p2         <- eAct $ tc    cfg    p1
-  r          <-        refTc cfg f  p2
-  return r
+  refTc cfg f  p2
 
 --------------------------------------------------------------------------------
 parse :: Config -> [FilePath] -> IO (Err (Config, NanoBareR F.Reft))
@@ -109,11 +108,11 @@ refTc :: Config -> FilePath -> NanoTypeR F.Reft -> IO Result
 refTc cfg f p = do
   let cgi = generateConstraints cfg f p
   donePhase Loud "Generate Constraints"
-  solveConstraints p f cgi
+  solveConstraints cfg p f cgi
 
-result :: Either _ Result -> IO Result
-result (Left l)  = return (A.NoAnn, l)
-result (Right r) = return r
+-- result :: Either _ Result -> IO Result
+-- result (Left l)  = return (A.NoAnn, l)
+-- result (Right r) = return r
 
 (>>=>) :: IO (Either a b) -> (b -> IO c) -> IO (Either a c)
 act >>=> k = do
@@ -122,35 +121,33 @@ act >>=> k = do
     Left l  -> return $  Left l -- (A.NoAnn, l)
     Right x -> Right <$> k x
 
-
 eAct :: IO (Err a) -> IO a
 eAct m = do
   x <- m
   case x of
-    Left l  -> throw l
+    Left  l -> throw l
     Right r -> return r
 
 
 -- | solveConstraint: solve with `ueqAllSorts` enabled.
 --------------------------------------------------------------------------------
-solveConstraints :: NanoRefType
+solveConstraints :: Config
+                 -> NanoRefType
                  -> FilePath
                  -> CGInfo
                  -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
-solveConstraints p f cgi
+solveConstraints cfg p f cgi
   = do F.Result r s <- solve fpConf $ cgi_finfo cgi
        let r'   = fmap (ci_info . F.sinfo) r
        let anns = cgi_annot cgi
        let sol  = applySolution s
        return (A.SomeAnn anns sol, r')
   where
-    real        = error "FIXME" -- RealOption `elem` pOptions p
-    ext         = error "FIXME"
-    fpConf      = def { C.real        = error "FIXME"
+    fpConf      = def { C.real        = real cfg -- error "FIXME"
                       , C.ueqAllSorts = C.UAS True
                       , C.srcFile     = f
-                      , C.extSolver   = error "FIXME"
+                      , C.extSolver   = extSolver cfg -- error "FIXME"
                       }
 
 -- withUEqAllSorts c b = c { ueqAllSorts = UAS b }

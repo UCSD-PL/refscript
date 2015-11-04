@@ -53,10 +53,10 @@ testBinary = "rsc"
 type TestCmd = FilePath -> FilePath -> FilePath -> String
 ---------------------------------------------------------------------------
 rscCmd :: TestCmd
-rscCmd bin dir file = printf "cd %s && %s    %s" dir bin file
+rscCmd bin dir file = printf "cd %s && %s --native %s" dir bin file
 
 eCmd :: TestCmd
-eCmd bin dir file   = printf "cd %s && %s --extrainvs %s" dir bin file
+eCmd bin dir file   = printf "cd %s && %s --native --extrainvs %s" dir bin file
 
 
 ---------------------------------------------------------------------------

@@ -1,5 +1,4 @@
-
-/* option "--real" */
+/*@ option --real */
 
 /*@ alias nat = {number | v >= 0} */
 

@@ -71,8 +71,8 @@ verifyFile    :: Config -> FilePath -> [FilePath] -> IO Result
 verifyFile cfg f fs = do
   (cfg', p0) <- eAct $ parse cfg fs
   p1         <- eAct $ ssa          p0
-  p2         <- eAct $ tc    cfg    p1
-  refTc cfg f  p2
+  p2         <- eAct $ tc    cfg'   p1
+  refTc cfg' f  p2
 
 --------------------------------------------------------------------------------
 parse :: Config -> [FilePath] -> IO (Err (Config, NanoBareR F.Reft))

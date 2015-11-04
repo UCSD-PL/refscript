@@ -590,11 +590,13 @@ qualifierP = do
   xts     <- parens $ sepBy1 qualParamP comma
   _       <- colon
   body    <- predP
-  let xts' = [(x, convertTvar as t) | (x, t) <- xts]
+  let xts' = [(x, qpSort as t) | (x, t) <- xts]
   return  $ mkQual n xts' body pos
 
-qualParamP = pairP symbolP colon btSortP
-btSortP    = rTypeSort <$> bareTypeP
+qpSort as = rTypeSort . convertTvar as
+
+qualParamP = pairP symbolP colon bareTypeP
+-- btSortP    = rTypeSort <$> bareTypeP
 
 patch2 ss (x,t)   = (fmap (const ss) x , t)
 patch3 ss (x,a,t) = (fmap (const ss) x , a, t)

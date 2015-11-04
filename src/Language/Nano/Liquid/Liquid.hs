@@ -147,7 +147,7 @@ solveConstraints cfg p f cgi
     fpConf      = def { C.real        = real cfg
                       , C.ueqAllSorts = C.UAS True
                       , C.srcFile     = f
-                      , C.extSolver   = not (native cfg)
+                      , C.extSolver   = extSolver cfg
                       }
 
 -- withUEqAllSorts c b = c { ueqAllSorts = UAS b }

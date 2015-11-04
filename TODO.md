@@ -4,51 +4,6 @@ Tests / Benchmarks
 See https://github.com/UCSD-PL/rs-benchmarks
 
 
-forin-01.ts:            FAIL (0.98s)
-  Wrong exit code
-  expected: ExitSuccess
-   but got: ExitFailure 1
-forin-000.ts:           FAIL (1.42s)
-  Wrong exit code
-  expected: ExitSuccess
-   but got: ExitFailure 1
-forin-00.ts:            FAIL (0.82s)
-  Wrong exit code
-  expected: ExitSuccess
-   but got: ExitFailure 1
-   minindex-modern.ts:     FAIL (0.90s)
-      Wrong exit code
-      expected: ExitSuccess
-       but got: ExitFailure 1
-    minindex-modern-lib.ts: FAIL (0.88s)
-      Wrong exit code
-      expected: ExitSuccess
-       but got: ExitFailure 1
-       arithmetic-option.ts:   FAIL (0.63s)
-       non-linear.ts:          FAIL (0.65s)
-       unif-00.ts:             FAIL (0.76s)
-       variadic-01.ts:         FAIL (0.73s)
-       minindex-02.ts:         FAIL (0.93s)
-              Wrong exit code
-              expected: ExitSuccess
-               but got: ExitFailure 1
-            minindex-01.ts:         FAIL (0.81s)
-              Wrong exit code
-              expected: ExitSuccess
-               but got: ExitFailure 1
-            minindex-00.ts:         FAIL (0.75s)
-              Wrong exit code
-              expected: ExitSuccess
-               but got: ExitFailure 1
-               poly-03.ts:             FAIL (0.98s)
-               arr-09.ts:              FAIL (0.73s)
-               string-idx.ts:          FAIL (0.90s)
-
-
-
-
-
-
 Tool/Implementation
 -------------------
 

@@ -1,5 +1,5 @@
 
-/* option REALS */
+/*@ option REALS */
 
 var a = 10;
 

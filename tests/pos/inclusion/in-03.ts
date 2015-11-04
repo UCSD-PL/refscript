@@ -1,4 +1,6 @@
 
+/*@ option --extrainvs */
+
 // Predefined objects
 assert("PI" in Math);         // returns true
  

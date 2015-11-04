@@ -1,5 +1,6 @@
 
-/*@ option REALS */
+// this is not really needed...
+/*@ option --real */
 
 var a = 10;
 

@@ -1,4 +1,4 @@
-
+/*@ option --extrainvs */
 
 class Point { 
   x: number = 1;

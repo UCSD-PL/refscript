@@ -1,4 +1,6 @@
 
+/*@ option --extrainvs */
+
 // Arrays
 var trees = ["redwood", "bay", "cedar", "oak", "maple"];
 

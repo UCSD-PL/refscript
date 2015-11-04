@@ -583,14 +583,15 @@ parseAnnot = go
     go (RawExported (ss, _)) = return  $ Exported ss
     go (RawReadOnly (ss, _)) = return  $ RdOnly ss
 
-
 qualifierP = do
-  pos    <- getPosition
-  n      <- upperIdP
-  params <- parens $ sepBy1 qualParamP comma
-  _      <- colon
-  body   <- predP
-  return  $ mkQual n params body pos
+  pos     <- getPosition
+  n       <- upperIdP
+  as      <- try tParP <|> return []
+  xts     <- parens $ sepBy1 qualParamP comma
+  _       <- colon
+  body    <- predP
+  let xts' = [(x, convertTvar as t) | (x, t) <- xts]
+  return  $ mkQual n xts' body pos
 
 qualParamP = pairP symbolP colon btSortP
 btSortP    = rTypeSort <$> bareTypeP

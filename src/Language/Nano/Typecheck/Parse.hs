@@ -586,7 +586,7 @@ parseAnnot = go
 qualifierP = do
   pos     <- getPosition
   n       <- upperIdP
-  as      <- try tParP <|> return []
+  as      <- option [] tParP -- try tParP <|> return []
   xts     <- parens $ sepBy1 qualParamP comma
   _       <- colon
   body    <- predP

@@ -1,4 +1,4 @@
-/*@ alias index<a> = {v:number | 0 <= v && v < len a} */ 
+/*@ alias index<a> = {v:number | 0 <= v && v < len a} */
 
 
 // function reduce<T,A>(me: T[], callback:(x: A, y: T, n: number) => A, init:A): A
@@ -12,7 +12,7 @@ function reduce(me, callback, init) {
   for (var i = 0; i < me.length; i++){
     res = callback(res, me[i], i);
   }
-  
+
   return res;
 }
 
@@ -24,33 +24,10 @@ function minIndex(arrrr) {
     var arr = arrrr;
 
     if (arr.length <= 0) return -1;
-    
-    function body(min: number, cur: number, i: number) { 
-	    return cur < arr[min] ? i : min; 
-    }; 
-    
+
+    function body(acc: number, cur: number, i: number) {
+	    return cur < arr[acc] ? i : acc;
+    };
+
     return reduce(arr, body, 0);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

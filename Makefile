@@ -46,7 +46,6 @@ tags:
 
 tasty:
 	cabal configure --package-db=clear --package-db=global --package-db=$$(stack path --snapshot-pkg-db) --package-db=$$(stack path --local-pkg-db) -fdevel --enable-tests --disable-library-profiling
-	#cabal configure -fdevel --enable-tests --disable-library-profiling
 	cabal build
 	$(TASTY)
 

@@ -25,8 +25,9 @@ module Language.Rsc.Liquid.Constraint (
 
   ) where
 
+import           Control.DeepSeq
 import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types          as F
+import qualified Language.Fixpoint.Types         as F
 import           Language.Rsc.Liquid.Environment
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
@@ -44,6 +45,9 @@ data Cinfo = Ci { ci_info    :: !Error
 
 ci   :: (IsLocated a) => Error -> a -> Cinfo
 ci e = Ci e . srcPos
+
+instance NFData Cinfo where
+  rnf (Ci _ s) = seq s ()
 
 instance PP Cinfo where
   pp (Ci e l)   = text "CInfo:" <+> pp l <+> (parens $ pp e)

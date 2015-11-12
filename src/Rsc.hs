@@ -23,7 +23,7 @@ import           Language.Rsc.Core.Files
 import           Language.Rsc.Errors
 import qualified Language.Rsc.Liquid.Checker    as LQ
 import qualified Language.Rsc.Liquid.Types      as L
-import           Language.Rsc.Misc              (mapi, (<//>))
+import           Language.Rsc.Misc              (mapi, single, (<//>))
 import           Language.Rsc.Pretty
 import           Language.Rsc.SystemUtils
 import qualified Language.Rsc.Typecheck.Checker as TC

@@ -16,7 +16,7 @@ module Language.Rsc.Core.Files (
 import           Control.Applicative
 import           System.FilePath
 
-import           Paths_RefScript
+import           Paths_refscript
 
 
 -------------------------------------------------------------------------------

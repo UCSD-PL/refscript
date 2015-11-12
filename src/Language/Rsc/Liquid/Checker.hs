@@ -64,80 +64,81 @@ import           Text.PrettyPrint.HughesPJ
 
 import           Debug.Trace                     hiding (traceShow)
 
--- OLD CODE -- --------------------------------------------------------------------------------
--- OLD CODE -- verifyFile :: Config -> FilePath -> [FilePath] -> IO (A.UAnnSol RefType, FError)
--- OLD CODE -- --------------------------------------------------------------------------------
--- OLD CODE -- verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
--- OLD CODE --   do  p   <- announce "parse" $ EitherIO   $ parseRscFromFiles fs
--- OLD CODE --       _   <- pure (checkTypeWF p)
--- OLD CODE --       cha <- liftEither (mkCHA p)
--- OLD CODE --       -- _   <- liftIO (dumpJS f cha "-parse" p)
--- OLD CODE --       ssa <- announce "ssa" (EitherIO (ssaTransform p cha))
--- OLD CODE --
--- OLD CODE --       cha0 <- liftEither (mkCHA ssa)
--- OLD CODE --       _   <- liftIO (dumpJS f cha0 "-ssa" ssa)
--- OLD CODE --       tc  <- announce "Typecheck" (EitherIO  (typeCheck cfg ssa cha))
--- OLD CODE --
--- OLD CODE --       cha1 <- liftEither (mkCHA tc)
--- OLD CODE --       _   <- liftIO (dumpJS f cha1 "-tc" tc)
--- OLD CODE --       cgi <- announce "Generate Constraints" (pure (generateConstraints cfg tc cha))
--- OLD CODE --       res <- announce "Solve Constraints" (liftIO (solveConstraints tc f cgi))
--- OLD CODE --       return res
--- OLD CODE --
--- OLD CODE -- announce s a
--- OLD CODE --   = do  _ <- liftIO     $ startPhase Loud s
--- OLD CODE --         r <- a
--- OLD CODE --         _ <- liftIO     $ donePhase Loud s
--- OLD CODE --         return r
-
-
 type Result = (A.UAnnSol RefType, F.FixResult Error)
 type Err a  = Either (F.FixResult Error) a
 
 --------------------------------------------------------------------------------
-verifyFile    :: Config -> FilePath -> [FilePath] -> IO Result
+verifyFile :: Config -> FilePath -> [FilePath] -> IO Result
 --------------------------------------------------------------------------------
-verifyFile cfg f fs = do
-  (cfg', p0) <- eAct $ parse cfg fs
-  p1         <- eAct $ ssa          p0
-  p2         <- eAct $ tc    cfg    p1
-  refTc cfg f  p2
+verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
+  do  p     <- announce "parse" $ EitherIO   $ parseRscFromFiles fs
+      cfg'  <- liftIO           $ withPragmas cfg (pOptions p)
+      _     <- pure             $ checkTypeWF p
+      cha   <- liftEither       $ mkCHA p
+      -- _   <- liftIO            $ dumpJS f cha "-parse" p
+      ssa   <- announce "ssa"   $ EitherIO (ssaTransform p cha)
 
---------------------------------------------------------------------------------
-parse :: Config -> [FilePath] -> IO (Err (Config, RefScript))
---------------------------------------------------------------------------------
-parse cfg fs
-  = do  r <- parseRscFromFiles fs
-        donePhase Loud "Parse Files"
-        case r of
-          Left l  -> return (Left l)
-          Right p -> do cfg'  <- withPragmas cfg (pOptions p)
-                        return $ Right (cfg', p)
+      cha0  <- liftEither       $ mkCHA ssa
+      _     <- liftIO           $ dumpJS f cha0 "-ssa" ssa
+      tc    <- announce "TC"    $ EitherIO (typeCheck cfg ssa cha)
+
+      cha1  <- liftEither       $ mkCHA tc
+      _     <- liftIO           $ dumpJS f cha1 "-tc" tc
+      cgi   <- announce "CG"    $ pure (generateConstraints cfg f tc cha)
+      res   <- announce "Solve" $ liftIO (solveConstraints cfg' tc f cgi)
+      return   res
+
+announce s a
+  = do  -- _ <- liftIO     $ startPhase Loud s
+        r <- a
+        _ <- liftIO     $ donePhase Loud s
+        return r
 
 
---------------------------------------------------------------------------------
-ssa :: BareRsc F.Reft -> IO (Err (SsaRsc F.Reft))
---------------------------------------------------------------------------------
-ssa p = do
-  r <- ssaTransform p
-  donePhase Loud "SSA Transform"
-  return r
+-- --------------------------------------------------------------------------------
+-- verifyFile    :: Config -> FilePath -> [FilePath] -> IO Result
+-- --------------------------------------------------------------------------------
+-- verifyFile cfg f fs = do
+--   (cfg', p0) <- eAct $ parse cfg fs
+--   p1         <- eAct $ ssa   cfg'   p0
+--   p2         <- eAct $ tc    cfg    p1
+--   refTc cfg f  p2
 
---------------------------------------------------------------------------------
-tc :: Config -> SsaRsc F.Reft -> IO (Err (TcRsc F.Reft))
---------------------------------------------------------------------------------
-tc cfg p = do
-  r <- typeCheck cfg p
-  donePhase Loud "Typecheck"
-  return r
+-- --------------------------------------------------------------------------------
+-- parse :: Config -> [FilePath] -> IO (Err (Config, RefScript))
+-- --------------------------------------------------------------------------------
+-- parse cfg fs
+--   = do  r <- parseRscFromFiles fs
+--         donePhase Loud "Parse Files"
+--         case r of
+--           Left l  -> return (Left l)
+--           Right p -> do cfg'  <- withPragmas cfg (pOptions p)
+--                         return $ Right (cfg', p)
 
---------------------------------------------------------------------------------
-refTc :: Config -> FilePath -> RefScript -> IO Result
---------------------------------------------------------------------------------
-refTc cfg f p = do
-  let cgi = generateConstraints cfg f p
-  donePhase Loud "Generate Constraints"
-  solveConstraints cfg p f cgi
+
+-- --------------------------------------------------------------------------------
+-- ssa :: ClassHierarchy F.Reft -> BareRsc F.Reft -> IO (Err (SsaRsc F.Reft))
+-- --------------------------------------------------------------------------------
+-- ssa cha p = do
+--   r <- ssaTransform p cha
+--   donePhase Loud "SSA Transform"
+--   return r
+--
+-- --------------------------------------------------------------------------------
+-- tc :: Config -> SsaRsc F.Reft -> IO (Err (TcRsc F.Reft))
+-- --------------------------------------------------------------------------------
+-- tc cfg p = do
+--   r <- typeCheck cfg p
+--   donePhase Loud "Typecheck"
+--   return r
+--
+-- --------------------------------------------------------------------------------
+-- refTc :: Config -> FilePath -> RefScript -> IO Result
+-- --------------------------------------------------------------------------------
+-- refTc cfg f p = do
+--   let cgi = generateConstraints cfg f p
+--   donePhase Loud "Generate Constraints"
+--   solveConstraints cfg p f cgi
 
 -- result :: Either _ Result -> IO Result
 -- result (Left l)  = return (A.NoAnn, l)
@@ -192,11 +193,11 @@ applySolution  = fmap . fmap . tx
 
 
 
---------------------------------------------------------------------------------
-generateConstraints :: Config -> FilePath -> NanoRefType -> CGInfo
---------------------------------------------------------------------------------
-generateConstraints cfg f pgm = getCGInfo cfg f pgm $ consNano pgm
-
+-- --------------------------------------------------------------------------------
+-- generateConstraints :: Config -> FilePath -> RefScript-> CGInfo
+-- --------------------------------------------------------------------------------
+-- generateConstraints cfg f pgm = getCGInfo cfg f pgm $ consRsc pgm
+--
 
 
 
@@ -252,9 +253,9 @@ ppCasts (Rsc { code = Src fs })
 -- OLD CODE --     -- appSol s (F.RKvar k su) = F.RConc $ F.subst su $ HM.lookupDefault F.PTop k s
 
 --------------------------------------------------------------------------------
-generateConstraints :: Config -> RefScript -> ClassHierarchy F.Reft -> CGInfo
+generateConstraints :: Config -> FilePath -> RefScript -> ClassHierarchy F.Reft -> CGInfo
 --------------------------------------------------------------------------------
-generateConstraints cfg pgm = getCGInfo cfg pgm . consRsc pgm
+generateConstraints cfg f pgm = getCGInfo cfg f pgm . consRsc pgm
 
 --------------------------------------------------------------------------------
 consRsc :: RefScript -> ClassHierarchy F.Reft -> CGM ()

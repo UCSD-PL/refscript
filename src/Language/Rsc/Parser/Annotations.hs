@@ -24,7 +24,7 @@ import           Data.Generics             hiding (Generic)
 import           GHC.Generics
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Parse
-import           Language.Fixpoint.Types   hiding (Expression, FI, Loc, quals)
+import           Language.Fixpoint.Types   hiding (Expression, FI, Loc, Located, quals)
 import           Language.Rsc.AST
 import           Language.Rsc.Locations    hiding (val)
 import           Language.Rsc.Names
@@ -84,7 +84,7 @@ data PSpec l r
   | PredicateAliasSpec      (Id l, PAlias)
   | QualifierSpec           Qualifier
   | InvariantSpec           l (RTypeQ RK r)
-  | OptionSpec              RscOption
+  | OptionSpec              (Located String)
   -- Used only for parsing specs
   | ErrorSpec
   deriving (Data, Typeable)
@@ -129,7 +129,8 @@ parseSpec ctx = go
     go (PredicateAliasRawSpec      (ss, _)) = PredicateAliasSpec <$> patch2 ss <$> pAliasP
     go (QualifierRawSpec           (_ , _)) = QualifierSpec      <$> qualifierP sortP
     go (InvariantRawSpec           (ss, _)) = InvariantSpec ss   <$> bareTypeP ctx
-    go (OptionRawSpec              (_ , _)) = OptionSpec         <$> optionP
+    go (OptionRawSpec              (ss, o)) = -- OptionSpec         <$> optionP
+                                              return   $ OptionSpec         (Loc ss o)
 
     patch2 ss (i,t)   = (fmap (const ss) i,t)
     patch3 ss (i,a,t) = (fmap (const ss) i,a,t)

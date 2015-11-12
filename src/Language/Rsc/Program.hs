@@ -80,7 +80,7 @@ data Rsc a r = Rsc {
   --
   -- | Options
   --
-  , pOptions :: [RscOption]
+  , pOptions :: [Located String]
 
   } deriving (Functor) -- , Data, Typeable)
 

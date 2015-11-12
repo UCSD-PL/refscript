@@ -95,27 +95,27 @@ Library
                   , attoparsec
 
   hs-source-dirs:   src
-  Exposed-Modules:  Paths_refscript,
-                    Language.Nano.Errors,
-                    Language.Nano.Files,
-                    Language.Nano.Types,
-                    Language.Nano.Env,
-                    Language.Nano.Misc,
-                    Language.Nano.Annots,
-                    Language.Nano.CmdLine,
-                    Language.Nano.SSA.SSAMonad,
-                    Language.Nano.SSA.SSA,
-                    Language.Nano.Typecheck.Unify,
-                    Language.Nano.Typecheck.Types,
-                    Language.Nano.Typecheck.Parse,
-                    Language.Nano.Typecheck.TCMonad,
-                    Language.Nano.Typecheck.Subst,
-                    Language.Nano.Typecheck.Lookup,
-                    Language.Nano.Typecheck.Typecheck,
-                    Language.Nano.Liquid.Liquid,
-                    Language.Nano.Liquid.Types,
-                    Language.Nano.Liquid.CGMonad,
-                    Language.Nano.Liquid.Qualifiers
+  Exposed-Modules:  Paths_refscript
+                    Language.Rsc.Errors,
+                    Language.Rsc.Core.Files,
+                    Language.Rsc.Types,
+                    Language.Rsc.Core.Env,
+                    Language.Rsc.Misc,
+                    Language.Rsc.Annotations,
+                    Language.Rsc.CmdLine,
+                    Language.Rsc.SSA.SSAMonad,
+                    Language.Rsc.SSA.SSA,
+                    Language.Rsc.Parser,
+                    Language.Rsc.Lookup,
+                    Language.Rsc.Typecheck.Unify,
+                    Language.Rsc.Typecheck.Types,
+                    Language.Rsc.Typecheck.TCMonad,
+                    Language.Rsc.Typecheck.Subst,
+                    Language.Rsc.Typecheck.Checker,
+                    Language.Rsc.Liquid.Checker,
+                    Language.Rsc.Liquid.Types,
+                    Language.Rsc.Liquid.CGMonad,
+                    Language.Rsc.Liquid.Qualifiers
 
 test-suite test
   default-language: Haskell98

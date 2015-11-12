@@ -40,7 +40,8 @@ import           Language.Rsc.Parser
 import           Language.Rsc.Pretty
 import           Language.Rsc.Types        ()
 import           Text.Parsec.Pos
-import           Text.PrettyPrint.HughesPJ (nest, punctuate, render, text, vcat, ($+$), (<+>))
+import           Text.PrettyPrint.HughesPJ (nest, punctuate, render, text, vcat,
+                                            ($+$), (<+>))
 
 ------------------------------------------------------------------------------
 -- | Type Definitions For Annotations
@@ -126,7 +127,7 @@ eInfo msg err                     = (srcPos $ errLoc err', errMsg err')
     err'                          = catMessage err msg
 
 mkAnnMapTyp (AI m)
-  = M.map (\a -> (symbolString $ ann_bind a, render $ pp (ann_type a)))
+  = M.map (\a -> (F.symbolSafeString $ ann_bind a, render $ pp (ann_type a)))
   $ M.fromList
   $ map (head . sortWith (srcSpanEndCol . fst))
   $ groupWith (lineCol . fst)

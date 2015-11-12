@@ -18,7 +18,8 @@ import qualified Data.HashSet                 as S
 import qualified Data.IntMap.Strict           as IM
 import qualified Data.IntSet                  as I
 import qualified Data.List                    as L
-import           Data.Maybe                   (catMaybes, fromMaybe, listToMaybe)
+import           Data.Maybe                   (catMaybes, fromMaybe,
+                                               listToMaybe)
 import           Data.Typeable                ()
 import qualified Language.Fixpoint.Errors     as E
 import           Language.Fixpoint.Misc
@@ -85,8 +86,8 @@ ssaFun :: (Data r, PPR r) => SsaEnv r -> AnnSSA r -> [Var r] -> [Statement (AnnS
 -------------------------------------------------------------------------------------
 ssaFun g l xs body
   = do  γ0         <- getSsaVars                  -- Remember env before the function
-        setSsaVars  $ envEmpty                    -- Reset the 'local' SSA-vars count
-        body1      <- return body -- prefixArgInit l body
+        setSsaVars  $ mempty                      -- Reset the 'local' SSA-vars count
+        body1      <- return body   -- prefixArgInit l body
         arg        <- argIdInit <$> freshenAnn l
         ret        <- returnId <$> freshenAnn l
         let g'      = initCallableSsaEnv l g arg ret xs body1
@@ -419,10 +420,10 @@ ctorVisitor g ms          = defaultVisitor { endStmt = es } { endExpr = ee }
         parent | Just n <- curClass g,
                  Just (TD (TS _ _ ([(Gen (QN path name) _)],_)) _ ) <- resolveType cha n
                = case path of
-                   QP _ _ []     -> VarRef <$> fr <*> (Id <$> fr <**> F.symbolString name)
-                   QP _ _ (y:ys) -> do init <- VarRef <$> fr <*> (Id <$> fr <**> F.symbolString y)
+                   QP _ _ []     -> VarRef <$> fr <*> (Id <$> fr <**> F.symbolSafeString name)
+                   QP _ _ (y:ys) -> do init <- VarRef <$> fr <*> (Id <$> fr <**> F.symbolSafeString y)
                                        foldM (\e q -> DotRef <$> fr <*> return e
-                                                                    <*> (Id <$> fr <**> F.symbolString q)) init (ys ++ [name])
+                                                                    <*> (Id <$> fr <**> F.symbolSafeString q)) init (ys ++ [name])
                | otherwise = ssaError $ bugSuperWithNoParent (srcPos l)
 
         superVS n = VarDeclStmt <$> fr <*> (single <$> superVD n)
@@ -432,10 +433,10 @@ ctorVisitor g ms          = defaultVisitor { endStmt = es } { endExpr = ee }
         asgnS x = ExprStmt   <$> fr <*> asgnE x
         asgnE x = AssignExpr <$> fr
                              <*> return OpAssign
-                             <*> (LDot <$> fr <*> (ThisRef <$> fr) <**> F.symbolString x)
+                             <*> (LDot <$> fr <*> (ThisRef <$> fr) <**> F.symbolSafeString x)
                              <*> (DotRef <$> fr
                                          <*> (VarRef <$> fr <*> freshenIdSSA (builtinOpId BISuperVar))
-                                         <*> (Id <$> fr <**> F.symbolString x))
+                                         <*> (Id <$> fr <**> F.symbolSafeString x))
 
     ts r@(ReturnStmt l _) = maybeBlock <$> fr_ l <*> ((:[r]) <$> ctorExit l ms)
     ts r                  = return $ r
@@ -489,7 +490,7 @@ ssaClassElt g c (Constructor l xs bd)
         (_, bd'') <- ssaStmts g' bd'
         return     $ Constructor l xs bd''
   where
-    symToVar       = freshenIdSSA . mkId . F.symbolString
+    symToVar       = freshenIdSSA . mkId . F.symbolSafeString
     cha            = ssaCHA g
     fields         | Just n <- curClass g = nonStaticFields cha n
                    | otherwise            = []

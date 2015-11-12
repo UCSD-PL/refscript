@@ -25,11 +25,9 @@ module Language.Rsc.Core.Env (
   , envMap
   , envLefts
   , envRights
-  -- , envUnion (monoid)
   , envUnionList
   , envDiff
   , envIntersectWith
-  -- , envEmpty (monoid)
   , envSEnv
   , envIds
   , envKeys
@@ -73,7 +71,6 @@ newtype QEnv t = QE (M.HashMap AbsPath (Located t)) deriving (Eq, Functor, Data,
 --------------------------------------------------------------------------------
 
 envIds             = map fst . envToList
-envEmpty           = F.emptySEnv
 envMap    f        = fmap (fmap f)
 envFilter f        = F.filterSEnv (f . val)
 envMem i γ         = isJust $ envFind i γ
@@ -97,7 +94,7 @@ envAddWith f i t γ = case envFind i γ of
 envSEnv           :: Env a -> F.SEnv a
 envSEnv            = F.fromListSEnv . map (first F.symbol) . envToList
 
-envFromList_ f l   = L.foldl' step envEmpty l
+envFromList_ f l   = L.foldl' step mempty l
   where
     step γ (i, t)  = case envFind i γ of
                        Nothing          -> envAdd i t γ
@@ -116,12 +113,12 @@ envFromListConcat l = envFromList_ f l
 
 -- Allows duplicates in list -- last one in list will be used
 envFromList'      :: (IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t
-envFromList'       = L.foldl' step envEmpty
+envFromList'       = L.foldl' step mempty
   where
     step γ (i, t)  = envAdd i t γ
 
 envFromListWithKey :: (IsLocated x, F.Symbolic x) => (x -> a -> a -> a) -> [(x, a)] -> Env a
-envFromListWithKey merge = L.foldl' step envEmpty
+envFromListWithKey merge = L.foldl' step mempty
   where
     step γ (i, t)  = case envFindTy i γ of
                        Nothing -> envAdd i t γ
@@ -130,11 +127,7 @@ envFromListWithKey merge = L.foldl' step envEmpty
 envIntersectWith  :: (a -> b -> c) -> Env a -> Env b -> Env c
 envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))
 
--- | Favors environment on the left
--- envUnion          :: Env a -> Env a -> Env a
--- envUnion           = envAdds . envToList
-
-envUnionList       = go envEmpty
+envUnionList l     = go mempty l
   where
     go acc (y:ys)  = go (mappend acc y) ys
     go acc []      = acc

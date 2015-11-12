@@ -43,6 +43,7 @@ module Language.Rsc.Liquid.Types (
   -- * 'this' related substitutions
   , substThis
   -- , unqualifyThis
+  , qualifySymbol
   , mkQualSym
   , mkOffset
 

@@ -108,7 +108,7 @@ initGlobSsaEnv fs cha
 initCallableSsaEnv l g arg ret xs bd = SsaEnv env cha cls path
   where
     env  = envMap toFgn (asgn g)
-         & envUnion (envFromListConcat (accumVars' bd))
+         & mappend (envFromListConcat (accumVars' bd))
          & envAdd ret ReturnVar
          & envAdd arg RdOnly
          & envAdds (xs `zip` repeat WriteLocal)
@@ -123,7 +123,7 @@ envToFgn = envMap toFgn
 
 initModuleSsaEnv l g m ss = SsaEnv env cha cls path
   where
-    env  = envFromListConcat (accumVars' ss) `envUnion` envMap toFgn (asgn g)
+    env  = envFromListConcat (accumVars' ss) `mappend` envMap toFgn (asgn g)
     cha  = ssaCHA g
     cls  = curClass g
     path = pathInPath l (curPath g) m
@@ -249,5 +249,5 @@ tryAction act = get >>= return . runState (runExceptT act)
 -------------------------------------------------------------------------------------
 initState :: BareRsc r -> ClassHierarchy r -> SsaState r
 -------------------------------------------------------------------------------------
-initState p cha = SsaST (maxId p) envEmpty IM.empty S.empty
+initState p cha = SsaST (maxId p) mempty IM.empty S.empty
 

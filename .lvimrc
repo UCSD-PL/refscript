@@ -5,7 +5,7 @@
 "
 
 " let g:syntastic_haskell_hdevtools_args = '-g-iliquid-fixpoint/src -g-isrc -g-package-conf='.glob(finddir('.cabal-sandbox', './;').'/*-packages.conf.d').' \
-let g:syntastic_haskell_hdevtools_args = ' \
+let g:syntastic_haskell_hdevtools_args = '-g-iliquid-fixpoint/src \
   \-g-XTypeSynonymInstances  
   \-g-XFlexibleInstances 
   \-g-XFlexibleContexts 

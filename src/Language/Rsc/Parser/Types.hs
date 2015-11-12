@@ -19,15 +19,16 @@ import           Data.Foldable                (concat)
 import           Data.Generics                hiding (Generic)
 import           Data.List                    (foldl')
 import           Data.Maybe                   (maybeToList)
+import qualified Data.HashSet                 as S
 import           Data.Monoid
 import qualified Data.Text                    as DT
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc       (mapEither)
 import           Language.Fixpoint.Names
 import           Language.Fixpoint.Parse
 import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Names
+import           Language.Rsc.Misc            (mapEither)
 import           Language.Rsc.Options
 import           Language.Rsc.Parser.Common
 import           Language.Rsc.Parser.Lexer
@@ -202,7 +203,7 @@ qnameP
 -- | Redefining some stuff to make the Qualified names parse right
 qSymbolP    :: Parser Symbol
 qSymbolP    = symbol <$> qSymCharsP
-qSymCharsP  = condIdP' qSymChars (`notElem` keyWordSyms)
+qSymCharsP  = condIdP (S.fromList qSymChars) (`notElem` keyWordSyms)
 
 keyWordSyms = ["if", "then", "else", "mod"]
 qSymChars   = ['a' .. 'z'] ++
@@ -210,12 +211,12 @@ qSymChars   = ['a' .. 'z'] ++
               ['0' .. '9'] ++
               ['_', '%', '#'] -- omitting '.'
 
-condIdP'  :: [Char] -> (String -> Bool) -> Parser Symbol
-condIdP' chars f
-  = do c  <- try letter <|> oneOf ['_']
-       cs <- many (satisfy (`elem` chars))
-       blanks
-       if f (c:cs) then return (F.symbol $ DT.pack $ c:cs) else parserZero
+-- OLD CODE -- condIdP'  :: [Char] -> (String -> Bool) -> Parser Symbol
+-- OLD CODE -- condIdP' chars f
+-- OLD CODE --   = do c  <- try letter <|> oneOf ['_']
+-- OLD CODE --        cs <- many (satisfy (`elem` chars))
+-- OLD CODE --        blanks
+-- OLD CODE --        if f (c:cs) then return (F.symbol $ DT.pack $ c:cs) else parserZero
 
 
 -- | <A extends T, B extends S, ...>
@@ -326,7 +327,7 @@ isTvar = not . isLower . head
 
 wordP  = condIdP ok
   where
-    ok = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
+    ok = S.fromList $ ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
 tPrimP :: Parser TPrim
 tPrimP =  try (reserved "number"      >> return TNumber)

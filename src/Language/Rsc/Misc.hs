@@ -48,6 +48,7 @@ module Language.Rsc.Misc (
   , concatMapM, mappendM, justM
 
   -- Convenience
+  , single
   , case1, case2, case3
   , (<##>), (<###>)
   , (&)
@@ -251,6 +252,9 @@ mappendM = liftM2 mappend
 
 
 -- | Auxiliary functions
+
+single a = [a]
+
 case1 g f e        = g (\case [e']            -> f e'         ) [e]
 case2 g f e1 e2    = g (\case [e1', e2']      -> f e1' e2'    ) [e1, e2]
 case3 g f e1 e2 e3 = g (\case [e1', e2', e3'] -> f e1' e2' e3') [e1, e2, e3]

@@ -9,9 +9,12 @@
 {-# LANGUAGE UndecidableInstances      #-}
 
 
+
+-- TODO: throw away
+
 module Language.Rsc.Parser.Sorts (
 
-    sortP
+    sortP_
 
 ) where
 
@@ -25,17 +28,17 @@ import           Text.Parsec             hiding (State, parse)
 -- import           Debug.Trace                             ( trace, traceShow)
 
 
-sortP :: Parser Sort
-sortP
-  =   try (parens $ sortP)
-  <|> try (string "@"    >> varSortP)
-  -- <|> try (string "func" >> funcSortP)
- --  <|> try (fApp (Left listFTyCon) . single <$> brackets sortP)
-  <|> try bvSortP
-  -- <|> try baseSortP
-  <|> try (fApp' <$> locLowerIdP)
-  <|> try (fApp  <$> (Left <$> fTyConP) <*> sepBy sortP blanks)
-  <|> (FObj . symbol <$> lowerIdP)
+-- OLD CODE -- sortP_ :: Parser Sort
+-- OLD CODE -- sortP_
+-- OLD CODE --   =   try (parens $ sortP_)
+-- OLD CODE --   <|> try (string "@"    >> varSortP)
+-- OLD CODE --   -- <|> try (string "func" >> funcSortP)
+-- OLD CODE --   -- <|> try (fApp (Left listFTyCon) . single <$> brackets sortP_)
+-- OLD CODE --   <|> try bvSortP
+-- OLD CODE --   -- <|> try baseSortP
+-- OLD CODE --   <|> try (fApp' <$> locLowerIdP)
+-- OLD CODE --   <|> try (fApp  <$> (Left <$> fTyConP) <*> sepBy sortP_ blanks)
+-- OLD CODE --   <|> (FObj . symbol <$> lowerIdP)
 
 varSortP :: Parser Sort
 varSortP  = FVar  <$> parens intP
@@ -56,6 +59,6 @@ fApp' ls
   | s == "bool"    = boolSort
   | otherwise      = fTyconSort . symbolFTycon $ ls
   where
-    s              = symbolString $ val ls
+    s              = symbolSafeString $ val ls
 
 

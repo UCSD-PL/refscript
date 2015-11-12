@@ -11,6 +11,7 @@
 module Language.Rsc.Liquid.Checker (verifyFile) where
 
 import           Control.Applicative             (pure, (<$>))
+import           Control.Exception               (throw)
 import           Control.Monad
 import           Data.Function                   (on)
 import qualified Data.HashMap.Strict             as HM
@@ -23,12 +24,13 @@ import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Files         (Ext (..), extFileName)
 import           Language.Fixpoint.Interface     (solve)
 import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Names         (symbolString)
 import qualified Language.Fixpoint.Types         as F
 import qualified Language.Fixpoint.Visitor       as V
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
-import           Language.Rsc.CmdLine            (Config)
+import           Language.Rsc.CmdLine
 import           Language.Rsc.Core.EitherIO
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
@@ -62,31 +64,140 @@ import           Text.PrettyPrint.HughesPJ
 
 import           Debug.Trace                     hiding (traceShow)
 
+-- OLD CODE -- --------------------------------------------------------------------------------
+-- OLD CODE -- verifyFile :: Config -> FilePath -> [FilePath] -> IO (A.UAnnSol RefType, FError)
+-- OLD CODE -- --------------------------------------------------------------------------------
+-- OLD CODE -- verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
+-- OLD CODE --   do  p   <- announce "parse" $ EitherIO   $ parseRscFromFiles fs
+-- OLD CODE --       _   <- pure (checkTypeWF p)
+-- OLD CODE --       cha <- liftEither (mkCHA p)
+-- OLD CODE --       -- _   <- liftIO (dumpJS f cha "-parse" p)
+-- OLD CODE --       ssa <- announce "ssa" (EitherIO (ssaTransform p cha))
+-- OLD CODE --
+-- OLD CODE --       cha0 <- liftEither (mkCHA ssa)
+-- OLD CODE --       _   <- liftIO (dumpJS f cha0 "-ssa" ssa)
+-- OLD CODE --       tc  <- announce "Typecheck" (EitherIO  (typeCheck cfg ssa cha))
+-- OLD CODE --
+-- OLD CODE --       cha1 <- liftEither (mkCHA tc)
+-- OLD CODE --       _   <- liftIO (dumpJS f cha1 "-tc" tc)
+-- OLD CODE --       cgi <- announce "Generate Constraints" (pure (generateConstraints cfg tc cha))
+-- OLD CODE --       res <- announce "Solve Constraints" (liftIO (solveConstraints tc f cgi))
+-- OLD CODE --       return res
+-- OLD CODE --
+-- OLD CODE -- announce s a
+-- OLD CODE --   = do  _ <- liftIO     $ startPhase Loud s
+-- OLD CODE --         r <- a
+-- OLD CODE --         _ <- liftIO     $ donePhase Loud s
+-- OLD CODE --         return r
+
+
+type Result = (A.UAnnSol RefType, F.FixResult Error)
+type Err a  = Either (F.FixResult Error) a
+
 --------------------------------------------------------------------------------
-verifyFile :: Config -> FilePath -> [FilePath] -> IO (A.UAnnSol RefType, FError)
+verifyFile    :: Config -> FilePath -> [FilePath] -> IO Result
 --------------------------------------------------------------------------------
-verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
-  do  p   <- announce "parse" $ EitherIO   $ parseRscFromFiles fs
-      _   <- pure (checkTypeWF p)
-      cha <- liftEither (mkCHA p)
-      -- _   <- liftIO (dumpJS f cha "-parse" p)
-      ssa <- announce "ssa" (EitherIO (ssaTransform p cha))
+verifyFile cfg f fs = do
+  (cfg', p0) <- eAct $ parse cfg fs
+  p1         <- eAct $ ssa          p0
+  p2         <- eAct $ tc    cfg    p1
+  refTc cfg f  p2
 
-      cha0 <- liftEither (mkCHA ssa)
-      _   <- liftIO (dumpJS f cha0 "-ssa" ssa)
-      tc  <- announce "Typecheck" (EitherIO  (typeCheck cfg ssa cha))
+--------------------------------------------------------------------------------
+parse :: Config -> [FilePath] -> IO (Err (Config, RefScript))
+--------------------------------------------------------------------------------
+parse cfg fs
+  = do  r <- parseRscFromFiles fs
+        donePhase Loud "Parse Files"
+        case r of
+          Left l  -> return (Left l)
+          Right p -> do cfg'  <- withPragmas cfg (pOptions p)
+                        return $ Right (cfg', p)
 
-      cha1 <- liftEither (mkCHA tc)
-      _   <- liftIO (dumpJS f cha1 "-tc" tc)
-      cgi <- announce "Generate Constraints" (pure (generateConstraints cfg tc cha))
-      res <- announce "Solve Constraints" (liftIO (solveConstraints tc f cgi))
-      return res
 
-announce s a
-  = do  _ <- liftIO     $ startPhase Loud s
-        r <- a
-        _ <- liftIO     $ donePhase Loud s
-        return r
+--------------------------------------------------------------------------------
+ssa :: BareRsc F.Reft -> IO (Err (SsaRsc F.Reft))
+--------------------------------------------------------------------------------
+ssa p = do
+  r <- ssaTransform p
+  donePhase Loud "SSA Transform"
+  return r
+
+--------------------------------------------------------------------------------
+tc :: Config -> SsaRsc F.Reft -> IO (Err (TcRsc F.Reft))
+--------------------------------------------------------------------------------
+tc cfg p = do
+  r <- typeCheck cfg p
+  donePhase Loud "Typecheck"
+  return r
+
+--------------------------------------------------------------------------------
+refTc :: Config -> FilePath -> RefScript -> IO Result
+--------------------------------------------------------------------------------
+refTc cfg f p = do
+  let cgi = generateConstraints cfg f p
+  donePhase Loud "Generate Constraints"
+  solveConstraints cfg p f cgi
+
+-- result :: Either _ Result -> IO Result
+-- result (Left l)  = return (A.NoAnn, l)
+-- result (Right r) = return r
+
+(>>=>) :: IO (Either a b) -> (b -> IO c) -> IO (Either a c)
+act >>=> k = do
+  r <- act
+  case r of
+    Left l  -> return $  Left l -- (A.NoAnn, l)
+    Right x -> Right <$> k x
+
+eAct :: IO (Err a) -> IO a
+eAct m = do
+  x <- m
+  case x of
+    Left  l -> throw l
+    Right r -> return r
+
+
+
+-- | solveConstraint: solve with `ueqAllSorts` enabled.
+--------------------------------------------------------------------------------
+solveConstraints :: Config
+                 -> RefScript
+                 -> FilePath
+                 -> CGInfo
+                 -> IO (A.UAnnSol RefType, F.FixResult Error)
+--------------------------------------------------------------------------------
+solveConstraints cfg p f cgi
+  = do F.Result r s <- solve fpConf $ cgi_finfo cgi
+       let r'   = fmap (ci_info . F.sinfo) r
+       let anns = cgi_annot cgi
+       let sol  = applySolution s
+       return (A.SomeAnn anns sol, r')
+  where
+    fpConf      = def { C.real        = real cfg
+                      , C.ueqAllSorts = C.UAS True
+                      , C.srcFile     = f
+                      , C.extSolver   = extSolver cfg
+                      }
+
+
+--------------------------------------------------------------------------------
+applySolution :: F.FixSolution -> A.UAnnInfo RefType -> A.UAnnInfo RefType
+--------------------------------------------------------------------------------
+applySolution  = fmap . fmap . tx
+  where
+    tx         = F.mapPredReft . txPred
+    txPred s   = F.simplify . V.mapKVars (appSol s)
+    appSol s k = Just $ HM.lookupDefault F.PTop k s
+
+
+
+--------------------------------------------------------------------------------
+generateConstraints :: Config -> FilePath -> NanoRefType -> CGInfo
+--------------------------------------------------------------------------------
+generateConstraints cfg f pgm = getCGInfo cfg f pgm $ consNano pgm
+
+
 
 
 -- | Debug info
@@ -106,39 +217,39 @@ ppCasts (Rsc { code = Src fs })
                               , TCast _ c <- fFact a ]
 
 
--- | solveConstraints: Call solve with `ueqAllSorts` enabled.
---------------------------------------------------------------------------------
-solveConstraints :: RefScript
-                 -> FilePath
-                 -> CGInfo
-                 -> IO (A.UAnnSol RefType, F.FixResult Error)
---------------------------------------------------------------------------------
-solveConstraints p f cgi
-  = do (r, s)  <- solve fpConf $ cgi_finfo cgi
-       let r'   = fmap (ci_info . F.sinfo) r
-       let anns = cgi_annot cgi
-       let sol  = applySolution s
-       return (A.SomeAnn anns sol, r')
-  where
-    real        = RealOption `elem` pOptions p
-    fpConf      = def { C.real        = real
-                      , C.ueqAllSorts = C.UAS True
-                      , C.srcFile     = f
-                      }
-
---------------------------------------------------------------------------------
-applySolution :: F.FixSolution -> A.UAnnInfo RefType -> A.UAnnInfo RefType
---------------------------------------------------------------------------------
-applySolution  = fmap . fmap . tx
-  where
-    tx         = F.mapPredReft . txPred
-    txPred s   = F.simplify . V.mapKVars (appSol s)
-    appSol s k = Just $ HM.lookupDefault F.PTop k s
-
-    -- tx   s (F.Reft (x, ra)) = F.Reft (x, txRa s ra)
-    -- txRa s                  = F.Refa . F.simplify . V.mapKVars (appSol s) . F.raPred
-    -- appSol _ ra@(F.RConc _) = ra
-    -- appSol s (F.RKvar k su) = F.RConc $ F.subst su $ HM.lookupDefault F.PTop k s
+-- OLD CODE -- -- | solveConstraints: Call solve with `ueqAllSorts` enabled.
+-- OLD CODE -- --------------------------------------------------------------------------------
+-- OLD CODE -- solveConstraints :: RefScript
+-- OLD CODE --                  -> FilePath
+-- OLD CODE --                  -> CGInfo
+-- OLD CODE --                  -> IO (A.UAnnSol RefType, F.FixResult Error)
+-- OLD CODE -- --------------------------------------------------------------------------------
+-- OLD CODE -- solveConstraints p f cgi
+-- OLD CODE --   = do (r, s)  <- solve fpConf $ cgi_finfo cgi
+-- OLD CODE --        let r'   = fmap (ci_info . F.sinfo) r
+-- OLD CODE --        let anns = cgi_annot cgi
+-- OLD CODE --        let sol  = applySolution s
+-- OLD CODE --        return (A.SomeAnn anns sol, r')
+-- OLD CODE --   where
+-- OLD CODE --     real        = RealOption `elem` pOptions p
+-- OLD CODE --     fpConf      = def { C.real        = real
+-- OLD CODE --                       , C.ueqAllSorts = C.UAS True
+-- OLD CODE --                       , C.srcFile     = f
+-- OLD CODE --                       }
+-- OLD CODE --
+-- OLD CODE -- --------------------------------------------------------------------------------
+-- OLD CODE -- applySolution :: F.FixSolution -> A.UAnnInfo RefType -> A.UAnnInfo RefType
+-- OLD CODE -- --------------------------------------------------------------------------------
+-- OLD CODE -- applySolution  = fmap . fmap . tx
+-- OLD CODE --   where
+-- OLD CODE --     tx         = F.mapPredReft . txPred
+-- OLD CODE --     txPred s   = F.simplify . V.mapKVars (appSol s)
+-- OLD CODE --     appSol s k = Just $ HM.lookupDefault F.PTop k s
+-- OLD CODE --
+-- OLD CODE --     -- tx   s (F.Reft (x, ra)) = F.Reft (x, txRa s ra)
+-- OLD CODE --     -- txRa s                  = F.Refa . F.simplify . V.mapKVars (appSol s) . F.raPred
+-- OLD CODE --     -- appSol _ ra@(F.RConc _) = ra
+-- OLD CODE --     -- appSol s (F.RKvar k su) = F.RConc $ F.subst su $ HM.lookupDefault F.PTop k s
 
 --------------------------------------------------------------------------------
 generateConstraints :: Config -> RefScript -> ClassHierarchy F.Reft -> CGInfo
@@ -183,7 +294,7 @@ initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnLq] -> CGM 
 initModuleEnv g n s = freshenCGEnvM g'
   where
     g'    = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
-    nms   = mkVarEnv (accumVars s) `envUnion` toFgn (envNames g)
+    nms   = mkVarEnv (accumVars s) `mappend` toFgn (envNames g)
     bnds  = envBounds g
     ctx   = cge_ctx g
     pth   = extendAbsPath (cge_path g) n
@@ -219,7 +330,7 @@ initCallableEnv l g f fty xs s
     g0     = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
              -- No FP binding for these
     nms    = toFgn (envNames g)
-           & envUnion (mkVarEnv (accumVars s))
+           & mappend (mkVarEnv (accumVars s))
            & envAdds tyBs
            & envAddReturn f (VI Local ReturnVar Initialized t)
     bnds   = envAdds [(v,tv) | BTV v _ (Just tv) <- bs] $ cge_bounds g
@@ -474,7 +585,7 @@ consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
     xts   = sortBy c_sym [ B x t' | (x, FI _ _ t) <- F.toListSEnv (i_mems ms)
                                   , let t' = unqualifyThis g0 thisT t ]
     out   = [ f | (f, FI _ Final _) <- F.toListSEnv (i_mems ms) ]
-    bnd f = F.PAtom F.Eq (mkOffset v_sym $ F.symbolString f) (F.eVar f)
+    bnd f = F.PAtom F.Eq (mkOffset v_sym $ symbolString f) (F.eVar f)
     v_sym = F.symbol $ F.vv Nothing
     c_sym = on compare b_sym
 
@@ -633,7 +744,7 @@ consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
          _          -> cgError $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
   where
     l2 = getAnnotation e2
-    cc (BGen (QN _ s) _) = F.symbolString s
+    cc (BGen (QN _ s) _) = symbolString s
 
 consExpr g (InfixExpr l o e1 e2) _
   = do opTy <- cgSafeEnvFindTyM (infixOpId o) g

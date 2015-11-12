@@ -51,10 +51,11 @@ import           Data.Monoid                       hiding ((<>))
 import qualified Data.Traversable                  as T
 import           Data.Tuple                        (swap)
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc            (concatMapM, intersperse, mapPair, single)
+import           Language.Fixpoint.Misc            (intersperse)
 import qualified Language.Fixpoint.Types           as F
 import           Language.Rsc.Annotations          hiding (err)
 import           Language.Rsc.AST
+import           Language.Rsc.Misc                 (single, concatMapM)
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
@@ -184,6 +185,7 @@ accumModules (Rsc { code = Src stmts }) =
     sEnumElt (EnumElt _ s e) = (F.symbol s, void e)
 
     ss                       = fmap fSrc
+
 
 --------------------------------------------------------------------------------
 mkVarEnv :: (PPR r, F.Symbolic s) => [(s, SyntaxKind, VarInfo r)] -> Env (VarInfo r)

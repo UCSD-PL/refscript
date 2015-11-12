@@ -35,7 +35,7 @@ import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Lookup
-import           Language.Rsc.Misc                  (dup, nths, zipWith3M, (&))
+import           Language.Rsc.Misc                  (dup, nths, single, zipWith3M, (&))
 import           Language.Rsc.Names
 import           Language.Rsc.Parser
 import           Language.Rsc.Pretty
@@ -653,7 +653,7 @@ tcExpr γ e@(ObjectLit _ _) _
 -- | <T>e
 tcExpr γ ex@(Cast l e) _
   | [t] <- [ ct | UserCast ct <- fFact l ]
-  = mapFst (Cast l) <$> tcCast l γ e t
+  = first (Cast l) <$> tcCast l γ e t
   | otherwise
   = die $  bugNoCasts (srcPos l) ex
 
@@ -748,7 +748,7 @@ tcCall γ c@(InfixExpr l o@OpInstanceof e1 e2)
        case t of
          TClass (BGen (QN _ x) _)  ->
             do  opTy <- safeEnvFindTy l γ (infixOpId o)
-                ([e1',_], t') <- let args = [e1, StringLit l2 (F.symbolString x)] `zip` nths in
+                ([e1',_], t') <- let args = [e1, StringLit l2 (F.symbolSafeString x)] `zip` nths in
                                  tcNormalCall γ l o args opTy
                       -- TODO: add qualified name
                 return (InfixExpr l o e1' e2', t')

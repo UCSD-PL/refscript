@@ -24,7 +24,8 @@ import           Data.List                    (sortBy)
 import           Data.Monoid
 import           Data.Typeable
 import           Language.Fixpoint.Errors     (die)
-import           Language.Fixpoint.Misc       (fst3, safeZip, single)
+import           Language.Fixpoint.Misc       (fst3, safeZip)
+import           Language.Rsc.Misc            (single)
 import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
@@ -124,7 +125,7 @@ initCallableEnv l γ f fty xs s
   & tcEnvAdds tyBs
   where
     nms   = toFgn (envNames γ)
-          & envUnion (mkVarEnv (accumVars s))
+          & mappend (mkVarEnv (accumVars s))
           & envAddReturn f (VI Local ReturnVar Initialized t)
 
     tyBs  = [(Loc (srcPos l) α, VI Local Ambient Initialized $ tVar α) | α <- αs]
@@ -160,7 +161,7 @@ initModuleEnv :: (Unif r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (Ann
 --------------------------------------------------------------------------------
 initModuleEnv γ n s = TCE nms bnds ctx pth cha mut tThis fnId
   where
-    nms   = mkVarEnv (accumVars s) `envUnion` toFgn (envNames γ)
+    nms   = mkVarEnv (accumVars s) `mappend` toFgn (envNames γ)
     bnds  = envBounds γ
     ctx   = envCtx γ
     pth   = extendAbsPath (envPath γ) n

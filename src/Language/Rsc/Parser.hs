@@ -16,6 +16,7 @@ module Language.Rsc.Parser
     , parseIdFromJSON
     ) where
 
+import           Control.Arrow                    (second)
 import           Control.Applicative              ((<$>))
 import           Control.Monad
 import           Control.Monad.Trans              (MonadIO, liftIO)
@@ -115,7 +116,7 @@ mkRelRsc :: [Statement (SrcSpan, [Spec])] -> RelRefScript
 --------------------------------------------------------------------------------
 mkRelRsc ss = Rsc {
         code          = Src (checkTopStmt <$> ss')
-      , consts        = envFromList [ mapSnd (ntransPure f g) t | MeasureSpec t <- anns ]
+      , consts        = envFromList [ second (ntransPure f g) t | MeasureSpec t <- anns ]
       , tAlias        = envFromList [ t | TypeAliasSpec      t <- anns ]
       , pAlias        = envFromList [ t | PredicateAliasSpec t <- anns ]
       , pQuals        = scrapeQuals [ t | QualifierSpec      t <- anns ] ss'
@@ -166,7 +167,7 @@ parseAnnotations ss
     ss'     = fmap snd <$> ses
 
     f :: PContext -> (SrcSpan, [RawSpec]) -> ([Error], (SrcSpan, [Spec]))
-    f ctx (ss, specs) = mapSnd (ss,) $ L.mapAccumL (\errs spec -> parse ctx errs spec) [] specs
+    f ctx (ss, specs) = second (ss,) $ L.mapAccumL (\errs spec -> parse ctx errs spec) [] specs
 
     g :: PContext -> ([Error], (SrcSpan, [Spec])) -> PContext
     g ctx = (ctx `mappend`) . mconcat . map h . snd . snd

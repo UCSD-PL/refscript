@@ -29,7 +29,7 @@ import           Language.Rsc.AST
 import           Language.Rsc.Locations    hiding (val)
 import           Language.Rsc.Names
 import           Language.Rsc.Options
-import           Language.Rsc.Parser.Sorts
+-- import           Language.Rsc.Parser.Sorts
 import           Language.Rsc.Parser.Types
 import           Language.Rsc.Pretty
 import           Language.Rsc.Types

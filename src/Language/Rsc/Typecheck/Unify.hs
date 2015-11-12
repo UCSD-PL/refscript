@@ -25,6 +25,7 @@ import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
+import           Language.Rsc.Misc                  (mapPair)
 import           Language.Rsc.Pretty
 import           Language.Rsc.Typecheck.Environment
 import           Language.Rsc.Typecheck.Sub

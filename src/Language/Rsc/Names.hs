@@ -63,6 +63,7 @@ import qualified Data.HashSet              as H
 import           Data.List                 (find)
 import           Data.Traversable
 import           Language.Fixpoint.Names   (symbolString)
+import           GHC.Generics              (Generic())
 import qualified Language.Fixpoint.Types   as F
 import           Language.Rsc.Locations
 import           Text.PrettyPrint.HughesPJ
@@ -137,7 +138,7 @@ returnName :: String
 returnName = "$result"
 
 data Id a = Id a String
-          deriving (Show,Data,Typeable,Functor,Foldable,Traversable)
+          deriving (Show,Data,Typeable,Functor,Foldable,Traversable, Generic)
 
 unId :: Id a -> String
 unId (Id _ s) = s

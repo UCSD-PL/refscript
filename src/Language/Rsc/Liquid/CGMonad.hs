@@ -72,7 +72,9 @@ import           Data.Maybe                      (catMaybes)
 import           Data.Monoid                     (mappend, mempty)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Names         (symbolString, symbolText)
 import qualified Language.Fixpoint.Types         as F
+import           Language.Fixpoint.Visitor       (SymConsts (..))
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
@@ -84,6 +86,7 @@ import           Language.Rsc.Liquid.Constraint
 import           Language.Rsc.Liquid.Environment
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
+import           Language.Rsc.Misc               (concatMapM, mapPair)
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
@@ -154,14 +157,15 @@ type CGM     = ExceptT Error (State CGState)
 
 type TConInv = HM.HashMap TPrim (Located RefType)
 
---------------------------------------------------------------------------------
-getCGInfo :: Config -> RefScript -> CGM a -> CGInfo
---------------------------------------------------------------------------------
-getCGInfo cfg pgm = cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
+-------------------------------------------------------------------------------
+getCGInfo :: Config -> FilePath -> RefScript -> CGM a -> CGInfo
+-------------------------------------------------------------------------------
+getCGInfo cfg f p = cgStateCInfo f p . execute cfg p . (>> fixCWs)
   where
-    fixCWs       = (,) <$> fixCs <*> fixWs
-    fixCs        = get >>= concatMapM splitC . cg_cs
-    fixWs        = get >>= concatMapM splitW . cg_ws
+    fixCWs        = (,) <$> fixCs <*> fixWs
+    fixCs         = get >>= concatMapM splitC . cg_cs
+    fixWs         = get >>= concatMapM splitW . cg_ws
+
 
 --------------------------------------------------------------------------------
 execute :: Config -> RefScript -> CGM a -> (a, CGState)
@@ -179,21 +183,41 @@ initState c p = CGS F.emptyBindEnv [] [] 0 mempty invars c (maxId p)
     invars    = HM.fromList [(pr, t) | t@(Loc _ (TPrim pr _)) <- invts p]
 
 --------------------------------------------------------------------------------
-cgStateCInfo :: RefScript -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
+cgStateCInfo :: FilePath -> RefScript -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
 --------------------------------------------------------------------------------
-cgStateCInfo pgm ((fcs, fws), cg) = CGI (patchSymLits fi) (cg_ann cg)
+cgStateCInfo f pgm ((fcs, fws), cg) = CGI finfo (cg_ann cg)
   where
-    fi   = F.FI { F.cm       = HM.fromList $ F.addIds fcs
-                , F.ws       = fws
-                , F.bs       = cg_binds cg
-                , F.gs       = measureEnv pgm
-                , F.lits     = []
-                , F.kuts     = F.ksEmpty
-                , F.quals    = pQuals pgm
-                , F.bindInfo = mempty
-                }
+    finfo    = F.fi fcs fws bs lits F.ksEmpty (pQuals pgm) mempty f
+    bs       = cg_binds cg
+    lits     = lits1 `mappend` lits2
+    lits1    = F.sr_sort <$> measureEnv pgm
+    lits2    = cgLits bs fcs
 
-patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
+cgLits :: F.BindEnv -> [F.SubC a] -> F.SEnv F.Sort
+cgLits bs cs = F.fromListSEnv cts
+  where
+    cts      = [ (F.symbol c, F.strSort) | c <- csLits ++ bsLits ]
+    csLits   = concatMap symConsts cs
+    bsLits   = symConsts bs
+
+
+-- OLD CODE -- --------------------------------------------------------------------------------
+-- OLD CODE -- cgStateCInfo :: RefScript -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
+-- OLD CODE -- --------------------------------------------------------------------------------
+-- OLD CODE -- cgStateCInfo pgm ((fcs, fws), cg) = CGI (patchSymLits fi) (cg_ann cg)
+-- OLD CODE --   where
+-- OLD CODE --     fi   = F.FI { F.cm       = HM.fromList $ F.addIds fcs
+-- OLD CODE --                 , F.ws       = fws
+-- OLD CODE --                 , F.bs       = cg_binds cg
+-- OLD CODE --                 , F.gs       = measureEnv pgm
+-- OLD CODE --                 , F.lits     = []
+-- OLD CODE --                 , F.kuts     = F.ksEmpty
+-- OLD CODE --                 , F.quals    = pQuals pgm
+-- OLD CODE --                 , F.bindInfo = mempty
+-- OLD CODE --                 }
+--
+
+-- OLD CODE -- patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
 
 
 -- | Get binding from object type
@@ -350,11 +374,11 @@ addInvariant g t
   where
     cha = envCHA g
     -- | typeof
-    typeof t@(TPrim p o)    i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup p i
-    typeof t@(TRef _ _)     _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
-    typeof t@(TObj _ _ _)   _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
-    typeof   (TFun a b _)   _ = TFun a b typeofReft
-    typeof t                _ = t
+    typeof t@(TPrim p o)   i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup p i
+    typeof t@(TRef{})      _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
+    typeof t@(TObj{})      _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
+    typeof   (TFun a b _)  _ = TFun a b typeofReft
+    typeof t               _ = t
     -- | Truthy
     truthy t               | maybeTObj t
                            = t `strengthen` F.reft (vv t) (F.eProp $ vv t)
@@ -365,15 +389,15 @@ addInvariant g t
     typeofReft             = F.reft  (vv t) $ F.pAnd [ typeofExpr $ F.symbol "function"
                                                      , F.eProp    $ vv t                ]
     typeofExpr s           = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
-                                          (F.expr $ F.symbolText s)
+                                          (F.expr $ F.symbolSafeText s)
 
-    ofRef (F.Reft (s, ra)) = F.reft s <$> F.raConjuncts ra
+    ofRef (F.Reft (s, ra))    = F.reft s <$> F.conjuncts ra
 
     -- | { f: T } --> hasProperty("f", v)
     hasProp ty             = t `strengthen` keyReft (boundKeys cha ty)
     keyReft ks             = F.reft (vv t) $ F.pAnd (F.PBexp . hasPropExpr <$> ks)
     hasPropExpr s          = F.EApp (F.dummyLoc (F.symbol "hasProperty"))
-                                [F.expr (F.symbolText s), F.eVar $ vv t]
+                                [F.expr (F.symbolSafeText s), F.eVar $ vv t]
 
     -- | extends class / interface
     hierarchy t@(TRef c _)
@@ -388,7 +412,8 @@ addInvariant g t
     rExtClass t cs = F.reft (vv t) (F.pAnd $ refa t "extends_class"     <$> cs)
     rExtIface t cs = F.reft (vv t) (F.pAnd $ refa t "extends_interface" <$> cs)
 
-    refa t s c     = F.PBexp $ F.EApp (sym s) [ F.expr $ rTypeValueVar t, F.expr $ F.symbolText c]
+    refa t s c     = F.PBexp $ F.EApp (sym s) [ F.expr $ rTypeValueVar t
+                                              , F.expr $ F.symbolSafeText c]
     vv             = rTypeValueVar
     sym s          = F.dummyLoc $ F.symbol s
 
@@ -625,17 +650,22 @@ instance Freshable F.Symbol where
   fresh = F.tempSymbol (F.symbol "rsc") <$> fresh
 
 instance Freshable String where
-  fresh = F.symbolString <$> fresh
+  fresh = symbolString <$> fresh
 
 -- | Freshen up
 freshTy :: RefTypable a => s -> a -> CGM RefType
 freshTy _ τ = refresh $ rType τ
 
-instance Freshable F.Refa where
-  fresh = F.Refa . (`F.PKVar` mempty) . F.intKvar <$> fresh
+-- OLD CODE -- instance Freshable F.Refa where
+-- OLD CODE --   fresh = F.Refa . (`F.PKVar` mempty) . F.intKvar <$> fresh
+-- OLD CODE --
+-- OLD CODE -- instance Freshable [F.Refa] where
+-- OLD CODE --   fresh = single <$> fresh
 
-instance Freshable [F.Refa] where
-  fresh = single <$> fresh
+instance Freshable F.Pred where
+  fresh  = kv <$> fresh
+    where
+      kv = (`F.PKVar` mempty) . F.intKvar
 
 instance Freshable F.Reft where
   fresh                  = errorstar "fresh F.Reft"
@@ -841,6 +871,15 @@ splitM g i (_, (m, m'))
   = cgError $ unsupportedConvFun (srcPos i) m m'
 
 
+subCTag :: [Int]
+subCTag = [1]
+
+conjoinPred :: F.Pred -> F.SortedReft -> F.SortedReft
+conjoinPred p r    = r {F.sr_reft = F.Reft (v, F.pAnd [pr, p]) }
+  where
+    F.Reft (v, pr) = F.sr_reft r
+
+
 --------------------------------------------------------------------------------
 bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 --------------------------------------------------------------------------------
@@ -849,21 +888,40 @@ bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant g t1 <*> return t2
 
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivial r2
-  -- = F.subC (cge_fenv g) F.PTrue (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
-  = F.subC bs p (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
+  = F.subC bs (conjoinPred p $ r1 {F.sr_reft = typeofReft t1}) r2 Nothing subCTag ci
   | F.isNonTrivial r2
-  = F.subC bs p r1 r2 Nothing [] ci
+  = F.subC bs (conjoinPred p r1) r2 Nothing subCTag ci
   | otherwise
   = []
   where
-    bs             = foldl F.unionIBindEnv F.emptyIBindEnv $ snd <$> F.toListSEnv (cge_fenv g)
+    bs             = foldl F.unionIBindEnv F.emptyIBindEnv
+                   $ snd <$> F.toListSEnv (cge_fenv g)
     p              = F.pAnd $ cge_guards g
-    (r1,r2)        = (rTypeSortedReft t1,  rTypeSortedReft t2)
+    (r1,r2)        = (rTypeSortedReft t1, rTypeSortedReft t2)
     typeofReft t   = F.reft (vv t) $ F.pAnd [ typeofExpr (F.symbol "function") t
                                             , F.eProp $ vv t ]
     typeofExpr s t = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
-                                  (F.expr $ F.symbolText s)
+                                  (F.expr $ symbolText s)
     vv             = rTypeValueVar
+
+
+-- OLD CODE -- bsplitC' g ci t1 t2
+-- OLD CODE --   | F.isFunctionSortedReft r1 && F.isNonTrivial r2
+-- OLD CODE --   -- = F.subC (cge_fenv g) F.PTrue (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
+-- OLD CODE --   = F.subC bs p (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
+-- OLD CODE --   | F.isNonTrivial r2
+-- OLD CODE --   = F.subC bs p r1 r2 Nothing [] ci
+-- OLD CODE --   | otherwise
+-- OLD CODE --   = []
+-- OLD CODE --   where
+-- OLD CODE --     bs             = foldl F.unionIBindEnv F.emptyIBindEnv $ snd <$> F.toListSEnv (cge_fenv g)
+-- OLD CODE --     p              = F.pAnd $ cge_guards g
+-- OLD CODE --     (r1,r2)        = (rTypeSortedReft t1,  rTypeSortedReft t2)
+-- OLD CODE --     typeofReft t   = F.reft (vv t) $ F.pAnd [ typeofExpr (F.symbol "function") t
+-- OLD CODE --                                             , F.eProp $ vv t ]
+-- OLD CODE --     typeofExpr s t = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
+-- OLD CODE --                                   (F.expr $ F.symbolSafeText s)
+-- OLD CODE --     vv             = rTypeValueVar
 
 
 --------------------------------------------------------------------------------
@@ -915,21 +973,32 @@ splitW (W _ _ (TMod _ ))
 splitW (W _ _ t)
   = error $ render $ text "Not supported in splitW: " <+> pp t
 
+-- OLD CODE -- bsplitW g t i
+-- OLD CODE --   | F.isNonTrivial r'
+-- OLD CODE --   = [F.wfC bs r' Nothing i]
+-- OLD CODE --   | otherwise
+-- OLD CODE --   = []
+-- OLD CODE --   where
+-- OLD CODE --     r' = rTypeSortedReft t
+-- OLD CODE --     bs = foldl F.unionIBindEnv F.emptyIBindEnv $ snd <$> F.toListSEnv (cge_fenv g)
+
 bsplitW g t i
   | F.isNonTrivial r'
-  = [F.wfC bs r' Nothing i]
+  = F.wfC bs r' {- Nothing -} i
   | otherwise
   = []
   where
     r' = rTypeSortedReft t
-    bs = foldl F.unionIBindEnv F.emptyIBindEnv $ snd <$> F.toListSEnv (cge_fenv g)
+    bs = foldl F.unionIBindEnv F.emptyIBindEnv
+       $ snd <$> F.toListSEnv (cge_fenv g)
+
 
 
 envTyAdds msg l xts g
   = cgEnvAdds l (msg ++ " - envTyAdds " ++ ppshow (srcPos l))
       [(symbolId l x, VI Local WriteLocal Initialized t) | B x t <- xts] g
     where
-      symbolId l x = Id l $ F.symbolString $ F.symbol x
+      symbolId l x = Id l $ symbolString $ F.symbol x
 
 
 
@@ -987,7 +1056,7 @@ unqualifyThis g t = F.subst $ F.mkSubst fieldSu
             | otherwise
             = []
     this      = F.symbol $ builtinOpId BIThis
-    qFld x f  = F.qualifySymbol (F.symbol x) f
+    qFld x f  = qualifySymbol (F.symbol x) f
     subPair f = (qFld this f, F.expr f)
 
 

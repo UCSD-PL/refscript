@@ -117,7 +117,7 @@ data FactQ q r
   | InterfaceAnn  (TypeDeclQ q r)
 
   | ModuleAnn     Locality (QP q)
-  | EnumAnn       (F.Symbol)
+  | EnumAnn       F.Symbol
 
   -- Auxiliary
   | BypassUnique

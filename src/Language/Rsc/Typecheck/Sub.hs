@@ -22,12 +22,14 @@ import           Data.Monoid
 import           Data.Tuple                   (swap)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Types      (differenceSEnv, intersectWithSEnv, toListSEnv)
+import           Language.Fixpoint.Types      (differenceSEnv,
+                                               intersectWithSEnv, toListSEnv)
 import           Language.Rsc.Annotations
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
+import           Language.Rsc.Misc            (mapPair)
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Typecheck.Types

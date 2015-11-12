@@ -2,7 +2,6 @@
 
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -40,8 +39,7 @@ import           Language.Rsc.Parser
 import           Language.Rsc.Pretty
 import           Language.Rsc.Types        ()
 import           Text.Parsec.Pos
-import           Text.PrettyPrint.HughesPJ (nest, punctuate, render, text, vcat,
-                                            ($+$), (<+>))
+import           Text.PrettyPrint.HughesPJ (nest, punctuate, render, text, vcat, ($+$), (<+>))
 
 ------------------------------------------------------------------------------
 -- | Type Definitions For Annotations

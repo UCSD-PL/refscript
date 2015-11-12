@@ -5,18 +5,18 @@
 "
 
 " let g:syntastic_haskell_hdevtools_args = '-g-iliquid-fixpoint/src -g-isrc -g-package-conf='.glob(finddir('.cabal-sandbox', './;').'/*-packages.conf.d').' \
-let g:syntastic_haskell_hdevtools_args = '-g-iliquid-fixpoint/src \
-  \-g-XTypeSynonymInstances  
-  \-g-XFlexibleInstances 
-  \-g-XFlexibleContexts 
-  \-g-XDeriveDataTypeable  
-  \-g-XNoMonomorphismRestriction  
-  \-g-XDeriveGeneric 
-  \-g-XDeriveFunctor 
-  \-g-ScopedTypeVariables  
-  \-g-XDatatypeContexts 
-  \-g-XTupleSections 
-  \-g-Wall ' 
+"let g:syntastic_haskell_hdevtools_args = '-g-iliquid-fixpoint/src \
+"  \-g-XTypeSynonymInstances  
+"  \-g-XFlexibleInstances 
+"  \-g-XFlexibleContexts 
+"  \-g-XDeriveDataTypeable  
+"  \-g-XNoMonomorphismRestriction  
+"  \-g-XDeriveGeneric 
+"  \-g-XDeriveFunctor 
+"  \-g-ScopedTypeVariables  
+"  \-g-XDatatypeContexts 
+"  \-g-XTupleSections 
+"  \-g-Wall ' 
 
 let g:syntastic_haskell_check = ['hdevtools', 'hlint']
 

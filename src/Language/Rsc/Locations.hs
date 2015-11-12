@@ -5,7 +5,6 @@
 {-# LANGUAGE ImpredicativeTypes        #-}
 {-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE OverlappingInstances      #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TupleSections             #-}
@@ -70,13 +69,13 @@ instance IsLocated Error where
 instance IsLocated SrcSpan where
   srcPos x = x
 
-instance IsLocated (Located a) where
+instance {-# OVERLAPPING #-} IsLocated (Located a) where
   srcPos = loc
 
 instance IsLocated SourcePos where
   srcPos x = SS x x
 
-instance IsLocated (F.Located a) where
+instance {-# OVERLAPPING #-} IsLocated (F.Located a) where
   srcPos = srcPos . F.loc
 
 instance IsLocated F.Symbol where

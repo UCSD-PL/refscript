@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE OverlappingInstances      #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 
 import           Control.Applicative            ((<$>), (<*>))

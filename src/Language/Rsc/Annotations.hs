@@ -1,7 +1,6 @@
-{-# LANGUAGE DeriveDataTypeable   #-}
-{-# LANGUAGE DeriveFunctor        #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE FlexibleInstances  #-}
 
 module Language.Rsc.Annotations (
 
@@ -148,7 +147,7 @@ data FAnnQ q r = FA  { fId   :: NodeId
                      , fFact :: [FactQ q r]
                      } deriving (Data, Typeable)
 
-instance IsLocated (FAnnQ q r) where
+instance {-# OVERLAPPING #-} IsLocated (FAnnQ q r) where
   srcPos (FA _ s _) = s
 
 instance Default (FAnnQ q r) where

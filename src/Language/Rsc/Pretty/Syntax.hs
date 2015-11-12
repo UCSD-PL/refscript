@@ -1,5 +1,4 @@
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 -- | Pretty-printing JavaScript.
 module Language.Rsc.Pretty.Syntax (
@@ -17,7 +16,7 @@ import           Language.Rsc.Pretty.Common
 import           Prelude                    hiding (maybe)
 import           Text.PrettyPrint.HughesPJ
 
-instance PP [Statement a] where
+instance {-# OVERLAPPING #-} PP [Statement a] where
   pp = stmtList
 
 instance PP (Expression a) where

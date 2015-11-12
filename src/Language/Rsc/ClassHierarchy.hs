@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverlappingInstances  #-}
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
@@ -55,10 +54,10 @@ import           Language.Fixpoint.Misc            (intersperse)
 import qualified Language.Fixpoint.Types           as F
 import           Language.Rsc.Annotations          hiding (err)
 import           Language.Rsc.AST
-import           Language.Rsc.Misc                 (single, concatMapM)
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
+import           Language.Rsc.Misc                 (concatMapM, single)
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty.Annotations
 import           Language.Rsc.Pretty.Common

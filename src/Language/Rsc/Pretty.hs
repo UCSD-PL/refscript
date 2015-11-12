@@ -1,5 +1,4 @@
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 -- | Pretty-printing JavaScript.
 module Language.Rsc.Pretty (module P) where

@@ -1,7 +1,6 @@
-{-# LANGUAGE ConstraintKinds      #-}
-{-# LANGUAGE DeriveDataTypeable   #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE ConstraintKinds    #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances  #-}
 
 -- | Pretty-printing JavaScript.
 module Language.Rsc.Pretty.Common (
@@ -46,7 +45,7 @@ instance PP a => PP (Either String a) where
   pp (Left s)  = text $ "ERROR!" ++ s
   pp (Right x) = pp x
 
-instance PP String where
+instance {-# OVERLAPPING #-} PP String where
   pp = text
 
 instance PP Int where

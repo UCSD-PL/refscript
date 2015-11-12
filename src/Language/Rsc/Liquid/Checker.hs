@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE OverlappingInstances      #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ViewPatterns              #-}
 

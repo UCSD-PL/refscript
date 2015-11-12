@@ -3,7 +3,6 @@
 {-# LANGUAGE DeriveFunctor        #-}
 {-# LANGUAGE DeriveTraversable    #-}
 {-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Rsc.Types where
@@ -441,7 +440,7 @@ type PAlias      = Alias ()   F.Symbol F.Pred
 type TAliasEnv t = Env (TAlias t)
 type PAliasEnv   = Env PAlias
 
-instance IsLocated (Alias a s t) where
+instance {-# OVERLAPPING #-} IsLocated (Alias a s t) where
   srcPos = srcPos . al_name
 
 -- Local Variables:

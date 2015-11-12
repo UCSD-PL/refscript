@@ -4,7 +4,6 @@
 {-# LANGUAGE DeriveGeneric        #-}
 {-# LANGUAGE DeriveTraversable    #-}
 {-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -62,8 +61,8 @@ import           Data.Hashable
 import qualified Data.HashSet              as H
 import           Data.List                 (find)
 import           Data.Traversable
+import           GHC.Generics              (Generic ())
 import           Language.Fixpoint.Names   (symbolString)
-import           GHC.Generics              (Generic())
 import qualified Language.Fixpoint.Types   as F
 import           Language.Rsc.Locations
 import           Text.PrettyPrint.HughesPJ
@@ -146,7 +145,7 @@ unId (Id _ s) = s
 idName (Id _ x) = x
 idLoc  (Id l _) = l
 
-instance IsLocated a => IsLocated (Id a) where
+instance {-# OVERLAPPING #-} IsLocated a => IsLocated (Id a) where
   srcPos (Id l _) = srcPos l
 
 symbolId :: (IsLocated l, F.Symbolic x) => l -> x -> Id l

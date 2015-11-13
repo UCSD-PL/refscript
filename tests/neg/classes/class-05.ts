@@ -1,7 +1,7 @@
 interface IPoint {
-  /*@ x : { number | true } */
+  /*@ x : { number | 0 < 1 } */
   x: number;
-  /*@ y : { number | true } */
+  /*@ y : { number | 0 < 1 } */
   y: number;
 }
 

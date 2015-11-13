@@ -1,5 +1,5 @@
 
-/*@ a :: { number | true } */
+/*@ a :: { number | 0 < 1 } */
 var a : number  = 1;
 
 /*@ b :: string */
@@ -11,7 +11,7 @@ var c  = 1;
 /*@ d :: { v: number | v = 1 } + { v: string | v = "" } */
 var d  = 1;
 
-/*@ e :: { {  } | true } */
+/*@ e :: { {  } | 0 < 1 } */
 var e  = { } ;
 
 /*@ f :: [#Immutable]  { d: number + boolean } */

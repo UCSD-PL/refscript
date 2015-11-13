@@ -3,7 +3,7 @@
 module ts {
     export interface StringSet extends Map<any> { }
 
-    /*@ forEach :: forall T U . (array: IArray<T>, callback: (element: T) => U) => { U | true } + undefined */
+    /*@ forEach :: forall T U . (array: IArray<T>, callback: (element: T) => U) => { U | 0 < 1 } + undefined */
     export function forEach<T, U>(array: T[], callback: (element: T) => U): U {
         /*@ result :: U + undefined */
         var result: U;
@@ -17,7 +17,7 @@ module ts {
         return result;
     }
 
-    /*@  contains :: forall T . (array: IArray<T>, value: T) => { boolean | true } */
+    /*@  contains :: forall T . (array: IArray<T>, value: T) => { boolean | 0 < 1 } */
     export function contains<T>(array: T[], value: T): boolean {
         if (array) {
             var len = array.length;
@@ -30,7 +30,7 @@ module ts {
         return false;
     }
 
-    /*@  indexOf :: forall T . (array: IArray<T>, value: T) => { number | true } */
+    /*@  indexOf :: forall T . (array: IArray<T>, value: T) => { number | 0 < 1 } */
     export function indexOf<T>(array: T[], value: T): number {
         if (array) {
             var len = array.length;
@@ -43,7 +43,7 @@ module ts {
         return -1;
     }
 
-    /*@ filter :: forall T . (array: IArray<T>, f: (T) => boolean) => { MArray<T> | true } + undefined */
+    /*@ filter :: forall T . (array: IArray<T>, f: (T) => boolean) => { MArray<T> | 0 < 1 } + undefined */
     export function filter<T>(array: T[], f: (x: T) => boolean): T[] {
         /*@ result :: MArray<T> + undefined */
         var result: T[];
@@ -75,7 +75,7 @@ module ts {
         return result;
     }
 
-    /*@ concatenate :: forall T M . ( array1: IArray<T> + undefined, array2: IArray<T> + undefined) => { IArray<T> + undefined | true } */
+    /*@ concatenate :: forall T M . ( array1: IArray<T> + undefined, array2: IArray<T> + undefined) => { IArray<T> + undefined | 0 < 1 } */
     export function concatenate<T>(array1: T[], array2: T[]): T[] {
         if (!array2 || !array2.length) return array1;
         if (!array1 || !array1.length) return array2;
@@ -86,7 +86,7 @@ module ts {
         return arr1.concat(arr2);
     }
 
-    /*@ sum :: (array: IArray<{{[s:string]:number} | hasProperty(prop, v)}>, prop: string) => { number | true } */
+    /*@ sum :: (array: IArray<{{[s:string]:number} | hasProperty(prop, v)}>, prop: string) => { number | 0 < 1 } */
     export function sum(array: any[], prop: string): number {
         var result = 0;
         for (var i = 0; i < array.length; i++) {
@@ -119,13 +119,13 @@ module ts {
     /*@ hasProperty :: forall T M . (map: Map<M,T>, key: string) => { boolean | Prop(v) <=> (hasDirectProperty(key,map) && hasProperty(key,map)) } */
     export declare function hasProperty<T>(map: Map<T>, key: string): boolean;
 
-    /*@ getProperty :: forall T . (map: Map<Immutable,T>, key: string) => { T | true } */
+    /*@ getProperty :: forall T . (map: Map<Immutable,T>, key: string) => { T | 0 < 1 } */
     export declare function getProperty<T>(map: Map<T>, key: string): T;
 
     /*@  qualif HSqualif(s:Str,v:a): hasProperty(s,v) */
     /*@  qualif EPqualif(s:Str,v:a): enumProp(s,v) */
 
-    /*@ isEmpty :: forall T . (map: Map<Immutable,T>) => { boolean | true } */
+    /*@ isEmpty :: forall T . (map: Map<Immutable,T>) => { boolean | 0 < 1 } */
     export function isEmpty<T>(map: Map<T>) {
         for (var id in map) {
             if (hasProperty(map, id)) {
@@ -136,7 +136,7 @@ module ts {
     }
 
 
-    /*@ forEachValue :: forall T U . (map: Map<Immutable,T>, callback: (value: T) => U) => { U | true } + undefined */
+    /*@ forEachValue :: forall T U . (map: Map<Immutable,T>, callback: (value: T) => U) => { U | 0 < 1 } + undefined */
     export function forEachValue<T, U>(map: Map<T>, callback: (value: T) => U): U {
         /*@ result :: U + undefined */ 
         var result: U;
@@ -147,7 +147,7 @@ module ts {
     }
 
 
-    /*@ forEachKey :: forall T U . (map: Map<Immutable,T>, callback: (key: string) => U) => { U | true } + undefined */
+    /*@ forEachKey :: forall T U . (map: Map<Immutable,T>, callback: (key: string) => U) => { U | 0 < 1 } + undefined */
     export function forEachKey<T, U>(map: Map<T>, callback: (key: string) => U): U {
         /*@ result :: U + undefined */
         var result: U;
@@ -157,7 +157,7 @@ module ts {
         return result;
     }
 
-    /*@ mapToArray :: forall T . (map: Map<Immutable,T>) => { MArray<T> | true } */
+    /*@ mapToArray :: forall T . (map: Map<Immutable,T>) => { MArray<T> | 0 < 1 } */
     export function mapToArray<T>(map: Map<T>): T[] {
         /*@ result :: MArray<T> */
         var result: T[] = [];
@@ -183,7 +183,7 @@ module ts {
     /*@ _toMap :: forall S T M . (obj: S) => Map<M,T> */
     declare function _toMap(obj: any): Map<any>;
 
-    /*@ arrayToMap :: forall T . (array: IArray<T>, makeKey: (value: T) => string) => { Map<Mutable,T> | true } */
+    /*@ arrayToMap :: forall T . (array: IArray<T>, makeKey: (value: T) => string) => { Map<Mutable,T> | 0 < 1 } */
     export function arrayToMap<T>(array: T[], makeKey: (value: T) => string): Map<T> {
         /*@ readonly makeKeyLoc :: # */
         var makeKeyLoc = makeKey;
@@ -195,7 +195,7 @@ module ts {
         return result;
     }
 
-    /*@ compareValues :: forall T . (a:T, b:T) => { number | true } */
+    /*@ compareValues :: forall T . (a:T, b:T) => { number | 0 < 1 } */
     export function compareValues<T>(a: T, b: T): number {
         if (a === b) return 0;
         if (a === undefined) return -1;

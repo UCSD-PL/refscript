@@ -1214,7 +1214,7 @@ function arrayPush<T>(arr:T[], x:T) {
     return arr;
 }
 
-/*@ addEntry :: forall M T . (ob: MMap<T>, entry: Pair<M,string,T>) => { MMap<T> | true } */
+/*@ addEntry :: forall M T . (ob: MMap<T>, entry: Pair<M,string,T>) => { MMap<T> | 0 < 1 } */
 function addEntry(ob, entry) {
     ob[entry.x] = entry.y; //ORIG: ob[entry[0]] = entry[1];
     return ob;

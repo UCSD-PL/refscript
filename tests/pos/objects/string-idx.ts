@@ -4,7 +4,7 @@
 /*@ qualif EnumP<A>(v:string, s:A): enumProp(v,s)          */
 
 /*@ extend :: ( src:  [Immutable]{[s:string]: top }, dest: [Mutable]{[s:string]: top})
-           => { [Mutable] {[s:string]: top } | true }
+           => { [Mutable] {[s:string]: top } | 0 < 1 }
  */
 function extend(src, dest) {
   for (var p in src) {

@@ -1,5 +1,5 @@
 
-/*@ bar :: (x: string) => { void | true } */
+/*@ bar :: (x: string) => { void | 0 < 1 } */
 declare function bar(x: string): void;
 
 bar("");

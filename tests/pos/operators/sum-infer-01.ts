@@ -12,7 +12,7 @@ function sumLoop(acc:number, i:number){
 	return r;
 }
 
-/*@ main :: () => { void | true } */
+/*@ main :: () => { void | 0 < 1 } */
 function main(){
 	var n:number = pos();
 	var m:number = sumLoop(0, n);

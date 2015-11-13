@@ -19,14 +19,15 @@ main :: IO ()
 main = defaultMain =<< group "Tests" [unitTests]
 
 unitTests = group "Unit"
-  [ testGroup "pos-object" <$> dirTests rscCmd "tests/pos/objects"    [] ExitSuccess
+  [
+    testGroup "pos-object" <$> dirTests rscCmd "tests/pos/objects"    [] ExitSuccess
   , testGroup "pos-array"  <$> dirTests rscCmd "tests/pos/arrays"     [] ExitSuccess
   , testGroup "pos-class"  <$> dirTests rscCmd "tests/pos/classes"    [] ExitSuccess
   , testGroup "pos-loop"   <$> dirTests rscCmd "tests/pos/loops"      [] ExitSuccess
   , testGroup "pos-misc"   <$> dirTests rscCmd "tests/pos/misc"       [] ExitSuccess
   , testGroup "pos-ops"    <$> dirTests rscCmd "tests/pos/operators"  [] ExitSuccess
   , testGroup "pos-simple" <$> dirTests rscCmd "tests/pos/simple"     [] ExitSuccess
-  , testGroup "pos-simple" <$> dirTests rscCmd "tests/pos/scope"      [] ExitSuccess
+  , testGroup "pos-scope"  <$> dirTests rscCmd "tests/pos/scope"      [] ExitSuccess
   , testGroup "pos-union"  <$> dirTests rscCmd "tests/pos/unions"     [] ExitSuccess
   , testGroup "pos-alias"  <$> dirTests rscCmd "tests/pos/typealias"  [] ExitSuccess
   , testGroup "pos-fb"     <$> dirTests rscCmd "tests/pos/fb"         [] ExitSuccess
@@ -38,7 +39,7 @@ unitTests = group "Unit"
   , testGroup "neg-misc"   <$> dirTests rscCmd "tests/neg/misc"       [] (ExitFailure 1)
   , testGroup "neg-ops"    <$> dirTests rscCmd "tests/neg/operators"  [] (ExitFailure 1)
   , testGroup "neg-simple" <$> dirTests rscCmd "tests/neg/simple"     [] (ExitFailure 1)
-  , testGroup "neg-simple" <$> dirTests rscCmd "tests/neg/scope"      [] (ExitFailure 1)
+  , testGroup "neg-scope"  <$> dirTests rscCmd "tests/neg/scope"      [] (ExitFailure 1)
   , testGroup "neg-union"  <$> dirTests rscCmd "tests/neg/unions"     [] (ExitFailure 1)
   , testGroup "neg-alias"  <$> dirTests rscCmd "tests/neg/typealias"  [] (ExitFailure 1)
   , testGroup "neg-fb"     <$> dirTests rscCmd "tests/neg/fb"         [] (ExitFailure 1)

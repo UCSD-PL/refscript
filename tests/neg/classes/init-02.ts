@@ -1,11 +1,11 @@
 
 class Foo {
   public f: number;
-  /*@ new (id: number) => { void | true } */
+  /*@ new (id: number) => { void | 0 < 1 } */
   constructor(a: number) { this.f = a; }
 }
 
-/*@ createFoo :: () => { Foo<Immutable> | true } */
+/*@ createFoo :: () => { Foo<Immutable> | 0 < 1 } */
 function createFoo() {
   /*@ foo :: Foo<UniqueMutable> */
   var foo = new Foo(5);

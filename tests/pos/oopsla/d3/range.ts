@@ -1,14 +1,12 @@
 /// <reference path="include/d3.d.ts" />
 
-/*@ option REALS */
-
 //TODO: move to prelude? why does the annotation make rsc stall?
 /* Infinity :: {number | v = numeric_positive_infinity} */
 declare var Infinity:number;
 
 /*@ d3_range :: /\ (number, number, {number | v != 0}) =>   MArray<number>
-                /\ (number, number                   ) => { MArray<number> | true }
-                /\ (number                           ) => { MArray<number> | true } */
+                /\ (number, number                   ) => { MArray<number> | 0 < 1 }
+                /\ (number                           ) => { MArray<number> | 0 < 1 } */
 function d3_range(start:number, arg_stop?:number, arg_step?:number): number[] {
   /*@ local loc_start :: number + undefined */
   var loc_start = start;

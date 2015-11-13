@@ -1,4 +1,4 @@
-/*@ main :: () => { void | true } */ 
+/*@ main :: () => { void | 0 < 1 } */ 
 function main(){
   var x = 0;
   var y = x - 1;

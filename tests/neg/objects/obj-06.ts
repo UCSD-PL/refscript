@@ -11,7 +11,7 @@ var obj = {
   oo: { n: 6 }
 };
 
-/*@ foo :: ({ number | true } ) => { b: boolean } */
+/*@ foo :: ({ number | 0 < 1 } ) => { b: boolean } */
 function foo (n) {
   
   return obj.oo;

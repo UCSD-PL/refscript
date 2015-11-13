@@ -2,7 +2,7 @@
 /*@ qualif HasP<A>(v:string, s:A): hasProperty(v,s) */
 /*@ qualif EnumP<A>(v:string, s:A): enumProp(v,s)    */
 
-/*@  values :: forall T . (mp: [Immutable]{ [k:string]: T }) =>  { MArray<T> | true } */
+/*@  values :: forall T . (mp: [Immutable]{ [k:string]: T }) =>  { MArray<T> | 0 < 1 } */
 function values<T>(mp:{[k:string]:T}): T[] {
 
   var values:T[] = [];

@@ -1,9 +1,9 @@
 /// <reference path="d3.d.ts" />
 
-/*@ bv_to_num :: (bv: bitvector32) => { number | true } */
+/*@ bv_to_num :: (bv: bitvector32) => { number | 0 < 1 } */
 declare function bv_to_num(bv: number): number;
 
-/*@ num_to_bv :: (n: number) => { bitvector32 | true } */
+/*@ num_to_bv :: (n: number) => { bitvector32 | 0 < 1 } */
 declare function num_to_bv(n: number): number;
 
 /*@ check_undefined :: forall T.(T + undefined) => {T | 0 < 1} */

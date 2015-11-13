@@ -119,14 +119,14 @@ declare module D3 {
         * @param arr Array to search
         * @param map Accsessor function
         */
-        /*@ min : forall T U . (arr: IArray<T>, f: (T, number) => U) => { U | true } */
+        /*@ min : forall T U . (arr: IArray<T>, f: (T, number) => U) => { U | 0 < 1 } */
         min<T, U>(array: T[], f: (x:T, i:number) => U): U;
         /**
         * Find the minimum value in an array
         *
         * @param arr Array to search
         */
-        /*@ min : forall T . (arr: IArray<T>) => { T | true } */
+        /*@ min : forall T . (arr: IArray<T>) => { T | 0 < 1 } */
         min<T>(array: T[]): T;
         
         /**
@@ -135,7 +135,7 @@ declare module D3 {
         * @param arr Array to search
         * @param map Accsessor function
         */
-        /*@ max : forall T U . (arr: IArray<T>, f: (T, number) => U) => { U | true } */
+        /*@ max : forall T U . (arr: IArray<T>, f: (T, number) => U) => { U | 0 < 1 } */
         max<T, U>(array: T[], f: (v: T) => U): U;
 
         /**
@@ -143,7 +143,7 @@ declare module D3 {
         *
         * @param arr Array to search
         */
-        /*@ max : forall T . (arr: IArray<T>) => { T | true } */
+        /*@ max : forall T . (arr: IArray<T>) => { T | 0 < 1 } */
         max<T>(array: T[]): number;
         /**
         * Find the minimum and maximum value in an array
@@ -326,7 +326,7 @@ declare module D3 {
         *
         * @param stop Value to generate the range to
         */
-        /*@ range : /\ (number) : { MArray<number> | true } */
+        /*@ range : /\ (number) : { MArray<number> | 0 < 1 } */
         range(stop: number): number[];
         /**
         * Generate a range of numeric values.
@@ -335,8 +335,8 @@ declare module D3 {
         * @param stop Value to generate the range to
         * @param step Step between each value
         */
-        /*@ range : /\ (number, number, {number | v != 0}) : { MArray<number> | true }
-                    /\ (number, number                   ) : { MArray<number> | true } */
+        /*@ range : /\ (number, number, {number | v != 0}) : { MArray<number> | 0 < 1 }
+                    /\ (number, number                   ) : { MArray<number> | 0 < 1 } */
         range(start: number, stop: number, step?: number): number[];
 //        /**
 //        * Create new nest operator

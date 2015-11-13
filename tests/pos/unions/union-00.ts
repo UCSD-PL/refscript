@@ -1,5 +1,5 @@
 
-/*@ foo ::  (number + boolean) => number + { string | true } */
+/*@ foo ::  (number + boolean) => number + { string | 0 < 1 } */
 function foo(x) {
 
   if (typeof x === "number") 

@@ -58,7 +58,7 @@ json cfg f = do
 withExistingFile :: Config -> FilePath -> IO (Either (F.FixResult Error) [FilePath])
 withExistingFile cfg f
   | ext `elem` oks
-  = do  libs              <- tracePP "incl" <$> getIncludeLibs cfg
+  = do  libs              <- getIncludeLibs cfg
         (code, stdOut, _) <- readProcessWithExitCode tsCmd (mkArgs libs) ""
         case code of
           ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of

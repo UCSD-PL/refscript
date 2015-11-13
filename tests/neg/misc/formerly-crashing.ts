@@ -29,7 +29,7 @@ module SplayVERSION {
          *
          * @param {number} key Key to splay the tree on.
          */
-        /*@ splay_ : (number): { void | true } */
+        /*@ splay_ : (number): { void | 0 < 1 } */
         public splay_(key) {
             var root = this.root_;
             if (!root) { return; }

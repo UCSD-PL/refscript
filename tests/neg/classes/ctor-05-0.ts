@@ -7,7 +7,7 @@ module K {
         public x0 = "";
         public y0 = "";
 
-        /*@ new () => { A<M> | true } */
+        /*@ new () => { A<M> | 0 < 1 } */
         constructor() {}
       }
 
@@ -21,7 +21,7 @@ module Mod {
     /*@ k : [Immutable] { string | v = "K" } */
     public k = "";  
 
-    /*@ new () => { AA<M> | true } */
+    /*@ new () => { AA<M> | 0 < 1 } */
     constructor() {
       super();
     }
@@ -35,7 +35,7 @@ module N {
     /*@ k : [Immutable] { string | v = "KK" } */
     public k: string;
 
-    /*@ new () => { BB<M> | true } */
+    /*@ new () => { BB<M> | 0 < 1 } */
     constructor() {
       super();
       this.k = "KK";

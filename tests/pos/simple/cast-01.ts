@@ -2,7 +2,7 @@
 /*@ foo :: () => { number | v > 0 } + undefined */ 
 declare function foo(): any;
 
-/*@ bar :: () => { number | true } */
+/*@ bar :: () => { number | 0 < 1 } */
 function bar(): number {
 
   var x = foo();

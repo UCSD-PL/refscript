@@ -15,7 +15,7 @@ function f2(x:number, y: string): number {
   return x;
 }
 
-/*@ foo :: forall M . (#FooT) => #Array[M, { number | true } ] */
+/*@ foo :: forall M . (#FooT) => #Array[M, { number | 0 < 1 } ] */
 function foo(x) {
 
   var c = x.f(f1);

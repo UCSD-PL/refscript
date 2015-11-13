@@ -6,7 +6,7 @@ function reduce(me, callback, init){
   return res;
 }
 
-/*@ minIndex :: (arr: top) => { top | true } */
+/*@ minIndex :: (arr: top) => { top | 0 < 1 } */
 function minIndex(arr){
   function body(min, cur, i){ 
     return cur < arr[min] ? i : min 

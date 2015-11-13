@@ -9,7 +9,7 @@ var gobj = {
   oo: { n: 6 }
 }
 
-/*@ foo :: ({ number | true } ) => {  } */
+/*@ foo :: ({ number | 0 < 1 } ) => {  } */
 function foo (n) {
   return gobj.oo;
 }

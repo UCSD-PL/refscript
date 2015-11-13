@@ -7,7 +7,7 @@ class HTMLDivElt extends HTMLElt {
   constructor() { super(); }
 }
 
-/*@ foo :: (elt: { HTMLElt<Immutable> | true } ) => HTMLDivElt<Immutable> */
+/*@ foo :: (elt: { HTMLElt<Immutable> | 0 < 1 } ) => HTMLDivElt<Immutable> */
 function foo(elt: HTMLElt): HTMLDivElt {
   if (elt instanceof HTMLDivElt) {
     var div = <HTMLDivElt>elt;

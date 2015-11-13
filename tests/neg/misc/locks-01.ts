@@ -23,7 +23,7 @@ function release(l){
 
 
 
-/*@ main :: () => { void | true } */
+/*@ main :: () => { void | 0 < 1 } */
 function main(){
   var x = random();
   var l = create();

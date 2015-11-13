@@ -495,8 +495,8 @@ module RichardsTYPEDVERSION {
 
     class Task {
         constructor() {}
-        /*@ run : /\ (this:MSelf, packet: MPacket) : { MTaskControlBlock + null | true }
-                  /\ (this:MSelf) : { MTaskControlBlock + null | true } */
+        /*@ run : /\ (this:MSelf, packet: MPacket) : { MTaskControlBlock + null | 0 < 1 }
+                  /\ (this:MSelf) : { MTaskControlBlock + null | 0 < 1 } */
         public run(packet:Packet) : TaskControlBlock {
             throw "Abstract method";
         }
@@ -525,8 +525,8 @@ module RichardsTYPEDVERSION {
             this.count = count;
         }
 
-        /*@ run : /\ (this:MSelf, packet: Packet<ReadOnly>) : { MTaskControlBlock + null | true }
-                  /\ (this:MSelf) : { MTaskControlBlock + null | true } */
+        /*@ run : /\ (this:MSelf, packet: Packet<ReadOnly>) : { MTaskControlBlock + null | 0 < 1 }
+                  /\ (this:MSelf) : { MTaskControlBlock + null | 0 < 1 } */
         public run(packet:Packet) : TaskControlBlock {
             this.count--;
             if (this.count === 0) return this.scheduler.holdCurrent();
@@ -565,8 +565,8 @@ module RichardsTYPEDVERSION {
             this.v1 = v1;// if (arguments.length === 2) this.v1 = v1;
         }
 
-        /*@ run : /\ (this:MSelf, packet: MPacket) : { MTaskControlBlock + null | true }
-                  /\ (this:MSelf) : { MTaskControlBlock + null | true } */
+        /*@ run : /\ (this:MSelf, packet: MPacket) : { MTaskControlBlock + null | 0 < 1 }
+                  /\ (this:MSelf) : { MTaskControlBlock + null | 0 < 1 } */
         public run(packet:Packet) : TaskControlBlock {
             if (!packet) {
                 var v1 = this.v1;
@@ -607,8 +607,8 @@ module RichardsTYPEDVERSION {
             this.v2 = v2;
         }
 
-        /*@ run : /\ (this:MSelf, packet: MPacket) : { MTaskControlBlock + null | true }
-                  /\ (this:MSelf) : { MTaskControlBlock + null | true } */
+        /*@ run : /\ (this:MSelf, packet: MPacket) : { MTaskControlBlock + null | 0 < 1 }
+                  /\ (this:MSelf) : { MTaskControlBlock + null | 0 < 1 } */
         public run(packet:Packet) : TaskControlBlock {
             if (!packet) {
                 return this.scheduler.suspendCurrent();
@@ -658,8 +658,8 @@ module RichardsTYPEDVERSION {
             // }
         }
 
-        /*@ run : /\ (this:MSelf, packet: MPacket) : { MTaskControlBlock + null | true }
-                  /\ (this:MSelf) : { MTaskControlBlock + null | true } */
+        /*@ run : /\ (this:MSelf, packet: MPacket) : { MTaskControlBlock + null | 0 < 1 }
+                  /\ (this:MSelf) : { MTaskControlBlock + null | 0 < 1 } */
         public run(packet:Packet) : TaskControlBlock {
             if (packet) {
                 if (packet.kind === KIND_WORK) {

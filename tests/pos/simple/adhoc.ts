@@ -9,6 +9,6 @@ interface NumberGenerator {
 /*@ foo :: () => {NumberGenerator<Immutable> | 0 < 1} */
 function foo() {
   return {
-    generate: function() /*@ <anonymous>  () => { number | true } */ { return 3; }
+    generate: function() /*@ <anonymous>  () => { number | 0 < 1 } */ { return 3; }
   }
 }

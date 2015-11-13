@@ -1,8 +1,8 @@
 /// <reference path="include/d3.d.ts" />
 /// <reference path="include/d3.rsc.ts" />
 
-/* d3_min_1 :: forall T . (arr: IArray<T>) => { T + undefined | true } */
-/*@ d3_min_1 :: forall T . (arr: IArray<T>) => { T | true } */
+/* d3_min_1 :: forall T . (arr: IArray<T>) => { T + undefined | 0 < 1 } */
+/*@ d3_min_1 :: forall T . (arr: IArray<T>) => { T | 0 < 1 } */
 function d3_min_1<T>(array: T[]) : any {
   var i = 0,
       n = array.length;
@@ -33,7 +33,7 @@ function d3_min_1<T>(array: T[]) : any {
 }
 
 
-/*@ d3_min_2 :: forall T U . (arr: IArray<T>, f: (x:T, i:number) => U) => { U | true } */
+/*@ d3_min_2 :: forall T U . (arr: IArray<T>, f: (x:T, i:number) => U) => { U | 0 < 1 } */
 function d3_min_2 <T, U>(array:T[], f:(x:T, i:number) => U) : any {
   var i = 0,
       n = array.length;
@@ -61,8 +61,8 @@ function d3_min_2 <T, U>(array:T[], f:(x:T, i:number) => U) : any {
 }
 
 d3.min = function(array:any, f?:any) 
-/*@ <anonymous> /\ forall T U . (arr: IArray<T>, f: (T, number) => U) => { U | true }
-                /\ forall T   . (arr: IArray<T>) => { T | true } 
+/*@ <anonymous> /\ forall T U . (arr: IArray<T>, f: (T, number) => U) => { U | 0 < 1 }
+                /\ forall T   . (arr: IArray<T>) => { T | 0 < 1 } 
  */
 {
   if (arguments.length === 1) {

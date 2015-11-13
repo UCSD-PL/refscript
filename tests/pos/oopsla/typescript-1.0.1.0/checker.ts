@@ -94,7 +94,7 @@ module ts {
          */
         declare function createSymbol(flags: SymbolFlags, name: string): Symbol
 
-        /*@ getExcludedSymbolFlags :: (flags: SymbolFlags) => { bitvector32 | true } */
+        /*@ getExcludedSymbolFlags :: (flags: SymbolFlags) => { bitvector32 | 0 < 1 } */
         function getExcludedSymbolFlags(flags: SymbolFlags): SymbolFlags {
             var result = 0x00000000; // 0;
             //TODO: undefined below
@@ -114,13 +114,13 @@ module ts {
             return result ;
         }
 
-        /*@ recordMergedSymbol :: (target: ISymbol, source: ISymbol) => { void | true } */
+        /*@ recordMergedSymbol :: (target: ISymbol, source: ISymbol) => { void | 0 < 1 } */
         function recordMergedSymbol(target: Symbol, source: Symbol) {
             if (!source.mergeId) source.mergeId = nextMergeId++;
             mergedSymbols[source.mergeId] = target;
         }
 
-        /*@ getSymbolLinks :: (symbol: ISymbol) => { SymbolLinks<Immutable> | true } */
+        /*@ getSymbolLinks :: (symbol: ISymbol) => { SymbolLinks<Immutable> | 0 < 1 } */
         function getSymbolLinks(symbol: Symbol): SymbolLinks {
             if (symbol.flags & SymbolFlags.Transient) return <TransientSymbol>symbol;            
             if (!symbol.id) symbol.id = nextSymbolId++;
@@ -129,7 +129,7 @@ module ts {
             else { var o = {}; symbolLinks[symbol.id] = o; return o; }
         }
 
-        /*@ getNodeLinks :: (node: INode) => { NodeLinks<Immutable> | true } */
+        /*@ getNodeLinks :: (node: INode) => { NodeLinks<Immutable> | 0 < 1 } */
         function getNodeLinks(node: Node): NodeLinks {
             var node_id = node.id;
             if (!node_id) {
@@ -144,7 +144,7 @@ module ts {
             else { var o = {}; nodeLinks[<number>node_id] = o; return o; }
         }
 
-        /*@ getSourceFile :: (node: INode + undefined) => undefined + { SourceFile<Immutable> | true } */
+        /*@ getSourceFile :: (node: INode + undefined) => undefined + { SourceFile<Immutable> | 0 < 1 } */
         function getSourceFile(node: Node): SourceFile {
             var ancestor = getAncestor(node, SyntaxKind.SourceFile);
             if (ancestor) {
@@ -169,10 +169,10 @@ module ts {
             return type;
         }
 
-        /*@ resolveObjectTypeMembers :: (type: ObjectType<Immutable>) => { ResolvedObjectType<Immutable> | true } */
+        /*@ resolveObjectTypeMembers :: (type: ObjectType<Immutable>) => { ResolvedObjectType<Immutable> | 0 < 1 } */
         declare function resolveObjectTypeMembers(type: ObjectType): ResolvedObjectType;
 
-        /*@ getPropertiesOfType :: (type: IType) => { IArray<ISymbol> | true } */
+        /*@ getPropertiesOfType :: (type: IType) => { IArray<ISymbol> | 0 < 1 } */
         function getPropertiesOfType(type: Type): Symbol[] {
             if (type.flags & TypeFlags.ObjectType) {
                 return resolveObjectTypeMembers(<ObjectType>type).properties;
@@ -180,10 +180,10 @@ module ts {
             return emptyArray();
         }
 
-        /*@ getTypeListId :: (types: IArray<IType>) => { number | true } */
+        /*@ getTypeListId :: (types: IArray<IType>) => { number | 0 < 1 } */
         declare function getTypeListId(types: Type[]);
 
-        /*@ createTypeReference :: (target: GenericType<Immutable>, typeArguments: IArray<IType>) => { TypeReference<Immutable> | true } */
+        /*@ createTypeReference :: (target: GenericType<Immutable>, typeArguments: IArray<IType>) => { TypeReference<Immutable> | 0 < 1 } */
         function createTypeReference(target: GenericType, typeArguments: Type[]): TypeReference {
             var id = getTypeListId(typeArguments);
             var type = target.instantiations[id.toString()];
@@ -200,7 +200,7 @@ module ts {
             return type;
         }
 
-        /*@ isTypeParameterReferenceIllegalInConstraint :: (typeReferenceNode: TypeReferenceNode<Immutable>, typeParameterSymbol: ISymbol) => { boolean | true } */
+        /*@ isTypeParameterReferenceIllegalInConstraint :: (typeReferenceNode: TypeReferenceNode<Immutable>, typeParameterSymbol: ISymbol) => { boolean | 0 < 1 } */
         function isTypeParameterReferenceIllegalInConstraint(typeReferenceNode: TypeReferenceNode, typeParameterSymbol: Symbol): boolean {
             var links = getNodeLinks(typeReferenceNode);
             var links_isIllegalTypeReferenceInConstraint_tmp = links.isIllegalTypeReferenceInConstraint;
@@ -243,17 +243,17 @@ module ts {
             return type;
         }
 
-        /*@ instantiateSignature :: /\ (signature: ISignature, mapper: TypeMapper<Immutable>) => { ISignature | true } 
-                                    /\ (signature: ISignature, mapper: TypeMapper<Immutable>, eraseTypeParameters: boolean) => { ISignature | true } */
+        /*@ instantiateSignature :: /\ (signature: ISignature, mapper: TypeMapper<Immutable>) => { ISignature | 0 < 1 } 
+                                    /\ (signature: ISignature, mapper: TypeMapper<Immutable>, eraseTypeParameters: boolean) => { ISignature | 0 < 1 } */
         declare function instantiateSignature(signature: Signature, mapper: TypeMapper, eraseTypeParameters?: boolean): Signature;
 
-        /*@ instantiateSymbol :: (symbol: ISymbol, mapper: TypeMapper<Immutable>) => { ISymbol | true } */
+        /*@ instantiateSymbol :: (symbol: ISymbol, mapper: TypeMapper<Immutable>) => { ISymbol | 0 < 1 } */
         declare function instantiateSymbol(symbol: Symbol, mapper: TypeMapper): Symbol;
 
-        /*@ instantiateAnonymousType :: (type: ObjectType<Immutable>, mapper: TypeMapper<Immutable>) => { ObjectType<Mutable> | true } */
+        /*@ instantiateAnonymousType :: (type: ObjectType<Immutable>, mapper: TypeMapper<Immutable>) => { ObjectType<Mutable> | 0 < 1 } */
         declare function instantiateAnonymousType(type: ObjectType, mapper: TypeMapper): ObjectType;
 
-        /*@ instantiateType :: (type: IType, mapper: TypeMapper<Immutable>) => { IType | true } */
+        /*@ instantiateType :: (type: IType, mapper: TypeMapper<Immutable>) => { IType | 0 < 1 } */
         declare function instantiateType(type: Type, mapper: TypeMapper): Type;
 
         /*@ getAncestor :: (node: INode + undefined, kind: SyntaxKind) => undefined + INode */

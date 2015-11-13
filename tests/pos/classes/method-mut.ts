@@ -4,7 +4,7 @@ class Foo {
   /*@ new () => Foo<M> */
   constructor() { this.x = 3; }
 
-  /*@ bar: (this: Foo<Mutable>): { void | true } */
+  /*@ bar: (this: Foo<Mutable>): { void | 0 < 1 } */
   bar() { this.x = 4; }
 }
 

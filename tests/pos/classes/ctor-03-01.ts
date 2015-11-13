@@ -14,7 +14,7 @@ class A {
 
 }
 
-/*@ foo :: () => {void | true} */
+/*@ foo :: () => {void | 0 < 1} */
 function foo(){
   var r = new A(29);
   var p = r.x;

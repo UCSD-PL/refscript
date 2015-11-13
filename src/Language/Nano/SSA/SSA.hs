@@ -1,43 +1,43 @@
 {-# LANGUAGE DeriveDataTypeable        #-}
+{-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TupleSections             #-}
-{-# LANGUAGE FlexibleContexts          #-}
 
 module Language.Nano.SSA.SSA (ssaTransform) where
 
-import           Control.Arrow                           (first, second, (***))
+import           Control.Arrow                    (first, second, (***))
 -- import           Control.Applicative                     ((<$>), (<*>))
 import           Control.Monad
-import           Data.Default
 import           Data.Data
-import           Data.Maybe                              (catMaybes)
-import qualified Data.List                               as L
-import qualified Data.IntSet                             as I
-import qualified Data.IntMap.Strict                      as IM
-import qualified Data.HashSet                            as S
-import           Data.Typeable                           ()
+import           Data.Default
+import qualified Data.HashSet                     as S
+import qualified Data.IntMap.Strict               as IM
+import qualified Data.IntSet                      as I
+import qualified Data.List                        as L
+import           Data.Maybe                       (catMaybes)
+import           Data.Typeable                    ()
 
 import           Language.Nano.Syntax
 import           Language.Nano.Syntax.Annotations
 import           Language.Nano.Syntax.PrettyPrint
 
-import qualified Language.Fixpoint.Errors                as E
+import qualified Language.Fixpoint.Errors         as E
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types                 as F
-import           Language.Fixpoint.Names                 (symbolString)
+import           Language.Fixpoint.Names          (symbolString)
+import qualified Language.Fixpoint.Types          as F
 
 import           Language.Nano.Annots
 import           Language.Nano.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
-import           Language.Nano.Names
 import           Language.Nano.Misc
+import           Language.Nano.Names
 import           Language.Nano.Program
-import           Language.Nano.Types
+import           Language.Nano.SSA.SSAMonad
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Types
-import           Language.Nano.SSA.SSAMonad
+import           Language.Nano.Types
 import           Language.Nano.Visitor
 
 -- import           Debug.Trace                        hiding (traceShow)
@@ -598,6 +598,9 @@ ssaExpr ::  Data r => Expression (AnnSSA r) -> SSAM r ([Statement (AnnSSA r)], E
 -------------------------------------------------------------------------------------
 
 ssaExpr e@(IntLit _ _)
+  = return ([], e)
+
+ssaExpr e@(NumLit _ _)
   = return ([], e)
 
 ssaExpr e@(HexLit _ _)

@@ -2,17 +2,23 @@ module K {
 
     export function foo(): void { }
 
-    class InK { }
+    class InK { 
+        constructor() {}
+    }
 
     export module L {
 
       export function baz(): void { }
         
-      class InKL { }
+      class InKL { 
+          constructor() {}
+      }
     
       export module M { 
 
-        class InKLM { }
+        class InKLM { 
+            constructor() {}
+        }
 
           export function bar(): void {
             foo();
@@ -26,24 +32,34 @@ module K {
 }
 
 
-class InK { }
+class InK { 
+    constructor() {}
+}
 
 
 module K1 {
 
     export function foo(): void { }
 
-    class InK { }
+    class InK { 
+        constructor() {}
+    }
 
     export module L {
 
       export function baz(): void { }
         
-      class InKL extends InK { }
+      class InKL extends InK { 
+          constructor() {
+              super();
+          }
+      }
     
       export module M { 
 
-        class InKLM { }
+        class InKLM {
+            constructor() {}
+         }
 
           export function bar(): void {
             foo();

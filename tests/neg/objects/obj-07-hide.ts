@@ -1,6 +1,6 @@
-/*@ gobj :: { a: {v:number|true};
-              b: {v:string|true};
-              oo: {m : {v:number|true} };
+/*@ gobj :: { a: {v:number|0 < 1};
+              b: {v:string|0 < 1};
+              oo: {m : {v:number|0 < 1} };
             } 
  */
 var gobj = {

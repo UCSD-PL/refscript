@@ -17,7 +17,7 @@ function reduce(me, callback, init) {
 }
 
 
-/*@ minIndex :: (arrrr:IArray<number>) => {number | true} */
+/*@ minIndex :: (arrrr:IArray<number>) => {number | 0 < 1} */
 function minIndex(arrrr) {
 
     /*@ readonly arr :: # */

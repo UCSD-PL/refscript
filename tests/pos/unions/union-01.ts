@@ -1,5 +1,5 @@
 
-/*@ foo :: ({number | true}) => { number | v = 1 } + boolean  */
+/*@ foo :: ({number | 0 < 1}) => { number | v = 1 } + boolean  */
 function foo(x) {
   /*@ r :: number + boolean */
   var r: any = 1;

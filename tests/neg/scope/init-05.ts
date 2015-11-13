@@ -1,5 +1,5 @@
 
-/*@ foo :: (cnd: boolean) => { number | true } */
+/*@ foo :: (cnd: boolean) => { number | 0 < 1    } */
 
 function foo(cnd: boolean): number {
  

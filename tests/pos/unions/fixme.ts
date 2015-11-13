@@ -1,5 +1,5 @@
 
-/*@ check_undefined :: forall T.(T + undefined) => {T | true} */
+/*@ check_undefined :: forall T.(T + undefined) => {T | 0 < 1} */
 function check_undefined<T>(x:any) : T{
     if (typeof x === "undefined") 
 	return crash();

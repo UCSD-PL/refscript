@@ -1,37 +1,36 @@
-
-{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
 
-import qualified Language.Nano.Typecheck.Typecheck  as TC
-import qualified Language.Nano.Liquid.Liquid        as LQ
-import qualified Language.Nano.Liquid.Types         as L
+import qualified Language.Nano.Liquid.Liquid       as LQ
+import qualified Language.Nano.Liquid.Types        as L
+import qualified Language.Nano.Typecheck.Typecheck as TC
 
-import           System.Console.CmdArgs     hiding  (Loud)
+import           System.Console.CmdArgs            hiding (Loud)
 
-import           Data.Aeson                         (eitherDecode)
-import           Data.Aeson.Types            hiding (Parser, Error, parse)
+import           Control.Exception                 (catch)
+import           Control.Monad
+import           Data.Aeson                        (eitherDecode)
+import           Data.Aeson.Types                  hiding (Error, Parser, parse)
+import qualified Data.ByteString.Lazy.Char8        as B
+import           Data.List                         (nub, sort)
+import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Files
+import           Language.Fixpoint.Interface       (resultExit)
+import           Language.Fixpoint.Misc
+import qualified Language.Fixpoint.Types           as F
 import           Language.Nano.CmdLine
 import           Language.Nano.Errors
 import           Language.Nano.Files
-import           Language.Nano.SystemUtils
-import           Language.Nano.Misc                 (single, mapi)
-import           Control.Exception                  (catch)
-import           Control.Monad
-import           Data.List                          (sort, nub)
-import           System.Exit
-import           System.Directory                   (createDirectoryIfMissing, doesFileExist)
-import           System.Process
-import           System.FilePath.Posix
-import           Language.Fixpoint.Interface        (resultExit)
-import qualified Language.Fixpoint.Types      as    F
-import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Files
-import           Text.PrettyPrint.HughesPJ
+import           Language.Nano.Misc                (mapi, single)
 import           Language.Nano.Syntax.PrettyPrint
-import qualified Data.ByteString.Lazy.Char8   as    B
+import           Language.Nano.SystemUtils
+import           System.Directory                  (createDirectoryIfMissing, doesFileExist)
+import           System.Exit
+import           System.FilePath.Posix
+import           System.Process
+import           Text.PrettyPrint.HughesPJ
 
 main :: IO a
 main = do cfg  <- cmdArgs config
@@ -59,7 +58,7 @@ json cfg f = do
 withExistingFile :: Config -> FilePath -> IO (Either (F.FixResult Error) [FilePath])
 withExistingFile cfg f
   | ext `elem` oks
-  = do  libs              <- getIncludeLibs cfg
+  = do  libs              <- tracePP "incl" <$> getIncludeLibs cfg
         (code, stdOut, _) <- readProcessWithExitCode tsCmd (mkArgs libs) ""
         case code of
           ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of

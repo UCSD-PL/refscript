@@ -94,7 +94,7 @@ declare module D3 {
             /\ (a: number, b: number) => { number | [ (a < b => v = -1);
                                                       (a = b => v =  0);
                                                       (a > b => v =  1)] }
-            /\ forall T . (T,T) => {number | true}
+            /\ forall T . (T,T) => {number | 0 < 1}
          */
         ascending<T>(a: T, b: T): number;
 
@@ -109,7 +109,7 @@ declare module D3 {
             /\ (a: number, b: number) => { number | [ (a > b => v = -1);
                                                       (a = b => v =  0);
                                                       (a < b => v =  1)] }
-            /\ forall T . (T,T) => {number | true}
+            /\ forall T . (T,T) => {number | 0 < 1}
          */
         descending<T>(a: T, b: T): number;
 
@@ -166,14 +166,14 @@ declare module D3 {
         * @param arr Array to search
         * @param map Accsessor function
         */
-        /*@ sum : forall T. (arr : IArray<T>, f: (T, idx[array]) => number) => {number | true} */ 
+        /*@ sum : forall T. (arr : IArray<T>, f: (T, idx[array]) => number) => {number | 0 < 1} */ 
         sum<T>(arr: T[], map: (v: T) => number): number;
         /**
         * Compute the sum of an array of numbers
         *
         * @param arr Array to search
         */
-        /*@ sum : (array : IArray<number>) => {number | true} */
+        /*@ sum : (array : IArray<number>) => {number | 0 < 1} */
         sum(arr: number[]) : number;
 
         /**
@@ -183,7 +183,7 @@ declare module D3 {
         * @param map Accsessor function
         */
         
-        /*@ mean : forall T. (array : IArray<T>, f: (T, idx[array]) => number + undefined) => {number + undefined | true} */
+        /*@ mean : forall T. (array : IArray<T>, f: (T, idx[array]) => number + undefined) => {number + undefined | 0 < 1} */
         mean<T>(arr: T[], map: (v: T) => number): number;
         /**
         * Compute the arithmetic mean of an array of numbers
@@ -191,7 +191,7 @@ declare module D3 {
         * @param arr Array to search
         */
         
-        /*@ mean : (array : IArray<number + undefined>) => {number + undefined | true} */ 
+        /*@ mean : (array : IArray<number + undefined>) => {number + undefined | 0 < 1} */ 
         mean(arr: number[]): number;
 
         /**
@@ -201,7 +201,7 @@ declare module D3 {
         * @param map Accsessor function
         */
 
-        /*@ median : forall T. (array : IArray<T>, f: (T) => number) => {number + undefined | true} */
+        /*@ median : forall T. (array : IArray<T>, f: (T) => number) => {number + undefined | 0 < 1} */
         median<T>(arr: T[], map: (v: T) => number): number;
         /**
         * Compute the median of an array of numbers (the 0.5-quantile).
@@ -209,7 +209,7 @@ declare module D3 {
         * @param arr Array to search
         */
         
-        /*@ median : (array : IArray<number>) => {number + undefined | true} */ 
+        /*@ median : (array : IArray<number>) => {number + undefined | 0 < 1} */ 
         median(arr: number[]): number;
         /**
         * Compute a quantile for a sorted array of numbers.
@@ -257,7 +257,7 @@ declare module D3 {
         *
         * @param arr Array to randomize
         */
-        /*@ shuffle : forall T . (arr: IArray<T>) => {IArray<T> | true} */
+        /*@ shuffle : forall T . (arr: IArray<T>) => {IArray<T> | 0 < 1} */
         shuffle<T>(arr: T[]): T[];
         /**
         * Reorder an array of elements according to an array of indexes
@@ -275,7 +275,7 @@ declare module D3 {
         * @param arrs Arrays to transpose
         */
         //TODO: should actually be forall T, not number
-        /*@ zip : (args:IArray<IArray<number>>) => {IArray<IArray<number>> | true} */
+        /*@ zip : (args:IArray<IArray<number>>) => {IArray<IArray<number>> | 0 < 1} */
         zip(...arrs: any[]): any[];
 //        /**
 //        * Parse the given 2D affine transform string, as defined by SVG's transform attribute.
@@ -289,7 +289,7 @@ declare module D3 {
         * @param matrix Two dimensional array to transpose
         */
         //TODO: should actually be T, not number (see zip)
-        /*@ transpose : (matrix:IArray<IArray<number>>) => {IArray<IArray<number>> | true} */
+        /*@ transpose : (matrix:IArray<IArray<number>>) => {IArray<IArray<number>> | 0 < 1} */
         transpose(matrix: any[]): any[];
         /**
         * List the keys of an associative array.
@@ -304,21 +304,21 @@ declare module D3 {
         * @param map Array of objects to get the values from
         */
 
-        /*@ values : forall T . (map: [Immutable]{[k:string]:T}) => {MArray<T> | true} */
+        /*@ values : forall T . (map: [Immutable]{[k:string]:T}) => {MArray<T> | 0 < 1} */
         values<T>(map:{[k:string]:T}): T[];
         /**
         * List the key-value entries of an associative array.
         *
         * @param map Array of objects to get the key-value pairs from
         */
-        /*@ entries : forall T . ([Immutable]{[k:string]:T}) => {MArray<{key:string; value:T}> | true} */ 
+        /*@ entries : forall T . ([Immutable]{[k:string]:T}) => {MArray<{key:string; value:T}> | 0 < 1} */ 
         entries<T>(map: {[k:string]:T}): {key:string; value:T}[];
         /**
         * merge multiple arrays into one array
         *
         * @param map Arrays to merge
         */
-        /*@ merge : forall T . (map: IArray<IArray<T>>) => {IArray<T> | true} */
+        /*@ merge : forall T . (map: IArray<IArray<T>>) => {IArray<T> | 0 < 1} */
         merge<T>(map: T[][]): T[];
 
         /**

@@ -1,3 +1,6 @@
+
+/*@ qualif Add(v:int,x:int): v = x + 3 */
+
 /*@ foo :: () => { number | v = 4 } */
 function foo() {
 
@@ -16,6 +19,9 @@ function foo() {
 var w = 1;
 
 class ABC {
+    
+    constructor() {}
+
 
   /* addThree : (u: number): { number | v = u + 3 }*/
   public addThree(u: number) {

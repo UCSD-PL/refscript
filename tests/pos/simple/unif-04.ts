@@ -1,7 +1,7 @@
 //adapted from transducers
 class Foo<T> { constructor(){} }
-/*@ reduce :: /\            (Foo<Immutable, boolean>, string) => {void | true} 
-              /\ forall T . (Foo<Immutable, T>,       number) => {void | true} */
+/*@ reduce :: /\            (Foo<Immutable, boolean>, string) => {void | 0 < 1} 
+              /\ forall T . (Foo<Immutable, T>,       number) => {void | 0 < 1} */
 function reduce(xf, coll) {
     if (typeof coll === "string") {
         /*@ xxf :: Foo<Immutable, boolean> */

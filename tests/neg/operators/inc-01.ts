@@ -1,6 +1,6 @@
 /*@ qualif PlusOne(v:number,x:number)   : v = x + 1    */    
 
-/* IGNORED inc :: ({x:number|true}) => {v:number | v = x+1} */
+/* IGNORED inc :: ({x:number|0 < 1}) => {v:number | v = x+1} */
 /* IGNORED inc :: (x:number) => {v:number | v = x+1} */
 
 /*@ inc :: (number) => number */

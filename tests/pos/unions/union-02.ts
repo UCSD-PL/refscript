@@ -5,7 +5,7 @@ var a : number  = 1;
 /*@ b :: string */
 var b : string = "a";
 
-/*@ c :: { number + boolean | true} */
+/*@ c :: { number + boolean | 0 < 1} */
 var c  = 1;
 
 /*@ d :: { v: number | v = 1 } + { v: string | v = "" } */

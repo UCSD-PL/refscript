@@ -2,8 +2,8 @@
 /// <reference path="include/number.ts" />
 
 d3.median = function(array0, f?) 
-/*@ <anonymous> /\ forall T. (array : IArray<T>, f: (T) => number) => {number + undefined | true}
-                /\           (array : IArray<number>)              => {number + undefined | true} 
+/*@ <anonymous> /\ forall T. (array : IArray<T>, f: (T) => number) => {number + undefined | 0 < 1}
+                /\           (array : IArray<number>)              => {number + undefined | 0 < 1} 
  */
 {
   /*@ array :: IArray<number> */

@@ -16,7 +16,7 @@ module ts {
     /*@  filter :: forall T . (array: IArray<T>, f: (T) => boolean) => { MArray<T> | true } + undefined */
     export declare function filter<T>(array: T[], f: (x: T) => boolean): T[];
 
-    /*@ map :: forall T U . (array: IArray<T>, f: (x:T)=>U) => {MArray<U> | true} + undefined */
+    /*@ map :: forall T U . (array: IArray<T>, f: (x:T)=>U) => {MArray<U> | 0 < 1} + undefined */
     export declare function map<T, U>(array: T[], f: (x: T) => U): U[];
 
     /*@ concatenate :: forall T M . ( array1: IArray<T> + undefined, array2: IArray<T> + undefined) => { IArray<T> + undefined | true } */

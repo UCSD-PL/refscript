@@ -1,34 +1,33 @@
-
-{-# LANGUAGE DeriveDataTypeable     #-}
-{-# LANGUAGE DeriveTraversable      #-}
-{-# LANGUAGE StandaloneDeriving     #-}
-{-# LANGUAGE TypeSynonymInstances   #-}
-{-# LANGUAGE DeriveFoldable         #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE DeriveFunctor          #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
+{-# LANGUAGE DeriveFoldable       #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE DeriveTraversable    #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Nano.Types where
 
-import           Control.Applicative                ((<$>))
-import           Data.Hashable
+import           Control.Applicative              ((<$>))
 import           Data.Default
+import           Data.Foldable                    (Foldable ())
+import           Data.Function                    (on)
+import           Data.Generics                    (Data)
+import           Data.Hashable
+import           Data.List                        ((\\))
+import qualified Data.Map.Strict                  as M
 import           Data.Monoid
-import           Data.Function                      (on)
-import qualified Data.Map.Strict                 as M
-import           Data.Typeable                      (Typeable)
-import           Data.Generics                      (Data)
-import           Data.List                          ((\\))
-import           Data.Traversable            hiding (sequence, mapM)
-import           Data.Foldable                      (Foldable())
+import           Data.Traversable                 hiding (mapM, sequence)
+import           Data.Typeable                    (Typeable)
 import           Language.Nano.Syntax
-import           Language.Nano.Syntax.PrettyPrint          (PP (..))
+import           Language.Nano.Syntax.PrettyPrint (PP (..))
 
-import qualified Language.Fixpoint.Types         as F
+import qualified Language.Fixpoint.Types          as F
 
 import           Language.Fixpoint.Misc
 import           Language.Nano.Env
-import           Language.Nano.Names
 import           Language.Nano.Locations
+import           Language.Nano.Names
 import           Text.PrettyPrint.HughesPJ
 
 
@@ -49,7 +48,8 @@ data TVar = TV {
 
 -- | Type Constructors
 data TCon
-  = TInt                -- ^ number
+  = TInt                -- ^ integer
+  | TNum                -- ^ number (real)
   | TBV32               -- ^ bitvector
   | TBool               -- ^ boolean
   | TString             -- ^ string
@@ -271,11 +271,11 @@ data EnumDef = EnumDef {
     --
     -- ^ Name
     --
-      e_name       :: F.Symbol
+      e_name    :: F.Symbol
     --
     -- ^ Contents: Symbols -> Expr (expected IntLit or HexLit)
     --
-    , e_mapping    :: Env (Expression ())
+    , e_mapping :: Env (Expression ())
 
 } deriving (Data, Typeable)
 
@@ -302,19 +302,19 @@ data ModuleDefQ q r = ModuleDef {
   --   * Interfaces are _not_ included here (because thery don't appear as
   --   bindings in the language)
   --
-    m_variables   :: Env (Visibility, Assignability, RTypeQ q r, Initialization)
+    m_variables :: Env (Visibility, Assignability, RTypeQ q r, Initialization)
   --
   -- ^ Types
   --
-  , m_types       :: Env (IfaceDefQ q r)
+  , m_types     :: Env (IfaceDefQ q r)
   --
   -- ^ Enumerations
   --
-  , m_enums       :: Env EnumDef
+  , m_enums     :: Env EnumDef
   --
   -- ^ Absolute path of definition
   --
-  , m_path        :: AbsPath
+  , m_path      :: AbsPath
   }
   deriving (Data, Typeable)
 
@@ -430,6 +430,7 @@ instance F.Symbolic a => F.Symbolic (Located a) where
 
 instance Eq TCon where
   TInt     == TInt     = True
+  TNum     == TNum     = True
   TBV32    == TBV32    = True
   TBool    == TBool    = True
   TString  == TString  = True

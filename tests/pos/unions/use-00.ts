@@ -9,12 +9,12 @@ function foo(x:number) {
     return res;
 }
 
-/*@ inc :: (x:number) => {number | true} */
+/*@ inc :: (x:number) => {number | 0 < 1} */
 function inc(x:number):number {
     return x + 1;
 }
 
-/*@ bar :: (y:number) => {number | true} */
+/*@ bar :: (y:number) => {number | 0 < 1} */
 function bar(y:number):number {
     var z = foo(y);
     if (typeof z === "number"){

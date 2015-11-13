@@ -1,20 +1,20 @@
 -- | Global type definitions for Refinement Type Checker
 
-{-# LANGUAGE DeriveGeneric             #-}
-{-# LANGUAGE DeriveFunctor             #-}
-{-# LANGUAGE DeriveTraversable         #-}
-{-# LANGUAGE DeriveFoldable            #-}
-{-# LANGUAGE MultiParamTypeClasses     #-}
-{-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
-{-# LANGUAGE TypeSynonymInstances      #-}
-{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE DeriveFoldable            #-}
+{-# LANGUAGE DeriveFunctor             #-}
+{-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE DeriveTraversable         #-}
 {-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE IncoherentInstances       #-}
-{-# LANGUAGE UndecidableInstances      #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE UndecidableInstances      #-}
 
 module Language.Nano.Typecheck.Types (
 
@@ -49,7 +49,7 @@ module Language.Nano.Typecheck.Types (
   , finalizeTy
 
   -- * Primitive Types
-  , tInt, tBV32, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
+  , tInt, tNum, tBV32, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
   , isTVar, isTObj, isExpandable, isPrimitive, isConstr, subtypeable, isTUndef, isTNull, isTVoid
   , isTFun, fTop, orNull, isArr
 
@@ -82,32 +82,32 @@ module Language.Nano.Typecheck.Types (
 
 import           Data.Data
 import           Data.Default
+import           Data.Either                      (partitionEithers)
 import           Data.Hashable
-import           Data.Either                    (partitionEithers)
-import qualified Data.List                      as L
-import           Data.Maybe                     (fromMaybe, isJust, fromJust)
-import           Data.Monoid                    hiding ((<>))
-import qualified Data.Map.Strict                as M
-import           Data.Typeable                  ()
-import           Language.Nano.Syntax
-import           Language.Nano.Syntax.PrettyPrint
-import qualified Language.Nano.Env              as E
-import           Language.Nano.Misc
-import           Language.Nano.Types
+import qualified Data.List                        as L
+import qualified Data.Map.Strict                  as M
+import           Data.Maybe                       (fromJust, fromMaybe, isJust)
+import           Data.Monoid                      hiding ((<>))
+import           Data.Typeable                    ()
+import qualified Language.Fixpoint.Bitvector      as BV
+import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Names          (symbolString)
+import           Language.Fixpoint.PrettyPrint
+import qualified Language.Fixpoint.Types          as F
+import qualified Language.Nano.Env                as E
 import           Language.Nano.Errors
 import           Language.Nano.Locations
+import           Language.Nano.Misc
 import           Language.Nano.Names
-import           Language.Fixpoint.Names (symbolString)
-import qualified Language.Fixpoint.Types        as F
-import qualified Language.Fixpoint.Bitvector    as BV
-import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.PrettyPrint
+import           Language.Nano.Syntax
+import           Language.Nano.Syntax.PrettyPrint
+import           Language.Nano.Types
+import           Text.Parsec.Pos                  (initialPos)
 import           Text.PrettyPrint.HughesPJ
-import           Text.Parsec.Pos                    (initialPos)
 
-import           Control.Applicative            hiding (empty)
-import           Control.Exception              (throw)
+import           Control.Applicative              hiding (empty)
+import           Control.Exception                (throw)
 
 -- import           Debug.Trace (trace)
 
@@ -384,6 +384,7 @@ isTBool (TApp TBool _ _)   = True
 isTBool _                  = False
 
 isTNum (TApp TInt _ _ )    = True
+isTNum (TApp TNum _ _ )    = True
 isTNum _                   = False
 
 isConstr (ConsSig _)  = True
@@ -614,7 +615,8 @@ instance PP TVar where
   pp     = pprint . F.symbol
 
 instance PP TCon where
-  pp TInt      = text "number"
+  pp TInt      = text "int"
+  pp TNum      = text "real"
   pp TBV32     = text "bitvector"
   pp TBool     = text "boolean"
   pp TString   = text "string"
@@ -626,16 +628,17 @@ instance PP TCon where
   pp TFPBool   = text "bool"
 
 instance Hashable TCon where
-  hashWithSalt s TInt         = hashWithSalt s (0 :: Int)
-  hashWithSalt s TBool        = hashWithSalt s (1 :: Int)
-  hashWithSalt s TString      = hashWithSalt s (2 :: Int)
-  hashWithSalt s TVoid        = hashWithSalt s (3 :: Int)
-  hashWithSalt s TTop         = hashWithSalt s (4 :: Int)
-  hashWithSalt s TUn          = hashWithSalt s (5 :: Int)
-  hashWithSalt s TNull        = hashWithSalt s (6 :: Int)
-  hashWithSalt s TUndef       = hashWithSalt s (7 :: Int)
-  hashWithSalt s TFPBool      = hashWithSalt s (8 :: Int)
-  hashWithSalt s TBV32        = hashWithSalt s (9 :: Int)
+  hashWithSalt s TInt         = hashWithSalt s (0  :: Int)
+  hashWithSalt s TNum         = hashWithSalt s (1  :: Int)
+  hashWithSalt s TBool        = hashWithSalt s (2  :: Int)
+  hashWithSalt s TString      = hashWithSalt s (3  :: Int)
+  hashWithSalt s TVoid        = hashWithSalt s (4  :: Int)
+  hashWithSalt s TTop         = hashWithSalt s (5  :: Int)
+  hashWithSalt s TUn          = hashWithSalt s (6  :: Int)
+  hashWithSalt s TNull        = hashWithSalt s (7  :: Int)
+  hashWithSalt s TUndef       = hashWithSalt s (8  :: Int)
+  hashWithSalt s TFPBool      = hashWithSalt s (9  :: Int)
+  hashWithSalt s TBV32        = hashWithSalt s (10 :: Int)
 
 instance (PP r, F.Reftable r) => PP (BindQ q r) where
   pp (B x t)          = pp x <> colon <> pp t
@@ -753,8 +756,9 @@ tVar                        = (`TVar` fTop)
 isTVar (TVar _ _)           = True
 isTVar _                    = False
 
-tInt, tBool, tUndef, tNull, tString, tVoid, tErr :: (F.Reftable r) => RTypeQ q r
+tInt, tNum, tBool, tUndef, tNull, tString, tVoid, tErr :: (F.Reftable r) => RTypeQ q r
 tInt                        = TApp TInt     [] fTop
+tNum                        = TApp TNum     [] fTop
 tBV32                       = TApp TBV32    [] fTop
 tBool                       = TApp TBool    [] fTop
 tString                     = TApp TString  [] fTop

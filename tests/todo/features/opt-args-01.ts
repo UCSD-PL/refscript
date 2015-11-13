@@ -1,6 +1,6 @@
 
-/*@ foo :: /\ () => {void | true}            
-           /\ (lo: {number | 0 <= v}) => {void | true} */
+/*@ foo :: /\ () => {void | 0 < 1}            
+           /\ (lo: {number | 0 <= v}) => {void | 0 < 1} */
 function foo(lo?: number) 
 {
   if (arguments.length < 1)

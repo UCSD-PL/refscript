@@ -8,7 +8,7 @@ function foo(xs){
     return 12;
 }
 
-/*@ main :: () => {void | true} */
+/*@ main :: () => {void | 0 < 1} */
 function main(){
     var a = nil();
     var b = cons(1, a);

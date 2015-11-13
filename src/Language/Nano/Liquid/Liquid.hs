@@ -1,62 +1,62 @@
-{-# LANGUAGE OverlappingInstances      #-}
-{-# LANGUAGE PartialTypeSignatures     #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LambdaCase                #-}
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE PartialTypeSignatures     #-}
 {-# LANGUAGE TupleSections             #-}
 
 -- | Top Level for Refinement Type checker
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
-import           Control.Arrow                      (first, second)
+import           Control.Arrow                     (first, second)
 import           Control.Monad
 -- import           Control.Applicative                ((<$>), (<*>))
-import           Control.Exception                  (throw)
+import           Control.Exception                 (throw)
 
-import qualified Data.Traversable                   as T
-import qualified Data.HashMap.Strict                as HM
-import           Data.Function                      (on)
-import qualified Data.Map.Strict                    as M
-import           Data.Maybe                         (maybeToList, fromMaybe, catMaybes)
-import           Data.List                          (sortBy)
+import           Data.Function                     (on)
+import qualified Data.HashMap.Strict               as HM
+import           Data.List                         (sortBy)
+import qualified Data.Map.Strict                   as M
+import           Data.Maybe                        (catMaybes, fromMaybe, maybeToList)
+import qualified Data.Traversable                  as T
 
 import           Language.Nano.Syntax
 import           Language.Nano.Syntax.Annotations
 import           Language.Nano.Syntax.PrettyPrint
 
-import           Language.Fixpoint.Names            (symbolString)
-import qualified Language.Fixpoint.Config           as C
-import qualified Language.Fixpoint.Types            as F
+import qualified Language.Fixpoint.Config          as C
 import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Interface       (solve)
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Visitor          as V
-import           Language.Fixpoint.Interface        (solve)
+import           Language.Fixpoint.Names           (symbolString)
+import qualified Language.Fixpoint.Types           as F
+import qualified Language.Fixpoint.Visitor         as V
 
-import           Language.Nano.Misc                 (mseq)
+import qualified Data.Text                         as T
 import           Language.Nano.Annots
-import           Language.Nano.CmdLine              (Config)
-import           Language.Nano.Errors
-import qualified Language.Nano.Env                  as E
-import           Language.Nano.Environment
-import           Language.Nano.Locations
-import           Language.Nano.Names
+import           Language.Nano.CmdLine             (Config)
 import           Language.Nano.CmdLine
-import           Language.Nano.Program
-import           Language.Nano.Typecheck.Resolve
-import           Language.Nano.Types
-import           Language.Nano.Typecheck.Subst
-import qualified Language.Nano.SystemUtils          as A
-import           Language.Nano.Typecheck.Types
-import           Language.Nano.Typecheck.Parse
-import           Language.Nano.Typecheck.Typecheck  (typeCheck)
-import           Language.Nano.Typecheck.Lookup
-import           Language.Nano.SSA.SSA
-import           Language.Nano.Visitor
-import           Language.Nano.Liquid.Types
+import qualified Language.Nano.Env                 as E
+import           Language.Nano.Environment
+import           Language.Nano.Errors
 import           Language.Nano.Liquid.CGMonad
-import qualified Data.Text                          as T
+import           Language.Nano.Liquid.Types
+import           Language.Nano.Locations
+import           Language.Nano.Misc                (mseq)
+import           Language.Nano.Names
+import           Language.Nano.Program
+import           Language.Nano.SSA.SSA
+import qualified Language.Nano.SystemUtils         as A
+import           Language.Nano.Typecheck.Lookup
+import           Language.Nano.Typecheck.Parse
+import           Language.Nano.Typecheck.Resolve
+import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Typecheck (typeCheck)
+import           Language.Nano.Typecheck.Types
+import           Language.Nano.Types
+import           Language.Nano.Visitor
 import           System.Console.CmdArgs.Default
 -- import           Debug.Trace                        (trace)
 
@@ -79,7 +79,7 @@ parse :: Config -> [FilePath] -> IO (Err (Config, NanoBareR F.Reft))
 --------------------------------------------------------------------------------
 parse cfg fs
   = do  r <- parseNanoFromFiles fs
-        donePhase Loud "Parse Files"
+        {-donePhase Loud "Parse Files"-}
         case r of
           Left l  -> return (Left l)
           Right p -> do cfg'  <- withPragmas cfg (pOptions p)
@@ -91,7 +91,7 @@ ssa :: NanoBareR F.Reft -> IO (Err (NanoSSAR F.Reft))
 --------------------------------------------------------------------------------
 ssa p = do
   r <- ssaTransform p
-  donePhase Loud "SSA Transform"
+  {-donePhase Loud "SSA Transform"-}
   return r
 
 --------------------------------------------------------------------------------
@@ -99,7 +99,7 @@ tc :: Config -> NanoSSAR F.Reft -> IO (Err (NanoTypeR F.Reft))
 --------------------------------------------------------------------------------
 tc cfg p = do
   r <- typeCheck cfg p
-  donePhase Loud "Typecheck"
+  {-donePhase Loud "Typecheck"-}
   return r
 
 --------------------------------------------------------------------------------
@@ -671,6 +671,9 @@ consExpr g ex@(Cast l e) _ =
 
 consExpr g (IntLit l i) _
   = Just <$> envAddFresh "8" l (tInt `eSingleton` i, WriteLocal, Initialized) g
+
+consExpr g (NumLit l i) _
+  = Just <$> envAddFresh "8" l (tNum `eSingleton` i, WriteLocal, Initialized) g
 
 -- Assuming by default 32-bit BitVector
 consExpr g (HexLit l x) _

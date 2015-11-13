@@ -1,5 +1,5 @@
 
-/*@ minIndex :: (aa: IArray<number>) => {number | true} */
+/*@ minIndex :: (aa: IArray<number>) => {number | 0 < 1} */
 function minIndex(aa){
 
   /*@ readonly a :: # */

@@ -1,6 +1,8 @@
 //adapted from underscore
 class Foo {
-  /*@ map : forall T . () : {void | true} */
+  constructor() {}
+
+  /*@ map : forall T . () : {void | 0 < 1} */
   map<T>() {
     /*@ results :: Array<Mutable, T> */
     var results = [];
@@ -9,7 +11,7 @@ class Foo {
 
 // Note that it works outside of a class context:
 
-/*@ map :: forall T . () => {void | true} */
+/*@ map :: forall T . () => {void | 0 < 1} */
 function map<T>() {
   /*@ results :: Array<Mutable, T> */
   var results = [];

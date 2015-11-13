@@ -1,6 +1,6 @@
 /// <reference path="include/d3.d.ts" />
 
-/*@ d3_merge :: forall T . (map: IArray<IArray<T>>) => {v: IArray<T> | true}*/
+/*@ d3_merge :: forall T . (map: IArray<IArray<T>>) => {v: IArray<T> | 0 < 1}*/
 
 function d3_merge<T>(arrays: T[][]): T[] {
   var n = arrays.length,

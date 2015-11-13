@@ -4,13 +4,13 @@ var g1 = 4;
 /*@ g2 :: { string | true } */ 
 var g2 = 2;
 
-/*@ bar :: () => {void | true} */
+/*@ bar :: () => {void | 0 < 1} */
 function bar(){
   g1 = 7; 
   return;
 }
 
-/*@ zoo :: () => {void | true} */
+/*@ zoo :: () => {void | 0 < 1} */
 function zoo(){
   bar();
   assert(g1 > 0);

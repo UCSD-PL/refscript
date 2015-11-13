@@ -1,16 +1,16 @@
-{-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 module Language.Nano.Errors where
 
-import Debug.Trace
-import Text.Printf
-import Text.PrettyPrint.HughesPJ
-import Language.Nano.Locations
-import Language.Nano.Syntax.PrettyPrint
-import Language.Fixpoint.Errors
-import Language.Fixpoint.Misc
-import Language.Fixpoint.PrettyPrint
+import           Debug.Trace
+import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Misc
+import           Language.Fixpoint.PrettyPrint
+import           Language.Nano.Locations
+import           Language.Nano.Syntax.PrettyPrint
+import           Text.PrettyPrint.HughesPJ
+import           Text.Printf
 
 mkErr = err . sourceSpanSrcSpan
 
@@ -34,8 +34,8 @@ instance PP a => PP (Either String a) where
   pp (Left s)  = text $ "ERROR!" ++ s
   pp (Right x) = pp x
 
--- instance PP String where
-  -- pp = text
+instance {-# OVERLAPPING  #-} PP String where
+  pp = text
 
 instance PP Error where
   pp = pprint

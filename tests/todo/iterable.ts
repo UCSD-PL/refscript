@@ -14,7 +14,7 @@ function isIterable(x) {
     return "next" in x;
 }
 
-/*@ reduce :: (ObjectK) => {void | true} */
+/*@ reduce :: (ObjectK) => {void | 0 < 1} */
 function reduce(coll) {
     if(isIterable(coll)) {
         /*@ z :: Iterator<Immutable> */

@@ -2,7 +2,7 @@
 /// <reference path="zip.ts" />
 
 d3.transpose = function(matrix) 
-/*@ <anonymous> (matrix:IArray<IArray<number>>) => {IArray<IArray<number>> | true} */
+/*@ <anonymous> (matrix:IArray<IArray<number>>) => {IArray<IArray<number>> | 0 < 1} */
 {
   //ORIG: return d3.zip.apply(d3, matrix);
   return d3.zip(matrix);

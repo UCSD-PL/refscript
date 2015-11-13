@@ -1,5 +1,5 @@
 
-/*@ sumLoop :: ({acc:number | true}, {i:number| 0 <= i}) => {v:number|v = acc + i} */
+/*@ sumLoop :: ({acc:number | 0 < 1}, {i:number| 0 <= i}) => {v:number|v = acc + i} */
 function sumLoop(acc, i){
   var r = 0;
   if (0 < i){

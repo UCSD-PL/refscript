@@ -10,7 +10,7 @@ function assertEqual(x:number, y:number) {
   assert(x===y);
 }
 
-/*@ num_one :: (a:number) => {void | true} */
+/*@ num_one :: (a:number) => {void | 0 < 1} */
 function num_one(a:number):void{
   var d = myPlusOk(0, 1);
   assertEqual(d, 1);

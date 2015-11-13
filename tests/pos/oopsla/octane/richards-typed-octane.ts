@@ -278,7 +278,7 @@ module RichardsTYPEDVERSION {
                        id:natLT<NUMBER_OF_IDS>, 
                        priority:number, 
                        queue:MPacket + null, 
-                       task:MTask) : {void | true} */
+                       task:MTask) : {void | 0 < 1} */
         public addTask(id:number, priority:number, queue:Packet, task:Task) {
             this.currentTcb = new TaskControlBlock(this.list, id, priority, queue, task);
             this.list = this.currentTcb;
@@ -288,7 +288,7 @@ module RichardsTYPEDVERSION {
         /**
          * Execute the tasks managed by this scheduler.
          */
-        /*@ schedule : (this:MScheduler) : {void | true} */
+        /*@ schedule : (this:MScheduler) : {void | 0 < 1} */
         public schedule() {
             this.currentTcb = this.list;
             var currentTcb = this.currentTcb;
@@ -309,7 +309,7 @@ module RichardsTYPEDVERSION {
          * Release a task that is currently blocked and return the next block to run.
          * @param {int} id the id of the task to suspend
          */
-        /*@ release : (id:natLT<NUMBER_OF_IDS>) : {MTaskControlBlock + null | true} */
+        /*@ release : (id:natLT<NUMBER_OF_IDS>) : {MTaskControlBlock + null | 0 < 1} */
         public release(id:number) {
             var tcb = this.blocks[id];
             if (!tcb) return tcb;
@@ -357,7 +357,7 @@ module RichardsTYPEDVERSION {
          * suspended.
          * @param {Packet} packet the packet to add
          */
-        /*@ queue : (this:MScheduler, packet: MPacket) : {MTaskControlBlock + null | true} */
+        /*@ queue : (this:MScheduler, packet: MPacket) : {MTaskControlBlock + null | 0 < 1} */
         public queue(packet) {
             var t = this.blocks[packet.id];
             if (!t) return t;
@@ -417,17 +417,17 @@ module RichardsTYPEDVERSION {
             // }
         }
 
-        /*@ setRunning : (this:MSelf) : {void | true} */
+        /*@ setRunning : (this:MSelf) : {void | 0 < 1} */
         public setRunning () {
             this.state = STATE_RUNNING;
         }
 
-        /*@ markAsNotHeld : (this:MSelf) : {void | true} */
+        /*@ markAsNotHeld : (this:MSelf) : {void | 0 < 1} */
         public markAsNotHeld () {
             this.state = this.state & STATE_NOT_HELD;
         }
 
-        /*@ markAsHeld : (this:MSelf) : {void | true} */
+        /*@ markAsHeld : (this:MSelf) : {void | 0 < 1} */
         public markAsHeld () {
             this.state = this.state | STATE_HELD;
         }
@@ -436,12 +436,12 @@ module RichardsTYPEDVERSION {
             return (this.state & STATE_HELD) !== 0 || (this.state === STATE_SUSPENDED);
         }
 
-        /*@ markAsSuspended : (this:MSelf) : {void | true} */
+        /*@ markAsSuspended : (this:MSelf) : {void | 0 < 1} */
         public markAsSuspended () {
             this.state = this.state | STATE_SUSPENDED;
         }
 
-        /*@ markAsRunnable : (this:MSelf) : {void | true} */
+        /*@ markAsRunnable : (this:MSelf) : {void | 0 < 1} */
         public markAsRunnable () {
             this.state = this.state | STATE_RUNNABLE;
         }
@@ -449,7 +449,7 @@ module RichardsTYPEDVERSION {
         /**
          * Runs this task, if it is ready to be run, and returns the next task to run.
          */
-        /*@ run : (this:MSelf) : {MTaskControlBlock + null | true} */
+        /*@ run : (this:MSelf) : {MTaskControlBlock + null | 0 < 1} */
         public run () {
             //ORIG:
             // if (!(this.state === STATE_SUSPENDED_RUNNABLE)) {
@@ -517,7 +517,7 @@ module RichardsTYPEDVERSION {
          * @param {int} count the number of times this task should be scheduled
          * @constructor
          */
-        /*@ new(scheduler:MScheduler, v1:bitvector32, count:number) => {IdleTask<M> | true} */
+        /*@ new(scheduler:MScheduler, v1:bitvector32, count:number) => {IdleTask<M> | 0 < 1} */
         constructor(scheduler, v1, count) {
             super();
             this.scheduler = scheduler;
@@ -557,8 +557,8 @@ module RichardsTYPEDVERSION {
          * @param {Scheduler} scheduler the scheduler that manages this task
          * @constructor
          */
-        /*@ new /\ (scheduler:MScheduler, v1:MPacket + null) => {DeviceTask<M> | true} */
-                //\ (scheduler:MScheduler) => {DeviceTask<M> | true} */
+        /*@ new /\ (scheduler:MScheduler, v1:MPacket + null) => {DeviceTask<M> | 0 < 1} */
+                //\ (scheduler:MScheduler) => {DeviceTask<M> | 0 < 1} */
         constructor(scheduler, v1?) {
             super();
             this.scheduler = scheduler;
@@ -647,8 +647,8 @@ module RichardsTYPEDVERSION {
          * @param {Scheduler} scheduler the scheduler that manages this task
          * @constructor
          */
-        /*@ new /\ (scheduler:MScheduler, v1:MPacket + null, v2:MPacket + null) => {HandlerTask<M> | true} */
-                //\ (scheduler:MScheduler) => {HandlerTask<M> | true} */
+        /*@ new /\ (scheduler:MScheduler, v1:MPacket + null, v2:MPacket + null) => {HandlerTask<M> | 0 < 1} */
+                //\ (scheduler:MScheduler) => {HandlerTask<M> | 0 < 1} */
         constructor(scheduler, v1?, v2?) {
             super();
             this.scheduler = scheduler;

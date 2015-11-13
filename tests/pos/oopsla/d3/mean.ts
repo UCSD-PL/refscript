@@ -2,8 +2,8 @@
 /// <reference path="include/number.ts" />
  
 /*@ d3_mean :: 
-    /\ forall T. (array : IArray<T>, f: (T, idx[array]) => number + undefined) => {number + undefined | true}
-    /\           (array : IArray<number + undefined>) => {number + undefined | true} */ 
+    /\ forall T. (array : IArray<T>, f: (T, idx[array]) => number + undefined) => {number + undefined | 0 < 1}
+    /\           (array : IArray<number + undefined>) => {number + undefined | 0 < 1} */ 
 function d3_mean(array, f?) {
   var s = 0,
       n = array.length,

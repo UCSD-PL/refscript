@@ -1,6 +1,6 @@
 /// <reference path="include/d3.d.ts" />
 
-/*@ d3_entries :: forall T . ([Immutable]{[k:string]:T}) => {MArray<{key:string; value:T}> | true} */ 
+/*@ d3_entries :: forall T . ([Immutable]{[k:string]:T}) => {MArray<{key:string; value:T}> | 0 < 1} */ 
 function d3_entries<T>(map) {
   /*@ entries :: MArray<{key:string; value:T}> */
   var entries = [];

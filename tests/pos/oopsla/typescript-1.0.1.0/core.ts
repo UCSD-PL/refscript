@@ -60,7 +60,7 @@ module ts {
         return result;
     }
 
-    /*@ map :: forall T U . (array: IArray<T>, f: (x:T)=>U) => {MArray<U> | true} + undefined */
+    /*@ map :: forall T U . (array: IArray<T>, f: (x:T)=>U) => {MArray<U> | 0 < 1} + undefined */
     export function map<T, U>(array: T[], f: (x: T) => U): U[] {
       /*@ result :: MArray<U> + undefined */
         var result: U[];

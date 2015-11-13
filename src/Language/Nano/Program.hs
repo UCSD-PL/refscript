@@ -1,9 +1,8 @@
-
-{-# LANGUAGE DeriveDataTypeable     #-}
-{-# LANGUAGE DeriveFunctor          #-}
-{-# LANGUAGE TypeSynonymInstances   #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE OverlappingInstances   #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Nano.Program (
 
@@ -33,17 +32,17 @@ module Language.Nano.Program (
 
   ) where
 
-import           Control.Applicative     hiding (empty)
-import           Control.Exception              (throw)
-import           Data.Monoid             hiding ((<>))
+import           Control.Applicative               hiding (empty)
+import           Control.Exception                 (throw)
 import           Data.Default
-import           Data.List                      (stripPrefix)
-import qualified Data.HashMap.Strict              as HM
+import           Data.Generics
 import           Data.Graph.Inductive.Graph
 import           Data.Graph.Inductive.PatriciaTree
-import qualified Data.HashSet                   as H
-import           Data.Generics
-import qualified Data.IntMap                    as I
+import qualified Data.HashMap.Strict               as HM
+import qualified Data.HashSet                      as H
+import qualified Data.IntMap                       as I
+import           Data.List                         (stripPrefix)
+import           Data.Monoid                       hiding ((<>))
 import           Text.PrettyPrint.HughesPJ
 
 import           Language.Nano.Annots
@@ -53,13 +52,13 @@ import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Types
 
+import           Language.Nano.Misc                (errortext)
 import           Language.Nano.Syntax
-import           Language.Nano.Misc (errortext)
 import           Language.Nano.Syntax.PrettyPrint
 
-import           Language.Fixpoint.Names (symbolString)
-import           Language.Fixpoint.Misc hiding (mkGraph)
-import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Misc            hiding (mkGraph)
+import           Language.Fixpoint.Names           (symbolString)
+import qualified Language.Fixpoint.Types           as F
 
 -- import           Debug.Trace                        hiding (traceShow)
 
@@ -259,6 +258,7 @@ instance IsNano (VarDecl a) where
 instance IsNano (Expression a) where
   isNano (BoolLit _ _)           = True
   isNano (IntLit _ _)            = True
+  isNano (NumLit _ _)            = True
   isNano (HexLit _ _)            = True
   isNano (NullLit _ )            = True
   isNano (ArrayLit _ es)         = all isNano es

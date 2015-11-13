@@ -10,7 +10,7 @@ class A {
   constructor() {  }
 }
 
-/*@ foo :: () => {void | true} */
+/*@ foo :: () => {void | 0 < 1} */
 function foo(){
   var r = new A();
   var p = r.x;

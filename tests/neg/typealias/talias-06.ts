@@ -3,7 +3,7 @@
 
 // TODO: *******MUST****** report error locations for malformed type-aliases!!!! 
 
-/*@ baz :: forall T. (#iArray) => {v:number | true} */
+/*@ baz :: forall T. (#iArray) => {v:number | 0 < 1} */
 function baz<T>(array: T[]): number {
 
   var i = 0, 

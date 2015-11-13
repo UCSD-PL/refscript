@@ -1,63 +1,63 @@
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE UndecidableInstances   #-}
-{-# LANGUAGE DeriveDataTypeable     #-}
-{-# LANGUAGE LambdaCase             #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE RankNTypes             #-}
-{-# LANGUAGE TupleSections          #-}
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE ConstraintKinds        #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE DeriveDataTypeable    #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE UndecidableInstances  #-}
 
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where
 
 -- import           Control.Applicative                ((<$>), (<*>))
+import           Control.Arrow                       (first, (***))
+import           Control.Exception                   (throw)
 import           Control.Monad
-import           Control.Exception                  (throw)
-import           Control.Arrow                      (first, (***))
 
-import qualified Data.IntMap.Strict                 as I
-import qualified Data.Map.Strict                    as M
-import           Data.Maybe                         (catMaybes, maybeToList, fromMaybe)
-import           Data.List                          (nub, find, sortBy)
+import qualified Data.IntMap.Strict                  as I
+import           Data.List                           (find, nub, sortBy)
+import qualified Data.Map.Strict                     as M
+import           Data.Maybe                          (catMaybes, fromMaybe, maybeToList)
 -- import           Data.Monoid                        (mappend)
-import           Data.Function                      (on)
+import           Data.Function                       (on)
 import           Data.Generics
-import qualified Data.Traversable                   as T
+import qualified Data.Traversable                    as T
 
 import           Language.Nano.Annots
-import           Language.Nano.CmdLine              (noFailCasts, Config)
-import           Language.Nano.Errors
+import           Language.Nano.CmdLine               (Config, noFailCasts)
+import           Language.Nano.Env
 import           Language.Nano.Environment
+import           Language.Nano.Errors
 import           Language.Nano.Locations
+import           Language.Nano.Misc                  (convertError, dup, mapPair, single, zipWith3M)
 import           Language.Nano.Names
 import           Language.Nano.Program
-import           Language.Nano.Types
-import           Language.Nano.Env
-import           Language.Nano.Misc         (mapPair, single, convertError, zipWith3M, dup)
-import           Language.Nano.SystemUtils
-import           Language.Nano.Typecheck.Unify
-import           Language.Nano.Typecheck.Environment
-import           Language.Nano.Typecheck.Types
-import           Language.Nano.Typecheck.Resolve
-import           Language.Nano.Typecheck.Parse
-import           Language.Nano.Typecheck.TCMonad
-import           Language.Nano.Typecheck.Subst
-import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.SSA.SSA
+import           Language.Nano.SystemUtils
+import           Language.Nano.Typecheck.Environment
+import           Language.Nano.Typecheck.Lookup
+import           Language.Nano.Typecheck.Parse
+import           Language.Nano.Typecheck.Resolve
+import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.TCMonad
+import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Unify
+import           Language.Nano.Types
 import           Language.Nano.Visitor
 
-import           Language.Fixpoint.Names            (symbolString)
 import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types            as F
-import           Language.Fixpoint.Misc             as FM
+import           Language.Fixpoint.Misc              as FM
+import           Language.Fixpoint.Names             (symbolString)
+import qualified Language.Fixpoint.Types             as F
 import           Language.Nano.Syntax
-import           Language.Nano.Syntax.PrettyPrint
 import           Language.Nano.Syntax.Annotations
+import           Language.Nano.Syntax.PrettyPrint
 
 -- import           Debug.Trace                        hiding (traceShow)
 
-import qualified System.Console.CmdArgs.Verbosity as V
+import qualified System.Console.CmdArgs.Verbosity    as V
 
 
 type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r))
@@ -718,6 +718,9 @@ tcExpr :: PPRSF r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR
 -------------------------------------------------------------------------------
 tcExpr _ e@(IntLit _ _) _
   = return (e, tInt)
+
+tcExpr _ e@(NumLit _ _) _
+  = return (e, tNum)
 
 tcExpr _ e@(HexLit _ _) _
   = return (e, tBV32)

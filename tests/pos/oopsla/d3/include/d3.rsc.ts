@@ -6,7 +6,7 @@ declare function bv_to_num(bv: number): number;
 /*@ num_to_bv :: (n: number) => { bitvector32 | true } */
 declare function num_to_bv(n: number): number;
 
-/*@ check_undefined :: forall T.(T + undefined) => {T | true} */
+/*@ check_undefined :: forall T.(T + undefined) => {T | 0 < 1} */
 function check_undefined<T>(x:any) : T{
     if (typeof x === "undefined") 
 	      return crash();

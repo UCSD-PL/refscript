@@ -1,14 +1,14 @@
-{-# LANGUAGE TypeSynonymInstances       #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE DeriveFunctor              #-}
-{-# LANGUAGE TupleSections              #-}
-{-# LANGUAGE NoMonomorphismRestriction  #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE UndecidableInstances       #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE ViewPatterns               #-}
-{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE DeriveFunctor             #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE UndecidableInstances      #-}
+{-# LANGUAGE ViewPatterns              #-}
 
 -- | Module pertaining to Refinement Type descriptions and conversions
 --   Likely mergeable with @Language.Nano.Typecheck.Types@
@@ -66,41 +66,41 @@ module Language.Nano.Liquid.Types (
   ) where
 
 import           Control.DeepSeq
-import           Data.Maybe              (fromMaybe, catMaybes, maybeToList)
-import qualified Data.List               as L
-import qualified Data.Text               as T
-import qualified Data.HashMap.Strict     as HM
-import qualified Data.Map.Strict         as M
+import qualified Data.HashMap.Strict              as HM
+import qualified Data.List                        as L
+import qualified Data.Map.Strict                  as M
+import           Data.Maybe                       (catMaybes, fromMaybe, maybeToList)
+import qualified Data.Text                        as T
 -- import           Data.Monoid                        (mconcat)
-import qualified Data.Traversable        as T
+import qualified Data.Traversable                 as T
 import           Text.PrettyPrint.HughesPJ
 import           Text.Printf
 -- import           Control.Applicative
-import           Control.Monad          (zipWithM)
+import           Control.Monad                    (zipWithM)
 
 import           Language.Nano.Syntax
 import           Language.Nano.Syntax.PrettyPrint
 
 import           Language.Nano.Annots
 import           Language.Nano.Errors
+import           Language.Nano.Liquid.Environment
 import           Language.Nano.Locations
 import           Language.Nano.Misc
 import           Language.Nano.Names
-import           Language.Nano.Types
 import           Language.Nano.Program
-import           Language.Nano.Liquid.Environment
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
+import           Language.Nano.Types
 
-import qualified Language.Fixpoint.Bitvector as BV
-import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Names (symbolText)
-import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.PrettyPrint
+import qualified Language.Fixpoint.Bitvector      as BV
 import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Visitor as V
+import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Names          (symbolText)
+import           Language.Fixpoint.PrettyPrint
+import qualified Language.Fixpoint.Types          as F
+import qualified Language.Fixpoint.Visitor        as V
 
 -- import           Debug.Trace                        (trace)
 
@@ -207,6 +207,8 @@ instance F.Predicate  (Expression a) where
   prop e@(InfixExpr _ _ _ _ )      = eProp e
   prop e                           = convertError "F.Pred" e
 
+instance F.Expression Double where
+  expr = F.ECon . F.R
 
 ------------------------------------------------------------------
 eProp :: Expression a -> F.Pred
@@ -294,6 +296,7 @@ rTypeSort t                        = error $ render $ text "BUG: rTypeSort does 
 
 
 rTypeSortApp TInt _                = F.intSort
+rTypeSortApp TNum _                = F.realSort
 rTypeSortApp TUn  _                = F.fAppTC (tconFTycon TUn) []
 rTypeSortApp TFPBool _             = F.boolSort
 rTypeSortApp TString _             = F.strSort

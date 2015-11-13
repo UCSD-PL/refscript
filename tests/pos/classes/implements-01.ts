@@ -9,7 +9,7 @@ class FooImpl implements Foo, Bar {
   x = 1;
   y = 2;
 
-  /*@ new() => { FooImpl<M> | true} */
+  /*@ new() => { FooImpl<M> | 0 < 1} */
   constructor() { }
 }
 

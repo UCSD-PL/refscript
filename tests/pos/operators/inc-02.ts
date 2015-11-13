@@ -1,5 +1,5 @@
 
-/*@ inc :: ({x:number|true}) => {v:number | v = x+1} */
+/*@ inc :: ({x:number|0 < 1}) => {v:number | v = x+1} */
 function inc(x:number):number{
 	var res :number= x + 1;
 	return res;

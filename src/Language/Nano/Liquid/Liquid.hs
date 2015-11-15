@@ -976,7 +976,7 @@ consInstantiate :: PP a
                 -> CGM (Maybe (Id AnnTypeR, CGEnv))
 --------------------------------------------------------------------------------
 consInstantiate l g fn ft ts xes
-  -- = do  (_,its1,ot)     <- tracePP ("INSTANTIATE " ++ ppshow fn) <$> instantiateFTy l g fn ft
+  -- = do  (_,its1,ot)     <- tracePP ("INSTANTIATE " ++ ppshow fn ++ " :: " ++ ppshow ft) <$> instantiateFTy l g fn ft
   = do  (_,its1,ot)     <- instantiateFTy l g fn ft
         ts1             <- idxMapFI (instantiateTy l g) 1 ts
         let (ts2, its2)  = balance ts1 its1

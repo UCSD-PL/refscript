@@ -288,13 +288,13 @@ tcFun1 :: (PPRSF r, IsLocated l, PP l, CallSite t)
        -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
 tcFun1 g l f xs body fty
-  = do  body'           <- addReturnStmt l t body
+  = do  body'       <- addReturnStmt l t body
         tcFunBody g1 l body' t
   where
-    g1 					         = initFuncEnv g f i vs s xs ts t arg body
-    (i, (vs,s,ts,t))     = fty
-    arg                  = [(argId $ srcPos l, EE ReadOnly Initialized aTy)]
-    aTy                  = mkArgTy l ts $ tce_names g
+    g1               = initFuncEnv g f i vs s xs ts t arg body
+    (i, (vs,s,ts,t)) = fty
+    arg              = [(argId $ srcPos l, EE ReadOnly Initialized aTy)]
+    aTy              = mkArgTy l ts $ tce_names g
 
 
 addReturnStmt l t body | isTVoid t

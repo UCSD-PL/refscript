@@ -1,13 +1,13 @@
-{-# LANGUAGE DeriveDataTypeable    #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
-module Language.Nano.Typecheck.Resolve ( 
-  
+module Language.Nano.Typecheck.Resolve (
+
   -- * Resolve names
     resolveTypeInEnv, resolveEnumInEnv, resolveModuleInEnv
   , resolveModuleInPgm, resolveTypeInPgm, resolveEnumInPgm
@@ -30,28 +30,28 @@ module Language.Nano.Typecheck.Resolve (
   , isClassType
 
 
-  ) where 
+  ) where
 
-import           Control.Applicative                 ((<$>), (<|>))
+import           Control.Applicative            ((<$>), (<|>))
+import           Data.Foldable                  (foldlM)
+import           Data.Function                  (on)
 import           Data.Generics
-import qualified Data.HashMap.Strict              as HM
-import           Data.Maybe                          (maybeToList, catMaybes)
-import           Data.Foldable                       (foldlM)
-import           Data.List                           (find)
-import qualified Data.HashSet                    as  HS
 import           Data.Graph.Inductive.Graph
-import           Data.Graph.Inductive.Query.DFS
 import           Data.Graph.Inductive.Query.BFS
-import           Data.Function                       (on)
-import qualified Data.Map.Strict                  as M
-import qualified Language.Fixpoint.Types          as F
+import           Data.Graph.Inductive.Query.DFS
+import qualified Data.HashMap.Strict            as HM
+import qualified Data.HashSet                   as HS
+import           Data.List                      (find)
+import qualified Data.Map.Strict                as M
+import           Data.Maybe                     (catMaybes, maybeToList)
+import qualified Language.Fixpoint.Types        as F
 import           Language.Nano.Env
 import           Language.Nano.Environment
 import           Language.Nano.Names
-import           Language.Nano.Types
 import           Language.Nano.Program
-import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Types
+import           Language.Nano.Types
 
 import           Language.Nano.Syntax
 
@@ -59,25 +59,25 @@ import           Language.Nano.Syntax
 -- import           Debug.Trace
 
 resolveTypeInEnv :: EnvLike r t => t r -> AbsName -> Maybe (IfaceDef r)
-resolveTypeInEnv γ (QN AK_ l ss s) = resolveModuleInEnv γ (QP AK_ l ss) 
+resolveTypeInEnv γ (QN AK_ l ss s) = resolveModuleInEnv γ (QP AK_ l ss)
                                  >>= envFindTy s . m_types
 
 resolveEnumInEnv :: EnvLike r t => t r -> AbsName -> Maybe EnumDef
-resolveEnumInEnv γ (QN AK_ l ss s) = resolveModuleInEnv γ (QP AK_ l ss) 
+resolveEnumInEnv γ (QN AK_ l ss s) = resolveModuleInEnv γ (QP AK_ l ss)
                                  >>= envFindTy s . m_enums
- 
+
 resolveModuleInEnv :: EnvLike r t => t r -> AbsPath -> Maybe (ModuleDef r)
 resolveModuleInEnv γ s = qenvFindTy s (modules γ)
 
 
 resolveTypeInPgm :: NanoBareR r -> AbsName -> Maybe (IfaceDef r)
-resolveTypeInPgm p (QN AK_ l ss s) = resolveModuleInPgm p (QP AK_ l ss) 
+resolveTypeInPgm p (QN AK_ l ss s) = resolveModuleInPgm p (QP AK_ l ss)
                                  >>= envFindTy s . m_types
 
 resolveEnumInPgm :: NanoBareR r -> AbsName -> Maybe EnumDef
-resolveEnumInPgm p (QN AK_ l ss s) = resolveModuleInPgm p (QP AK_ l ss) 
+resolveEnumInPgm p (QN AK_ l ss s) = resolveModuleInPgm p (QP AK_ l ss)
                                  >>= envFindTy s . m_enums
- 
+
 resolveModuleInPgm :: NanoBareR r -> AbsPath -> Maybe (ModuleDef r)
 resolveModuleInPgm p s = qenvFindTy s $ pModules p
 
@@ -85,14 +85,14 @@ resolveModuleInPgm p s = qenvFindTy s $ pModules p
 isClassType :: EnvLike r g => g r -> RType r -> Bool
 --------------------------------------------------------------------------------
 isClassType γ (TRef x _ _ )
-  | Just (ID _ k _ _ _ ) <-resolveTypeInEnv γ x 
+  | Just (ID _ k _ _ _ ) <-resolveTypeInEnv γ x
   = k == ClassKind
   | otherwise
   = False
 isClassType _ _ = False
 
 
--- | expandning 
+-- | expandning
 
 numberInterface      = mkAbsName [] $ F.symbol "Number"
 stringInterface      = mkAbsName [] $ F.symbol "String"
@@ -103,25 +103,25 @@ functionInterface    = mkAbsName [] $ F.symbol "Function"
 emptyObjectInterface = mkAbsName [] $ F.symbol "EmptyObject"
 
 
--- 
--- | `expand m b γ d ts` 
 --
---   * epands a type reference to a structural type 
+-- | `expand m b γ d ts`
+--
+--   * epands a type reference to a structural type
 --
 --   * Output includes all elements of the the named type and its ancestors
 --
 --   * @b@ determines if static or non-static elements should be included
--- 
---   * @m@ is the top-level enforced mutability Top-level 
+--
+--   * @m@ is the top-level enforced mutability Top-level
 --
 --   * When no parent is found 'Object' is used
 --
 ---------------------------------------------------------------------------
-expand :: (EnvLike r g, PPR r) 
+expand :: (EnvLike r g, PPR r)
        => StaticKind -> g r -> IfaceDef r -> [RType r] -> Maybe (TypeMembers r)
 ---------------------------------------------------------------------------
-expand s γ (ID c _ vs h es) ts  =  M.map (apply θ) 
-                                .  M.unions 
+expand s γ (ID c _ vs h es) ts  =  M.map (apply θ)
+                                .  M.unions
                                 .  (current:)
                                <$> heritage h
   where
@@ -130,17 +130,17 @@ expand s γ (ID c _ vs h es) ts  =  M.map (apply θ)
     θ                           = fromList $ zip vs ts
 
     -- All object-types inherit from the Object interface
-    heritage ([],_)             | c == objectInterface 
-                                -- The object does not have a __proto__ field 
+    heritage ([],_)             | c == objectInterface
+                                -- The object does not have a __proto__ field
                                 = Just []
                                 | otherwise
                                 -- Other objects have an Object-typed __proto__ field
-                                = Just [M.fromList [(proto_key,proto_fld)]] 
+                                = Just [M.fromList [(proto_key,proto_fld)]]
                                 -- = mapM fields [(objectInterface,[])]
     heritage (es,_)             = mapM fields es
 
     fields (p,ts)               = resolveTypeInEnv γ p >>= \d -> expand s γ d ts
-    
+
     proto_sym                   = F.symbol "__proto__"
     proto_key                   = (proto_sym, InstanceMember)
     object_ty                   = TRef objectInterface [t_immutable] fTop
@@ -155,7 +155,7 @@ expand'' st γ d@(ID _ _ vs _ _) = (vs,) <$> expand st γ d (tVar <$> vs)
 
 
 data CoercionKind = Coercive | NonCoercive
- 
+
 -- | `expandType` will expand *any* type (including Mutability types!)
 --    It is not intended to be called with mutability types.
 --    Types with zero type parameters (missing mutability field) are considered
@@ -166,22 +166,22 @@ data CoercionKind = Coercive | NonCoercive
 --    (overriding their current mutability).
 --
 --    if CoercionKind == Coercive, then primitive types will be treated as their
---    object counterparts, i.e. String, Number, Boolean. 
+--    object counterparts, i.e. String, Number, Boolean.
 --
 ---------------------------------------------------------------------------
 expandType :: (PPR r, EnvLike r g, Data r)
            => CoercionKind -> g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
--- 
--- Given an object literal type, @expandType@ returns an expanded TCons containing 
--- the inherited (from Object) fields. 
--- 
-expandType _ γ (TCons m es r) 
+--
+-- Given an object literal type, @expandType@ returns an expanded TCons containing
+-- the inherited (from Object) fields.
+--
+expandType _ γ (TCons m es r)
   = do  empty   <- resolveTypeInEnv γ emptyObjectInterface
         es'     <- expand' InstanceMember γ $ empty { t_elts = es }
         return   $ TCons m es' r
--- 
--- FIXME: expandType for Mutability could easiliy return the same type 
+--
+-- FIXME: expandType for Mutability could easiliy return the same type
 --
 expandType _ γ (TRef x [] r)
   = do  d       <- resolveTypeInEnv γ x
@@ -193,12 +193,12 @@ expandType _ γ (TRef x ts@(m:_) r)
         es      <- expand InstanceMember γ d ts
         return   $ TCons (toType m) es r
 
-expandType _ γ (TClass x)             
+expandType _ γ (TClass x)
   = do  d       <- resolveTypeInEnv γ x
         es      <- expand' StaticMember γ d
         return   $ TCons t_immutable es fTop
 
-expandType _ γ (TModule x)             
+expandType _ γ (TModule x)
   = do  es      <- M.fromList . map mkField . envToList . m_variables <$> resolveModuleInEnv γ x
         return   $ TCons t_immutable es fTop
   where
@@ -209,29 +209,29 @@ expandType _ γ (TEnum x)
   = do  es      <- M.fromList . concatMap  mkField . envToList . e_mapping <$> resolveEnumInEnv γ x
         return   $ TCons t_immutable es fTop
   where
-    -- TODO 
+    -- TODO
     mkField (k, IntLit _ i) = [(key k, fld k $ tInt `strengthen` exprReft i)]
     mkField (k, HexLit _ s) | Just e <- bitVectorValue s
                             = [(key k, fld k $ tBV32 `strengthen` e)]
     mkField _               = []
     fld k = FieldSig (F.symbol k) f_required t_immutable
-    key   = (,InstanceMember) . F.symbol 
+    key   = (,InstanceMember) . F.symbol
 
 expandType NonCoercive γ t = Nothing
 
 -- FIXME: Even these should inherit from Object
 expandType _ γ (TApp TInt _ _)
-  = do  d     <- resolveTypeInEnv γ numberInterface 
+  = do  d     <- resolveTypeInEnv γ numberInterface
         es    <- expand' InstanceMember γ d
         return $ TCons t_immutable es fTop
 
 expandType _ γ (TApp TString _ _)
-  = do  d     <- resolveTypeInEnv γ stringInterface 
+  = do  d     <- resolveTypeInEnv γ stringInterface
         es    <- expand' InstanceMember γ d
         return $ TCons t_immutable es fTop
 
-expandType _ γ (TApp TBool _ _) 
-  = do  d     <- resolveTypeInEnv γ booleanInterface 
+expandType _ γ (TApp TBool _ _)
+  = do  d     <- resolveTypeInEnv γ booleanInterface
         es    <- expand' InstanceMember γ d
         return $ TCons t_immutable es fTop
 
@@ -250,7 +250,7 @@ weaken :: (PPR r, EnvLike r g) => g r -> TypeReference r -> AbsName -> Maybe (Ty
 ---------------------------------------------------------------------------
 weaken γ tr@(s,_) t
   | s == t                    = Just tr
-  | otherwise 
+  | otherwise
   = do n1                    <- HM.lookup s m
        n2                    <- HM.lookup t m
 
@@ -267,10 +267,10 @@ weaken γ tr@(s,_) t
 doEdge :: PPR r => ClassHierarchy r -> TypeReference r -> Edge -> Maybe (TypeReference r)
 ---------------------------------------------------------------------------
 doEdge (ClassHierarchy g _) (_, t1) (n1, n2)
-  = do  ID _  _ v1 (e1,i1) _  <-  lab g n1 
+  = do  ID _  _ v1 (e1,i1) _  <-  lab g n1
         ID c2 _ _  _       _  <-  lab g n2
         let θ                  =  fromList $ zip v1 t1
-        (n2,t2)               <-  find ((c2 ==) . fst) e1 
+        (n2,t2)               <-  find ((c2 ==) . fst) e1
                               <|> find ((c2 ==) . fst) i1
         return                 $  (n2, apply θ t2)
 
@@ -284,7 +284,7 @@ ancestors k γ s = [ t_name l | cur <- maybeToList (HM.lookup s m)
   where ClassHierarchy g m   = cha γ
 
 
--- XXX : only strict parents 
+-- XXX : only strict parents
 ---------------------------------------------------------------------------
 strictAncestorsFromPgm :: Nano a r -> AbsName -> [AbsName]
 ---------------------------------------------------------------------------
@@ -308,21 +308,21 @@ classAncestorsFromPgm p s = [ t_name l | cur <- maybeToList (HM.lookup s m)
 ---------------------------------------------------------------------------
 fieldSymbols :: StaticKind -> NanoBareR r -> AbsName -> [F.Symbol]
 ---------------------------------------------------------------------------
-fieldSymbols k p a = HS.toList . HS.unions 
-                $ HS.fromList . flds <$> classAncestorsFromPgm p a 
+fieldSymbols k p a = HS.toList . HS.unions
+                $ HS.fromList . flds <$> classAncestorsFromPgm p a
   where
     flds a = [ s | ID _ _ _ _ es    <- maybeToList $ resolveTypeInPgm p a
-                 , ((_,k'),FieldSig s _ _ _) <- M.toList es, k == k' ] 
+                 , ((_,k'),FieldSig s _ _ _) <- M.toList es, k == k' ]
 
 
 ---------------------------------------------------------------------------
 onlyInheritedFields :: StaticKind -> NanoBareR r -> AbsName -> [F.Symbol]
 ---------------------------------------------------------------------------
-onlyInheritedFields k p a = HS.toList . HS.unions 
-                        $ HS.fromList . flds <$> strictAncestorsFromPgm p a 
+onlyInheritedFields k p a = HS.toList . HS.unions
+                        $ HS.fromList . flds <$> strictAncestorsFromPgm p a
   where
     flds a = [ s | ID _ _ _ _ es    <- maybeToList $ resolveTypeInPgm p a
-                 , ((_,k'),FieldSig s _ _ _) <- M.toList es, k == k' ] 
+                 , ((_,k'),FieldSig s _ _ _) <- M.toList es, k == k' ]
 
 ---------------------------------------------------------------------------
 classAncestors     :: EnvLike r t => t r -> AbsName -> [AbsName]
@@ -331,7 +331,7 @@ allAncestors       :: EnvLike r t => t r -> AbsName -> [AbsName]
 ---------------------------------------------------------------------------
 classAncestors      = ancestors ClassKind
 interfaceAncestors  = ancestors InterfaceKind
-allAncestors γ s    = classAncestors γ s ++ interfaceAncestors γ s 
+allAncestors γ s    = classAncestors γ s ++ interfaceAncestors γ s
 
 
 ---------------------------------------------------------------------------
@@ -342,19 +342,21 @@ isAncestor γ c p = p `elem` allAncestors γ c
 ---------------------------------------------------------------------------
 boundKeys :: (PPR r, EnvLike r g) => g r -> RType r -> [F.Symbol]
 ---------------------------------------------------------------------------
-boundKeys γ t@(TRef _ _ _) | Just t <- expandType Coercive γ t = boundKeys γ t
-                           | otherwise                         = []
-boundKeys _ (TCons _ es _) = fst <$> M.keys es 
+boundKeys γ t@(TRef _ _ _) | Just t <- expandType Coercive γ t
+                           = boundKeys γ t
+                           | otherwise
+                           = []
+boundKeys _ (TCons _ es _) = fst <$> M.keys es
 boundKeys _ _              = []
 
 ---------------------------------------------------------------------------
 immFields :: (PPR r, EnvLike r g) => g r -> RType r -> [(F.Symbol, RType r)]
 ---------------------------------------------------------------------------
-immFields γ t 
-  | Just (TCons _ es _) <- expandType Coercive γ t 
+immFields γ t
+  | Just (TCons _ es _) <- expandType Coercive γ t
   = [ (x,t) | (_, FieldSig x o m t) <- M.toList es
-            , isImmutable m 
-            , x /= F.symbol "__proto__" 
+            , isImmutable m
+            , x /= F.symbol "__proto__"
     ]
   | otherwise
   = []
@@ -363,7 +365,7 @@ immFields γ t
 -- | Constructors
 -----------------------------------------------------------------------
 
-type Constructor = Type 
+type Constructor = Type
 
 instance F.Symbolic Constructor where
   symbol (TRef x _ _)                  = F.symbol x

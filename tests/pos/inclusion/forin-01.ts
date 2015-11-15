@@ -1,7 +1,7 @@
 // Taken from strobe
-/*@ qualif HasP(v: string, s: a): hasProperty(v, s) */
 
-/*  qualif EnumP(v:string, s:A): enumProp(v,s)    */
+/*@ qualif HasP<A>(x: string, y: A): hasProperty(x, y) */
+/*@ qualif EnumP<A>(x: string, y: A): enumProp(x, y) */
 
 /*@ foo :: (o: { [x:string]: string + number }) => { string | 0 < 1 } */
 function foo(o) {

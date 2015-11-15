@@ -181,7 +181,7 @@ errorTAliasNumArgs l na nx n  = mkErr l $ printf "Invalid type alias application
 errorTAliasMismatch l t a      = mkErr l $ printf "Invalid type alias application %s : Cannot convert %s into value argument" (ppshow t) (ppshow a)
 
 errorBadPAlias l p nx ne      = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." (ppshow p) nx ne
-errorLiquid l                 = mkErr l $ printf "Liquid Type Error"
+errorLiquid l s               = mkErr l $ printf "Liquid Type Error: %s" s
 errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for '%s'.\nArgument Types: %s\nFunction Type: %s" (ppshow fn) (ppshow ts) (ppshow t)
 errorMultipleCasts l cs       = mkErr l $ printf "Multiple Casts: %s" (ppshow cs)
 errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"

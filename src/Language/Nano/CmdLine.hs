@@ -1,16 +1,16 @@
-{-# LANGUAGE TupleSections      #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TupleSections      #-}
 
 module Language.Nano.CmdLine (Config(..), config, withPragmas) where
 
-import System.Console.CmdArgs
-import System.Console.CmdArgs.Explicit (modeValue)
+import           System.Console.CmdArgs
+import           System.Console.CmdArgs.Explicit (modeValue)
 -- import System.Console.CmdArgs.Implicit     hiding (Loud)
 -- import System.Console.CmdArgs.Text
 -- import Language.Fixpoint.Types
-import Language.Nano.Locations
-import Control.Monad (foldM)
-import System.Environment (withArgs)
+import           Control.Monad                   (foldM)
+import           Language.Nano.Locations
+import           System.Environment              (withArgs)
 
 ---------------------------------------------------------------------
 -- | Command Line Configuration Options
@@ -21,15 +21,19 @@ data Config
            , incdirs     :: [FilePath]     -- ^ path to directory for include specs
            , noFailCasts :: Bool           -- ^ fail typecheck when casts are inserted
            }
-  | Liquid { files       :: [FilePath]     -- ^ source files to check
-           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
-           , extraInvs   :: Bool           -- ^ add extra invariants to object types
-           , renderAnns  :: Bool           -- ^ render annotations
-           , prelude     :: Maybe FilePath -- ^ use this prelude file
-           , real        :: Bool           -- ^ use real-valued SMT arithmetic
-           , extSolver   :: Bool           -- ^ use external (Ocaml) fixpoint solver (deprecated)
+  | Liquid { files      :: [FilePath]     -- ^ source files to check
+           , incdirs    :: [FilePath]     -- ^ path to directory for include specs
+           , extraInvs  :: Bool           -- ^ add extra invariants to object types
+           , renderAnns :: Bool           -- ^ render annotations
+           , prelude    :: Maybe FilePath -- ^ use this prelude file
+           , real       :: Bool           -- ^ use real-valued SMT arithmetic
+           , extSolver  :: Bool           -- ^ use external (Ocaml) fixpoint solver (deprecated)
            }
   deriving (Data, Typeable, Show, Eq)
+
+
+instance Default Config where
+  def = Liquid [] [] False False Nothing False False
 
 
 ---------------------------------------------------------------------------------

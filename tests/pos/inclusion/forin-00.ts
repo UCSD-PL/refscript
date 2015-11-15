@@ -1,15 +1,33 @@
 
-/*@ qualif HasP<A>(v:string, s:A): hasProperty(v,s) */
-/*@ qualif EnumP<A>(v:string, s:A): enumProp(v,s)    */
+/*@ qualif HasP<A>(x: string, y: A): hasProperty(x, y) */
 
-/*@  values :: forall T . (mp: [Immutable]{ [k:string]: T }) =>  { MArray<T> | 0 < 1 } */
-function values<T>(mp:{[k:string]:T}): T[] {
+/* qualif EnumP<A>(v:A, s:B): enumProp(v,s)    */
 
-  var values:T[] = [];
+// /*  values :: forall T . (mp: [Immutable]{ [k:string]: T }) =>  { void | 0 < 1 } */
+// function values<T>(mp: { [k: string]: T }): void {
+//     for (var key in mp) {
+//         var a = <T>mp[key];
+//     }
+// };
 
-  for (var key in mp) {
-    values.push(<T>(mp[key]));
-  }
+/* fff :: forall A . (x: [Immutable] { [k:string]: A }, n: number) => { IArray<{ v: string | v = n }> | len v = 1 } */
+// declare function fff(m, n): string[];
+// var xxx = fff(mp, 1);
 
-  return values;
-};
+/*@ measure hasp :: forall A . (string, A) => bool */
+
+/*@ mmm :: [Immutable]{ [k:string]: number } */
+declare var mmm;
+
+/*@ a :: IArray<number> */
+declare var a: number[];
+
+
+/*@ xxx :: { IArray<{ v: string | len a = 1 }> | len v = 10 } */
+declare var xxx: number[];
+var r = xxx[0];
+
+
+
+/* bracket :: forall A . (m: [Immutable] {[y: string]: A }, k: string) => { v: A | hasp k m } + { undefined | not (hasp k m) } */
+// declare function bracket<A>(m: { [y: string]: A }, k: string): A;

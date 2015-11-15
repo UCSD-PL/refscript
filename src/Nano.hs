@@ -15,6 +15,7 @@ import           Data.Aeson                        (eitherDecode)
 import           Data.Aeson.Types                  hiding (Error, Parser, parse)
 import qualified Data.ByteString.Lazy.Char8        as B
 import           Data.List                         (nub, sort)
+--import           Language.Fixpoint.Config          ()
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Files
 import           Language.Fixpoint.Interface       (resultExit)
@@ -35,6 +36,12 @@ import           Text.PrettyPrint.HughesPJ
 main :: IO a
 main = do cfg  <- cmdArgs config
           run (verifier cfg) cfg
+
+top s invs = run (verifier cfg) cfg
+  where
+    cfg = def { extraInvs = invs
+              , files     = [s]
+              }
 
 -------------------------------------------------------------------------------
 verifier           :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult Error)

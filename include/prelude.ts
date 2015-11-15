@@ -41,7 +41,7 @@ declare function isNaN(x:any) : boolean;
     /\ forall   A . (MArray<A> , idx: number) => A + undefined
     /\ forall M A . (Array<M,A>, idx: number + undefined) => A + undefined
     /\ forall M A . (Array<M,A>, idx: undefined) => undefined
-    /\ forall   A . (o: [Immutable] {[y: string]: A }, x: string) => { A | hasProperty(x,o) } + { undefined | not (hasProperty(x,o)) }
+    /\ forall   A . (o: [Immutable] {[y: string]: A }, x: string) => { v: A + undefined | hasProperty x o => Prop v }
     /\ forall M A . ([M] {[y: string]: A }, string) => A + undefined
     /\              ({ }, string) => top
  */
@@ -123,7 +123,7 @@ declare function builtin_OpSub(a: number, b: number): number;
                                                (x > 0 && y > 0) => v > 0 ;
                                                (x < 0 && y < 0) => v > 0 ;
                                                (x = 0 || y = 0) => v = 0 ] }
-    /\  (x: real, y: real) => { v:real | v = x * y }                                            
+    /\  (x: real, y: real) => { v:real | v = x * y }
  */
 declare function builtin_OpMul(a: number, b: number): number;
 

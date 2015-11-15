@@ -109,7 +109,7 @@ testCategories = [ ("objects",   [])
                  , ("unions",    [])
                  , ("typealias", [])
                  , ("fb",        [])
-                 , ("inclusion", ["-e"])
+                 , ("inclusion", ["--extrainvs"])
                  # ## not supported:
                  # , "proto"
                  # , "lists"

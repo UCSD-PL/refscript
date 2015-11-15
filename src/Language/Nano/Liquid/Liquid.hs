@@ -58,7 +58,8 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
 import           Language.Nano.Visitor
 import           System.Console.CmdArgs.Default
--- import           Debug.Trace                        (trace)
+
+import           Debug.Trace                       (trace)
 
 type PPRS r = (PPR r, Substitutable r (Fact r))
 
@@ -379,7 +380,7 @@ consStmt g (VarDeclStmt _ ds)
 
 -- return
 consStmt g (ReturnStmt l Nothing)
-  = do _ <- subType l (errorLiquid' l) g tVoid (envFindReturn g)
+  = do _ <- subType l (errorLiquid' l "return") g tVoid (envFindReturn g)
        return Nothing
 
 -- return e
@@ -473,15 +474,15 @@ consVarDecl g v@(VarDecl l x (Just e))
         mseq (consExpr g e $ Just t) $ \(y, gy) -> do
           ty      <- safeEnvFindTy y gy
           fta     <- freshenType WriteGlobal gy l t
-          _       <- subType l (errorLiquid' l) gy ty  fta
-          _       <- subType l (errorLiquid' l) gy fta t
+          _       <- subType l (errorLiquid' l "global-1") gy ty  fta
+          _       <- subType l (errorLiquid' l "global-2") gy fta t
           Just   <$> envAdds "consVarDecl" [(x, EE WriteGlobal Initialized fta)] gy
 
       [(_, WriteGlobal, Nothing)] ->
         mseq (consExpr g e Nothing) $ \(y, gy) -> do
           ty      <- safeEnvFindTy y gy
           fta     <- refresh ty >>= wellFormed l g
-          _       <- subType l (errorLiquid' l) gy ty fta
+          _       <- subType l (errorLiquid' l "global-3") gy ty fta
           Just   <$> envAdds "consVarDecl" [(x, EE WriteGlobal Initialized fta)] gy
 
       -- | ReadOnly
@@ -944,10 +945,11 @@ consCall :: PP a
 
 consCall g l fn ets ft0
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      -- ts <- ltracePP l ("LQ " ++ ppshow fn) <$> T.mapM (`safeEnvFindTy` g') xes
+      -- ts <- ltracePP l ("LQ " ++ ppshow fn ++ " WITH TYPE " ++ ppshow ol) <$> T.mapM (`safeEnvFindTy` g') xes
       ts <- T.mapM (`safeEnvFindTy` g') xes
       case ol of
         -- If multiple are valid, pick the first one
+        -- (ft:_) -> traceTypePP l ("consInstantiate " ++ ppshow fn) $ consInstantiate l g' fn ft ts xes
         (ft:_) -> consInstantiate l g' fn ft ts xes
         _      -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
   where
@@ -974,15 +976,16 @@ consInstantiate :: PP a
                 -> CGM (Maybe (Id AnnTypeR, CGEnv))
 --------------------------------------------------------------------------------
 consInstantiate l g fn ft ts xes
+  -- = do  (_,its1,ot)     <- tracePP ("INSTANTIATE " ++ ppshow fn) <$> instantiateFTy l g fn ft
   = do  (_,its1,ot)     <- instantiateFTy l g fn ft
         ts1             <- idxMapFI (instantiateTy l g) 1 ts
         let (ts2, its2)  = balance ts1 its1
         (ts3, ot')      <- subNoCapture l (toList its2) (toList xes) ot
-        _               <- zipWithM_ (subType l err g) (toList ts2) ts3
+        _               <- zipWithM_ (\t1 t2 -> subType l (err t1 t2) g t1 t2) (toList ts2) ts3
         Just           <$> envAddFresh "5" l (ot', WriteLocal, Initialized) g
   where
     toList (FI x xs)     = maybeToList x ++ xs
-    err                  = errorLiquid' l
+    err t1 t2            = errorLiquid' l ("Call to " ++ ppshow fn ++ " SUB: " ++ ppshow t1 ++ " <: " ++ ppshow t2)
 
     idxMapFI f i (FI Nothing ts)  = FI     Nothing        <$> zipWithM f [i..] ts
     idxMapFI f i (FI (Just t) ts) = FI <$> Just <$> f i t <*> zipWithM f [(i+1)..] ts
@@ -1139,7 +1142,7 @@ consWhileBase l xs tIs g
         xts_base'          <- zipWithM (\(x,t) t' -> zipTypeUpM g x t t') xts_base tIs    -- (c)
         zipWithM_ (subType l err g) xts_base' tIs
   where
-    err                      = errorLiquid' l
+    err                      = errorLiquid' l "while"
 
 consWhileStep l xs tIs gI''
   = do  xts_step           <- mapM (\x -> (x,) <$> safeEnvFindTy x gI'') xs'
@@ -1149,7 +1152,7 @@ consWhileStep l xs tIs gI''
     tIs'                    = F.subst su <$> tIs
     xs'                     = mkNextId   <$> xs
     su                      = F.mkSubst   $  safeZip "consWhileStep" (F.symbol <$> xs) (F.eVar <$> xs')
-    err                     = errorLiquid' l
+    err                     = errorLiquid' l "while-step"
 
 whenJustM Nothing  _ = return ()
 whenJustM (Just x) f = f x
@@ -1216,7 +1219,7 @@ envJoin' l g g1 g2
         -- t2s : the types of the phi vars in the 2nd branch
         (xls, l1s, l2s) = unzip3 $ locals (zip3 xs t1s t2s)
         xs    = [ xs | PhiVarTC xs <- ann_fact l]
-        err   = errorLiquid' l
+        err   = errorLiquid' l "envJoin"
 
 
 getPhiTypes _ g1 g2 x =
@@ -1237,15 +1240,15 @@ globals ts = [(x,s1,s2) | (x, s1@(EE WriteGlobal Initialized _),
 
 errorLiquid' = errorLiquid . srcPos
 
--- traceTypePP l msg act
---   = act >>= \case
---       Just (x,g) ->
---           do  t <- safeEnvFindTy x g
---               return $ Just $ trace (ppshow (srcPos l) ++
---                                      " " ++ msg ++
---                                      ": " ++ ppshow x ++
---                                      " :: " ++ ppshow t) (x,g)
---       Nothing ->  return Nothing
+traceTypePP l msg act
+  = act >>= \case
+      Just (x,g) ->
+          do  t <- safeEnvFindTy x g
+              return $ Just $ trace (ppshow (srcPos l) ++
+                                     " " ++ msg ++
+                                     ": " ++ ppshow x ++
+                                     " :: " ++ ppshow t) (x,g)
+      Nothing ->  return Nothing
 
 
 -- Local Variables:

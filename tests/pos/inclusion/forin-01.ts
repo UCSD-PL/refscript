@@ -1,5 +1,6 @@
 // Taken from strobe
-/*@ qualif HasP(v:string, s:A): hasProperty(v,s) */
+/*@ qualif HasP(v: string, s: a): hasProperty(v, s) */
+
 /*  qualif EnumP(v:string, s:A): enumProp(v,s)    */
 
 /*@ foo :: (o: { [x:string]: string + number }) => { string | 0 < 1 } */

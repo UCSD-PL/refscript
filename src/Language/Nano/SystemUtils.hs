@@ -1,9 +1,9 @@
 -- | Code for Saving and Rendering Annotations
 
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE FlexibleContexts     #-}
 
 
 module Language.Nano.SystemUtils (
@@ -20,35 +20,35 @@ module Language.Nano.SystemUtils (
   , annotVimString
   ) where
 
-import qualified Data.List              as L
-import           Data.List.Split
-import qualified Data.ByteString.Lazy   as B
-import qualified Data.Vector            as V
-import qualified Data.Text              as T
-import qualified Data.HashMap.Strict    as M
-import           Data.Monoid
 import           Data.Aeson
-import           GHC.Exts                           (groupWith, sortWith)
+import qualified Data.ByteString.Lazy             as B
+import qualified Data.HashMap.Strict              as M
+import qualified Data.List                        as L
+import           Data.List.Split
+import           Data.Monoid
+import qualified Data.Text                        as T
+import qualified Data.Vector                      as V
+import           GHC.Exts                         (groupWith, sortWith)
 
-import           Language.Fixpoint.Files()
+import           Control.Applicative              ((<$>))
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc             (inserts)
-import           Language.Fixpoint.Names            (symbolString)
-import qualified Language.Fixpoint.Types    as F
-import           Language.Nano.Typecheck.Parse
-import           Language.Nano.Syntax.PrettyPrint
-import           Text.Parsec.Pos
-import           Language.Nano.Types()
+import           Language.Fixpoint.Files          ()
+import           Language.Fixpoint.Misc           (inserts)
+import           Language.Fixpoint.Names          (symbolString)
+import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Locations
-import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat, nest, (<+>), punctuate, render)
-import           Control.Applicative                ((<$>))
+import           Language.Nano.Syntax.PrettyPrint
+import           Language.Nano.Typecheck.Parse
+import           Language.Nano.Types              ()
+import           Text.Parsec.Pos
+import           Text.PrettyPrint.HughesPJ        (nest, punctuate, render, text, vcat, ($+$), (<+>))
 
 ------------------------------------------------------------------------------
 -- | Type Definitions For Annotations ----------------------------------------
 ------------------------------------------------------------------------------
 
 data AnnBind t        = AnnBind { ann_bind :: F.Symbol,
-                                ann_type :: t }
+                                ann_type   :: t }
 
 {-@ type NonNull a = {v: [a] | 0 < (len v)} @-}
 type    NonEmpty a  = [a]

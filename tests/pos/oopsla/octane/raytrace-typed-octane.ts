@@ -21,8 +21,9 @@
 /*@ alias MIntersectionInfo = IntersectionInfo<Mutable> */
 
 //TODO: move this stuff to prelude?
-/*@ qualif Bot(s:Str,v:a): hasProperty(s,v) */
-/*@ qualif Bot(s:Str,v:a): enumProp(s,v) */
+/*@ qualif HasP<A>(x: string, y: A): hasProperty(x, y) */
+/*@ qualif EnumP<A>(x: string, y: A): enumProp(x, y) */
+
 interface HTMLCanvasElement {
     /*@ getContext : (string) => {CanvasRenderingContext2D<Mutable> | 0 < 1} */
     getContext(s:string):CanvasRenderingContext2D; //or WebGLRenderingContext or null
@@ -372,10 +373,10 @@ module VERSION {
             public density:number = 1/2;
 
             /*@ new(colorEven:IColor, colorOdd:IColor, reflection:number, transparency:number, gloss:number, density:number) => {Chessboard<M> | 0 < 1} */
-            constructor(colorEven:Color, colorOdd:Color, 
-                        reflection:number, 
-                        transparency:number, 
-                        gloss:number, 
+            constructor(colorEven:Color, colorOdd:Color,
+                        reflection:number,
+                        transparency:number,
+                        gloss:number,
                         density?) {
                 super(gloss, transparency, reflection, 1/2, true);
                 this.colorEven = colorEven;
@@ -601,7 +602,7 @@ module VERSION {
 
                 return ray;
             }
-            
+
             public toString() {
                 return 'Ray []';
             }
@@ -621,6 +622,7 @@ module VERSION {
 
         /*@ extend :: (dest:[Mutable]{[s:string]:top}, src:[Immutable]{[s:string]:top}) => {[Mutable]{[s:string]:top} | 0 < 1} */
         function extend(dest, src) {
+            // PV TODO
             for (var p in src) {
                 dest[p] = src[p];
             }
@@ -754,9 +756,9 @@ module VERSION {
                 var infoShape = info.shape;
                 var infoNormal = info.normal;
                 var infoPosition = info.position;
-                if (!infoColor || 
-                    !infoShape || 
-                    !infoNormal || 
+                if (!infoColor ||
+                    !infoShape ||
+                    !infoNormal ||
                     !infoPosition) throw new Error('incomplete IntersectionInfo'); //TODO is there a way to get rid of this check?
 
                 // Calc ambient

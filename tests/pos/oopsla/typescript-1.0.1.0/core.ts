@@ -10,7 +10,7 @@ module ts {
         if (array) {
             var cnt = false;
             for (var i = 0, len = array.length; i < len && cnt; i++) {
-                if (result = callback(array[i])) 
+                if (result = callback(array[i]))
                     cnt = false;
             }
         }
@@ -113,7 +113,7 @@ module ts {
                 low = middle + 1;
             }
         }
-        return -1; // ~low;     // PV: Not sure what the purpose of ~low is. 
+        return -1; // ~low;     // PV: Not sure what the purpose of ~low is.
     }
 
     /*@ hasProperty :: forall T M . (map: Map<M,T>, key: string) => { boolean | Prop(v) <=> (hasDirectProperty(key,map) && hasProperty(key,map)) } */
@@ -122,8 +122,8 @@ module ts {
     /*@ getProperty :: forall T . (map: Map<Immutable,T>, key: string) => { T | 0 < 1 } */
     export declare function getProperty<T>(map: Map<T>, key: string): T;
 
-    /*@  qualif HSqualif(s:Str,v:a): hasProperty(s,v) */
-    /*@  qualif EPqualif(s:Str,v:a): enumProp(s,v) */
+    /*@  qualif HSqualif<A>(s: string, v: A): hasProperty(s,v) */
+    /*@  qualif EPqualif<A>(s: string, v: A): enumProp(s,v) */
 
     /*@ isEmpty :: forall T . (map: Map<Immutable,T>) => { boolean | 0 < 1 } */
     export function isEmpty<T>(map: Map<T>) {
@@ -138,7 +138,7 @@ module ts {
 
     /*@ forEachValue :: forall T U . (map: Map<Immutable,T>, callback: (value: T) => U) => { U | 0 < 1 } + undefined */
     export function forEachValue<T, U>(map: Map<T>, callback: (value: T) => U): U {
-        /*@ result :: U + undefined */ 
+        /*@ result :: U + undefined */
         var result: U;
         for (var id in map) {
             result = callback(map[id]);
@@ -205,14 +205,14 @@ module ts {
 
     export interface ObjectAllocator {
         getNodeConstructor(kind: SyntaxKind): { new (): Node };
-        getSymbolConstructor(): { 
+        getSymbolConstructor(): {
           /*@ new (flags: SymbolFlags, name: string) => { v: ISymbol | keyVal(v, "flags") = flags } */
-          new (flags: SymbolFlags, name: string): Symbol 
+          new (flags: SymbolFlags, name: string): Symbol
         };
         getTypeConstructor(): { new (checker: TypeChecker, flags: TypeFlags): Type };
         getSignatureConstructor(): { new (checker: TypeChecker): Signature };
     }
-      
+
     /*@ newType :: forall M . (checker: TypeChecker<Immutable>, flags: bitvector32) => { Type<M> | type_flags(flags,v) } */
     export declare function newType(checker: TypeChecker, flags: TypeFlags): Type;
 }

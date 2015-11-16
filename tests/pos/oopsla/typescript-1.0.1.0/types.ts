@@ -5,17 +5,18 @@
 module ts {
 
 
-///////////////////////////////////////////////////////////////////////// 
+/////////////////////////////////////////////////////////////////////////
 //
-//  RefScript 
+//  RefScript
 
 
-/*@ alias INode       = Node<Immutable> */
-/*@ alias ISymbol     = ts.Symbol<Immutable> */
-/*@ alias IType       = Type<Immutable> */
-/*@ alias ISignature  = Signature<Immutable> */
+/*@ alias INode        = Node<Immutable>        */
+/*@ alias ISymbol      = ts.Symbol<Immutable>   */
+/*@ alias IType        = Type<Immutable>        */
+/*@ alias ISignature   = Signature<Immutable>   */
+/*@ alias IDeclaration = Declaration<Immutable> */
 
-/*@ predicate non_zero                      (b) = (b /= lit "#x00000000" (BitVec (Size32 obj))) */
+/*@ predicate non_zero                           (b) = (b /= lit "#x00000000" (BitVec (Size32 obj))) */
 
 /*@ predicate typeflags_any                      (v) = (v = lit "#x00000001" (BitVec (Size32 obj))) */
 /*@ predicate typeflags_string                   (v) = (v = lit "#x00000002" (BitVec (Size32 obj))) */
@@ -106,15 +107,15 @@ module ts {
 /*@ predicate mask_symbolflags_merged            (v) = (non_zero(bvand v (lit "#x01000000" (BitVec (Size32 obj))))) */
 /*@ predicate mask_symbolflags_transient         (v) = (non_zero(bvand v (lit "#x02000000" (BitVec (Size32 obj))))) */
 /*@ predicate mask_symbolflags_prototype         (v) = (non_zero(bvand v (lit "#x04000000" (BitVec (Size32 obj))))) */
- 
+
 /*@ predicate type_flags(v,o) = (mask_typeflags_objecttype(v) =>  extends_interface(o,"ObjectType"))         &&
                                 (mask_typeflags_anonymous (v) =>  extends_interface(o,"ResolvedObjectType")) &&
                                 (mask_typeflags_reference (v) =>  extends_interface(o,"TypeReference"))
- */ 
+ */
 
 
 //
-///////////////////////////////////////////////////////////////////////// 
+/////////////////////////////////////////////////////////////////////////
 
 
     export interface Map<T> {
@@ -356,7 +357,7 @@ module ts {
         Synthetic        = 0x00000100,  // Synthetic node (for full fidelity)
         DeclarationFile  = 0x00000200,  // Node is a .d.ts file
 
-        // TODO 
+        // TODO
         // Modifier = Export | Ambient | Public | Private | Static
     }
 
@@ -763,7 +764,7 @@ module ts {
     }
 
     export enum TypeFormatFlags {
-        None                    = 0x00000000, 
+        None                    = 0x00000000,
         WriteArrayAsGenericType = 0x00000001,  // Write Array<T> instead T[]
         UseTypeOfFunction       = 0x00000002,  // Write typeof instead of function type literal
         NoTruncation            = 0x00000004,  // Don't truncate typeToString result
@@ -834,14 +835,14 @@ module ts {
         Transient          = 0x02000000,  // Transient symbol (created during type check)
         Prototype          = 0x04000000,  // Symbol for the prototype property (without source code representation)
 
-// TODO 
+// TODO
 //         Value     = Variable | Property | EnumMember | Function | Class | Enum | ValueModule | Method | GetAccessor | SetAccessor,
 //         Type      = Class | Interface | Enum | TypeLiteral | ObjectLiteral | TypeParameter,
 //         Namespace = ValueModule | NamespaceModule,
 //         Module    = ValueModule | NamespaceModule,
 //         Accessor  = GetAccessor | SetAccessor,
 //         Signature = CallSignature | ConstructSignature | IndexSignature,
-// 
+//
 //         ParameterExcludes       = Value,
 //         VariableExcludes        = Value & ~Variable,
 //         PropertyExcludes        = Value,
@@ -856,25 +857,25 @@ module ts {
 //         GetAccessorExcludes     = Value & ~SetAccessor,
 //         SetAccessorExcludes     = Value & ~GetAccessor,
 //         TypeParameterExcludes   = Type & ~TypeParameter,
-// 
+//
 //         // Imports collide with all other imports with the same name.
 //         ImportExcludes          = Import,
-// 
+//
 //         ModuleMember = Variable | Function | Class | Interface | Enum | Module | Import,
-// 
+//
 //         ExportHasLocal = Function | Class | Enum | ValueModule,
-// 
+//
 //         HasLocals  = Function | Module | Method | Constructor | Accessor | Signature,
 //         HasExports = Class | Enum | Module,
 //         HasMembers = Class | Interface | TypeLiteral | ObjectLiteral,
-// 
+//
 //         IsContainer = HasLocals | HasExports | HasMembers,
 //         PropertyOrAccessor      = Property | Accessor,
 //         Export                  = ExportNamespace | ExportType | ExportValue,
     }
 
     export interface Symbol {
-    
+
         /*@ flags : [Immutable] { v: bitvector32 | [(mask_symbolflags_transient(v)) <=>  extends_interface(this,"TransientSymbol")] } */
         flags: SymbolFlags;            // Symbol flags
 
@@ -886,7 +887,7 @@ module ts {
         /*@ mergeId : [Mutable] number */
         mergeId?: number;              // Merge id (used to look up merged symbol)
 
-        /*@ declarations : IArray<Declaration<Immutable>> */
+        /*@ declarations : IArray<IDeclaration> */
         declarations?: Declaration[];  // Declarations associated with this symbol
 
         /*@ parent?: [Mutable] ISymbol */
@@ -961,10 +962,10 @@ module ts {
         //NumberLike = Number | Enum,
         //ObjectType = Class | Interface | Reference | Anonymous
 
-        // PV : hardcoding the result here         
+        // PV : hardcoding the result here
         ObjectType         = 0x00003C00,
     }
-   
+
     // Properties common to all types
     export interface Type {
 
@@ -972,7 +973,7 @@ module ts {
         flags: TypeFlags;  // Flags
 
         id: number;        // Unique ID
-        
+
         /*@ symbol? : [Immutable] ISymbol + undefined */
         symbol?: Symbol;   // Symbol associated with type (if any)
     }
@@ -1035,10 +1036,10 @@ module ts {
         /*@ properties  : [InheritedMut] IArray<ISymbol> */
         properties: Symbol[];              // Properties
 
-        /*@ callSignatures : [InheritedMut] IArray<ISignature> */ 
+        /*@ callSignatures : [InheritedMut] IArray<ISignature> */
         callSignatures: Signature[];       // Call signatures of type
 
-        /*@ constructSignatures : [InheritedMut] IArray<ISignature> */ 
+        /*@ constructSignatures : [InheritedMut] IArray<ISignature> */
         constructSignatures: Signature[];  // Construct signatures of type
 
         stringIndexType: Type;             // String index type
@@ -1175,13 +1176,13 @@ module ts {
         nullCharacter     = 0x00000000, // 0,
         maxAsciiCharacter = 0x0000007F, // 0x7F,
 
-// TODO 
+// TODO
 //         lineFeed = 0x0A,              // \n
 //         carriageReturn = 0x0D,        // \r
 //         lineSeparator = 0x2028,
 //         paragraphSeparator = 0x2029,
 //         nextLine = 0x0085,
-// 
+//
 //         // Unicode 3.0 space characters
 //         space = 0x0020,   // " "
 //         nonBreakingSpace = 0x00A0,   //
@@ -1200,11 +1201,11 @@ module ts {
 //         narrowNoBreakSpace = 0x202F,
 //         ideographicSpace = 0x3000,
 //         mathematicalSpace = 0x205F,
-//         ogham = 0x1680, 
-// 
+//         ogham = 0x1680,
+//
 //         _ = 0x5F,
 //         $ = 0x24,
-// 
+//
 //         _0 = 0x30,
 //         _1 = 0x31,
 //         _2 = 0x32,
@@ -1215,7 +1216,7 @@ module ts {
 //         _7 = 0x37,
 //         _8 = 0x38,
 //         _9 = 0x39,
-// 
+//
 //         a = 0x61,
 //         b = 0x62,
 //         c = 0x63,
@@ -1242,7 +1243,7 @@ module ts {
 //         x = 0x78,
 //         y = 0x79,
 //         z = 0x7A,
-// 
+//
 //         A = 0x41,
 //         B = 0x42,
 //         C = 0x43,
@@ -1269,7 +1270,7 @@ module ts {
 //         X = 0x58,
 //         Y = 0x59,
 //         Z = 0x5a,
-// 
+//
 //         ampersand = 0x26,             // &
 //         asterisk = 0x2A,              // *
 //         at = 0x40,                    // @
@@ -1298,7 +1299,7 @@ module ts {
 //         singleQuote = 0x27,           // '
 //         slash = 0x2F,                 // /
 //         tilde = 0x7E,                 // ~
-// 
+//
 //         backspace = 0x08,             // \b
 //         formFeed = 0x0C,              // \f
 //         byteOrderMark = 0xFEFF,

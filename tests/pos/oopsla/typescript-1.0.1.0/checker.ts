@@ -47,7 +47,7 @@ module ts {
         var typeCount = 0;
 
         /*@ emptyArray :: forall T . () => { IArray<T> | (len v) = 0 }  */
-        function emptyArray(): any[] { return []; }; 
+        function emptyArray(): any[] { return []; };
 
         var emptySymbols: SymbolTable = {};
 
@@ -122,10 +122,10 @@ module ts {
 
         /*@ getSymbolLinks :: (symbol: ISymbol) => { SymbolLinks<Immutable> | 0 < 1 } */
         function getSymbolLinks(symbol: Symbol): SymbolLinks {
-            if (symbol.flags & SymbolFlags.Transient) return <TransientSymbol>symbol;            
+            if (symbol.flags & SymbolFlags.Transient) return <TransientSymbol>symbol;
             if (!symbol.id) symbol.id = nextSymbolId++;
             var s = symbolLinks[symbol.id];
-            if(s) { return s; } 
+            if(s) { return s; }
             else { var o = {}; symbolLinks[symbol.id] = o; return o; }
         }
 
@@ -157,7 +157,7 @@ module ts {
         /*@ createType :: (flags: bitvector32) => { Type<UniqueMutable> | type_flags(flags,v) } */
         function createType(flags: TypeFlags): Type {
             /*@ result :: Type<UniqueMutable> */
-            var result = newType(checker, flags); 
+            var result = newType(checker, flags);
             result.id = typeCount++;
             return result;
         }
@@ -215,7 +215,7 @@ module ts {
             // forEach === exists
             /*@ _check :: (d: Declaration<Immutable>) => boolean */
             function _check(d: Declaration): boolean { return d.parent === currentNode.parent }
-            var cnt = true;     // PV: adding explicit check  
+            var cnt = true;     // PV: adding explicit check
             while (cnt && !forEach(typeParameterSymbol.declarations, _check)) {
                 var cp = currentNode.parent;
                 if (cp) { currentNode = cp; } else { cnt = false; }
@@ -243,7 +243,7 @@ module ts {
             return type;
         }
 
-        /*@ instantiateSignature :: /\ (signature: ISignature, mapper: TypeMapper<Immutable>) => { ISignature | 0 < 1 } 
+        /*@ instantiateSignature :: /\ (signature: ISignature, mapper: TypeMapper<Immutable>) => { ISignature | 0 < 1 }
                                     /\ (signature: ISignature, mapper: TypeMapper<Immutable>, eraseTypeParameters: boolean) => { ISignature | 0 < 1 } */
         declare function instantiateSignature(signature: Signature, mapper: TypeMapper, eraseTypeParameters?: boolean): Signature;
 

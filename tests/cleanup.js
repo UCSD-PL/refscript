@@ -6,7 +6,7 @@ var readline = require('readline');
 var exts=["css", "vc", "hi", "out", "js", "json", "fqout",
           "fq", "o", "err", "annot", "log", "cgi", "smt2", "html", "liquid"];
 
-var exceptions=["cleanup.js"]
+var exceptions=["cleanup.js", "tsconfig.json"]
 
 var cmd = "find . " + exts.map(function(e){return '-name "*.' + e + '" '}).join(" -o ");
 
@@ -26,12 +26,12 @@ var deleteFolderRecursive = function(path) {
 };
 
 var exec = require('child_process').exec;
-function puts(error, stdout, stderr) { 
+function puts(error, stdout, stderr) {
   files = stdout.split("\n").filter(function(s){return s !== ""; });
 
   //Filter out exceptions
   exceptions.forEach(function(e) {
-    files = files.filter(function(f){ 
+    files = files.filter(function(f){
       return f.indexOf(e) === -1;
     });
   });
@@ -44,7 +44,7 @@ function puts(error, stdout, stderr) {
   }
 
   var txt = "\nAre you sure you want to delete these " + files.length + " paths? (type 'Yes' to confirm) ";
-  
+
   var rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -54,13 +54,13 @@ function puts(error, stdout, stderr) {
     if (answer === "Yes") {
       console.log("Deleting " + files.length + " paths ...");
 
-      files.forEach(function(f){ 
+      files.forEach(function(f){
         if (fs.lstatSync(f).isFile()) {
           fs.unlink(f);
         }
       });
 
-      files.forEach(function(f){ 
+      files.forEach(function(f){
         if (fs.existsSync(f) && fs.lstatSync(f).isDirectory()) {
           deleteFolderRecursive(f);
         }
@@ -76,4 +76,3 @@ function puts(error, stdout, stderr) {
 }
 
 exec(cmd, puts);
-

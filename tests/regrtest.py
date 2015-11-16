@@ -99,26 +99,29 @@ options, args = parser.parse_args()
 
 testSign  = [("pos", 0), ("neg", 1)]
 
-testCategories = [ ("objects",   [])
-                 , ("arrays",    [])
-                 , ("classes",   [])
-                 , ("loops",     [])
-                 , ("misc",      [])
-                 , ("operators", [])
-                 , ("simple",    [])
-                 , ("unions",    [])
-                 , ("typealias", [])
-                 , ("fb",        [])
-                 , ("inclusion", ["--extrainvs"])
-                 # ## not supported:
-                 # , "proto"
-                 # , "lists"
+testCategories = [
+                    ("oopsla/d3", [])
+
+                #    ("objects",   [])
+                #  , ("arrays",    [])
+                #  , ("classes",   [])
+                #  , ("loops",     [])
+                #  , ("misc",      [])
+                #  , ("operators", [])
+                #  , ("simple",    [])
+                #  , ("unions",    [])
+                #  , ("typealias", [])
+                #  , ("fb",        [])
+                #  , ("inclusion", ["--extrainvs"])
+
+                # ## not supported:
+                # , "proto"
+                # , "lists"
 
                  ]
 
-testdirs = [("/".join([s, c]), p, fs) for (s, p)  in testSign 
+testdirs = [("/".join([s, c]), p, fs) for (s, p)  in testSign
                                       for (c, fs) in testCategories ]
 
 runner    = rtest.TestRunner (Config ("stack exec -- rsc", options.opts, testdirs, logfile, options.threadcount))
 runner.run ()
-

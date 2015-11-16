@@ -40,3 +40,6 @@ css/
 /tests/logs/*
 /out
 .stack-work
+.stylish-haskell.yaml
+src/Paths_refscript.hs
+tags

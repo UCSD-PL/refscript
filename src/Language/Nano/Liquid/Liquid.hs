@@ -985,7 +985,8 @@ consInstantiate l g fn ft ts xes
         Just           <$> envAddFresh "5" l (ot', WriteLocal, Initialized) g
   where
     toList (FI x xs)     = maybeToList x ++ xs
-    err t1 t2            = errorLiquid' l ("Call to " ++ ppshow fn ++ " SUB: " ++ ppshow t1 ++ " <: " ++ ppshow t2)
+    err t1 t2            = errorLiquid' l ""
+    -- err t1 t2            = errorLiquid' l ("Call to " ++ ppshow fn ++ " SUB: " ++ ppshow t1 ++ " <: " ++ ppshow t2)
 
     idxMapFI f i (FI Nothing ts)  = FI     Nothing        <$> zipWithM f [i..] ts
     idxMapFI f i (FI (Just t) ts) = FI <$> Just <$> f i t <*> zipWithM f [(i+1)..] ts

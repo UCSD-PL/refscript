@@ -102,28 +102,35 @@ declare function builtin_OpGT(a: any, b: any): boolean;
 declare function builtin_OpGEq(a: any, b: any): boolean;
 
 /*@ builtin_OpAdd ::
-    /\ (x: real, y: real) => {real | v = x + y}
-    /\ (x:number, y:number) => {number | v = x + y}
-    /\ (x:bitvector32, y:bitvector32) => { bitvector32 | true }
-    /\ (x:number, y:string) => {string | true}
-    /\ (x:string, y:number) => {string | true}
-    /\ (x:string, y:string) => {string | true}
-    /\ (x:string, y:boolean) => {string | true}
-        /\ (x:boolean, y:string) => {string | true}
+    /\ (x: real       , y: real       ) => { real   | v = x + y }
+    /\ (x: number     , y: real       ) => { real   | v = x + y }
+    /\ (x: real       , y: number     ) => { real   | v = x + y }
+    /\ (x: number     , y: number     ) => { number | v = x + y }
+    /\ (x: bitvector32, y: bitvector32) => { bitvector32 | 0 < 1 }
+    /\ (x: number     , y: string     ) => { string | 0 < 1 }
+    /\ (x: string     , y: number     ) => { string | 0 < 1 }
+    /\ (x: string     , y: string     ) => { string | 0 < 1 }
+    /\ (x: string     , y: boolean    ) => { string | 0 < 1 }
+    /\ (x: boolean    , y: string     ) => { string | 0 < 1 }
  */
 declare function builtin_OpAdd(a: any, b: any): any;
 
 /*@ builtin_OpSub ::
-    (x:number, y:number)  => {v:number | v ~~ x - y}
+    /\ (x: number, y: number)  => { number | v ~~ x - y }
+    /\ (x: real  , y: number)  => { real   | v ~~ x - y }
+    /\ (x: number, y: real  )  => { real   | v ~~ x - y }
+    /\ (x: real  , y: real  )  => { real   | v ~~ x - y }
 */
 declare function builtin_OpSub(a: number, b: number): number;
 
+// TODO: Get rid of this?
+// /\ (x: number, y: number) => { v:number | [ v = x * y ; (x > 0 && y > 0) => v > 0 ; (x < 0 && y < 0) => v > 0 ; (x = 0 || y = 0) => v = 0 ] }
+
 /*@ builtin_OpMul ::
-    /\ (x: number, y: number) => { v:number | [ v = x * y ;
-                                               (x > 0 && y > 0) => v > 0 ;
-                                               (x < 0 && y < 0) => v > 0 ;
-                                               (x = 0 || y = 0) => v = 0 ] }
-    /\  (x: real, y: real) => { v:real | v = x * y }
+    /\ (x: number, y: number) => { v: number | v = x * y }
+    /\ (x: number, y: real  ) => { v: real   | v = x * y }
+    /\ (x: real  , y: number) => { v: real   | v = x * y }
+    /\ (x: real  , y: real  ) => { v: real   | v = x * y }
  */
 declare function builtin_OpMul(a: number, b: number): number;
 
@@ -135,7 +142,8 @@ declare function builtin_OpDiv(a: number, b: number): number;
 declare function builtin_OpMod(a: number, b: number): number;
 
 /*@ builtin_PrefixPlus ::
-    (x:number) => {v:number  | v ~~ x}
+    /\ (x: real)   => { v: real   | v ~~ x }
+    /\ (x: number) => { v: number | v ~~ x }
  */
 declare function builtin_PrefixPlus(a: number): number;
 
@@ -444,7 +452,10 @@ interface Math {
     ceil(x: number): number;
     cos(x: number): number;
     exp(x: number): number;
-    /*@ floor : (x: number) : {number | x - 1 < v && v <= x} */
+    /*@ floor :
+        /\ (x: number) : { number | x = v }
+        /\ (x: real  ) : { number | x - 1 < v && v <= x }
+     */
     floor(x: number): number;
     log(x: number): number;
     /*@ max : (a:number, b:number) : {number | v = if (a < b) then b else a} */

@@ -1,15 +1,18 @@
 // R-7 per <http://en.wikipedia.org/wiki/Quantile>
 /// <reference path="include/d3.d.ts" />
 
-/*@ qualif RemoveMe(v:a): 0 < len(v) */
+/*@ mulThm1 :: (x: number, p: { real | v < 1 }) => { boolean | x * p < x } */
+declare function mulThm1(x, p);
 
-d3.quantile = function(values:number[], p:number): number 
-/*@ <anonymous> (arr: {IArray<number> | 0 < len v}, p: {number | 0 <= v && v < 1}) => number */
-{
-    var H = (values.length - 1) * p + 1; // TODO: we currently work only with integer math, so (0 <= p && p < 1) => (p = 0) which is why this passes so easily
-    var h:number = Math.floor(H);
-    var v:number = +values[h - 1];
-    var e:number = H - h;
+/*@ d3_quantile :: (values: {IArray<real> | 0 < len v}, p: { real | 0 <= v && v < 1 }) => real */
+function d3_quantile(values: number[], p: number): number {
+    var H = (values.length - 1) * p + 1;
+    var h = Math.floor(H);
+    var lemma1_ = mulThm1(h - 1, p);            // PV: adding this lemma
+    var v = +values[h - 1];
+    var e = H - h;
     return e ? v + e * (values[h] - v) : v;
 };
 
+// TODO
+// d3.quantile = d3_quantile;

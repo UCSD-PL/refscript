@@ -488,7 +488,8 @@ rTypeCode (TApp c _ _)   = 11 + tconCode c
 rTypeCode _              = errorstar "Types.rTypeCode"
 
 tconCode TInt            = 0
-tconCode TBool           = 1
+tconCode TNum            = 1
+tconCode TBool           = 2
 tconCode TString         = 3
 tconCode TVoid           = 4
 tconCode TTop            = 5

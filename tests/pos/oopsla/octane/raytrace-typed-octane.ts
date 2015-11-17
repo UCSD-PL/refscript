@@ -21,7 +21,7 @@
 /*@ alias MIntersectionInfo = IntersectionInfo<Mutable> */
 
 //TODO: move this stuff to prelude?
-/*@ qualif HasP<A>(x: string, y: A): hasProperty(x, y) */
+/*@ qualif HasP <A>(x: string, y: A): hasProperty(x, y) */
 /*@ qualif EnumP<A>(x: string, y: A): enumProp(x, y) */
 
 interface HTMLCanvasElement {

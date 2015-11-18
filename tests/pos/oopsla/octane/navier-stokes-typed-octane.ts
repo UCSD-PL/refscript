@@ -24,8 +24,8 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/*@ qualif Add(v: number, n: number, m: number): v < m + n */
-/*@ qualif Add(v: number, n: number, m: number): v = m + n */
+/*@ qualif Add1(v: number, n: number, m: number): v < m + n */
+/*@ qualif Add2(v: number, n: number, m: number): v = m + n */
 
 /// <reference path="mulThms.d.ts" />
 
@@ -254,6 +254,7 @@ module NavierStokes {
                         var _lemma = mulThm2(rowSize, j, height+2);
                         ++currentRow;
                         for (var i = 0; i < width; i++) {
+                            //needs Add2
                             x[currentRow] = x0[currentRow];
                             ++currentRow;
                         }
@@ -309,6 +310,7 @@ module NavierStokes {
                         var _lemma = mulThm2(rowSize, j, height+2);
                         ++currentRow;
                         for (var i = 0; i < width; i++) {
+                            //needs Add2
                             x[currentRow] = x0[currentRow];
                             y[currentRow] = y0[currentRow];
                             ++currentRow;
@@ -404,8 +406,8 @@ module NavierStokes {
             /*@ project : (u  :{v:IArray<number> | (len v) = this.size}, 
                            v  :{v:IArray<number> | (len v) = this.size}, 
                            p  :{v:IArray<number> | (len v) = this.size}, 
-                           div:{v:IArray<number> | (len v) = this.size}) : void */
-            project(u:number[], ww:number[], p:number[], div:number[])
+                           divv:{v:IArray<number> | (len v) = this.size}) : void */
+            project(u:number[], ww:number[], p:number[], divv:number[])
             {
                 var width = this.width;
                 var height = this.height;
@@ -423,14 +425,14 @@ module NavierStokes {
                     var _lemma2 = mulThm2(rowSize, j, height+2);
                     var _lemma3 = mulThm2(rowSize, j+1, height+2);
                     for (var i = 1; i <= width; i++ ) {
-                        div[++currentRow] = h * (u[++nextValue] - u[++prevValue] + ww[++nextRow] - ww[++previousRow]);
+                        divv[++currentRow] = h * (u[++nextValue] - u[++prevValue] + ww[++nextRow] - ww[++previousRow]);
                         p[currentRow] = 0;
                     }
                 }
-                this.set_bnd(0, div);
+                this.set_bnd(0, divv);
                 this.set_bnd(0, p);
 
-                this.lin_solve(0, p, div, 1, 4 );
+                this.lin_solve(0, p, divv, 1, 4 );
                 var wScale = 1/2 * width;//.
                 var hScale = 1/2 * height;//.
                 for (var k = 1; k<= height; k++ ) {

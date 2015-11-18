@@ -127,7 +127,7 @@ declare function builtin_OpSub(a: number, b: number): number;
 // /\ (x: number, y: number) => { v:number | [ v = x * y ; (x > 0 && y > 0) => v > 0 ; (x < 0 && y < 0) => v > 0 ; (x = 0 || y = 0) => v = 0 ] }
 
 /*@ builtin_OpMul ::
-    /\ (x: number, y: number) => { v: number | v = x * y }
+    /\ (x: number, y: number) => { v:number | [ v = x * y ; (x > 0 && y > 0) => v > 0 ; (x < 0 && y < 0) => v > 0 ; (x = 0 || y = 0) => v = 0 ] }
     /\ (x: number, y: real  ) => { v: real   | v = x * y }
     /\ (x: real  , y: number) => { v: real   | v = x * y }
     /\ (x: real  , y: real  ) => { v: real   | v = x * y }
@@ -410,20 +410,20 @@ declare var Number: {
     <A>(value: A): number;							// (value?: any): number;
     prototype: Number;
 
-    /*  MAX_VALUE: { number | v = numeric_max_value } */
-    MAX_VALUE: number;
+    // /*  MAX_VALUE: { number | v = numeric_max_value } */
+    // MAX_VALUE: number;
 
-    /*  MIN_VALUE: { number | v = numeric_min_value } */
-    MIN_VALUE: number;
+    // /*  MIN_VALUE: { number | v = numeric_min_value } */
+    // MIN_VALUE: number;
 
-    /*  NaN: { number | v = numeric_nan } */
-    NaN: number;
+    // /*  NaN: { number | v = numeric_nan } */
+    // NaN: number;
 
-    /*  NEGATIVE_INFINITY: { number | v = numeric_negative_infinity } */
-    NEGATIVE_INFINITY: number;
+    // /*  NEGATIVE_INFINITY: { number | v = numeric_negative_infinity } */
+    // NEGATIVE_INFINITY: number;
 
-    /*  POSITIVE_INFINITY: { number | v = numeric_positive_infinity } */
-    POSITIVE_INFINITY: number;
+    // /*  POSITIVE_INFINITY: { number | v = numeric_positive_infinity } */
+    // POSITIVE_INFINITY: number;
 }
 
 
@@ -436,14 +436,14 @@ declare var Number: {
  */
 
 interface Math {
-    E: number;
-    LN10: number;
-    LN2: number;
-    LOG2E: number;
-    LOG10E: number;
-    PI: number;
-    SQRT1_2: number;
-    SQRT2: number;
+    // E: number;
+    // LN10: number;
+    // LN2: number;
+    // LOG2E: number;
+    // LOG10E: number;
+    // PI: number;
+    // SQRT1_2: number;
+    // SQRT2: number;
     abs(x: number): number;
     acos(x: number): number;
     asin(x: number): number;

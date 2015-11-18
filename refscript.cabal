@@ -57,6 +57,7 @@ Executable rsc
                   , text-format
                   , array
                   , attoparsec
+                  , ascii-progress >= 0.3
                   , refscript
 
   -- ghc-options:    -threaded -- -W -O2
@@ -94,6 +95,7 @@ Library
                   , text-format
                   , array
                   , attoparsec
+                  , ascii-progress >= 0.3
 
   hs-source-dirs:   src
   Exposed-Modules:  Paths_refscript,

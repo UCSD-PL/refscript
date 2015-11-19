@@ -24,8 +24,7 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/*@ qualif Add1(v: number, n: number, m: number): v < m + n */
-/*@ qualif Add2(v: number, n: number, m: number): v = m + n */
+/*@ qualif Add(v: number, n: number, m: number): v <= m + n */
 
 /// <reference path="mulThms.d.ts" />
 

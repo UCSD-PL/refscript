@@ -1,4 +1,4 @@
-/// <reference path="types.ts"/>
+/// <reference path="libs/types.ts"/>
 
 module ts {
     export interface StringSet extends Map<any> { }

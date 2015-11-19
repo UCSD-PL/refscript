@@ -127,10 +127,10 @@ declare function builtin_OpSub(a: number, b: number): number;
 // /\ (x: number, y: number) => { v:number | [ v = x * y ; (x > 0 && y > 0) => v > 0 ; (x < 0 && y < 0) => v > 0 ; (x = 0 || y = 0) => v = 0 ] }
 
 /*@ builtin_OpMul ::
-    /\ (x: number, y: number) => { v:number | [ v = x * y ; (x > 0 && y > 0) => v > 0 ; (x < 0 && y < 0) => v > 0 ; (x = 0 || y = 0) => v = 0 ] }
-    /\ (x: number, y: real  ) => { v: real   | v = x * y }
-    /\ (x: real  , y: number) => { v: real   | v = x * y }
-    /\ (x: real  , y: real  ) => { v: real   | v = x * y }
+    /\ (x: number, y: number) => { v: number | [ v = x * y ; (x > 0 && y > 0) => v > 0 ; (x < 0 && y < 0) => v > 0 ; (x = 0 || y = 0) => v = 0 ] }
+    /\ (x: number, y: real  ) => { v: real   | [ v = x * y ; (x > 0 && y > 0) => v > 0 ; (x < 0 && y < 0) => v > 0 ; (x = 0 || y = 0) => v = 0 ] }
+    /\ (x: real  , y: number) => { v: real   | [ v = x * y ; (x > 0 && y > 0) => v > 0 ; (x < 0 && y < 0) => v > 0 ; (x = 0 || y = 0) => v = 0 ] }
+    /\ (x: real  , y: real  ) => { v: real   | [ v = x * y ; (x > 0 && y > 0) => v > 0 ; (x < 0 && y < 0) => v > 0 ; (x = 0 || y = 0) => v = 0 ] }
  */
 declare function builtin_OpMul(a: number, b: number): number;
 

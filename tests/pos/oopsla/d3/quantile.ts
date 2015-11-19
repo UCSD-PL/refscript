@@ -8,7 +8,7 @@ declare function mulThm1(x, p);
 function d3_quantile(values: number[], p: number): number {
     var H = (values.length - 1) * p + 1;
     var h = Math.floor(H);
-    var lemma1_ = mulThm1(h - 1, p);            // PV: adding this lemma
+    var lemma1_ = mulThm1(values.length - 1, p);            // PV: adding this lemma    
     var v = +values[h - 1];
     var e = H - h;
     return e ? v + e * (values[h] - v) : v;

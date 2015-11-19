@@ -26,7 +26,7 @@
 
 /*@ qualif Add(v: number, n: number, m: number): v <= m + n */
 
-/// <reference path="mulThms.d.ts" />
+/// <reference path="libs/mulThms.d.ts" />
 
 module NavierStokes {
     /*@ solver :: {v:FluidField<Mutable> | offset(v,"width") = 128 && offset(v,"height") = 128} + null */

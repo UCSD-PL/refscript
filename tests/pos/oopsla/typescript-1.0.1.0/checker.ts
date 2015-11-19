@@ -1,9 +1,5 @@
-/// <reference path="types.ts"/>
-/// <reference path="core.defs.ts"/>
-//  <reference path="parser.ts"/>
-//  <reference path="scanner.ts"/>
-//  <reference path="binder.ts"/>
-//  <reference path="emitter.ts"/>
+/// <reference path="libs/types.ts"/>
+/// <reference path="libs/core.defs.ts"/>
 
 module ts {
 

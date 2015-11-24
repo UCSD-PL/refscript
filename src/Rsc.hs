@@ -37,6 +37,13 @@ main :: IO a
 main = do cfg  <- cmdArgs config
           run (verifier cfg) cfg
 
+top s invs = run (verifier cfg) cfg
+  where
+    cfg = def { extraInvs = invs
+              , files     = [s]
+              }
+
+
 -------------------------------------------------------------------------------
 verifier :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult Error)
 -------------------------------------------------------------------------------
@@ -60,7 +67,8 @@ withExistingFile :: Config -> FilePath -> IO (Either (F.FixResult Error) [FilePa
 withExistingFile cfg f
   | ext `elem` oks
   = do  libs              <- getIncludeLibs cfg
-        (code, stdOut, _) <- readProcessWithExitCode tsCmd (mkArgs libs) ""
+        tsBin             <- getTSBindPath
+        (code, stdOut, _) <- readProcessWithExitCode "node" (mkArgs tsBin libs) ""
         case code of
           ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
                                 Left  s  -> return $ Left  $ F.UnknownError $ s <//> stdOut
@@ -72,9 +80,9 @@ withExistingFile cfg f
   = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
   where
     ext            = takeExtension f
-    tsCmd          = "tsc-refscript"
     oks            = [".ts", ".js"]
-    mkArgs libs    = [ "--outDir", tempDirectory f
+    mkArgs ts libs = [ ts
+                     , "--outDir", tempDirectory f
                      , "--module", moduleKind
                      , "--refscript", "cmdline"
                      ] ++
@@ -82,9 +90,10 @@ withExistingFile cfg f
                      [ f ]
     moduleKind      = "commonjs" -- also 'amd', 'system', 'umd'
 
+
 getIncludeLibs :: Config -> IO [FilePath]
 getIncludeLibs cfg = case prelude cfg of
-  Nothing -> single <$> getPreludeTSPath
+  Nothing -> tracePP "" <$> single <$> getPreludeTSPath
   Just p  -> return [p]
 
 instance FromJSON (F.FixResult Error)

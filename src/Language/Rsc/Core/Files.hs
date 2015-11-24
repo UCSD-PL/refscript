@@ -10,6 +10,7 @@ module Language.Rsc.Core.Files (
   , getPreludeTSPath
   , getDomJSONPath
   , getDomTSPath
+  , getTSBindPath
   )
   where
 
@@ -26,6 +27,8 @@ getPreludeTSPath   = getDataFileName "include/prelude.d.ts"
 getDomTSPath       = getDataFileName "include/ambient/dom.ts"
 getPreludeJSONPath = (`replaceExtension` ".json") <$> getPreludeTSPath
 getDomJSONPath     = (`replaceExtension` ".json") <$> getDomTSPath
+
+getTSBindPath      = getDataFileName "./ext/tsc-bin/built/local/tsc-refscript.js"
 
 
 

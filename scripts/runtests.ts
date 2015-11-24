@@ -57,14 +57,19 @@ interface TestFile {
 }
 
 
-// Main code 
+// Main code
 
 let exec = child_process.exec;
-let commandPrefix = ['rsc']
+let commandPrefix = ['stack exec -- rsc']
 
 let testDir = path.join(__dirname, "../tests");
 let polarities = ["pos", "neg"];
-let categories = ["arrays"] // "operators", "simple", "scope"];
+let categories = [
+    "operators",
+    "simple",
+    "scope",
+    "arrays"
+];
 
 let testQueries: TestQuery[] = _.flatten(polarities.map(polarity => categories.map(category =>
     makeTestQuery(polarity, path.join(testDir, polarity, category, "**/*.ts"))

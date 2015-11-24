@@ -27049,7 +27049,7 @@ var ts;
                     case ts.SyntaxKind.ExclamationToken:
                         return new ts.RsPrefixExpr(nodeToSrcSpan(node), [], new ts.RsPrefixOp(ts.RsPrefixOpKind.PrefixLNot), nodeToRsExp(state, node.operand));
                     case ts.SyntaxKind.PlusPlusToken:
-                        return new ts.RsUnaryAssignExpr(nodeToSrcSpan(node), [], new ts.RsUnaryAssignOp(ts.RsUnaryAssignOpKind.PrefixInc), nodeToRsExp(state, node.operand));
+                        return new ts.RsUnaryAssignExpr(nodeToSrcSpan(node), [], new ts.RsUnaryAssignOp(ts.RsUnaryAssignOpKind.PrefixInc), nodeToRsLval(state, node.operand));
                     case ts.SyntaxKind.PlusToken:
                         return new ts.RsPrefixExpr(nodeToSrcSpan(node), [], new ts.RsPrefixOp(ts.RsPrefixOpKind.PrefixPlus), nodeToRsExp(state, node.operand));
                     default:

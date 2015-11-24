@@ -70,12 +70,12 @@ type Err a  = Either (F.FixResult Error) a
 verifyFile :: Config -> FilePath -> [FilePath] -> IO Result
 --------------------------------------------------------------------------------
 verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
-  do  p     <- announce "parse" $ EitherIO   $ parseRscFromFiles fs
+  do  p     <- announce "Parse" $ EitherIO   $ parseRscFromFiles fs
       cfg'  <- liftIO           $ withPragmas cfg (pOptions p)
       _     <- pure             $ checkTypeWF p
       cha   <- liftEither       $ mkCHA p
       -- _   <- liftIO            $ dumpJS f cha "-parse" p
-      ssa   <- announce "ssa"   $ EitherIO (ssaTransform p cha)
+      ssa   <- announce "SSA"   $ EitherIO (ssaTransform p cha)
 
       cha0  <- liftEither       $ mkCHA ssa
       _     <- liftIO           $ dumpJS f cha0 "-ssa" ssa
@@ -88,9 +88,9 @@ verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
       return   res
 
 announce s a
-  = do  -- _ <- liftIO     $ startPhase Loud s
+  = do  _ <- liftIO     $ startPhase Loud s
         r <- a
-        _ <- liftIO     $ donePhase Loud s
+        -- _ <- liftIO     $ donePhase Loud s
         return r
 
 

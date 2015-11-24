@@ -13,7 +13,7 @@ category:            Language
 cabal-version:       >=1.18
 
 data-files:          README.md,
-                     include/prelude.d.ts
+                     ext/tsc-bin/built/local/prelude.d.ts
 
 Source-Repository this
   Tag:         0.1

@@ -1,13 +1,13 @@
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TupleSections              #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE RankNTypes                 #-}
-{-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE TypeSynonymInstances       #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE ImpredicativeTypes         #-}
-{-# LANGUAGE NoMonomorphismRestriction  #-}
+{-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE ImpredicativeTypes        #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
 
 module Language.Nano.Visitor (
     Transformable (..)
@@ -43,47 +43,47 @@ module Language.Nano.Visitor (
 
   ) where
 
-import           Data.Functor.Identity          (Identity)
-import           Data.Monoid
+import           Control.Applicative              ((<$>), (<*>))
+import           Control.Exception                (throw)
+import           Control.Monad
+import           Control.Monad.Trans.Class        (lift)
+import           Control.Monad.Trans.State        (StateT, modify, runState, runStateT)
 import           Data.Data
 import           Data.Default
+import           Data.Functor.Identity            (Identity)
 import           Data.Generics
-import qualified Data.HashSet                   as H
-import           Data.List                      (partition)
-import qualified Data.Map.Strict                as M
-import           Data.Maybe                     (maybeToList, listToMaybe, fromMaybe)
-import qualified Data.IntMap                    as I
-import qualified Data.Traversable               as T
-import           Data.Text                      (pack, splitOn)
-import           Control.Applicative            ((<$>), (<*>))
-import           Control.Exception              (throw)
-import           Control.Monad.Trans.State      (modify, runState, StateT, runStateT)
-import           Control.Monad.Trans.Class      (lift)
-import           Control.Monad
-import           Language.Nano.Misc             (single, concatMapM, mapPair, mapSndM, (<##>), (<###>))
+import qualified Data.HashSet                     as H
+import qualified Data.IntMap                      as I
+import           Data.List                        (partition)
+import qualified Data.Map.Strict                  as M
+import           Data.Maybe                       (fromMaybe, listToMaybe, maybeToList)
+import           Data.Monoid
+import           Data.Text                        (pack, splitOn)
+import qualified Data.Traversable                 as T
+import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Misc           hiding ((<$$>))
+import           Language.Fixpoint.Names          (symSepName, symbolString)
+import qualified Language.Fixpoint.Types          as F
+import qualified Language.Fixpoint.Visitor        as V
+import           Language.Nano.Annots             hiding (err)
+import           Language.Nano.Env
 import           Language.Nano.Errors
+import           Language.Nano.Liquid.Types       ()
+import           Language.Nano.Locations
+import           Language.Nano.Misc               (concatMapM, mapPair, mapSndM, single, (<###>), (<##>))
+import           Language.Nano.Names
+import           Language.Nano.Program
 import           Language.Nano.Syntax
 import           Language.Nano.Syntax.Annotations
 import           Language.Nano.Syntax.PrettyPrint
-import           Language.Nano.Env
-import           Language.Nano.Types
-import           Language.Nano.Typecheck.Types
-import           Language.Nano.Names
-import           Language.Nano.Locations
-import           Language.Nano.Annots           hiding (err)
-import           Language.Nano.Program
 import           Language.Nano.Typecheck.Resolve
-import           Language.Nano.Liquid.Types     ()
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Names        (symbolString, symSepName)
-import           Language.Fixpoint.Misc hiding ((<$$>))
-import qualified Language.Fixpoint.Types        as F
-import qualified Language.Fixpoint.Visitor      as V
+import           Language.Nano.Typecheck.Types
+import           Language.Nano.Types
 
 -- import           Debug.Trace                        (trace)
 
-import           Text.Printf
 import           Text.PrettyPrint.HughesPJ
+import           Text.Printf
 
 --------------------------------------------------------------------------------
 -- | Top-down visitors
@@ -259,6 +259,7 @@ visitExpr v = vE
                                                                 acc = accExpr v c' e
      step _ e@(BoolLit {})           = return e
      step _ e@(IntLit {})            = return e
+     step _ e@(NumLit {})            = return e
      step _ e@(HexLit {})            = return e
      step _ e@(NullLit {})           = return e
      step _ e@(StringLit {})         = return e

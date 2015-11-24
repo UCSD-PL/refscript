@@ -9,7 +9,7 @@ module K {
         /*@ y0 : [Immutable] { string | v = "" } */
         public y0 = "";
 
-        /*@ new () => { A<M> | true } */
+        /*@ new () => { A<M> | 0 < 1 } */
         constructor() {}
       }
 
@@ -23,7 +23,7 @@ module Mod {
     /*@ k : [Immutable] { string | v = "K" } */
     public k = "K";  
 
-    /*@ new () => { AA<M> | true } */
+    /*@ new () => { AA<M> | 0 < 1 } */
     constructor() {
       super();
     }

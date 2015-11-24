@@ -1,6 +1,6 @@
 
-/*@ foo :: /\ () => {void | true}            
-           /\ (l: {number | 0 <= v}) => {void | true} */
+/*@ foo :: /\ () => {void | 0 < 1}            
+           /\ (l: {number | 0 <= v}) => {void | 0 < 1} */
 function foo(l?: number) 
 {
 

@@ -28,6 +28,7 @@ unitTests = group "Unit"
     testGroup "pos-ops"    <$> dirTests rscCmd "tests/pos/operators"  [] ExitSuccess
   , testGroup "pos-ops"    <$> dirTests rscCmd "tests/pos/scope"      [] ExitSuccess
   , testGroup "pos-simple" <$> dirTests rscCmd "tests/pos/simple"     [] ExitSuccess
+--   , testGroup "pos-scope"  <$> dirTests rscCmd "tests/pos/scope"      [] ExitSuccess
 --   , testGroup "pos-union"  <$> dirTests rscCmd "tests/pos/unions"     [] ExitSuccess
 --   , testGroup "pos-alias"  <$> dirTests rscCmd "tests/pos/typealias"  [] ExitSuccess
 --   , testGroup "pos-fb"     <$> dirTests rscCmd "tests/pos/fb"         [] ExitSuccess
@@ -56,10 +57,10 @@ testBinary = "rsc"
 type TestCmd = FilePath -> FilePath -> FilePath -> String
 ---------------------------------------------------------------------------
 rscCmd :: TestCmd
-rscCmd bin dir file = printf "cd %s && %s    %s" dir bin file
+rscCmd bin dir file = printf "cd %s && %s %s" dir bin file
 
 eCmd :: TestCmd
-eCmd bin dir file   = printf "cd %s && %s -e %s" dir bin file
+eCmd bin dir file   = printf "cd %s && %s --extrainvs %s" dir bin file
 
 
 ---------------------------------------------------------------------------

@@ -22,7 +22,7 @@ function release(l:number):number{
 
 
 
-/*@ main :: () => { void | true } */
+/*@ main :: () => { void | 0 < 1 } */
 function main():void{
 	let x :number = random();
 	let l :number = create();

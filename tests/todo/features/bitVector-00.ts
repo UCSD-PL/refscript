@@ -22,7 +22,7 @@ interface Symbol {
 
 interface TransientSymbol extends Symbol { }
 
-/*@ getSymbolLinks :: (symbol: ISymbolF) => { void | true } */
+/*@ getSymbolLinks :: (symbol: ISymbolF) => { void | 0 < 1 } */
 function getSymbolLinks(symbol: Symbol): void {
 
     if (symbol.flags & SymbolFlags.Transient) {

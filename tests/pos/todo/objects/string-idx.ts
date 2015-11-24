@@ -1,10 +1,10 @@
 
-/*@ qualif HasDP(v:string, s:a): hasDirectProperty(v,s) */
-/*@ qualif HasP(v:string, s:a): hasProperty(v,s)        */
-/*@ qualif EnumP(v:string, s:a): enumProp(v,s)          */
+/*@ qualif HasDP<A>(v:string, s:A): hasDirectProperty(v,s) */
+/*@ qualif HasP<A>(v:string, s:A): hasProperty(v,s)        */
+/*@ qualif EnumP<A>(v:string, s:A): enumProp(v,s)          */
 
 /*@ extend :: ( src:  [Immutable]{[s:string]: top }, dest: [Mutable]{[s:string]: top})
-           => { [Mutable] {[s:string]: top } | true }
+           => { [Mutable] {[s:string]: top } | 0 < 1 }
  */
 function extend(src, dest) {
   for (var p in src) {

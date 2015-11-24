@@ -1,7 +1,7 @@
 
 /*@ qualif Ineq3(v : number ): (5 <= v) */
 
-/*@ foo :: (x: [#Mutable]{ a: [#Mutable] number }) => { number | true } */ 
+/*@ foo :: (x: [#Mutable]{ a: [#Mutable] number }) => { number | 0 < 1 } */ 
 
 function foo(x) : number {
 

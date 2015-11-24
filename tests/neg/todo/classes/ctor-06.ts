@@ -4,7 +4,7 @@ class AA {
   /*@ a : [Immutable] { string | v = "OLD" } */
   public a = "OLD"; 
 
-  /*@ new () => { AA<M> | true } */
+  /*@ new () => { AA<M> | 0 < 1 } */
   constructor () {}
 }
 
@@ -13,7 +13,7 @@ class BB extends AA {
   
   public b = 0;
     
-  /*@ new () => { BB<M> | true } */
+  /*@ new () => { BB<M> | 0 < 1 } */
   constructor() {
     super();
     this.a = "NEW";

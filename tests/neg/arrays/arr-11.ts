@@ -1,7 +1,7 @@
 //XXX: WORKS with this line - some qualifier scraping is missing...
 /*@ qualif Length(v:number): (len v) = 3 */
 
-/*@ foo :: () => {void | true} */
+/*@ foo :: () => {void | 0 < 1} */
 function foo(){
 
   /*@ a :: IArray<number> */

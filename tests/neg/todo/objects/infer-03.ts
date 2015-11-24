@@ -11,7 +11,7 @@ function foo() {
   return;
 }
 
-/*@ moo :: () => {void | true} */ 
+/*@ moo :: () => {void | 0 < 1} */ 
 function moo(){
   foo();
   var z = gobj.a;

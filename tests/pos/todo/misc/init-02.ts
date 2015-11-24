@@ -4,7 +4,7 @@
 // declare function crash<A>(): A; 
 
 
-/*@ init :: forall T. (number) => {v: T | true} */
+/*@ init :: forall T. (number) => {v: T | 0 < 1} */
 function init<T>(n:number):T{
     let x:T = crash();
     return x;

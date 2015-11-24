@@ -64,7 +64,7 @@ function kmp_table(p) {
 
 
 
-/*@ kmp_search :: (p:IArray<number>, s:IArray<number>) => {number | true} */ 
+/*@ kmp_search :: (p:IArray<number>, s:IArray<number>) => {number | 0 < 1} */ 
 function kmp_search(p, s) {
   var next = kmp_table(p);
   var m    = p.length;

@@ -2,7 +2,8 @@
 var exec = require('child_process').exec;
 var path = require('path');
 
-var includeDir = path.join(__dirname, "../include");
+// var includeDir = path.join(__dirname, "../include");
+var includeDir = path.join(__dirname, "../ext/tsc-bin/build/local");
 var outputFile = path.join(includeDir, "prelude.d.ts");
 
 var files = [

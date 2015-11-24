@@ -1,23 +1,22 @@
 //adapted from splay-typed-octane.ts
-
-class ListNode<M extends ReadOnly> {
-
+class ListNode {
+    /*@ new () => {ListNode<M> | 0 < 1} */
     constructor() { }
-
     /*@ right : ListNode<Immutable> + null */
     public right = null;
-
 }
 
-/*@ traverse_ :: (ListNode<Immutable>) => {void | true} */
+
+/*@ traverse_ :: (ListNode<Immutable>) => {void | 0 < 1} */
 function traverse_(x) {
 
     /*@ local current :: ListNode<Immutable> + null */
-    let current = x;
+    var current = x;
 
     while (current) {
-        let z = <ListNode<Immutable>>current;
+        /*  z :: ListNode<Immutable> */
+          var z = <ListNode>current;
+
         current = current.right;
     }
-
 }

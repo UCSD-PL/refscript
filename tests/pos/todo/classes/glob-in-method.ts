@@ -4,7 +4,7 @@ class Blah {
 
   public state = 3;
 
-  /*@ foo : () : { void | true } */
+  /*@ foo : () : { void | 0 < 1 } */
   public foo() {
     /*@ val :: number + null */
     var val = null;

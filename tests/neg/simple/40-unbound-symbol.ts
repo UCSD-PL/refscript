@@ -1,5 +1,5 @@
 
-/*@ outer :: (xxxx: number) => { void | true } */
+/*@ outer :: (xxxx: number) => { void | 0 < 1 } */
 function outer(xxxx: number) {
 
     /*@ obj :: {

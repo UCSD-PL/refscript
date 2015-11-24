@@ -14,7 +14,7 @@ function foo(x){
   return x + z;
 }
  
-/*@ main :: ({n:number|true}) => {v:number |v > n} */
+/*@ main :: ({n:number|0 < 1}) => {v:number |v > n} */
 function main(x){
   return twice(foo, x);
 }

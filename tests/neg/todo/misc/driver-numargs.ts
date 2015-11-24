@@ -37,7 +37,7 @@ function driver(l0, newCount0, oldCount0){
   return l;
 }
 
-/*@ main :: () => { void | true } */
+/*@ main :: () => { void | 0 < 1 } */
 function main() {
   var newCount = pos();
   var oldCount = pos(); 

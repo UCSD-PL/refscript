@@ -3,9 +3,9 @@ function id(x:any):any{
   return x;
 }
 
-/*@ foo :: /\ (number)  => {number  | true} 
-           /\ (boolean) => {boolean | true} 
-           /\ (string)  => {string  | true}
+/*@ foo :: /\ (number)  => {number  | 0 < 1} 
+           /\ (boolean) => {boolean | 0 < 1} 
+           /\ (string)  => {string  | 0 < 1}
  */
 function foo(y){
   let z = id(y);

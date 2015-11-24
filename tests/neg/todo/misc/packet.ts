@@ -6,7 +6,7 @@ class Packet {
   constructor() { }
 }
 
-/*@ foo :: (curr: Packet<Mutable>) => { Packet<Mutable> | true } */
+/*@ foo :: (curr: Packet<Mutable>) => { Packet<Mutable> | 0 < 1 } */
 function foo(curr) {
   var next = curr.link;
 

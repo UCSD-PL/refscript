@@ -1,15 +1,13 @@
 
-/*@ qualif HasP(v:string, s:A): hasProperty(v,s) */
-/*@ qualif EnumP(v:string, s:A): enumProp(v,s)    */
+/*@ qualif HasP<A>(x: string, y: A): hasProperty(x, y) */
+/*@ qualif EnumP<A>(x: string, y: A): enumProp(x, y) */
 
-/*@  values :: forall T . (map: [Immutable]{ [k:string]: T }) =>  { MArray<T> | true } */
-function values<T>(map:{[k:string]:T}): T[] {
-  
-  var values:T[] = [];
-  
-  for (var key in map) { 
-    values.push(<T>(map[key]));
-  }
-  
-  return values;
+
+/*@  values :: forall T . (mp: [Immutable]{ [k:string]: T }) =>  { void | 0 < 1 } */
+function values<T>(mp: { [k: string]: T }): void {
+
+    for (var key in mp) {
+        var a = <T>mp[key];
+    }
+
 };

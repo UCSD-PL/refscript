@@ -5,7 +5,7 @@
 /*@ extend :: (
     src:[Immutable]{[s:string]:string}
   , dest:[Mutable]{[s:string]:top}
-  ) => {[Mutable]{[s:string]:top} | true} */
+  ) => {[Mutable]{[s:string]:top} | 0 < 1} */
 function extend(src, dest) {
   for (var p in src) {
     dest[p] = src[p];

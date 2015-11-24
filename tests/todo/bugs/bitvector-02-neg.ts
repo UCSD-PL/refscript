@@ -27,7 +27,7 @@ interface Symbol {
 interface TransientSymbol extends Symbol { }
 interface ImportSymbol extends Symbol { }
 
-/*@ getSymbolLinks :: (symbol: Symbol<Immutable>) => { void | true } */
+/*@ getSymbolLinks :: (symbol: Symbol<Immutable>) => { void | 0 < 1 } */
 function getSymbolLinks(symbol: Symbol): void {
 
   if (symbol.flags & SymbolFlags.Merged) {

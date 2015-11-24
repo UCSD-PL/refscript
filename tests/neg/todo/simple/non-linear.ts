@@ -1,7 +1,7 @@
 
 /*@ alias nat = {number | v >= 0} */
 
-/*@ foo :: (x:nat, y:nat) => {void | true} */
+/*@ foo :: (x:nat, y:nat) => {void | 0 < 1} */
 
 function foo(x,y) {
 

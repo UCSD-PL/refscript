@@ -4,7 +4,7 @@ class Foo {
   /*@ new () => void */
   constructor() { this.x = 3; }
 
-  /*@ bar: (): { void | true } */
+  /*@ bar: (): { void | 0 < 1 } */
   bar() { this.x = 4; }
 }
 

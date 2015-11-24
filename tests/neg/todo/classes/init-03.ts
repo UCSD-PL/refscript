@@ -9,7 +9,7 @@ class Foo {
 
 }
 
-/*@ createFoo :: () => { Foo<Immutable> | true } */
+/*@ createFoo :: () => { Foo<Immutable> | 0 < 1 } */
 function createFoo() {
   /*@ foo :: Foo<UniqueMutable> */
   var foo = new Foo(4);

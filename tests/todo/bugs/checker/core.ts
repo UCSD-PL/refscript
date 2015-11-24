@@ -9,7 +9,7 @@ module ts {
 
 // // <<<< DONE >>>>
 // 
-//     /*@  forEach :: forall T U . (array: IArray<T>, callback: (element: T) => U) => { U | true } + undefined */
+//     /*@  forEach :: forall T U . (array: IArray<T>, callback: (element: T) => U) => { U | 0 < 1 } + undefined */
 //     export function forEach<T, U>(array: T[], callback: (element: T) => U): U {
 //         /*@ result :: U */
 //         var result: U;
@@ -22,7 +22,7 @@ module ts {
 //         return result;
 //     }
 // 
-//     /*@  contains :: forall T . (array: IArray<T>, value: T) => { boolean | true } */
+//     /*@  contains :: forall T . (array: IArray<T>, value: T) => { boolean | 0 < 1 } */
 //     export function contains<T>(array: T[], value: T): boolean {
 //         if (array) {
 //             var len = array.length;
@@ -35,7 +35,7 @@ module ts {
 //         return false;
 //     }
 // 
-//     /*@  indexOf :: forall T . (array: IArray<T>, value: T) => { number | true } */
+//     /*@  indexOf :: forall T . (array: IArray<T>, value: T) => { number | 0 < 1 } */
 //     export function indexOf<T>(array: T[], value: T): number {
 //         if (array) {
 //             var len = array.length;
@@ -48,7 +48,7 @@ module ts {
 //         return -1;
 //     }
 // 
-//     /*@  filter :: forall T . (array: IArray<T>, f: (T) => boolean) => { MArray<T> | true } + undefined */
+//     /*@  filter :: forall T . (array: IArray<T>, f: (T) => boolean) => { MArray<T> | 0 < 1 } + undefined */
 //     export function filter<T>(array: T[], f: (x: T) => boolean): T[] {
 //         var result: T[];
 //         if (array) {

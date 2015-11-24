@@ -1,4 +1,4 @@
-/*@ foo :: (x:Node<Mutable>, y:Node<Mutable> + null) => { void | true } */
+/*@ foo :: (x:Node<Mutable>, y:Node<Mutable> + null) => { void | 0 < 1 } */
 function foo(x, y) {
   var right, noOp;
   /*@ current :: Node<Mutable> */

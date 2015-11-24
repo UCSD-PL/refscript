@@ -1,5 +1,5 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TupleSections      #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module Language.Rsc.CmdLine (Config(..), config, withPragmas) where
 
@@ -30,6 +30,10 @@ data Config
            , extSolver  :: Bool           -- ^ use external (Ocaml) fixpoint solver (deprecated)
            }
   deriving (Data, Typeable, Show, Eq)
+
+
+instance Default Config where
+  def = Liquid [] [] False False Nothing False False
 
 
 ---------------------------------------------------------------------------------

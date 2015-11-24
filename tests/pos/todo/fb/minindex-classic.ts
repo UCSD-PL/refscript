@@ -1,5 +1,5 @@
 
-/*@ minIndex :: (arr:IArray<number>) => {number | true} */
+/*@ minIndex :: (arr:IArray<number>) => {number | 0 < 1} */
 function minIndex(arr){
   if (arr.length <= 0) return -1;
 

@@ -46,3 +46,6 @@ css/
 Paths_RefScript.hs
 cabal.sandbox.config
 .stack-work
+.stylish-haskell.yaml
+src/Paths_refscript.hs
+tags

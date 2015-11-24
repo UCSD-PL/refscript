@@ -25,7 +25,7 @@ class Snake extends Animal {
   }
 }
 
-/*@ move :: (a: Animal<Mutable>) => { void | true } */
+/*@ move :: (a: Animal<Mutable>) => { void | 0 < 1 } */
 function move(a: Animal) {
 
   if (a.kind === "snake") {

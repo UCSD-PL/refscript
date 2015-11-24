@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverlappingInstances      #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 
@@ -79,6 +80,7 @@ import           Language.Nano.Liquid.Types
 import           Language.Nano.Locations
 import           Language.Nano.Misc               (concatMapM, single)
 import           Language.Nano.Names
+import           Language.Nano.CmdLine
 import           Language.Nano.Program
 import qualified Language.Nano.SystemUtils        as S
 import           Language.Nano.Typecheck.Resolve
@@ -110,10 +112,10 @@ data CGInfo = CGI { cgi_finfo :: F.FInfo Cinfo
 
 -- Dump the refinement subtyping constraints
 instance PP CGInfo where
-  pp (CGI finfo _) = cat (map pp (HM.elems $ F.cm finfo))
+  pp (CGI finfo _) = vcat (map (\(k,v) -> pp k <+> text "::" <+> pp v) (HM.toList $ F.cm finfo))
 
 instance PP (F.SubC c) where
-  pp s = text "TODO: pp SubC" -- pp (F.clhs s) <+> text " <: " <+> pp (F.crhs s)
+  pp s = pp (F.slhs s) <+> text " <: " <+> pp (F.srhs s)
 
 
 -------------------------------------------------------------------------------
@@ -393,8 +395,10 @@ addInvariant :: CGEnv -> RefType -> CGM RefType
 ---------------------------------------------------------------------------------------
 addInvariant g t
   = do  extraInvariants <- extraInvs <$> cg_opts <$> get
-        if extraInvariants then (hasProp . hierarchy . truthy . typeof t . invs) <$> get
-                           else (          hierarchy . truthy . typeof t . invs) <$> get
+        t' <- hierarchy . truthy . typeof t . invs <$> get
+        if extraInvariants
+          then return $ hasProp t'
+          else return           t'
   where
     -- | typeof
     typeof t@(TApp tc _ o)  i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup tc i
@@ -417,7 +421,8 @@ addInvariant g t
     ofRef (F.Reft (s, ra))    = F.reft s <$> F.conjuncts ra
 
     -- | { f: T } --> hasProperty("f", v)
-    hasProp ty                = t `nubstrengthen` keyReft (boundKeys g ty)
+    hasProp ty                = ty `strengthen` keyReft (boundKeys g ty)
+
     keyReft ks                = F.reft (vv t) $ F.pAnd (F.PBexp . hasPropExpr <$> ks)
     hasPropExpr s             = F.EApp (F.dummyLoc (F.symbol "hasProperty"))
                                 [F.expr (symbolText s), F.eVar $ vv t]
@@ -831,15 +836,18 @@ splitC (Sub g i t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) r2))
   --
   | x1 == x2 && isImmutable m2 && not (isArr t1)
   = do  cs    <- bsplitC g i t1 t2
-        cs'   <- concatMapM splitC $ safeZipWith "splitc-4" (Sub g i) t1s t2s
+        g'    <- addTyBinds g t1s
+        cs'   <- concatMapM splitC $ safeZipWith "splitc-4" (Sub g' i) t1s t2s
         return $ cs ++ cs'
   --
   -- * Non-immutable, same name: invariance
   --
   | x1 == x2 && not (F.isFalse r2)
   = do  cs    <- bsplitC g i t1 t2
-        cs'   <- concatMapM splitC $ safeZipWith "splitc-5" (Sub g i) t1s t2s
-        cs''  <- concatMapM splitC $ safeZipWith "splitc-6" (Sub g i) t2s t1s
+        g1'   <- addTyBinds g t1s
+        cs'   <- concatMapM splitC $ safeZipWith "splitc-5" (Sub g1' i) t1s t2s
+        g2'   <- addTyBinds g t2s
+        cs''  <- concatMapM splitC $ safeZipWith "splitc-6" (Sub g2' i) t2s t1s
         return $ cs ++ cs' ++ cs''
 
   | x1 == x2
@@ -847,6 +855,9 @@ splitC (Sub g i t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) r2))
 
   | otherwise
   = splitIncompatC g i t1
+  where
+     addTyBinds = foldM step
+     step g t   = fmap snd $ envAddFresh "splitc" i (t, ReadOnly, Initialized) g
 
 -- | Rest of TApp
 --
@@ -1020,8 +1031,12 @@ splitW (W g i t@(TApp _ ts _))
 
 splitW (W g i t@(TRef _ ts _))
   =  do let ws = bsplitW g t i
+        g'    <- addTyBinds g ts
         ws'   <- concatMapM splitW [W g i ti | ti <- ts]
         return $ ws ++ ws'
+  where
+     addTyBinds = foldM step
+     step g t   = fmap snd $ envAddFresh "splitc" i (t, ReadOnly, Initialized) g
 
 splitW (W g i (TAnd ts))
   = concatMapM splitW [W g i t | t <- ts]

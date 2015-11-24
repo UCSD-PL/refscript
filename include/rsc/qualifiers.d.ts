@@ -15,7 +15,7 @@
 /*@ qualif Cmp  (v: int , x: int): v >= x       */
 /*@ qualif Cmp  (v: a   , x: a  ): v ~~ x       */
 /*@ qualif Cmp  (v: a   , x: a  ): v != x       */
-/*@ qualif True (v: bool        ): (Prop v)     */
-/*@ qualif False(v: bool        ): not (Prop v) */
+/*@ qualif True (v: a           ): (Prop v)     */
+/*@ qualif False(v: a           ): not (Prop v) */
 /*@ qualif Tag  (v: Str , x: a  ): v = ttag x   */
 /*@ qualif Len  (v: int , x: a  ): v < len w    */

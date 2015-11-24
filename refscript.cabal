@@ -2,8 +2,8 @@ name:                refscript
 version:             0.1.0.0
 Copyright:           2010-14 Regents of the University of California
 build-type:          Custom
-synopsis:            Refinement Types for Scripting Languages
-Description:         Refinement Types for Scripting Languages
+synopsis:            Refinement Types for TypeScript
+Description:         Refinement Types for TypeScript
 homepage:            https://github.com/UCSD-PL/refscript
 license:             BSD3
 license-file:        LICENSE
@@ -13,7 +13,7 @@ category:            Language
 cabal-version:       >=1.18
 
 data-files:          README.md,
-                     include/*.d.ts
+                     include/prelude.d.ts
 
 Source-Repository this
   Tag:         0.1

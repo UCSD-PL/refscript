@@ -93,7 +93,7 @@ withExistingFile cfg f
 
 getIncludeLibs :: Config -> IO [FilePath]
 getIncludeLibs cfg = case prelude cfg of
-  Nothing -> tracePP "" <$> single <$> getPreludeTSPath
+  Nothing -> single <$> getPreludeTSPath
   Just p  -> return [p]
 
 instance FromJSON (F.FixResult Error)

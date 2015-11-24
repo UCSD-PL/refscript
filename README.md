@@ -31,6 +31,11 @@ Refinement Types for TypeScript
 
     cd tests; ./regrtest.py; cd -
 
+### Fast load (using ghci)
+
+    stack ghci refscript:exe:rsc
+    *main> top "file.ts" False
+
 
 ## Advanced
 

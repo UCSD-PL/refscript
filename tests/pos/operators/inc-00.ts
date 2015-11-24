@@ -1,4 +1,4 @@
-/*@ qualif PlusOne(v:number, x:number)   : v = x + 1    */
+/*@ qualif PlusOne(v: int, x: int)   : v = x + 1    */
 
 function inc(x: number) {
     return x + 1;

@@ -1,7 +1,7 @@
 // R-7 per <http://en.wikipedia.org/wiki/Quantile>
 /// <reference path="include/d3.d.ts" />
 
-/*@ mulThm1 :: (x: number, p: { real | v < 1 }) => { boolean | x * p < x } */
+/*@ mulThm1 :: (x: nat, p: { real | 0 <= v && v < 1 }) => { boolean | x * p < x || x = 0 } */
 declare function mulThm1(x, p);
 
 /*@ d3_quantile :: (values: {IArray<real> | 0 < len v}, p: { real | 0 <= v && v < 1 }) => real */

@@ -1,4 +1,6 @@
 
+/*@ qualif EqM1(v: int): v = -1 */
+
 // posint get translated to number before being passed to RSC
 
 /*@ foo :: <V extends posint, W extends number>(x: W, y: V) => W */

@@ -15,4 +15,5 @@ export function snd<M extends ReadOnly, A, B>(p: Pair<M, A, B>): B {
 let o   = { z: "ASDFGHJKL" }
 let obj = snd({ x: 1, y: o });
 let a   = obj.z;
+
 assert(a === "ASDFGHJKL");

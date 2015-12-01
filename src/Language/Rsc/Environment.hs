@@ -93,9 +93,10 @@ chkEnvFindTy :: (CheckingEnvironment r t, Symbolic a) => a -> t r -> Maybe (RTyp
 chkEnvFindTy x = fmap v_type . chkEnvFindTy' x
 
 -------------------------------------------------------------------------------
-envFindBound :: (CheckingEnvironment r t, Symbolic a) => a -> t r -> Maybe (RType r)
+envFindBound :: (CheckingEnvironment r t, F.Reftable r) => t r -> RType r -> RType r
 -------------------------------------------------------------------------------
-envFindBound x (envBounds -> b) = envFindTy x b
+envFindBound (envBounds -> b) t | TVar a _ <- t, Just s <- envFindTy a b = s
+                                | otherwise = tTop
 
 --------------------------------------------------------------------------------
 resolveModuleInEnv  :: (PPR r, CheckingEnvironment r t) => t r -> AbsPath -> Maybe (ModuleDef r)

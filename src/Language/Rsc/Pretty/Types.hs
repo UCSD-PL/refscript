@@ -72,8 +72,8 @@ instance (F.Reftable r, PP r) => PP (TypeMembersQ q r) where
       ppSIdx sidx $+$
       ppNIdx nidx
 
-ppMem  = sep . map (\(x, f) ->                 ppMI x f <> semi) . F.toListSEnv
-ppSMem = sep . map (\(x, f) -> pp "static" <+> ppMI x f <> semi) . F.toListSEnv
+ppMem  = sep . map (\(x, f) ->                 ppElt x f <> semi) . F.toListSEnv
+ppSMem = sep . map (\(x, f) -> pp "static" <+> ppElt x f <> semi) . F.toListSEnv
 
 ppCall optT | Just t <- optT = pp t              <> semi | otherwise = empty
 ppCtor optT | Just t <- optT = pp "new" <+> pp t <> semi | otherwise = empty
@@ -87,13 +87,13 @@ instance PPR r => PP (TypeMemberQ q r) where
   pp (FI o _ t) = pp o <> colon <+> pp t
   pp (MI o mts) = pp o <> vcat (map (\(m,t) -> brackets (pp m) <> pp t) mts)
 
-ppMI x (FI o m t) = pp m <+> pp x <> pp o <> colon <+> pp t
-ppMI x (MI o mts) = vcat (map (\(m,t) -> text "@" <> pp m <+> pp x <> pp o <> pp t) mts)
+ppElt x (FI o m t) = pp m <+> pp x <> pp o <> colon <+> pp t
+ppElt x (MI o mts) = vcat (map (\(m,t) -> text "@" <> pp m <+> pp x <> pp o <> pp t) mts)
 
 instance PP FieldAsgn where
   pp Assignable = pp "@Assignable"
+  pp Final      = pp "@Final"
   pp _          = empty
-
 
 instance PP Optionality where
   pp Opt = text "?"

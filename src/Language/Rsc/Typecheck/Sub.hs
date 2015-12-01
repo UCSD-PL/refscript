@@ -95,19 +95,8 @@ compareVars :: FE g => SrcSpan -> g () -> Type -> Type -> SubTRes
 --------------------------------------------------------------------------------
 compareVars _ _ (TVar v1 _) (TVar v2 _) | v1 == v2  = EqT
                                         | otherwise = SubErr []     -- TODO
-
--- compareVars _ _ (TVar v1 _) (TVar v2 _) | unassigned v1 undefined
---                                         = undefined
-
-compareVars l γ (TVar v1 _) t2          = compareTypes l γ bt1 t2
-                                          where bt1 = fromMaybe tTop $ envFindBound v1 γ
-compareVars _ _ _           (TVar _ _)  = SubErr []                 -- TODO
-
-compareVars _ _ _           _           = SubErr [{- BUG -}]
-
--- unassigned α (Su m) | Just t <- HM.lookup α m = t `eqV` TVar α fTop
---                     | otherwise               = False
-
+compareVars l γ t1@TVar{}   t2          = compareTypes l γ (envFindBound γ t1) t2
+compareVars _ _ _           _           = SubErr []                 -- TODO
 
 --------------------------------------------------------------------------------
 compareUnions :: FE g => g () -> Type -> Type -> SubTRes
@@ -133,8 +122,11 @@ compareObjs l γ t1 t2
   | not (isClassType (envCHA γ) t1) && isClassType (envCHA γ) t2
   = SubErr [errorObjectType l t1 t2]
 
-compareObjs l γ t1@(TObj _ e1s _) t2@(TObj _ e2s _)
-  = compareObjMembers l γ t1 e1s t2 e2s
+compareObjs l γ t1@(TObj m1 e1s _) t2@(TObj m2 e2s _)
+  = compareObjMembers l γ (t1, a1, e1s) (t2, a2, e2s)
+  where
+    (a1, a2) = mapPair mutToFieldAsgn (m1, m2)
+
 
 compareObjs l γ t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
   | mutRelated t1, mutRelated t2, x1 == x2
@@ -191,45 +183,49 @@ compareObjs l γ t1 t2 =
     (_       , Nothing ) -> SubErr [errorNonObjectType l t2]
 
 
-compareObjMembers l γ t1 (TM m1 _ c1 k1 s1 n1) t2 (TM m2 _ c2 k2 s2 n2)
-  = compareMems  l γ t1 m1 t2 m2 <>
+compareObjMembers l γ (t1, a1, TM m1 _ c1 k1 s1 n1) (t2, a2, TM m2 _ c2 k2 s2 n2)
+  = compareMems  l γ (t1, a1, m1) (t2, a2, m2) <>
     compareCalls l γ t1 c1 t2 c2 <>
     compareCtors l γ t1 k1 t2 k2 <>
     compareSIdxs l γ t1 s1 t2 s2 <>
     compareNIdxs l γ t1 n1 t2 n2
 
-compareMems = compareMembers compareMem
-
-compareMembers op l γ t1 p1 t2 p2
-  | null diff12, null diff21                              -- Same exact fields in @t1@ and @t2@
-  = mconcat $ op l γ <$> match
-  | null diff21                                           -- Width-subtyping: fields of @t1@ are a
-                                                          -- superset of fields of @t2@.
-  = mconcat $ SubT : map (op l γ) match
-  | otherwise                                             -- No subtype
+compareMems l γ (t1, a1, p1) (t2, a2, p2)
+  -- Same exact fields in @t1@ and @t2@
+  | null diff12, null diff21
+  = mconcat $        map (compareMem l γ) match
+  -- Width-subtyping: fields of @t1@ are a superset of fields of @t2@.
+  | null diff21
+  = mconcat $ SubT : map (compareMem l γ) match
+  -- No subtype
+  | otherwise
   = SubErr [errorObjSubtype l t1 t2 $ fst <$> diff21]
   where
     diff21 = toListSEnv $ p2 `differenceSEnv` p1
     diff12 = toListSEnv $ p1 `differenceSEnv` p2
-    match  = toListSEnv $ intersectWithSEnv (,) p1 p2
+    match  = toListSEnv $ intersectWithSEnv (\p1_ p2_ -> ((a1, p1_), (a2, p2_))) p1 p2
 
--- Take enclosing object into account??
---
---  TODO: check this!!!
---
---
---
-compareMem l γ (f, ff@(FI o1 m1 t1, FI o2 m2 t2))
+compareMem l γ (f, ((a1, FI o1 m1 t1), (a2, FI o2 m2 t2)))
+  -- Different optionality modifier
   | o1 /= o2
   = SubErr [errorIncompatOptional (srcPos l) f]
-  | m1 == m2, m1 == Final                                 -- Co-Variance
+  -- Co-Variance (unassignable fields)
+  | am1 == am2, am1 == Final
   = compareTypes l γ t1 t2
-  | m1 == m2, m1 == Assignable                            -- Co-& Contra-Variance
+  -- Co-& Contra-Variance (assignable fields)
+  | am1 == am2, am1 == Assignable
   = compareTypes l γ t1 t2 <> compareTypes l γ t2 t1
+  -- Incompatible field assignabilities
   | otherwise
-  = SubErr [errorIncompMutElt (srcPos l) f]
+  = SubErr [errorIncompMutElt (srcPos l) f m1 m2]
+  where
+    am1            = a1 ## m1
+    am2            = a2 ## m2
+    a ## Inherited = a
+    _ ## b         = b
 
-compareMem l _ (_, (m1@(MI _ _), m2@(MI _ _)))
+
+compareMem l _ (_, ((_, m1), (_, m2)))
   = SubErr [unsupportedMethodComp (srcPos l) m1 m2]
 
 

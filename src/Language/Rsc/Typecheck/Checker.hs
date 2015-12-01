@@ -649,9 +649,13 @@ tcExpr γ e@(ArrayLit l es) to
           do  (es', t) <- tcNormalCall γ l BIArrayLit (es `zip` nths) opTy
               return $ (ArrayLit l es', t)
 
--- | { f: e }
-tcExpr γ e@(ObjectLit _ _) _
-  = tcCall γ e
+-- | `{ f1:t1,...,fn:tn }`
+--
+--  TODO: use the contextual type here
+--
+tcExpr γ e@(ObjectLit l (unzip -> (ps, es))) _
+  = do (es', t) <- tcNormalCall γ l "ObjectLit" (es `zip` nths) (objLitTy l ps)
+       return $ (ObjectLit l (zip ps es'), t)
 
 -- | <T>e
 tcExpr γ ex@(Cast l e) _
@@ -788,11 +792,6 @@ tcCall γ e@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
        case z of
          ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
          _ -> fatal (impossible (srcPos l) "tcCall AssignExpr") (e, tBot)
-
--- | `{ f1:t1,...,fn:tn }`
-tcCall γ (ObjectLit l (unzip -> (ps, es)))
-  = do (es', t) <- tcNormalCall γ l "ObjectLit" (es `zip` nths) (objLitTy l ps)
-       return $ (ObjectLit l (zip ps es'), t)
 
 -- | `new e(e1,...,en)`
 tcCall γ c@(NewExpr l e es)

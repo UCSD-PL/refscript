@@ -34,7 +34,7 @@ module Language.Rsc.Typecheck.Types (
 
   -- * Mutability primitives
   , tMU, tUM, tIM, tAF, tRO, trMU, trIM, trAF, trRO
-  , isRO, isMU, isIM, isUM, isAF, isUMRef, mutRelated, mutRelatedBVar
+  , isRO, isMU, isIM, isUM, isAF, isUMRef, mutRelated, mutRelatedBVar, mutToFieldAsgn
 
   -- * Primitive Types
 
@@ -126,6 +126,10 @@ mutRelated t = isMU t || isIM t || isUM t || isRO t
 
 mutRelatedBVar (BTV _ _ (Just m)) = mutRelated m
 mutRelatedBVar _                  = False
+
+mutToFieldAsgn m | isUM m    = Assignable
+                 | isMU m    = Assignable
+                 | otherwise = Final
 
 
 ---------------------------------------------------------------------
@@ -412,7 +416,7 @@ objLitTy l ps     = mkFun (avs, bs, rt)
   where
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
     rt            = TObj tIM tms fTop
-    tms           = typeMembersFromList [ (s, FI Req Final a) | (s, a) <- zip ss ats ]
+    tms           = typeMembersFromList [ (s, FI Req Inherited a) | (s, a) <- zip ss ats ]
     (avs, ats)    = unzip $ map (freshBTV l aSym Nothing) [1..length ps]  -- field type vars
     ss            = [F.symbol p | p <- ps]
     mSym          = F.symbol "M"

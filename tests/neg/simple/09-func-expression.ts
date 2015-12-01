@@ -1,6 +1,6 @@
 
-/*@ qualif PlusOne(v:number, x: number): v = x + 1 */
-/*@ qualif PlusTwo(v:number, x: number): v = x + 2 */
+/*@ qualif PlusOne(v: int, x: int): v = x + 1 */
+/*@ qualif PlusTwo(v: int, x: int): v = x + 2 */
 
 /*@ readonly bar :: (x: number) => number */
 let bar = function(x: number) {

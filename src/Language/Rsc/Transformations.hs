@@ -24,6 +24,7 @@ import           Data.Functor.Identity
 import           Data.Generics
 import qualified Data.HashSet                 as HS
 import qualified Data.IntMap.Strict           as I
+import           Data.List                    (find)
 import           Data.Maybe                   (fromMaybe)
 import           Data.Maybe                   (listToMaybe)
 import           Data.Monoid                  hiding ((<>))
@@ -309,15 +310,15 @@ emapReftGen f γ (Gen n ts)  = Gen n $ emapReft f γ <$> ts
 emapReftBGen f γ (BGen n ts) = BGen n $ emapReftBTV f γ <$> ts
 emapReftBind f γ (B x t)    = B x $ emapReft f γ t
 emapReftTM f γ (TM m sm c k s n)
-  = TM (fmap (emapReftMI f γ) m)
-       (fmap (emapReftMI f γ) sm)
+  = TM (fmap (emapReftElt f γ) m)
+       (fmap (emapReftElt f γ) sm)
        (emapReft f γ <$> c)
        (emapReft f γ <$> k)
        (emapReft f γ <$> s)
        (emapReft f γ <$> n)
 
-emapReftFI f γ (FI m a t) = FI m a (emapReft f γ t)
-emapReftMI f γ (MI m mts) = MI m (mapPair (emapReft f γ) <$> mts)
+emapReftElt f γ (FI m a t) = FI m a (emapReft f γ t)
+emapReftElt f γ (MI m mts) = MI m (mapPair (emapReft f γ) <$> mts)
 
 --------------------------------------------------------------------------------
 mapReftM :: (F.Reftable r, PP r, Applicative m, Monad m)
@@ -341,15 +342,15 @@ mapReftBGenM f (BGen n ts) = BGen n  <$>   mapM (mapReftBTV f) ts
 mapReftBindM f (B x t)     = B x     <$>         mapReftM f    t
 
 mapTypeMembers f (TM m sm c k s n)
-  = TM <$> T.mapM (mapReftMI f) m
-       <*> T.mapM (mapReftMI f) sm
+  = TM <$> T.mapM (mapReftElt f) m
+       <*> T.mapM (mapReftElt f) sm
        <*> T.mapM (mapReftM f) c
        <*> T.mapM (mapReftM f) k
        <*> T.mapM (mapReftM f) s
        <*> T.mapM (mapReftM f) n
 
-mapReftFI f (FI m a t) = FI m a <$> mapReftM f t
-mapReftMI f (MI m mts) = MI m   <$> mapM (mapPairM (mapReftM f) (mapReftM f)) mts
+mapReftElt f (FI m a t) = FI m a <$> mapReftM f t
+mapReftElt f (MI m mts) = MI m   <$> mapM (mapPairM (mapReftM f) (mapReftM f)) mts
 
 --------------------------------------------------------------------------------
 mapTypeMembersM :: (Applicative m, Monad m)
@@ -642,4 +643,43 @@ stransLvalue f g ctx lv = go lv
     go (LVar _ s)         = LVar b s
     go (LDot _ e s)       = LDot b (ss e) s
     go (LBracket _ e1 e2) = LBracket b (ss e1) (ss e2)
+
+
+--------------------------------------------------------------------------
+-- | Name transformation
+--------------------------------------------------------------------------
+
+-- | `absoluteName env p r` returns `Just a` where `a` is the absolute path of
+--   the relative name `r` when referenced in the context of the absolute path
+--   `p`; `Nothing` otherwise.
+--
+--   If p = A.B.C and r = C.D.E then the paths that will be checked in this
+--   order are:
+--
+--    A.B.C.C.D.E
+--    A.B.C.D.E
+--    A.C.D.E
+--    C.D.E
+--
+---------------------------------------------------------------------------------
+absoluteName :: HS.HashSet AbsName -> AbsPath -> RelName -> Maybe AbsName
+---------------------------------------------------------------------------------
+absoluteName ns (QP AK_ _ p) (QN (QP RK_ _ ss) s) =
+    find (`HS.member` ns) $ (`mkAbsName` s) . (++ ss) <$> prefixes p
+  where
+    prefixes        = map reverse . suffixes . reverse
+    suffixes []     = [[]]
+    suffixes (x:xs) = (x:xs) : suffixes xs
+
+---------------------------------------------------------------------------------
+absolutePath :: HS.HashSet AbsPath -> AbsPath -> RelPath -> Maybe AbsPath
+---------------------------------------------------------------------------------
+absolutePath ps (QP AK_ _ p) (QP RK_ _ ss) =
+    find (`HS.member` ps) $ mkAbsPath . (++ ss) <$> prefixes p
+  where
+    prefixes        = map reverse . suffixes . reverse
+    suffixes []     = [[]]
+    suffixes (x:xs) = (x:xs) : suffixes xs
+
+toAbsoluteName (QN (QP RK_ l ss) s) = QN (QP AK_ l ss) s
 

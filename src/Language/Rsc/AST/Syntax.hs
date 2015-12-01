@@ -272,6 +272,7 @@ isIterationStmt s = case s of
 data BuiltinOp = BIUndefined
                | BIBracketRef
                | BIBracketAssign
+               | BIImmArrayLit
                | BIArrayLit
                | BIObjectLit
                | BINumArgs

@@ -55,7 +55,7 @@ module Language.Rsc.Typecheck.Types (
   , typeMembers, typeMembersFromList, typesOfTM
 
   -- * Operator Types
-  , infixOpId, prefixOpId, builtinOpId, arrayLitTy, objLitTy, finalizeTy
+  , infixOpId, prefixOpId, builtinOpId, objLitTy, finalizeTy
 
   -- * Builtin: Binders
   , mkId, argId, argIdInit, mkArgTy, returnTy
@@ -311,6 +311,12 @@ isArrayType t | TRef (Gen x [_,_]) _ <- t
               | otherwise
               = False
 
+-- bkArrayTyp (cha -> c) t
+--   | TRef n _ <- t
+--   , weaken c n Array
+--               = F.symbol x == F.symbol "Array"
+
+
 orNull t@(TOr ts) | any isTNull ts = t
                   | otherwise      = TOr $ tNull:ts
 orNull t          | isTNull t      = t
@@ -380,20 +386,6 @@ tAny    = tPrim TAny
 tNull   = tPrim TNull
 tErr    = tVoid
 
-
----------------------------------------------------------------------------------
--- | Array literal types
----------------------------------------------------------------------------------
-
----------------------------------------------------------------------------------
-arrayLitTy :: F.Subable (RType r) => Int -> RType r -> RType r
----------------------------------------------------------------------------------
-arrayLitTy n (TAll μ (TAll α (TFun [B x t_] t r))) = mkAll [μ,α] $ TFun αs rt r
-  where αs       = [B (x_ i) t_ | i <- [1..n]]
-        rt       = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
-        xs       = symbolString x
-        x_       = F.symbol . (xs ++) . show
-arrayLitTy _ _ = error "Bad Type for ArrayLit Constructor"
 
 
 
@@ -517,6 +509,7 @@ builtinOpId BIUndefined     = builtinId "BIUndefined"
 builtinOpId BIBracketRef    = builtinId "BIBracketRef"
 builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
 builtinOpId BIArrayLit      = builtinId "BIArrayLit"
+builtinOpId BIImmArrayLit   = builtinId "BIImmArrayLit"
 builtinOpId BIObjectLit     = builtinId "BIObjectLit"
 builtinOpId BISetProp       = builtinId "BISetProp"
 builtinOpId BIForInKeys     = builtinId "BIForInKeys"

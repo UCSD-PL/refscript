@@ -7,6 +7,7 @@
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE UndecidableInstances      #-}
+{-# LANGUAGE ViewPatterns              #-}
 
 -- | Utilities share by both Typecheck and Liquid modules
 
@@ -15,12 +16,18 @@ module Language.Rsc.TypeUtilities (
     mkDotRefFunTy
   , idTy, idTys
   , castTy
+  , arrayLitTy
 
   ) where
 
+import           Language.Fixpoint.Names      (symbolString)
 import qualified Language.Fixpoint.Types      as F
+import           Language.Rsc.AST
+import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
+import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Types
+import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
@@ -89,3 +96,46 @@ castTy :: (ExprReftable F.Symbol r, F.Reftable r) => RType r -> RType r
 castTy t = TFun [B sx t] (t `eSingleton` sx) fTop
   where
     sx    = F.symbol "x"
+
+
+
+---------------------------------------------------------------------------------
+-- | Array literal types
+---------------------------------------------------------------------------------
+
+---------------------------------------------------------------------------------
+-- arrayLitTy :: F.Subable (RType r) =>RType r -> Int -> RType r -> RType r
+---------------------------------------------------------------------------------
+arrayLitTy l g@(envCHA -> c) e (Just t0) n
+  | TRef nm _          <- t0
+  , Just (Gen _ [m,t]) <- weaken c nm (mkAbsName [] arrayName)
+  = if isIM m then mkImmArrTy l g t n
+              else mkArrTy    l g t n
+  | otherwise
+  = return $ Left $ errorArrayLitType l e t0
+
+arrayLitTy l _ e _ _
+  = return $ Left $ errorArrayLitCtxType l e
+
+
+mkImmArrTy l g t n
+  = do  opTy <- safeEnvFindTy l g (builtinOpId BIImmArrayLit)
+        case opTy of
+          TAll (BTV s l _) (TFun [B x_ t_] tOut r) ->
+            return $ Right $ mkAll [BTV s l (Just t)] (TFun (bs x_ t_) (rt tOut) r)
+          _ -> return undefined
+  where
+    bs x_ t_ = [ B (tox x_ i) t_ | i <- [1..n] ]
+    rt t_    = F.subst1 t_ (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
+    tox x    = F.symbol . ((symbolString x) ++) . show
+
+mkArrTy l g t n
+  = do  opTy <- safeEnvFindTy l g (builtinOpId BIArrayLit)
+        case opTy of
+          TAll μ (TAll α (TFun [B x_ t_] rt r)) ->
+            return $ Right $ mkAll [μ,α] (TFun (bs x_ t_) rt r)
+  where
+    bs x_ t_ = [ B (tox x_ i) t_ | i <- [1..n] ]
+    rt       = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
+    tox x    = F.symbol . ((symbolString x) ++) . show
+

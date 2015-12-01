@@ -119,7 +119,6 @@ Library
                     Language.Rsc.Parser.Types,
                     Language.Rsc.Pretty,
                     Language.Rsc.Pretty.Annotations,
-                    Language.Rsc.Pretty.ClassHierarchy,
                     Language.Rsc.Pretty.Common,
                     Language.Rsc.Pretty.Errors,
                     Language.Rsc.Errors,

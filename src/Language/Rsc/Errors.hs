@@ -27,7 +27,8 @@ unimplemented l s x           = mkErr l $ printf "Unimplemented %s: %s" (ppshow 
 unsupportedConsTy l t         = mkErr l $ printf "Unsupported constructor type %s" (ppshow t)
 unsupportedNonSingleConsTy l  = mkErr l $ printf "Only a single constructor signature is supported."
 unsupportedDotRef l t         = mkErr l $ printf "Unsupported dot reference %s" (ppshow t)
-unsupportedConvFun l t1 t2    = mkErr l $ printf "Unsupported case in convertFun:\n%s\nvs\n%s" (ppshow t1) (ppshow t2)
+unsupportedConvFun l t1 t2    = mkErr l $ printf "Unsupported case in convertFun: '%s' and '%s'" (ppshow t1) (ppshow t2)
+unsupportedSplitElt l t1 t2   = mkErr l $ printf "Unsupported case in splitTM: '%s' and '%s'" (ppshow t1) (ppshow t2)
 unsupportedStaticNoInit l x   = mkErr l $ printf "Unsupported uninitialized static field '%s'." (ppshow x)
 unsupportedUnionTVar l t      = mkErr l $ printf "Unsupported multiple type variables in union '%s'." (ppshow t)
 unsupportedMethodComp l m m'  = mkErr l $ printf "Unsupported method comparison between '%s' and '%s'." (ppshow m) (ppshow m')
@@ -219,4 +220,8 @@ errorUnionMergeAlls l t       = mkErr l $ printf "In type '%s', cannot have type
 errorUnionMergeTys l t a b    = mkErr l $ printf "In type '%s', cannot merge named types '%s' and '%s'." (ppshow t) (ppshow a) (ppshow b)
 errorUnionMergeMods l t a b   = mkErr l $ printf "In type '%s', cannot merge module types '%s' and '%s'." (ppshow t) (ppshow a) (ppshow b)
 errorUnionMergeFuns l t       = mkErr l $ printf "In type '%s', cannot merge multiple function types." (ppshow t)
-bugUnionMergeExps l t         = mkErr l $ printf "[BUG] In type '%s', exp type cannot appear at this point." (ppshow t)
+
+errorArrayLitCtxType l e      = mkErr l $ printf "Cannot type array literal '%s' without a contextual type." (ppshow e)
+errorArrayLitType l e t       = mkErr l $ printf "Cannot cast array '%s' with non array type '%s'." (ppshow e) (ppshow t)
+bugArrayBIType l f t          = mkErr l $ printf "[BUG] Inconsistent built-in arrray literal ('%s') type '%s'." (ppshow f) (ppshow t)
+

@@ -52,7 +52,7 @@ instance PP Char where
 
 instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp (TPrim c r)     = F.ppTy r $ pp c
-  pp (TVar α r)      = F.ppTy r $ (text "#" <> pp α)
+  pp (TVar α r)      = F.ppTy r $ pp α
   pp (TOr ts)        = ppArgs id (text " +") ts
   pp (TAnd ts)       = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TRef t r)      = F.ppTy r (pp t)

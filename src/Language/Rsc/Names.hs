@@ -16,28 +16,28 @@ module Language.Rsc.Names (
   , RelName, AbsName
   , RelPath, AbsPath
   , NameSpacePath
-
-  -- * Id
   , Id(..)
+
+  -- * Id operations
   , idName
   , idLoc
   , unId
   , symbolId
   , returnId
-  , returnSymbol
+
+  -- * Path operations
   , extendAbsPath
   , nameInPath
   , pathInPath
 
+  -- * Name constructors
   , mkRelName
   , mkAbsName
   , mkAbsPath
   , emptyPath
 
-  , absoluteName
-  , absolutePath
-
-  , toAbsoluteName
+  -- * Hard-coded Symbols
+  , returnSymbol
   , extClassSym
   , extInterfaceSym
   , offsetLocSym
@@ -46,9 +46,22 @@ module Language.Rsc.Names (
   , thisId
   , undefinedId
 
-  , boolName, voidName, unionName, intersName, topName, nullName, undefName
-  , objectName, selfName, className, moduleName, enumName
-  , extendsClassName, extendsInterfaceName
+  -- * Hard-coded names
+  , arrayName
+  , boolName
+  , voidName
+  , unionName
+  , intersName
+  , topName
+  , nullName
+  , undefName
+  , objectName
+  , selfName
+  , className
+  , moduleName
+  , enumName
+  , extendsClassName
+  , extendsInterfaceName
   , offsetName
 
   ) where
@@ -59,7 +72,6 @@ import           Data.Default
 import           Data.Foldable             (Foldable ())
 import           Data.Hashable
 import qualified Data.HashSet              as H
-import           Data.List                 (find)
 import           Data.Traversable
 import           GHC.Generics              (Generic ())
 import           Language.Fixpoint.Names   (symbolString)
@@ -180,44 +192,6 @@ mkAbsPath = QP AK_ $ srcPos dummySpan
 emptyPath = mkAbsPath []
 
 
---------------------------------------------------------------------------
--- | Name transformation
---------------------------------------------------------------------------
-
--- | `absoluteName env p r` returns `Just a` where `a` is the absolute path of
---   the relative name `r` when referenced in the context of the absolute path
---   `p`; `Nothing` otherwise.
---
---   If p = A.B.C and r = C.D.E then the paths that will be checked in this
---   order are:
---
---    A.B.C.C.D.E
---    A.B.C.D.E
---    A.C.D.E
---    C.D.E
---
----------------------------------------------------------------------------------
-absoluteName :: H.HashSet AbsName -> AbsPath -> RelName -> Maybe AbsName
----------------------------------------------------------------------------------
-absoluteName ns (QP AK_ _ p) (QN (QP RK_ _ ss) s) =
-    find (`H.member` ns) $ (`mkAbsName` s) . (++ ss) <$> prefixes p
-  where
-    prefixes        = map reverse . suffixes . reverse
-    suffixes []     = [[]]
-    suffixes (x:xs) = (x:xs) : suffixes xs
-
----------------------------------------------------------------------------------
-absolutePath :: H.HashSet AbsPath -> AbsPath -> RelPath -> Maybe AbsPath
----------------------------------------------------------------------------------
-absolutePath ps (QP AK_ _ p) (QP RK_ _ ss) =
-    find (`H.member` ps) $ mkAbsPath . (++ ss) <$> prefixes p
-  where
-    prefixes        = map reverse . suffixes . reverse
-    suffixes []     = [[]]
-    suffixes (x:xs) = (x:xs) : suffixes xs
-
-toAbsoluteName (QN (QP RK_ l ss) s) = QN (QP AK_ l ss) s
-
 
 -- toLocSym        = F.dummyLoc . F.symbol
 extClassSym     = F.dummyLoc extendsClassName     -- "extends_class"
@@ -241,7 +215,8 @@ offsetName = "offset"
 
 
 
-boolName, voidName, unionName, topName, nullName, undefName :: F.Symbol
+arrayName, boolName, voidName, unionName, topName, nullName, undefName :: F.Symbol
+arrayName = "Array"
 boolName  = "Boolean"
 voidName  = "Void"
 unionName = "Union"
@@ -260,3 +235,4 @@ intersName = "intersection"
 extendsClassName, extendsInterfaceName :: F.Symbol
 extendsClassName     = "extends_class"
 extendsInterfaceName = "extends_interface"
+

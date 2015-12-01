@@ -2,6 +2,8 @@
 Tool/Implementation
 -------------------
 
+  - Get rid of syb
+
   - Implement Sort checker for refinements
   
   - Add script compilation in stack build script

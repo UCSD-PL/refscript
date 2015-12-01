@@ -16,8 +16,8 @@ module Language.Rsc.Parser
     , parseIdFromJSON
     ) where
 
-import           Control.Arrow                    (second)
 import           Control.Applicative              ((<$>))
+import           Control.Arrow                    (second)
 import           Control.Monad
 import           Control.Monad.Trans              (MonadIO, liftIO)
 import           Data.Aeson                       (eitherDecode)
@@ -31,6 +31,7 @@ import           Data.Traversable                 (mapAccumL)
 import           Data.Tuple
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Parse          (Parser)
 import qualified Language.Fixpoint.Types          as F
 import           Language.Rsc.Annotations         hiding (err)
 import           Language.Rsc.AST
@@ -140,8 +141,7 @@ extractFact fs = map go fs
   where
     exprt ExportedSpec = True
     exprt _  = False
-    loc | any exprt fs = Exported
-        | otherwise = Local
+    loc | any exprt fs = Exported | otherwise    = Local
     go (FunctionDeclarationSpec (_,t))     = Just $ SigAnn loc t
     go (VariableDeclarationSpec (_, a, t)) = Just $ VarAnn loc a t
     go (FunctionExpressionSpec t)          = Just $ SigAnn loc t
@@ -167,7 +167,7 @@ parseAnnotations ss
     ss'     = fmap snd <$> ses
 
     f :: PContext -> (SrcSpan, [RawSpec]) -> ([Error], (SrcSpan, [Spec]))
-    f ctx (ss, specs) = second (ss,) $ L.mapAccumL (\errs spec -> parse ctx errs spec) [] specs
+    f ctx (ss, specs) = second (ss,) $ L.mapAccumL (parseSpec ctx) [] specs
 
     g :: PContext -> ([Error], (SrcSpan, [Spec])) -> PContext
     g ctx = (ctx `mappend`) . mconcat . map h . snd . snd
@@ -183,9 +183,11 @@ parseAnnotations ss
 
 
 --------------------------------------------------------------------------------
-parse :: PContext -> [Error] -> RawSpec -> ([Error], Spec)
+parseSpec :: PContext -> [Error] -> RawSpec -> ([Error], Spec)
 --------------------------------------------------------------------------------
-parse ctx errs rawspec = failLeft $ runParser (parseRawSpec ctx rawspec) 0 f (getSpecString rawspec)
+parseSpec ctx errs rawspec
+  = failLeft
+  $ runParser (parseRawSpecWithError ctx rawspec) 0 f (getSpecString rawspec)
   where
     failLeft (Left err) = (fromError err : errs, ErrorSpec)
     failLeft (Right r)  = (errs, r)
@@ -194,15 +196,16 @@ parse ctx errs rawspec = failLeft $ runParser (parseRawSpec ctx rawspec) 0 f (ge
                               ++ "\n\nWhile parsing: "
                               ++ show (getSpecString rawspec)
     ss = srcPos rawspec
-    --
     -- Slight change from this one:
     -- http://hackage.haskell.org/package/parsec-3.1.5/docs/src/Text-Parsec-Error.html#ParseError
-    --
     showErr = showErrorMessages "or" "unknown parse error" "expecting"
                 "unexpected" "end of input" . errorMessages
 
-parseRawSpec ctx s
-  = do  a     <- parseSpec ctx s
+--------------------------------------------------------------------------------
+parseRawSpecWithError :: PContext -> RawSpec -> Parser Spec
+--------------------------------------------------------------------------------
+parseRawSpecWithError ctx s
+  = do  a     <- parseRawSpec ctx s
         it    <- getInput
         case it of
           ""  -> return a

@@ -355,7 +355,7 @@ tcVarDecl γ v@(VarDecl l x (Just e))
             return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ VI Local WriteLocal Initialized <$> to)
 
       Just (VI lc WriteLocal _ t) ->
-        do  ([e'], Just t') <- tcNormalCallWCtx γ l "VarDecl-WL" [(e, Just t)] (idTy t)
+        do  (e', t') <- tcExpr γ e (Just t)
             return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (VI lc WriteLocal Initialized t') γ)
 
       -- | Global
@@ -642,8 +642,12 @@ tcExpr γ e@(CallExpr _ _ _) _
   = tcCall γ e
 
 -- | [e1,..,en]
-tcExpr γ e@(ArrayLit _ _) _
-  = tcCall γ e
+tcExpr γ e@(ArrayLit l es) to
+  = arrayLitTy l γ e to (length es) >>= \case
+      Left ee    -> fatal ee (e, tBot)
+      Right opTy ->
+          do  (es', t) <- tcNormalCall γ l BIArrayLit (es `zip` nths) opTy
+              return $ (ArrayLit l es', t)
 
 -- | { f: e }
 tcExpr γ e@(ObjectLit _ _) _
@@ -784,12 +788,6 @@ tcCall γ e@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
        case z of
          ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
          _ -> fatal (impossible (srcPos l) "tcCall AssignExpr") (e, tBot)
-
--- | `[e1,...,en]`
-tcCall γ (ArrayLit l es)
-  = do opTy <- arrayLitTy (length es) <$> safeEnvFindTy l γ (builtinOpId BIArrayLit)
-       (es', t) <- tcNormalCall γ l BIArrayLit (es `zip` nths) opTy
-       return $ (ArrayLit l es', t)
 
 -- | `{ f1:t1,...,fn:tn }`
 tcCall γ (ObjectLit l (unzip -> (ps, es)))

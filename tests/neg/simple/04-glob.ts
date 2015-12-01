@@ -1,6 +1,7 @@
 
 /*@ qualif CmpZ(v:int): v = 20 */
 
+// This is a local variable
 let glob = 20;
 
 function zog(){

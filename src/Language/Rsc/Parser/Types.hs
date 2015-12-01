@@ -17,9 +17,9 @@ import           Control.Monad
 import           Data.Char                    (isLower)
 import           Data.Foldable                (concat)
 import           Data.Generics                hiding (Generic)
+import qualified Data.HashSet                 as S
 import           Data.List                    (foldl')
 import           Data.Maybe                   (maybeToList)
-import qualified Data.HashSet                 as S
 import           Data.Monoid
 import qualified Data.Text                    as DT
 import           Language.Fixpoint.Errors
@@ -27,8 +27,8 @@ import           Language.Fixpoint.Names
 import           Language.Fixpoint.Parse
 import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Liquid.Types
-import           Language.Rsc.Names
 import           Language.Rsc.Misc            (mapEither)
+import           Language.Rsc.Names
 import           Language.Rsc.Options
 import           Language.Rsc.Parser.Common
 import           Language.Rsc.Parser.Lexer
@@ -89,11 +89,6 @@ idBindP ctx = withinSpacesP $ xyP identifierP dcolon (bareTypeP ctx)
 
 idBindP' :: PContext -> Parser (Id SrcSpan, Assignability, Maybe RRType)
 idBindP' ctx = withinSpacesP $ axyP identifierP dcolon (Just <$> bareTypeP ctx)
--- idBindP' ctx = withinSpacesP $ axyP identifierP dcolon typeOrHashP)
---   where
---     typeOrHashP = try (Just <$> bareTypeP ctx)
---                <|>    (char '#' >> return Nothing)
-
 
 functionExpressionP :: PContext -> Parser RRType
 functionExpressionP = funcSigP

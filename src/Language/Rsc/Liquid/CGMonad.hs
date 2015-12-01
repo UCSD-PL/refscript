@@ -849,7 +849,7 @@ splitTM :: CGEnv -> F.Symbol -> Cinfo
         -> CGM [FixSubC]
 --------------------------------------------------------------------------------
 splitTM g x c (TM m1 sm1 c1 k1 s1 n1) (TM m2 sm2 c2 k2 s2 n2)
-  = concatMapM (splitM g c) (ms ++ sms) +++
+  = concatMapM (splitElt g c) (ms ++ sms) +++
     concatMapM splitT (cs ++ ks ++ ss ++ ns)
   where
     (+++) = liftM2 (++)
@@ -861,13 +861,13 @@ splitTM g x c (TM m1 sm1 c1 k1 s1 n1) (TM m2 sm2 c2 k2 s2 n2)
     ns  = [ (t1,t2) | Just t1 <- [n1], Just t2 <- [n2] ]
     splitT (t1,t2) = splitC (Sub g c t1 t2)
 
-splitF g i (_, (FI _ m1 t1, FI _ m2 t2))
+splitElt g i (_, (FI _ m1 t1, FI _ m2 t2))
   | m2 == Final = splitC (Sub g i t1 t2)
   | otherwise = (++) <$> splitC (Sub g i t1 t2)
                      <*> splitC (Sub g i t2 t1)
 
-splitM g i (_, (m, m'))
-  = cgError $ unsupportedConvFun (srcPos i) m m'
+splitElt g i (_, (m, m'))
+  = cgError $ unsupportedSplitElt (srcPos i) m m'
 
 
 subCTag :: [Int]

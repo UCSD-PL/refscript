@@ -1,7 +1,5 @@
 
-/*@ qualif Plus(v:number, x:number, y:number)   : v = x + y    */
-
-// Ha ha. Why is this safe? :)
+/*@ qualif Plus(v: int, x: int, y: int): v = x + y    */
 
 function sumLoop(acc: number, i: number): number {
     let r: number = 0;

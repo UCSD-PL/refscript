@@ -12,5 +12,3 @@ class Foo {
 var f = new Foo();
 
 f.bar();
-
-

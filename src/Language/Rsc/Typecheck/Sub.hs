@@ -22,8 +22,7 @@ import           Data.Monoid
 import           Data.Tuple                   (swap)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Types      (differenceSEnv,
-                                               intersectWithSEnv, toListSEnv)
+import           Language.Fixpoint.Types      (differenceSEnv, intersectWithSEnv, toListSEnv)
 import           Language.Rsc.Annotations
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
@@ -275,7 +274,6 @@ compareFuns l γ t1@(TAnd t1s) t2
   = SubErr [errorFuncSubtype l t1 t2]
   where
     f t1 = isSubtype γ t1 t2
-
 
 compareFuns l _ t1 t2 = SubErr [unsupportedConvFun l t1 t2]
 

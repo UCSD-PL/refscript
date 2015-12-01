@@ -26,7 +26,10 @@ declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 /*@ builtin_BIBracketAssign :: <A>(a: {[y: string]: A}, s: string, v: A) => void */
 declare function builtin_BIBracketAssign<A>(a: any, s: any, v: A): void;
 
-/*@ builtin_BIArrayLit :: <M,A>(A) => {v: Array<M,A> | (len v) = builtin_BINumArgs } */
+/*@ builtin_BIImmArrayLit :: <A>(x: A) => {v: IArray<A> | (len v) = builtin_BINumArgs } */
+declare function builtin_BIImmArrayLit<A>(a: A): A[];
+
+/*@ builtin_BIArrayLit :: <M,A>(x: A) => Array<M,A> */
 declare function builtin_BIArrayLit<A>(a: A): A[];
 
 /*@ builtin_BICondExpr :: <C,T>(c: C, t: T, x: T, y: T) => { v: T | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) } */

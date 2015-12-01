@@ -1,5 +1,5 @@
 
-/*@ [global] glob :: posint */
+/*@ global glob :: posint */
 let glob = 4;
 
 function bar() {

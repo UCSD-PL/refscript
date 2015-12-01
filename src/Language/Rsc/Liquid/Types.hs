@@ -18,9 +18,6 @@ module Language.Rsc.Liquid.Types (
   -- * Refinement Types
     RefType
 
-  -- * Some Operators on Pred
-  , pAnd, pOr
-
   -- * Conversions
   , RefTypable (..), eSingleton, pSingleton
 
@@ -113,8 +110,8 @@ eProp (InfixExpr _ OpGEq  e1 e2)       = F.PAtom F.Ge (F.expr e1) (F.expr e2)
 -- eProp (InfixExpr _ OpEq   e1 e2)       = F.PAtom F.Eq (F.expr e1) (F.expr e2)
 eProp (InfixExpr _ OpStrictEq   e1 e2) = F.PAtom F.Eq (F.expr e1) (F.expr e2)
 eProp (InfixExpr _ OpNEq  e1 e2)       = F.PAtom F.Ne (F.expr e1) (F.expr e2)
-eProp (InfixExpr _ OpLAnd e1 e2)       = pAnd (F.prop e1) (F.prop e2)
-eProp (InfixExpr _ OpLOr  e1 e2)       = pOr  (F.prop e1) (F.prop e2)
+eProp (InfixExpr _ OpLAnd e1 e2)       = F.pAnd [F.prop e1, F.prop e2]
+eProp (InfixExpr _ OpLOr  e1 e2)       = F.pOr  [F.prop e1, F.prop e2]
 eProp e                                = convertError "InfixExpr -> F.Prop" e
 
 ------------------------------------------------------------------
@@ -126,9 +123,6 @@ bop OpMul = F.Times
 bop OpDiv = F.Div
 bop OpMod = F.Mod
 bop o     = convertError "F.Bop" o
-
-pAnd p q  = F.pAnd [p, q]
-pOr  p q  = F.pOr  [p, q]
 
 
 ------------------------------------------------------------------------

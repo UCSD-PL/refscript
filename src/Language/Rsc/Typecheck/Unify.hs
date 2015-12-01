@@ -149,10 +149,11 @@ unifyMembers l γ θ (TM m1 _ c1 k1 s1 n1) (TM m2 _ c2 k2 s2 n2)
   = do  θ1 <- unifys l γ θ m1s m2s
         unifys l γ θ1 r1s r2s
   where
-    (m1s , m2s) = unzip $ concatMap fromMI $ F.toListSEnv $ F.intersectWithSEnv (,) m1 m2
+    (m1s , m2s) = unzip $ concatMap merge $ F.toListSEnv $ F.intersectWithSEnv (,) m1 m2
 
-    fromFI (_, (FI _ _ t, FI _ _ t')) = [(t, t')]
-    fromMI (_, (MI _ mts, MI _ mts')) = map snd mts `zip` map snd mts'
+    merge (_, (FI _ _ t, FI _ _ t')) = [(t, t')]
+    merge (_, (MI _ mts, MI _ mts')) = map snd mts `zip` map snd mts'
+    merge _ = []
     fromBoth (Just a1, Just a2)  = [(a1,a2)]
     fromBoth _                   = []
     (r1s, r2s)  = unzip $ concatMap fromBoth [(c1,c2),(k1,k2),(n1,n2)]

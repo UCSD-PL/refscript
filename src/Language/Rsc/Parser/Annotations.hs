@@ -14,7 +14,7 @@
 module Language.Rsc.Parser.Annotations (
       RawSpec(..), Spec, PSpec(..)
     , PContext
-    , parseSpec
+    , parseRawSpec
     , getSpecString
     ) where
 
@@ -42,7 +42,7 @@ import           Text.PrettyPrint.HughesPJ (text)
 --------------------------------------------------------------------------------
 
 data RawSpec
-  -- Specifications
+  -- Declaration specific
   = FunctionDeclarationRawSpec (SrcSpan, String)
   | VariableDeclarationRawSpec (SrcSpan, String)
   | FunctionExpressionRawSpec  (SrcSpan, String)
@@ -110,8 +110,8 @@ instance PP Spec where
   pp OptionSpec{}              = text "OptionSpec"
   pp ErrorSpec{}               = text "ErrorSpec"
 
-parseSpec :: PContext -> RawSpec -> Parser Spec
-parseSpec ctx = go
+parseRawSpec :: PContext -> RawSpec -> Parser Spec
+parseRawSpec ctx = go
   where
     go (FunctionDeclarationRawSpec (ss, _)) = FunctionDeclarationSpec <$> patch2 ss <$> idBindP ctx
     go (VariableDeclarationRawSpec (ss, _)) = VariableDeclarationSpec <$> patch3 ss <$> idBindP' ctx

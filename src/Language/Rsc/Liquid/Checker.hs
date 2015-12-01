@@ -519,7 +519,7 @@ consVarDecl g (VarDecl l x (Just e))
           Just   <$> cgEnvAdds l "consVarDecl" [(x, VI Local WriteLocal Initialized t)] gy
 
       Just (VI lc  WriteLocal _ t) ->
-        mseq (consCall g l "consVarDecl" [(e, Just t)] $ idTy t) $ \(y,gy) -> do
+        mseq (consExpr g e $ Just t) $ \(y,gy) -> do
           declT   <- cgSafeEnvFindTyM y gy
           Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc WriteLocal Initialized declT)] gy
 
@@ -823,7 +823,7 @@ consExpr g (CallExpr l e es) _
 --
 consExpr g ef@(DotRef l e f) _
   = mseq (consExpr g e Nothing) $ \(x, g') -> do
-      tRcvr <- ltracePP l "tRcvr" <$> cgSafeEnvFindTyM x g'
+      tRcvr <- cgSafeEnvFindTyM x g'
       case getProp l g' f tRcvr of
         Right [(t, FI o a tf)] ->
             case getMutability (envCHA g) tRcvr of
@@ -852,9 +852,10 @@ consExpr g (AssignExpr l OpAssign (LBracket _ e1 e2) e3) _
         consCall g l BIBracketAssign ([e1,e2,e3] `zip` nths) opTy
 
 -- | [e1,...,en]
-consExpr g (ArrayLit l es) _
-  = do  opTy <- arrayLitTy (length es) <$> cgSafeEnvFindTyM (builtinOpId BIArrayLit) g
-        consCall g l BIArrayLit (es `zip` nths) opTy
+consExpr g e@(ArrayLit l es) to
+  = arrayLitTy l g e to (length es) >>= \case
+      Left ee    -> cgError ee
+      Right opTy -> consCall g l BIArrayLit (es `zip` nths) opTy
 
 -- | {f1:e1,...,fn:en}
 consExpr g (ObjectLit l bs) _
@@ -952,7 +953,8 @@ consCall g l fn ets ft0
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case validOverloads of
-        (ft: _) -> consInstantiate l g' fn ft ts xes
+        (ft: _) -> -- traceTypePP l (ppshow ft) $
+                    consInstantiate l g' fn ft ts xes
         _       -> cgError $ errorNoMatchCallee (srcPos l) fn ts validOverloads
   where
     validOverloads = [ mkFun t | Overload cx i <- fFact l     -- all overloads

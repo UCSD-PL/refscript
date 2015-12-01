@@ -17,11 +17,14 @@ import           Control.Applicative           ((<$>))
 import           Control.Exception.Base
 import           Data.Data
 import           Data.Function                 (on)
+import           Data.Interned
 import qualified Data.IntMap                   as I
 import           Data.List                     (isPrefixOf, sortBy)
+import qualified Data.Text                     as T
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Names       (symbolText)
 import           Language.Fixpoint.PrettyPrint
 import qualified Language.Fixpoint.Types       as F
 import qualified Language.Fixpoint.Types       as F

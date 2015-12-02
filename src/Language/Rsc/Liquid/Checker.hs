@@ -57,6 +57,7 @@ import           Language.Rsc.Types
 import           Language.Rsc.TypeUtilities
 import           System.Console.CmdArgs.Default
 import           System.FilePath.Posix           (dropExtension)
+import           Text.Printf
 
 import qualified Data.Foldable                   as FO
 import           Text.PrettyPrint.HughesPJ
@@ -823,13 +824,13 @@ consExpr g (CallExpr l e es) _
 --
 consExpr g ef@(DotRef l e f) _
   = mseq (consExpr g e Nothing) $ \(x, g') -> do
-      tRcvr <- cgSafeEnvFindTyM x g'
+      tRcvr <- ltracePP l (ppshow e) <$> cgSafeEnvFindTyM x g'
       case getProp l g' f tRcvr of
         Right [(t, FI o a tf)] ->
             case getMutability (envCHA g) tRcvr of
               Just mRcvr ->
                   do  funTy <- mkDotRefFunTy g f tRcvr mRcvr a tf
-                      consCall g' l ef [(VarRef (getAnnotation e) x, Nothing)] funTy
+                      consCall g' l ef [(VarRef (getAnnotation e) x, Nothing)] (tracePP "funty" funTy)
               Nothing -> cgError $ bugGetMutability l tRcvr
 
         Right tfs -> cgError $ unsupportedUnionAccess l tRcvr f
@@ -858,10 +859,8 @@ consExpr g e@(ArrayLit l es) to
       Right opTy -> consCall g l BIArrayLit (es `zip` nths) opTy
 
 -- | {f1:e1,...,fn:en}
-consExpr g (ObjectLit l bs) _
-  = consCall g l "ObjectLit" (es `zip` nths) $ objLitTy l ps
-  where
-    (ps, es) = unzip bs
+consExpr g e@(ObjectLit l (unzip -> (ps, es))) _
+  = traceTypePP l (ppshow e) $ consCall g l "ObjectLit" (es `zip` nths) (objLitTy l ps)
 
 -- | new C(e, ...)
 consExpr g (NewExpr l e es) _
@@ -953,8 +952,7 @@ consCall g l fn ets ft0
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case validOverloads of
-        (ft: _) -> -- traceTypePP l (ppshow ft) $
-                    consInstantiate l g' fn ft ts xes
+        (ft: _) -> consInstantiate l g' fn ft ts xes
         _       -> cgError $ errorNoMatchCallee (srcPos l) fn ts validOverloads
   where
     validOverloads = [ mkFun t | Overload cx i <- fFact l     -- all overloads
@@ -1241,14 +1239,14 @@ globals ts = [(x,s1,s2) | (x, s1@(VI Local WriteGlobal Initialized _),
 errorLiquid' = errorLiquid . srcPos
 
 traceTypePP l msg act
-  = act >>= \case
-      Just (x,g) ->
-          do  t <- cgSafeEnvFindTyM x g
-              return $ Just $ trace (ppshow (srcPos l) ++
-                                     " " ++ msg ++
-                                     ": " ++ ppshow x ++
-                                     " :: " ++ ppshow t) (x,g)
-      Nothing ->  return Nothing
+  = do  z <- act
+        case z of
+          Just (x,g) -> do  t <- cgSafeEnvFindTyM x g
+                            return $ Just $ trace (str x t) (x,g)
+          Nothing -> return Nothing
+  where
+    str x t = boldBlue (printf "\nTrace: [%s] %s\n" (ppshow (srcPos l)) (ppshow msg)) ++
+              printf "%s: %s" (ppshow x) (ppshow t)
 
 
 -- Local Variables:

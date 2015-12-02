@@ -286,8 +286,10 @@ bbaseP c
  <|> try (TPrim       <$> tPrimP     )     -- number, boolean, etc...
  <|>     (TRef        <$> tGenP     c)     -- List<A>, Tree<A,B> etc...
   where
-    ambMut | Just b <- pctx_mut c = TVar (btvToTV b) fTop
-           | otherwise            = trIM
+    ambMut | Just b <- pctx_mut c
+           = TVar (btvToTV b) fTop
+           | otherwise
+           = trIM
 
 tGenP c = Gen <$> qnameP <*> bareTyArgsP c
 

@@ -22,7 +22,7 @@ module Language.Rsc.Liquid.Types (
   , RefTypable (..), eSingleton, pSingleton
 
   -- * Manipulating RefType
-  , rTypeReft, rTypeSort, rTypeSortedReft, rTypeValueVar
+  , rTypeReft, rTypeSort, rTypeSortedReft, rTypeValueVar, singleton
 
   -- * Manipulating Reft
   , noKVars
@@ -201,6 +201,11 @@ stripRTypeBase (TVar _ r)   = Just r
 stripRTypeBase (TFun _ _ r) = Just r
 stripRTypeBase (TObj _ _ r) = Just r
 stripRTypeBase _            = Nothing
+
+------------------------------------------------------------------------------------------
+singleton :: F.Expression x => RefType -> x -> RefType
+------------------------------------------------------------------------------------------
+singleton t x = toplevel (const (F.uexprReft x)) t
 
 ------------------------------------------------------------------------------------------
 noKVars :: F.Reft -> F.Reft

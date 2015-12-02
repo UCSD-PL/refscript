@@ -280,7 +280,7 @@ cgEnvAddFresh :: IsLocated l => String -> l -> RefType -> CGEnv -> CGM (Id AnnLq
 --------------------------------------------------------------------------------
 cgEnvAddFresh msg l t g
   = do x  <- freshId l
-       g' <- cgEnvAdds l ("cgEnvAddFresh: " ++ msg) [ltracePP l msg (x, v)] g
+       g' <- cgEnvAdds l ("cgEnvAddFresh: " ++ msg) [(x, v)] g
        addAnnot l x t
        return (x, g')
   where

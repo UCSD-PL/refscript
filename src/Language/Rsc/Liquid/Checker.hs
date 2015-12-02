@@ -10,6 +10,7 @@
 module Language.Rsc.Liquid.Checker (verifyFile) where
 
 import           Control.Applicative             (pure, (<$>))
+import           Control.Arrow                   (first, (***))
 import           Control.Exception               (throw)
 import           Control.Monad
 import           Data.Function                   (on)
@@ -824,13 +825,13 @@ consExpr g (CallExpr l e es) _
 --
 consExpr g ef@(DotRef l e f) _
   = mseq (consExpr g e Nothing) $ \(x, g') -> do
-      tRcvr <- ltracePP l (ppshow e) <$> cgSafeEnvFindTyM x g'
+      tRcvr <- cgSafeEnvFindTyM x g'
       case getProp l g' f tRcvr of
         Right [(t, FI o a tf)] ->
             case getMutability (envCHA g) tRcvr of
               Just mRcvr ->
                   do  funTy <- mkDotRefFunTy g f tRcvr mRcvr a tf
-                      consCall g' l ef [(VarRef (getAnnotation e) x, Nothing)] (tracePP "funty" funTy)
+                      consCall g' l ef [(VarRef (getAnnotation e) x, Nothing)] funTy
               Nothing -> cgError $ bugGetMutability l tRcvr
 
         Right tfs -> cgError $ unsupportedUnionAccess l tRcvr f
@@ -858,9 +859,27 @@ consExpr g e@(ArrayLit l es) to
       Left ee    -> cgError ee
       Right opTy -> consCall g l BIArrayLit (es `zip` nths) opTy
 
--- | {f1:e1,...,fn:en}
-consExpr g e@(ObjectLit l (unzip -> (ps, es))) _
-  = traceTypePP l (ppshow e) $ consCall g l "ObjectLit" (es `zip` nths) (objLitTy l ps)
+-- | { f1: e1, ..., fn: en }
+consExpr g e@(ObjectLit l pes) to
+  = mseq (consScan consExpr g ets) $ \(xes, g') -> do
+      ts <- mapM (\x -> (`singleton` x) <$> cgSafeEnvFindTyM x g') xes
+      Just <$> cgEnvAddFresh "17" l (TObj tIM (typeMembersFromList (pts ts)) fTop) g'
+  where
+    ctx     | Just t <- to
+            = i_mems $ typeMembersOfType (envCHA g) t
+            | otherwise
+            = mempty
+
+    peoats  = [ (p, e, ctxTy p)   | (p, e)           <- pes ]
+    ets     = [ (e, t)           | (_,e,(_,_,t))     <- peoats ]
+    pts ts_ = [ (ss p, FI o a t) | ((p,_,(o,a,_)),t) <- zip peoats ts_ ]
+
+    ctxTy p | Just (FI o a t) <- F.lookupSEnv (F.symbol p) ctx
+            = (o, a, Just t)
+            | otherwise
+            = (Req, Final, Nothing)
+    ss      = F.symbol
+
 
 -- | new C(e, ...)
 consExpr g (NewExpr l e es) _

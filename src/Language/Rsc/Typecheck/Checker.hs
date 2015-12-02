@@ -649,13 +649,22 @@ tcExpr γ e@(ArrayLit l es) to
           do  (es', t) <- tcNormalCall γ l BIArrayLit (es `zip` nths) opTy
               return $ (ArrayLit l es', t)
 
--- | `{ f1:t1,...,fn:tn }`
---
---  TODO: use the contextual type here
---
-tcExpr γ e@(ObjectLit l (unzip -> (ps, es))) _
-  = do (es', t) <- tcNormalCall γ l "ObjectLit" (es `zip` nths) (objLitTy l ps)
-       return $ (ObjectLit l (zip ps es'), t)
+-- | { f1: e1, ..., fn: tn }
+tcExpr γ ex@(ObjectLit l pes) to
+  = do  (pes', tys) <- unzip <$> mapM tce ets
+        return (ObjectLit l pes', TObj tIM (typeMembersFromList tys) fTop)
+  where
+    ctxtys      | Just t <- to
+                = i_mems $ typeMembersOfType (envCHA γ) t
+                | otherwise
+                = mempty
+    ets         = [ (p, e, F.lookupSEnv (F.symbol p) ctxtys) | (p, e) <- pes ]
+
+    tce (p,e,x) | Just (FI o a t)   <- x
+                = (***) (p,) ((F.symbol p,) . (FI o a))       <$> tcExpr γ e (Just t)
+                | otherwise
+                -- Default optionality and assignability for field
+                = (***) (p,) ((F.symbol p,) . (FI Req Final)) <$> tcExpr γ e Nothing
 
 -- | <T>e
 tcExpr γ ex@(Cast l e) _

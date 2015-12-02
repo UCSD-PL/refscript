@@ -20,14 +20,16 @@ boldBlue s = setSGRCode [SetConsoleIntensity BoldIntensity,
              setSGRCode [Reset]
 
 ---------------------------------------------------------------------
-tracePP     ::  (PP a) => String -> a -> a
+tracePP     ::  (PP a, PP b) => a -> b -> b
 ---------------------------------------------------------------------
-tracePP s x = trace (boldBlue (printf "\nTrace: [%s]\n" s) ++  printf "%s" (ppshow x)) x
+tracePP s x = trace (boldBlue (printf "\nTrace: [%s]\n" (ppshow s)) ++  printf "%s" (ppshow x)) x
 
 ---------------------------------------------------------------------
-ltracePP     ::  (PP a, IsLocated l) => l -> String -> a -> a
+ltracePP     ::  (PP a, PP b, IsLocated l) => l -> a -> b -> b
 ---------------------------------------------------------------------
-ltracePP l s x = trace (boldBlue (printf "\nTrace: [%s: %s]\n" (ppshow (srcPos l)) s) ++ printf "%s" (ppshow x)) x
+ltracePP l s x =
+  trace (boldBlue (printf "\nTrace: [%s: %s]\n" (ppshow (srcPos l)) (ppshow s)) ++
+         printf "%s" (ppshow x)) x
 
 instance PP Error where
   pp e = pp (errLoc e) <+> pp (errMsg e)

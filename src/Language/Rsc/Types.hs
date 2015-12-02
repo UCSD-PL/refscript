@@ -110,21 +110,21 @@ data BindQ q r        = B { b_sym  :: F.Symbol
                           }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data TypeMembersQ q r = TM { i_mems  :: F.SEnv (TypeMemberQ q r)    -- Instance Members
-                           , s_mems  :: F.SEnv (TypeMemberQ q r)    -- Static members
-                           , tm_call :: Maybe (RTypeQ q r)           -- Call signatures
-                           , tm_ctor :: Maybe (RTypeQ q r)           -- Contructor signatures
-                           , tm_sidx :: Maybe (RTypeQ q r)           -- String indexer
-                           , tm_nidx :: Maybe (RTypeQ q r)           -- Numeric indexer
+data TypeMembersQ q r = TM { i_mems  :: F.SEnv (TypeMemberQ q r)      -- Instance Members
+                           , s_mems  :: F.SEnv (TypeMemberQ q r)      -- Static members
+                           , tm_call :: Maybe (RTypeQ q r)            -- Call signatures
+                           , tm_ctor :: Maybe (RTypeQ q r)            -- Contructor signatures
+                           , tm_sidx :: Maybe (RTypeQ q r)            -- String indexer
+                           , tm_nidx :: Maybe (RTypeQ q r)            -- Numeric indexer
                            }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
-data TypeMemberQ q r  = FI                                        -- Field Members
+data TypeMemberQ q r  = FI                                            -- Field Members
                            { f_opt :: Optionality                     -- Optional
                            , f_asg :: FieldAsgn                       -- Assignability
                            , f_ty  :: RTypeQ q r                      -- Type
                            }
-                      | MI                                        -- Method Members
+                      | MI                                            -- Method Members
                            { m_opt :: Optionality                     -- Optional
                            , m_ty  :: [(MutabilityQ q r, RTypeQ q r)] -- [(Mutability, Type)]
                            }

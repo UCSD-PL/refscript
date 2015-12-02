@@ -55,7 +55,7 @@ module Language.Rsc.Typecheck.Types (
   , typeMembers, typeMembersFromList, typesOfTM
 
   -- * Operator Types
-  , infixOpId, prefixOpId, builtinOpId, objLitTy, finalizeTy
+  , infixOpId, prefixOpId, builtinOpId, finalizeTy
 
   -- * Builtin: Binders
   , mkId, argId, argIdInit, mkArgTy, returnTy
@@ -68,6 +68,7 @@ module Language.Rsc.Typecheck.Types (
   ) where
 
 import           Control.Applicative         hiding (empty)
+import           Control.Arrow               (second)
 import           Data.Default
 import qualified Data.List                   as L
 import           Data.Maybe                  (fromMaybe, maybeToList)
@@ -248,27 +249,26 @@ orUndef t  | any isTUndef ts = t
 
 
 ----------------------------------------------------------------------------------------
-toplevel :: RTypeQ q r -> (r -> r) -> RTypeQ q r
+toplevel :: (r -> r) -> RTypeQ q r -> RTypeQ q r
 ----------------------------------------------------------------------------------------
-toplevel (TPrim c r) f   = TPrim c (f r)
-toplevel (TVar v r) f    = TVar v (f r)
-toplevel (TOr ts)   _    = TOr ts
-toplevel (TAnd ts) _     = TAnd ts
-toplevel (TRef n r) f    = TRef n (f r)
-toplevel (TObj m ms r) f = TObj m ms (f r)
-toplevel (TClass n) _    = TClass n
-toplevel (TMod n) _      = TMod n
-toplevel (TAll b t) _    = TAll b t
-toplevel (TFun b t r) f  = TFun b t (f r)
-toplevel (TExp e) _      = TExp e
+toplevel f (TPrim c r  ) = TPrim c (f r)
+toplevel f (TVar v r   ) = TVar v (f r)
+toplevel f (TOr ts     ) = TOr (map (toplevel f) ts)
+toplevel f (TAnd ts    ) = TAnd (map (second (toplevel f)) ts)
+toplevel f (TRef n r   ) = TRef n (f r)
+toplevel f (TObj m ms r) = TObj m ms (f r)
+toplevel _ (TClass n   ) = TClass n
+toplevel _ (TMod n     ) = TMod n
+toplevel f (TAll b t   ) = TAll b (toplevel f t)
+toplevel f (TFun b t r ) = TFun b t (f r)
+toplevel _ (TExp e     ) = TExp e
 
 
 -- | Strengthen the top-level refinement
 ----------------------------------------------------------------------------------------
 strengthen :: F.Reftable r  => RTypeQ q r -> r -> RTypeQ q r
 ----------------------------------------------------------------------------------------
-strengthen (TOr ts) r' = TOr (map (`strengthen` r') ts)
-strengthen t        r' = toplevel t (r' `F.meet`)
+strengthen t r' = toplevel (r' `F.meet`) t
 
 -- NOTE: r' is the OLD refinement.
 --       We want to preserve its VV binder as it "escapes",
@@ -408,19 +408,6 @@ freshBTV l s b n  = (bv,t)
     bv            = BTV i (srcPos l) b
     v             = TV i (srcPos l)
     t             = TVar v fTop
-
---------------------------------------------------------------------------------------------
-objLitTy         :: (F.Reftable r, IsLocated a) => a -> [Prop a] -> RType r
---------------------------------------------------------------------------------------------
-objLitTy l ps     = mkFun (avs, bs, rt)
-  where
-    bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
-    rt            = TObj tIM tms fTop
-    tms           = typeMembersFromList [ (s, FI Req Inherited a) | (s, a) <- zip ss ats ]
-    (avs, ats)    = unzip $ map (freshBTV l aSym Nothing) [1..length ps]  -- field type vars
-    ss            = [F.symbol p | p <- ps]
-    mSym          = F.symbol "M"
-    aSym          = F.symbol "A"
 
 lenId l           = Id l "length"
 argIdInit l       = Id l $ "arguments"

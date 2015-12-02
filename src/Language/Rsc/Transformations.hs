@@ -480,7 +480,7 @@ fixFunBindersInType _ bs = go
     sub              = F.subst (F.mkSubst (zip ks ks'))
 
     go (TFun bs t r) = TFun [B (ss s) ts | B s ts <- bs] t (sub r)
-    go t             = toplevel t sub
+    go t             = toplevel sub t
 
 -- When costructing the substitution haskmap, if the list contains duplicate
 -- mappings, the later mappings take precedence.

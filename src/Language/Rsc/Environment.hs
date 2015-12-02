@@ -107,10 +107,6 @@ resolveModuleInEnv (envCHA -> c) = resolveModule c
 resolveTypeInEnv   (envCHA -> c) = resolveType c
 resolveEnumInEnv   (envCHA -> c) = resolveEnum c
 
-
--- instance (PP r, F.Reftable r, CheckingEnvironment r t) => PP (t r) where
---   pp = pp . envNames
-
 --------------------------------------------------------------------------------
 toFgn :: Env (VarInfoQ q r) -> Env (VarInfoQ q r)
 --------------------------------------------------------------------------------

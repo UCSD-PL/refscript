@@ -896,7 +896,7 @@ tcNormalCall :: (Unif r, PP a) => TCEnv r -> AnnTc r -> a -> [(ExprSSAR r, Maybe
 --------------------------------------------------------------------------------
 tcNormalCall γ l fn etos ft0
   = do ets <- T.mapM (uncurry $ tcExprWD γ) etos
-       z <- resolveOverload γ l fn ets ft0
+       z   <- resolveOverload γ l fn ets ft0
        case z of
          Just (i, θ, ft) ->
              do addAnn (fId l) (Overload (tce_ctx γ) i)
@@ -907,15 +907,16 @@ tcNormalCall γ l fn etos ft0
          Nothing -> tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) (unzip ets)
 
 
+--------------------------------------------------------------------------------
 -- | `resolveOverload γ l fn es ts ft`
 --
--- When resolving an overload there are two prossible cases:
+--   When resolving an overload there are two prossible cases:
 --
--- * There is only a single signature available: then return just this
---   signature regardless of subtyping constraints
+--   1. There is only a single signature available: then return just this
+--      signature regardless of subtyping constraints
 --
--- * There are more than one signature available: return all that pass the
---   subtype check (this is what tcCallCaseTry does).
+--   2. There are more than one signature available: return all that pass the
+--      subtype check (this is what tcCallCaseTry does).
 --
 --------------------------------------------------------------------------------
 resolveOverload :: (Unif r, PP a)
@@ -936,7 +937,7 @@ resolveOverload :: (Unif r, PP a)
 resolveOverload γ l fn es ft
   | [(i,t)] <- validOverloads
   = Just . (i,,t) <$> getSubst
-  |otherwise
+  | otherwise
   = tcCallCaseTry γ l fn (snd <$> es) validOverloads
   where
     validOverloads = [ (i, mkFun s) | (i, s@(_, bs, _)) <- extractCall γ ft
@@ -945,15 +946,15 @@ resolveOverload γ l fn es ft
 
 --------------------------------------------------------------------------------
 -- | A successful pairing of formal to actual parameters will return `Just θ`,
--- where @θ@ is the corresponding substitution. If the types are not acceptable
--- this will return `Nothing`. In this case successful means:
+--   where @θ@ is the corresponding substitution. If the types are not acceptable
+--   this will return `Nothing`. In this case successful means:
 --
---  * Unifying without errors.
+--   1. Unifying without errors.
 --
---  * Passing the subtyping test.
+--   2. Passing the subtyping test.
 --
--- The monad state is completely reversed after this function returns, thanks
--- to `runMaybeM`. We don't need to reverse the action of `instantiateFTy`.
+--   The monad state is completely reversed after this function returns, thanks
+--   to `runMaybeM`. We don't need to reverse the action of `instantiateFTy`.
 --------------------------------------------------------------------------------
 tcCallCaseTry :: (Unif r, PP a)
   => TCEnv r -> AnnTc r -> a -> [RType r] -> [(IntCallSite, RType r)]

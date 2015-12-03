@@ -60,6 +60,7 @@ module Language.Rsc.Liquid.CGMonad (
   ) where
 
 import           Control.Applicative
+import           Control.Arrow                   ((***))
 import           Control.Exception               (throw)
 import           Control.Monad
 import           Control.Monad.State
@@ -459,14 +460,6 @@ instance F.Expression TVar where
   expr (TV a _) = F.expr a
 
 
--- IN FIXPOINT meetReft (F.Reft (v, ras)) (F.Reft (v', ras'))
--- IN FIXPOINT   | v == v'            = F.Reft (v , L.nubBy cmp $ ras  ++ ras')
--- IN FIXPOINT   | v == F.dummySymbol = F.Reft (v', L.nubBy cmp $ ras' ++ (ras `F.subst1`  (v , F.EVar v')))
--- IN FIXPOINT   | otherwise          = F.Reft (v , L.nubBy cmp $ ras  ++ (ras' `F.subst1` (v', F.EVar v )))
--- IN FIXPOINT   where
--- IN FIXPOINT     cmp = (==) `on` (show . F.toFix)
-
-
 --------------------------------------------------------------------------------
 -- | Fresh Templates
 --------------------------------------------------------------------------------
@@ -516,19 +509,26 @@ freshenType _ g l t
   | otherwise
   = return t
 
--- | Instantiate Fresh Type (at Call-site)
---
---   Returns a pair of instantiations of type variables @αs@ and the freshly
---   instantiated body type of the function.
+-- | 1. Instantiates fresh types (at call-site)
+--   2. Adds well-formedness constraints for instantiated type variables
+--   3. Adds subtyping constraints when type vars have bounds
+--   4. Returns the instantiated body of the function.
 --------------------------------------------------------------------------------
-freshTyInst :: IsLocated l => l -> CGEnv -> [BTVar F.Reft] -> [RefType] -> RefType -> CGM RefType
+freshTyInst :: AnnLq -> CGEnv -> [BTVar F.Reft] -> [RefType] -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
 freshTyInst l g bs τs tbody
-  = do ts    <- mapM (freshTy "freshTyInst") τs
-       _     <- mapM (wellFormed l g) ts
-       return $ apply (fromList $ zip αs ts) tbody
+  = do ts    <- mapM  (freshTy "freshTyInst") τs
+       _     <- mapM_ (wellFormed l g) ts
+       _     <- zipWithM_ subt ts bs
+       let θ  = fromList (zip αs ts)
+       return $ apply θ tbody
   where
-    αs = btvToTV <$> bs
+    αs        = btvToTV <$> bs
+    subt t b  | BTV v _ (Just b) <- b
+              = subType l (errorBoundSubt l v b) g t b
+              | otherwise
+              = return ()
+
 
 -- | Instantiate Fresh Type (at Phi-site)
 --------------------------------------------------------------------------------
@@ -1011,27 +1011,26 @@ cgFunTys l f xs ft   | Just ts <- bkFuns ft
                      = cgError $ errorNonFunction (srcPos l) f ft
   where
     fTy (αs, yts, t) | Just yts' <- padUndefineds xs yts
-                     = uncurry (αs,,) <$> substNoCapture l xs (yts', t)
+                     = uncurry (αs,,) <$> substNoCapture xs (yts', t)
                      | otherwise
                      = cgError $ errorArgMismatch (srcPos l)
 
--- | Avoids capture of function binders by existing value variables
+-- | `substNoCapture xs (yts,t)` substitutes formal parameters in `yts` with
+--   actual parameters passed as bindings in `xs`.
+--
+--   Avoids capture of function binders by existing value variables
 --------------------------------------------------------------------------------
-substNoCapture :: F.Symbolic a => t -> [a] -> ([Bind F.Reft], RefType) -> CGM ([Bind F.Reft], RefType)
+substNoCapture :: F.Symbolic a => [a] -> ([Bind F.Reft], RefType) -> CGM ([Bind F.Reft], RefType)
 --------------------------------------------------------------------------------
-substNoCapture _ xs (yts, t) | length yts /= length xs
-                             = error "substNoCapture - length test failed"
-                             | otherwise
-                             = (,) <$> mapM (\(B s t) -> B s <$> mapReftM ff t) yts
-                                   <*> mapReftM ff t
+substNoCapture xs (yts, rt)
+  | length yts /= length xs
+  = error "substNoCapture - length test failed"
+  | otherwise
+  = (,) <$> mapM (onT (mapReftM ff)) yts <*> mapReftM ff rt
   where
-    -- If the symbols we are about to introduce are already captured by some vv,
-    -- then:
-    --
-    --  (1) create a fresh vv., and
-    --
-    --  (2) proceed with the substitution after replacing with the new vv.
-    --
+    -- If the symbols we are about to introduce are already captured by some vv:
+    -- (1) create a fresh vv., and
+    -- (2) proceed with the substitution after replacing with the new vv.
     ff r@(F.Reft (v,ras)) | v `L.elem` xss
                           = do v' <- freshVV
                                return $ F.subst su $ F.Reft . (v',)
@@ -1041,8 +1040,8 @@ substNoCapture _ xs (yts, t) | length yts /= length xs
     freshVV               = F.vv . Just <$> fresh
     xss                   = F.symbol <$> xs
     su                    = F.mkSubst $ safeZipWith "substNoCapture" fSub yts xs
-    fSub yt x             = (b_sym yt, F.eVar x)
-
+    fSub                  = curry $ (***) b_sym F.eVar
+    onT f (B s t)         = B s <$> f t
 
 -- | Substitute occurences of 'this.f' in type @t'@, with 'f'
 --------------------------------------------------------------------------------

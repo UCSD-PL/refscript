@@ -192,6 +192,8 @@ errorForbiddenSyms l t xs     = mkErr l $ printf "Symbol(s): %s, is (are) not re
 errorUnboundSyms l x t s m    = mkErr l $ printf "Symbol '%s', appearing in type '%s' of '%s' is unbound [ERROR_CODE: %s]." (ppshow s) (ppshow t) (ppshow x) (ppshow m)
 unimplementedReservedSyms l   = mkErr l $ printf "Please avoid using 'func' and 'obj' as symbols in refinements."
 errorAsgnInRef l x t a        = mkErr l $ printf "Only readonly variables can be used in refinements. In type '%s' symbol '%s' is %s." (ppshow t) (ppshow x) (ppshow a)
+errorContextual l e t         = mkErr l $ printf "Contextual error occured when checking expression '%s' under type '%s'." (ppshow e) (ppshow t)
+bugDeadCast l                 = mkErr l $ "Dead-cast with no error associated."
 
 ---------------------------------------------------------------------------
 -- | Pervasive (typechecking TC and Liquid)
@@ -224,4 +226,5 @@ errorUnionMergeFuns l t       = mkErr l $ printf "In type '%s', cannot merge mul
 errorArrayLitCtxType l e      = mkErr l $ printf "Cannot type array literal '%s' without a contextual type." (ppshow e)
 errorArrayLitType l e t       = mkErr l $ printf "Cannot cast array '%s' with non array type '%s'." (ppshow e) (ppshow t)
 bugArrayBIType l f t          = mkErr l $ printf "[BUG] Inconsistent built-in arrray literal ('%s') type '%s'." (ppshow f) (ppshow t)
+errorBoundSubt l v t          = mkErr l $ printf "Could not find a valid instantiation to satisfy the bound of '%s': '%s'" (ppshow v) (ppshow t)
 

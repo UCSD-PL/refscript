@@ -202,7 +202,7 @@ offsetLocSym    = F.dummyLoc offsetName
 -- hasPropertySym  = F.dummyLoc "hasProperty"
 
 undefinedId     = Id (srcPos dummySpan) "undefined"
-thisId          = Id (srcPos dummySpan) "this"
+thisId l        = Id l "this"
 
 offsetName, thisSym, protoSym :: F.Symbol
 thisSym    = "this"

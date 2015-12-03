@@ -1,15 +1,7 @@
 
-/*@ y :: { } */
-declare let y;
+/*@ readonly x_25 :: { @assignable f: posint } */
+let x_25 = { f: 1 };
 
-/*@ x :: { f: [Mutable] posint } */
-let x = { f: 1 };
-
-/*@ foo :: () => void */
-function foo(): void {
-    x.f = 2;
-}
-
-export function main(): void {
-    foo();
+export function foo(): void {
+    x_25.f = 2;
 }

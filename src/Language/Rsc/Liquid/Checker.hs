@@ -89,11 +89,7 @@ verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
       res   <- announce "Solve" $ liftIO (solveConstraints cfg' tc f cgi)
       return   res
 
-announce s a
-  = do  _ <- liftIO     $ startPhase Loud s
-        r <- a
-        -- _ <- liftIO     $ donePhase Loud s
-        return r
+announce s a = liftIO (startPhase Loud s) >> a
 
 (>>=>) :: IO (Either a b) -> (b -> IO c) -> IO (Either a c)
 act >>=> k = do
@@ -108,7 +104,6 @@ eAct m = do
   case x of
     Left  l -> throw l
     Right r -> return r
-
 
 
 -- | solveConstraint: solve with `ueqAllSorts` enabled.
@@ -167,41 +162,6 @@ ppCasts (Rsc { code = Src fs })
     ppEntry = \(_, c) -> pp c
     entries = [ (srcPos a, c) | a <- concatMap FO.toList fs
                               , TCast _ c <- fFact a ]
-
-
--- OLD CODE -- -- | solveConstraints: Call solve with `ueqAllSorts` enabled.
--- OLD CODE -- --------------------------------------------------------------------------------
--- OLD CODE -- solveConstraints :: RefScript
--- OLD CODE --                  -> FilePath
--- OLD CODE --                  -> CGInfo
--- OLD CODE --                  -> IO (A.UAnnSol RefType, F.FixResult Error)
--- OLD CODE -- --------------------------------------------------------------------------------
--- OLD CODE -- solveConstraints p f cgi
--- OLD CODE --   = do (r, s)  <- solve fpConf $ cgi_finfo cgi
--- OLD CODE --        let r'   = fmap (ci_info . F.sinfo) r
--- OLD CODE --        let anns = cgi_annot cgi
--- OLD CODE --        let sol  = applySolution s
--- OLD CODE --        return (A.SomeAnn anns sol, r')
--- OLD CODE --   where
--- OLD CODE --     real        = RealOption `elem` pOptions p
--- OLD CODE --     fpConf      = def { C.real        = real
--- OLD CODE --                       , C.ueqAllSorts = C.UAS True
--- OLD CODE --                       , C.srcFile     = f
--- OLD CODE --                       }
--- OLD CODE --
--- OLD CODE -- --------------------------------------------------------------------------------
--- OLD CODE -- applySolution :: F.FixSolution -> A.UAnnInfo RefType -> A.UAnnInfo RefType
--- OLD CODE -- --------------------------------------------------------------------------------
--- OLD CODE -- applySolution  = fmap . fmap . tx
--- OLD CODE --   where
--- OLD CODE --     tx         = F.mapPredReft . txPred
--- OLD CODE --     txPred s   = F.simplify . V.mapKVars (appSol s)
--- OLD CODE --     appSol s k = Just $ HM.lookupDefault F.PTop k s
--- OLD CODE --
--- OLD CODE --     -- tx   s (F.Reft (x, ra)) = F.Reft (x, txRa s ra)
--- OLD CODE --     -- txRa s                  = F.Refa . F.simplify . V.mapKVars (appSol s) . F.raPred
--- OLD CODE --     -- appSol _ ra@(F.RConc _) = ra
--- OLD CODE --     -- appSol s (F.RKvar k su) = F.RConc $ F.subst su $ HM.lookupDefault F.PTop k s
 
 --------------------------------------------------------------------------------
 generateConstraints :: Config -> FilePath -> RefScript -> ClassHierarchy F.Reft -> CGInfo
@@ -811,9 +771,9 @@ consExpr g ef@(DotRef l e f) _
 -- | e1[e2]
 consExpr g e@(BracketRef l e1 e2) _
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
-      opTy <- do  cgSafeEnvFindTyM x1 g' >>= \case
-                    -- TEnum _ -> cgError $ unimplemented (srcPos l) msg e
-                    _       -> cgSafeEnvFindTyM (builtinOpId BIBracketRef) g'
+      opTy <- cgSafeEnvFindTyM x1 g' >>= \case
+                -- TEnum _ -> cgError $ unimplemented (srcPos l) msg e
+                _       -> cgSafeEnvFindTyM (builtinOpId BIBracketRef) g'
       consCall g' l BIBracketRef ([vr x1, e2] `zip` nths) opTy
   where
     msg = "Support for dynamic access of enumerations"
@@ -968,7 +928,7 @@ consScan f g xs
   = do  z <- fmap (mapFst reverse) <$> consFold step ([], g) xs
         case z of
           Just (xs', g') -> return $ Just (xs', g')
-          _              -> return $ Nothing
+          _              -> return   Nothing
   where
     step (ys, g) (x,y) = fmap (mapFst (:ys))   <$> f g x y
 
@@ -996,7 +956,7 @@ consCondExprArgs l g [(c,tc),(t,tt),(x,tx),(y,ty)]
                        let ttx    = fromMaybe tty tx    -- Dummy type if tx is Nothing
                        (x_, gx') <- cgEnvAddFresh "7" l ttx gy
                        return     $ Just ([c_,t_,x_,y_], gx')
-                Nothing       -> return $ Nothing
+                Nothing       -> return Nothing
   where
     withGuard g cond b x tx =
       fmap (mapSnd envPopGuard) <$> consExpr (envAddGuard cond b g) x tx
@@ -1052,7 +1012,7 @@ consWhile g l cond body
               whenJustM z $ consWhileStep l xs tIs                           -- (f)
               return      $ Just $ envAddGuard xc False gI'
     where
-        (xs,ts) = unzip $ [xts | PhiVarTy xts <- fFact l]
+        (xs,ts) = unzip [xts | PhiVarTy xts <- fFact l]
 
 consWhileBase l xs tIs g
   = do  baseT <- mapM (`cgSafeEnvFindTyM` g) xs

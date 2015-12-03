@@ -93,7 +93,7 @@ envAddWith f i t γ = case envFind i γ of
 envSEnv           :: Env a -> F.SEnv a
 envSEnv            = F.fromListSEnv . map (first F.symbol) . envToList
 
-envFromList_ f l   = L.foldl' step mempty l
+envFromList_ f     = L.foldl' step mempty
   where
     step γ (i, t)  = case envFind i γ of
                        Nothing          -> envAdd i t γ

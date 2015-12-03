@@ -61,7 +61,7 @@ import           System.FilePath.Posix           (dropExtension)
 import           Text.Printf
 
 import qualified Data.Foldable                   as FO
-import           Text.PrettyPrint.HughesPJ
+import           Text.PrettyPrint.HughesPJ       hiding (first)
 
 import           Debug.Trace                     hiding (traceShow)
 
@@ -94,56 +94,6 @@ announce s a
         r <- a
         -- _ <- liftIO     $ donePhase Loud s
         return r
-
-
--- --------------------------------------------------------------------------------
--- verifyFile    :: Config -> FilePath -> [FilePath] -> IO Result
--- --------------------------------------------------------------------------------
--- verifyFile cfg f fs = do
---   (cfg', p0) <- eAct $ parse cfg fs
---   p1         <- eAct $ ssa   cfg'   p0
---   p2         <- eAct $ tc    cfg    p1
---   refTc cfg f  p2
-
--- --------------------------------------------------------------------------------
--- parse :: Config -> [FilePath] -> IO (Err (Config, RefScript))
--- --------------------------------------------------------------------------------
--- parse cfg fs
---   = do  r <- parseRscFromFiles fs
---         donePhase Loud "Parse Files"
---         case r of
---           Left l  -> return (Left l)
---           Right p -> do cfg'  <- withPragmas cfg (pOptions p)
---                         return $ Right (cfg', p)
-
-
--- --------------------------------------------------------------------------------
--- ssa :: ClassHierarchy F.Reft -> BareRsc F.Reft -> IO (Err (SsaRsc F.Reft))
--- --------------------------------------------------------------------------------
--- ssa cha p = do
---   r <- ssaTransform p cha
---   donePhase Loud "SSA Transform"
---   return r
---
--- --------------------------------------------------------------------------------
--- tc :: Config -> SsaRsc F.Reft -> IO (Err (TcRsc F.Reft))
--- --------------------------------------------------------------------------------
--- tc cfg p = do
---   r <- typeCheck cfg p
---   donePhase Loud "Typecheck"
---   return r
---
--- --------------------------------------------------------------------------------
--- refTc :: Config -> FilePath -> RefScript -> IO Result
--- --------------------------------------------------------------------------------
--- refTc cfg f p = do
---   let cgi = generateConstraints cfg f p
---   donePhase Loud "Generate Constraints"
---   solveConstraints cfg p f cgi
-
--- result :: Either _ Result -> IO Result
--- result (Left l)  = return (A.NoAnn, l)
--- result (Right r) = return r
 
 (>>=>) :: IO (Either a b) -> (b -> IO c) -> IO (Either a c)
 act >>=> k = do
@@ -434,7 +384,7 @@ consStmt g (IfSingleStmt l b s)
 
 -- if e { s1 } else { s2 }
 consStmt g (IfStmt l e s1 s2) =
-  mseq ((cgSafeEnvFindTyM (builtinOpId BITruthy) g)
+  mseq (cgSafeEnvFindTyM (builtinOpId BITruthy) g
         >>= consCall g l "truthy" [(e, Nothing)]) $ \(xe,ge) -> do
     g1' <- (`consStmt` s1) $ envAddGuard xe True ge
     g2' <- (`consStmt` s2) $ envAddGuard xe False ge
@@ -474,7 +424,7 @@ consStmt g (ThrowStmt _ e)
   = consExpr g e Nothing >> return Nothing
 
 -- function f(x1...xn){ s }
-consStmt g s@(FunctionStmt _ _ _ _)
+consStmt g s@FunctionStmt{}
   = consFun g s >> return (Just g)
 
 --
@@ -494,7 +444,7 @@ consStmt g (ClassStmt l x ce)
 consStmt g (InterfaceStmt _ _)
   = return $ Just g
 
-consStmt g (EnumStmt _ _ _)
+consStmt g EnumStmt{}
   = return $ Just g
 
 consStmt g (ModuleStmt _ n body)
@@ -963,57 +913,41 @@ consCall g l fn ets (validOverloads g l -> fts)
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
-        ft:_ -> consInstantiate l g' fn ft ts xes
+        ft:_ -> consCheckArgs l g' fn ft ts xes
         _    -> cgError $ errorNoMatchCallee (srcPos l) fn ts fts
 
 
--- | `consInstantiate` does the subtyping between the types of the arguments
+-- | `consCheckArgs` does the subtyping between the types of the arguments
 --   @xes@ and the formal paramaters of @ft@.
---   If this are bounded type variables, then repeat the parameter types of the
---   function this time with all bound type variables replaced by their
---   respective type constraint (also repeat the respective actual arguments in
---   the subtyping constraint).
---
 --------------------------------------------------------------------------------
-consInstantiate :: PP a => AnnLq -> CGEnv -> a
-                        -> RefType                          -- Function spec
-                        -> [RefType]                        -- Input types
-                        -> [Id AnnLq]                       -- Input ids
-                        -> CGM (Maybe (Id AnnLq, CGEnv))
+consCheckArgs :: PP a => AnnLq -> CGEnv -> a
+                      -> RefType                          -- Function spec
+                      -> [RefType]                        -- Input types
+                      -> [Id AnnLq]                       -- Input ids
+                      -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
-consInstantiate l g fn ft ts xes
-  = do  o           <- instantiateFTy l g fn ft
-        (rhs0, ot)  <- substNoCapture xes o
-        rhs1        <- pure      (map b_type rhs0)
-        lhs         <- zipWithM  (instantiateTy l g) [1..] (ts ++ ts)
-        _           <- zipWithM_ (subType l err g) lhs rhs1
-        Just       <$> cgEnvAddFresh "5" l ot g
-  where
-    (bs, xts, t)    = fromJust $ bkFun ft
-
-    θc              = fromList [ (TV s l, c )| BTV s l (Just c) <- bs ]
-    xts'            = apply θc xts
-    err             = errorLiquid' l
+consCheckArgs l g fn ft ts xes
+  = do  (rhs, rt) <- instantiateFTy l g fn xes ft
+        lhs       <- zipWithM  (instantiateTy l g) [1..] (ts ++ ts)
+        _         <- zipWithM_ (subType l (errorLiquid' l) g) lhs rhs
+        Just      <$> cgEnvAddFresh "5" l rt g
 
 --------------------------------------------------------------------------------
 instantiateTy :: AnnLq -> CGEnv -> Int -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
 instantiateTy l g i (bkAll -> (αs, t))
-  = freshTyInst l g αs (envGetContextTypArgs i g l αs) t
+  = freshTyInst l g αs τs t where τs = envGetContextTypArgs 0 g l αs
 
---
--- @τs@: the type instantiations for parameters @bs@
---
----------------------------------------------------------------------------------
-instantiateFTy :: PP a => AnnLq -> CGEnv -> a -> RefType -> CGM ([Bind F.Reft], RefType)
----------------------------------------------------------------------------------
-instantiateFTy l g fn ft@(bkAll -> (αs, t))
-  = do  ft'             <- freshTyInst l g αs τs t
-        (_, bs', t')    <- maybe err return (bkFun ft')
-        return           $ (bs', t')
+--------------------------------------------------------------------------------
+instantiateFTy :: PP a => AnnLq -> CGEnv -> a -> [Id AnnLq] -> RefType
+                       -> CGM ([RefType], RefType)
+--------------------------------------------------------------------------------
+instantiateFTy l g fn xes ft@(bkAll -> (αs, t))
+  = bkFun <$> freshTyInst l g αs τs t >>= \case
+      Just (_, bs, rt) -> first (map b_type) <$> substNoCapture xes (bs, rt)
+      _                -> cgError $ errorNonFunction (srcPos l) fn ft
     where
-      τs  = envGetContextTypArgs 0 g l αs
-      err = cgError $ errorNonFunction (srcPos l) fn ft
+      τs = envGetContextTypArgs 0 g l αs
 
 
 -- | consCallCondExpr: Special casing conditional expression call here because we'd like the
@@ -1023,7 +957,7 @@ consCallCondExpr g l fn ets (validOverloads g l -> fts)
   = mseq (consCondExprArgs (srcPos l) g ets) $ \(xes, g') -> do
       ts <- T.mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
-        [ft] -> consInstantiate l g' fn ft ts xes
+        [ft] -> consCheckArgs l g' fn ft ts xes
         _    -> cgError $ errorNoMatchCallee (srcPos l) fn ts fts
 
 

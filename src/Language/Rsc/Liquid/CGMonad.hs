@@ -248,6 +248,7 @@ envGetContextCast g a
       cs  -> let (errs', ts) = unzip cs in
              CDead (concat errs') (mkUnion ts)
 
+-- | Returns the type instantiations for parameters @αs@ in context @n@
 --------------------------------------------------------------------------------
 envGetContextTypArgs :: Int -> CGEnv -> AnnLq -> [BTVar F.Reft] -> [RefType]
 --------------------------------------------------------------------------------

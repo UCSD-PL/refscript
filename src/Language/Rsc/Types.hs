@@ -134,7 +134,8 @@ data FieldAsgn        = Assignable | Final | Inherited
                         deriving (Data, Typeable, Eq)
 
 type MutabilityQ q r  = RTypeQ q r
-type Mutability r     = MutabilityQ AK r
+type MutabilityR r    = MutabilityQ AK r
+type Mutability       = MutabilityR F.Reft
 
 data TypeSigQ q r     = TS { sigKind  :: TypeDeclKind
                            , sigTRef  :: BTGenQ q r

@@ -33,8 +33,9 @@ module Language.Rsc.Typecheck.Types (
   , btvToTV, tvToBTV
 
   -- * Mutability primitives
-  , tMU, tUM, tIM, tAF, tRO, trMU, trIM, trAF, trRO
-  , isRO, isMU, isIM, isUM, isAF, isUMRef, mutRelated, mutRelatedBVar, mutToFieldAsgn
+  , tMU, tUQ, tIM, tAF, tRO, trMU, trIM, trAF, trRO
+  , isRO, isMU, isIM, isUQ, isAF, isUMRef, mutRelated, mutRelatedBVar, mutToFieldAsgn
+  , isFinal
 
   -- * Primitive Types
 
@@ -95,12 +96,12 @@ import           Text.Parsec.Pos             (initialPos)
 mkMut s    = TRef (Gen (mkAbsName [] s) []) fTop
 mkRelMut s = TRef (Gen (mkRelName [] s) []) fTop
 
-tMU, tUM, tIM, tRO, tAF :: F.Reftable r => RType r
+tMU, tUQ, tIM, tRO, tAF :: F.Reftable r => RType r
 tMU   = mkMut "Mutable"
 tIM   = mkMut "Immutable"
 tRO   = mkMut "ReadOnly"
 tAF   = mkMut "AssignsFields"
-tUM   = mkMut "UniqueMutable"
+tUQ   = mkMut "Unique"
 
 trMU, trIM, trRO, trAF :: F.Reftable r => RTypeQ RK r
 trMU  = mkRelMut "Mutable"
@@ -115,22 +116,24 @@ isNamed s t | TRef n _ <- t, typeName n == F.symbol s = True | otherwise = False
 isRO  = isNamed "ReadOnly"
 isMU  = isNamed "Mutable"
 isIM  = isNamed "Immutable"
-isUM  = isNamed "UniqueMutable"
+isUQ  = isNamed "Unique"
 isAF  = isNamed "AssignsFields"
 
-isUMRef t | TRef (Gen _ (m:_)) _ <- t, isUM m
+isUMRef t | TRef (Gen _ (m:_)) _ <- t, isUQ m
           = True
           | otherwise
           = False
 
-mutRelated t = isMU t || isIM t || isUM t || isRO t
+mutRelated t = isMU t || isIM t || isUQ t || isRO t
 
 mutRelatedBVar (BTV _ _ (Just m)) = mutRelated m
 mutRelatedBVar _                  = False
 
-mutToFieldAsgn m | isUM m    = Assignable
+mutToFieldAsgn m | isUQ m    = Assignable
                  | isMU m    = Assignable
                  | otherwise = Final
+
+isFinal = (== Final)
 
 
 ---------------------------------------------------------------------
@@ -482,7 +485,7 @@ returnTy _ False = mkFun ([], [], tVoid)
 ---------------------------------------------------------------------------------
 finalizeTy :: (F.Reftable r, ExprReftable F.Symbol r) => RType r -> RType r
 ---------------------------------------------------------------------------------
-finalizeTy t  | TRef (Gen x (m:ts)) _ <- t, isUM m
+finalizeTy t  | TRef (Gen x (m:ts)) _ <- t, isUQ m
               = mkFun ([mOut], [B sx t], TRef (Gen x (tOut:ts)) (uexprReft sx))
               | otherwise
               = mkFun ([mV], [B (F.symbol "x") tV], tV)

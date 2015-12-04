@@ -14,3 +14,7 @@ interface Mutable extends AssignsFields {
 interface Immutable extends ReadOnly {
     _immutableBrand: any;
 }
+
+interface Unique extends ReadOnly {
+    _uniqueBrand: any;
+}

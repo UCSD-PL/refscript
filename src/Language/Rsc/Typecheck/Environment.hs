@@ -25,7 +25,6 @@ import           Data.Monoid
 import           Data.Typeable
 import           Language.Fixpoint.Errors     (die)
 import           Language.Fixpoint.Misc       (fst3, safeZip)
-import           Language.Rsc.Misc            (single)
 import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
@@ -34,6 +33,7 @@ import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
+import           Language.Rsc.Misc            (single)
 import           Language.Rsc.Misc
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
@@ -67,7 +67,7 @@ data TCEnv r  = TCE {
   , tce_ctx    :: IContext
   , tce_path   :: AbsPath
   , tce_cha    :: ClassHierarchy r
-  , tce_mut    :: Maybe (Mutability r)
+  , tce_mut    :: Maybe (MutabilityR r)
   , tce_this   :: Maybe (RType r)
   , tce_fnid   :: Int
   }
@@ -150,7 +150,7 @@ initClassInstanceEnv (TS _ (BGen _ bs) _) γ =
     bts = [(s,t) | BTV s _ (Just t) <- bs]
 
 --------------------------------------------------------------------------------
-initClassMethEnv :: Unif r => Mutability r -> TypeSig r -> TCEnv r -> TCEnv r
+initClassMethEnv :: Unif r => MutabilityR r -> TypeSig r -> TCEnv r -> TCEnv r
 --------------------------------------------------------------------------------
 initClassMethEnv m (TS _ (BGen nm bs) _) γ
   = γ { tce_mut  = Just m

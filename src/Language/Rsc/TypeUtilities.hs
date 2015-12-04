@@ -39,7 +39,7 @@ import           Language.Rsc.Types
 ---------------------------------------------------------------------------------
 mkDotRefFunTy ::
   (CheckingEnvironment r t, PP r, ExprReftable F.Expr r, F.Symbolic f, F.Reftable r, Monad m) =>
-  t r -> f -> RType r -> Mutability r -> FieldAsgn -> RType r -> m (RType r)
+  t r -> f -> RType r -> MutabilityR r -> FieldAsgn -> RType r -> m (RType r)
 ---------------------------------------------------------------------------------
 mkDotRefFunTy g f tRcvr mRcvr a tf
   -- Array

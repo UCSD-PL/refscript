@@ -360,7 +360,7 @@ consStmt g (VarDeclStmt _ ds)
 
 -- return
 consStmt g (ReturnStmt l Nothing)
-  = do _ <- subType l (errorLiquid' l) g tVoid (cgEnvFindReturn g)
+  = do _ <- subType l (errorLiquid l) g tVoid (cgEnvFindReturn g)
        return Nothing
 
 -- return e
@@ -430,29 +430,30 @@ consVarDecl g (VarDecl l x (Just e))
       -- | Local
       Nothing ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
-          t       <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI Local WriteLocal Initialized t)] gy
+          eT      <- cgSafeEnvFindTyM y gy
+          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI Local WriteLocal Initialized eT)] gy
 
       Just (VI lc  WriteLocal _ t) ->
         mseq (consExpr g e $ Just t) $ \(y,gy) -> do
-          declT   <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc WriteLocal Initialized declT)] gy
+          eT      <- cgSafeEnvFindTyM y gy
+          _       <- subType l (errorVarDecl l x t e eT) gy eT t
+          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc WriteLocal Initialized eT)] gy
 
       -- | Global
-      Just (VI lc WriteGlobal _ t) ->
-        do  fta       <- freshenType WriteGlobal g l t
-            mseq (consExpr g e $ Just fta) $ \(y, gy) -> do
-              ty      <- cgSafeEnvFindTyM y gy
-
-              _       <- subType l (errorLiquid' l) gy ty fta
-              _       <- subType l (errorLiquid' l) gy fta t
-              Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc WriteGlobal Initialized fta)] gy
+      Just (VI lc WriteGlobal _ t) -> do
+        fta       <- freshenType WriteGlobal g l t
+        mseq (consExpr g e $ Just fta) $ \(y, gy) -> do
+          eT      <- cgSafeEnvFindTyM y gy
+          _       <- subType l (errorVarDecl l x t e eT) gy eT fta
+          _       <- subType l (errorVarDecl l x t e eT) gy fta t
+          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc WriteGlobal Initialized fta)] gy
 
       -- | ReadOnly
       Just (VI lc RdOnly _ t) ->
         mseq (consExpr g e (Just t)) $ \(y,gy) -> do
-          declT   <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc RdOnly Initialized declT)] gy
+          eT      <- cgSafeEnvFindTyM y gy
+          _       <- subType l (errorVarDecl l x t e eT) gy eT t
+          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc RdOnly Initialized t)] gy
 
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 
@@ -790,27 +791,17 @@ consExpr g e@(ArrayLit l es) to
       Left ee    -> cgError ee
       Right opTy -> consCall g l BIArrayLit (es `zip` nths) opTy
 
---
--- | G |- { f: e } <| { [m] f: t } |> { [m] f: t }
---
+-- | { f1: e1, ..., fn: en }
 consExpr g e@(ObjectLit l pes) to
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts <- mapM (\x -> (`singleton` x) <$> cgSafeEnvFindTyM x g') xes
-      Just <$> cgEnvAddFresh "17" l (TObj tIM (typeMembersFromList (pts ts)) fTop) g'
+      Just <$> cgEnvAddFresh "17" l (TObj tUQ (typeMembersFromList (zip ps (fs ts))) fTop) g'
   where
-    ctx     | Just t <- to
-            = i_mems $ typeMembersOfType (envCHA g) t
-            | otherwise
-            = mempty
-
-    peoats  = [ (p, e, ctxTy p)  | (p, e)            <- pes ]
-    ets     = [ (e, t)           | (_,e,(_,_,t))     <- peoats ]
-    pts ts_ = [ (ss p, FI o a t) | ((p,_,(o,a,_)),t) <- zip peoats ts_ ]
-
-    ctxTy p | Just (FI o a t) <- F.lookupSEnv (F.symbol p) ctx
-            = (o, a, Just t)
-            | otherwise
-            = (Req, Final, Nothing)
+    ctx     | Just t <- to = i_mems $ typeMembersOfType (envCHA g) t
+            | otherwise    = mempty
+    ps      = map (F.symbol . fst) pes
+    ets     = [(e, fmap f_ty $ F.symbol p `F.lookupSEnv` ctx) | (p, e) <- pes]
+    fs      = map $ FI Req Inherited
     ss      = F.symbol
 
 
@@ -881,7 +872,7 @@ consCheckArgs :: PP a => AnnLq -> CGEnv -> a
 consCheckArgs l g fn ft ts xes
   = do  (rhs, rt) <- instantiateFTy l g fn xes ft
         lhs       <- zipWithM  (instantiateTy l g) [1..] (ts ++ ts)
-        _         <- zipWithM_ (subType l (errorLiquid' l) g) lhs rhs
+        _         <- zipWithM_ (subType l (errorLiquid l) g) lhs rhs
         Just      <$> cgEnvAddFresh "5" l rt g
 
 --------------------------------------------------------------------------------
@@ -1010,7 +1001,7 @@ consWhileBase l xs tIs g
   = do  baseT <- mapM (`cgSafeEnvFindTyM` g) xs
         zipWithM_ (subType l err g) baseT tIs
   where
-    err = errorLiquid' l
+    err = errorLiquid l
 
 consWhileStep l xs tIs gI''
   = do  stepTs <- mapM (`cgSafeEnvFindTyM` gI'') xs'
@@ -1019,7 +1010,7 @@ consWhileStep l xs tIs gI''
     tIs' = F.subst su <$> tIs
     xs'  = mkNextId   <$> xs
     su   = F.mkSubst   $  safeZip "consWhileStep" (F.symbol <$> xs) (F.eVar <$> xs')
-    err  = errorLiquid' l
+    err  = errorLiquid l
 
 whenJustM Nothing  _ = return ()
 whenJustM (Just x) f = f x
@@ -1086,7 +1077,7 @@ envJoin' l g g1 g2
         -- t2s : the types of the phi vars in the 2nd branch
         (xls, l1s, l2s) = unzip3 $ locals (zip3 xs t1s t2s)
         xs    = [ xs | PhiVarTC xs <- fFact l]
-        err   = errorLiquid' l
+        err   = errorLiquid l
 
 
 getPhiTypes _ g1 g2 x =
@@ -1104,8 +1095,6 @@ globals ts = [(x,s1,s2) | (x, s1@(VI Local WriteGlobal Initialized _),
 -- partial ts = [(x,s2)    | (x, s2@(_, WriteGlobal, Uninitialized)) <- ts]
 --           ++ [(x,s1)    | (x, s1@(_, WriteGlobal, Uninitialized)) <- ts]
 
-
-errorLiquid' = errorLiquid . srcPos
 
 traceTypePP l msg act
   = do  z <- act

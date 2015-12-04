@@ -24606,14 +24606,14 @@ var ts;
         function checkMutabilityTypeParameter(node) {
             // Let some primitive types go through            
             if (node.name && (ts.indexOfEq(["Boolean", "Error", "Function", "Number", "NumberConstructor", "ErrorConstructor", "ReadOnly",
-                "AssignsFields", "Immutable", "Mutable", "RegExp", "RegExpExecArray", "String", "StringConstructor",
+                "AssignsFields", "Immutable", "Mutable", "Unique", "RegExp", "RegExpExecArray", "String", "StringConstructor",
                 "Object", "IArguments"], ts.getTextOfNode(node.name)) !== -1))
                 return;
             if (node.typeParameters && node.typeParameters.length > 0) {
                 var firstTypeParamter = node.typeParameters[0];
                 // PV: this is not a very robust check...
                 if (firstTypeParamter.constraint) {
-                    if (ts.indexOfEq(["ReadOnly", "Mutable", "Imuutable"], ts.getTextOfNode(firstTypeParamter.constraint)) < 0) {
+                    if (ts.indexOfEq(["ReadOnly", "Mutable", "Imuutable", "Unique"], ts.getTextOfNode(firstTypeParamter.constraint)) < 0) {
                         error(node, ts.Diagnostics.The_first_type_parameter_of_named_type_0_needs_to_extend_a_mutability_type, [ts.getTextOfNode(node.name)]);
                     }
                 }
@@ -30248,6 +30248,10 @@ var ts;
         return [asgn];
     }
     ts.makeVariableAssignability = makeVariableAssignability;
+    /**
+     * Consume an assignability token (one of "readonly", "global" , "local"). If nothing is provided
+     * assume WriteGlobal as default.
+     */
     function consumeAssignability(srcSpan, tokens, node) {
         if (!tokens || tokens.length <= 0) {
             throw new Error("[refscript] extractAssignabilityAnnotation called with empty token list");
@@ -30274,7 +30278,7 @@ var ts;
             default:
                 return {
                     restAsgn: tokens,
-                    asgn: (node && ts.isInAmbientContext(node)) ? Assignability.Ambient : Assignability.WriteLocal
+                    asgn: (node && ts.isInAmbientContext(node)) ? Assignability.Ambient : Assignability.WriteGlobal
                 };
         }
     }

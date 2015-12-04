@@ -816,13 +816,15 @@ splitC (Sub g i t1@(TPrim c1 _) t2@(TPrim c2 _))
 
 -- | TObj
 --
-splitC (Sub g i@(Ci _ l) t1@(TObj _ m1 r1) t2@(TObj _ m2 _))
+--    TODO: case for Unique
+--
+splitC (Sub g i@(Ci _ l) t1@(TObj m1 ms1 r1) t2@(TObj m2 ms2 _))
   | F.isFalse (F.simplify r1)
   = return []
   | otherwise
   = do  cs     <- bsplitC g i t1 t2
         (x,g') <- cgEnvAddFresh "" l t1 g
-        cs'    <- splitTM g' (F.symbol x) i m1 m2
+        cs'    <- splitTM g' (F.symbol x) i (m1, ms1) (m2, ms2)
         return $ cs ++ cs'
 
 splitC (Sub g i t1 t2)
@@ -846,28 +848,33 @@ mkBot t = t `strengthen` F.bot (rTypeR t)
 -- TODO: add symbol x in env
 --------------------------------------------------------------------------------
 splitTM :: CGEnv -> F.Symbol -> Cinfo
-        -> TypeMembers F.Reft -> TypeMembers F.Reft
+        -> (Mutability, TypeMembers F.Reft) -> (Mutability, TypeMembers F.Reft)
         -> CGM [FixSubC]
 --------------------------------------------------------------------------------
-splitTM g x c (TM m1 sm1 c1 k1 s1 n1) (TM m2 sm2 c2 k2 s2 n2)
-  = concatMapM (splitElt g c) (ms ++ sms) +++
+splitTM g x c (m1, TM p1 sp1 c1 k1 s1 n1) (m2, TM p2 sp2 c2 k2 s2 n2)
+  = concatMapM (splitElt g c m1 m2 ) (ms ++ sms) +++
     concatMapM splitT (cs ++ ks ++ ss ++ ns)
   where
     (+++) = liftM2 (++)
-    ms  = F.toListSEnv $ F.intersectWithSEnv (,) m1 m2
-    sms = F.toListSEnv $ F.intersectWithSEnv (,) sm1 sm2
+    ms  = F.toListSEnv $ F.intersectWithSEnv (,) p1 p2
+    sms = F.toListSEnv $ F.intersectWithSEnv (,) sp1 sp2
     cs  = [ (t1,t2) | Just t1 <- [c1], Just t2 <- [c2] ]
     ks  = [ (t1,t2) | Just t1 <- [k1], Just t2 <- [k2] ]
     ss  = [ (t1,t2) | Just t1 <- [s1], Just t2 <- [s2] ]
     ns  = [ (t1,t2) | Just t1 <- [n1], Just t2 <- [n2] ]
     splitT (t1,t2) = splitC (Sub g c t1 t2)
 
-splitElt g i (_, (FI _ m1 t1, FI _ m2 t2))
-  | m2 == Final = splitC (Sub g i t1 t2)
-  | otherwise = (++) <$> splitC (Sub g i t1 t2)
-                     <*> splitC (Sub g i t2 t1)
+--------------------------------------------------------------------------------
+splitElt :: CGEnv -> Cinfo -> Mutability -> Mutability
+         -> (t, (TypeMember F.Reft, TypeMember F.Reft)) -> CGM [FixSubC]
+--------------------------------------------------------------------------------
+splitElt g i m1 _ (_, (FI _ p1 t1, FI _ p2 t2))
+  | isUQ    m1 = splitC (Sub g i t1 t2)
+  | isFinal p2 = splitC (Sub g i t1 t2)
+  | otherwise  = (++) <$> splitC (Sub g i t1 t2)
+                      <*> splitC (Sub g i t2 t1)
 
-splitElt g i (_, (m, m'))
+splitElt g i _ _ (_, (m, m'))
   = cgError $ unsupportedSplitElt (srcPos i) m m'
 
 

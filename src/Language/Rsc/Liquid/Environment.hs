@@ -38,7 +38,7 @@ data CGEnvR r = CGE {
   , cge_fenv   :: !(F.SEnv F.IBindEnv)          -- Fixpoint bindings - XXX: Why not in monad? Remove?
   , cge_guards :: ![F.Pred]                     -- Branch target conditions
   , cge_consts :: !(Env (RType r))              -- Constants
-  , cge_mut    :: !(Maybe (Mutability r))       -- Method mutability
+  , cge_mut    :: !(Maybe (MutabilityR r))      -- Method mutability
   , cge_this   :: !(Maybe (RType r))            -- Method mutability
   , cge_fnid   :: !Int                          -- Enclosing fun's id
   } deriving (Functor)
@@ -147,7 +147,7 @@ initClassCtorEnv (TS _ (BGen nm bs) _) γ
       , cge_this  = Just $ TRef (Gen nm (map btVar bs)) fTop }
 
 -------------------------------------------------------------------------------
-initClassMethEnv :: Mutability F.Reft -> TypeSig F.Reft -> CGEnv -> CGEnv
+initClassMethEnv :: Mutability -> TypeSig F.Reft -> CGEnv -> CGEnv
 -------------------------------------------------------------------------------
 initClassMethEnv m (TS _ (BGen nm bs) _) γ
   = γ { cge_mut  = Just m

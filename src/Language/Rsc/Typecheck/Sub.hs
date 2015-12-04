@@ -241,7 +241,7 @@ compareNIdxs l γ = compareMaybe l γ compareTypes errorIncompNIdxSigs
 t1 `eqMutability` t2 | isMU t1, isMU t2  = True
                      | isIM t1, isIM t2  = True
                      | isRO t1, isRO t2  = True
-                     | isUM t1, isUM t2  = True
+                     | isUQ t1, isUQ t2  = True
                      | otherwise         = False
 
 --------------------------------------------------------------------------------

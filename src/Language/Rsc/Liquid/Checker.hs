@@ -622,27 +622,27 @@ consExpr g ex@(Cast l e) s
   = die $ bugNoCasts (srcPos l) ex
 
 consExpr g e@(IntLit l i) s
-  = withContextual l e s $ Just <$> cgEnvAddFresh "8" l (tNum `eSingleton` i) g
+  = Just <$> cgEnvAddFresh "8" l (tNum `eSingleton` i) g
 
 -- Assuming by default 32-bit BitVector
 consExpr g e@(HexLit l x) s
   | Just e <- bitVectorValue x
-  = withContextual l e s $ Just <$> cgEnvAddFresh "9" l (tBV32 `strengthen` e) g
+  = Just <$> cgEnvAddFresh "9" l (tBV32 `strengthen` e) g
   | otherwise
-  = withContextual l e s $ Just <$> cgEnvAddFresh "10" l tBV32 g
+  = Just <$> cgEnvAddFresh "10" l tBV32 g
 
 consExpr g e@(BoolLit l b) s
-  = withContextual l e s $ Just <$> cgEnvAddFresh "11" l (pSingleton tBool b) g
+  = Just <$> cgEnvAddFresh "11" l (pSingleton tBool b) g
 
 consExpr g e@(StringLit l x) s
-  = withContextual l e s $ Just <$> cgEnvAddFresh "12" l (tString `eSingleton` T.pack x) g
+  = Just <$> cgEnvAddFresh "12" l (tString `eSingleton` T.pack x) g
 
 consExpr g e@(NullLit l) s
-  = withContextual l e s $ Just <$> cgEnvAddFresh "13" l tNull g
+  = Just <$> cgEnvAddFresh "13" l tNull g
 
 consExpr g e@(ThisRef l) s
   = case envFindTyWithAsgn x g of
-      Just _  -> withContextual l e s $ return $ Just (x, g)
+      Just _  -> return $ Just (x, g)
       Nothing -> cgError $ errorUnboundId (fSrc l) "this"
   where
     x = thisId l
@@ -650,10 +650,10 @@ consExpr g e@(ThisRef l) s
 consExpr g e@(VarRef l x) s
   -- | undefined
   | F.symbol x == F.symbol "undefined"
-  = withContextual l e s $ Just <$> cgEnvAddFresh "0" l tUndef g
+  = Just <$> cgEnvAddFresh "0" l tUndef g
 
   | Just (VI _ WriteGlobal _ t) <- tInfo
-  = withContextual l e s $ Just <$> cgEnvAddFresh "0" l t g
+  = Just <$> cgEnvAddFresh "0" l t g
 
   | Just (VI _ a _ t) <- tInfo
   = do  addAnnot (srcPos l) x t
@@ -666,7 +666,7 @@ consExpr g e@(VarRef l x) s
 
 consExpr g ex@(PrefixExpr l o e) s
   = do opTy <- cgSafeEnvFindTyM (prefixOpId o) g
-       withContextual l ex s $ consCall g l o [(e,Nothing)] opTy
+       consCall g l o [(e,Nothing)] opTy
 
 consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
   = mseq (consExpr g e2 Nothing) $ \(x, g') -> do
@@ -803,7 +803,7 @@ consExpr g e@(ObjectLit l pes) to
             | otherwise
             = mempty
 
-    peoats  = [ (p, e, ctxTy p)   | (p, e)           <- pes ]
+    peoats  = [ (p, e, ctxTy p)  | (p, e)            <- pes ]
     ets     = [ (e, t)           | (_,e,(_,_,t))     <- peoats ]
     pts ts_ = [ (ss p, FI o a t) | ((p,_,(o,a,_)),t) <- zip peoats ts_ ]
 
@@ -858,13 +858,6 @@ validOverloads g l ft0
               , (j, t) <- extractCall g ft0           -- extract callables
               , i == j ]                              -- pick the one resolved at TC
 
-
--- | `consCall g l fn ets ft0`:
---
---   * @ets@ is the list of arguments, as pairs of expressions and optionally
---     contextual types on them.
---   * fts: possible overloads
---
 --------------------------------------------------------------------------------
 consCall :: PP a => CGEnv -> AnnLq -> a -> [(Expression AnnLq, Maybe RefType)]
                  -> RefType -> CGM (Maybe (Id AnnLq, CGEnv))
@@ -875,7 +868,6 @@ consCall g l fn ets (validOverloads g l -> fts)
       case fts of
         ft:_ -> consCheckArgs l g' fn ft ts xes
         _    -> cgError $ errorNoMatchCallee (srcPos l) fn ts fts
-
 
 -- | `consCheckArgs` does the subtyping between the types of the arguments
 --   @xes@ and the formal paramaters of @ft@.

@@ -33,7 +33,7 @@ module Language.Rsc.Misc (
   , unzip4
 
   -- Maybe
-  , maybeM, maybeM_, fromJust', maybeToEither, mseq, nths
+  , maybeM, maybeM_, fromJust', maybeToEither, mseq, nths, zwNth
 
   -- Container operations
   , isProperSubsetOf, isEqualSet, isProperSubmapOf
@@ -272,5 +272,6 @@ a <**> b = a <*> pure b
 x & f = f x
 
 nths = repeat Nothing
+zwNth = (`zip` nths)
 
 s1 <//> s2 = s1 ++ "\n" ++ s2

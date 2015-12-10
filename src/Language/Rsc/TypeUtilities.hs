@@ -18,6 +18,7 @@ module Language.Rsc.TypeUtilities (
   , castTy
   , arrayLitTy
   -- , objLitTy
+  , mkCondExprTy
 
   ) where
 
@@ -153,4 +154,13 @@ mkArrTy l g t n
 --     ss            = [F.symbol p | p <- ps]
 --     mSym          = F.symbol "M"
 --     aSym          = F.symbol "A"
+
+
+mkCondExprTy l g t
+  = do  opTy <- safeEnvFindTy l g (builtinOpId BICondExpr)
+        case bkAll opTy of
+          ([c, BTV α la _, BTV β lb _], TFun [B c_ tc_, B a_ ta_, B b_ tb_] rt r') ->
+            return $ mkAll [c, BTV α la (Just t), BTV β lb (Just t)]
+                           (TFun [B c_ tc_, B a_ ta_, B b_ tb_] (t `strengthen` rTypeR rt) r')
+          _ -> error "[BUG] mkCondExprTy"
 

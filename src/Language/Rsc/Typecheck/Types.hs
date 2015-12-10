@@ -197,6 +197,7 @@ bkArr :: RTypeQ q r -> Maybe ([BindQ q r], RTypeQ q r)
 bkArr (TFun xts t _)  = Just (xts, t)
 bkArr _               = Nothing
 
+mkAll :: [BTVarQ q r] -> RTypeQ q r -> RTypeQ q r
 mkAll αs t            = mkAnd $ go (reverse αs) <$> bkAnd t
   where
     go (x:xs)         = go xs . TAll x

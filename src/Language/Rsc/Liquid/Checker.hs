@@ -697,7 +697,7 @@ consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
        t            <- cgSafeEnvFindTyM x g'
        case t of
          TClass x_  -> do opTy <- cgSafeEnvFindTyM (infixOpId o) g
-                          consCall g l o ([e1, StringLit l2 (cc x_)] `zip` nths) opTy
+                          consCall g l o (zwNth [e1, StringLit l2 (cc x_)]) opTy
          _          -> cgError $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
   where
     l2 = getAnnotation e2
@@ -705,22 +705,24 @@ consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
 
 consExpr g (InfixExpr l o e1 e2) _
   = do opTy <- cgSafeEnvFindTyM (infixOpId o) g
-       consCall g l o ([e1, e2] `zip` nths) opTy
+       consCall g l o (zwNth [e1, e2]) opTy
 
 -- | e ? e1 : e2
-consExpr g (CondExpr l e e1 e2) to
-  = do  opTy    <- mkTy to <$> cgSafeEnvFindTyM (builtinOpId BICondExpr) g
-        tt'     <- freshTyFun g l (rType tt)
-        (v,g')  <- mapFst (VarRef l) <$> cgEnvAddFresh "14" l tt' g
-        consCallCondExpr g' l BICondExpr
-          [(e,Nothing), (v,Nothing), (e1,rType <$> to), (e2,rType <$> to)]
-          opTy
-        -- consCallCondExpr g' l BICondExpr (FI Nothing ((,Nothing) <$> [e,v,e1,e2])) opTy
+consExpr g (CondExpr l e e1 e2) (Just t)
+  = do  -- opTy    <- ltracePP l (ppshow to) <$> mkTy to <$> cgSafeEnvFindTyM (builtinOpId BICondExpr) g
+        opTy    <- mkCondExprTy l g t
+        -- tt'     <- freshTyFun g l (rType tt)
+        -- (v,g')  <- mapFst (VarRef l) <$> cgEnvAddFresh "14" l tt' g
+        consCallCondExpr g l BICondExpr (zwNth [e, e1, e2]) opTy
+        -- [(e,Nothing), (v,Nothing), (e1,rType <$> to), (e2,rType <$> to)] opTy
   where
-    tt       = fromMaybe tTop to
-    mkTy Nothing (TAll cv (TAll tv (TFun [B c_ tc, B t_ _   , B x_ xt, B y_ yt] o r))) =
-                  TAll cv (TAll tv (TFun [B c_ tc, B t_ tTop, B x_ xt, B y_ yt] o r))
-    mkTy _ t = t
+    -- tt       = fromMaybe tTop to
+    -- mkTy Nothing (TAll cv (TAll tv (TFun [B c_ tc, B t_ _   , B x_ xt, B y_ yt] o r))) =
+    --               TAll cv (TAll tv (TFun [B c_ tc, B t_ tTop, B x_ xt, B y_ yt] o r))
+    -- mkTy _ t = t
+
+consExpr _ e@CondExpr{} Nothing
+  = error $ "Cannot check condExpr" ++ ppshow e ++ " with no contextual type."
 
 -- | super(e1,..,en)
 consExpr g (CallExpr l (SuperRef _) _) _
@@ -943,26 +945,25 @@ consCondExprArgs :: SrcSpan -> CGEnv
                  -> [(Expression AnnLq, Maybe RefType)]
                  -> CGM (Maybe ([Id AnnLq], CGEnv))
 ---------------------------------------------------------------------------------
-consCondExprArgs l g [(c,tc),(t,tt),(x,tx),(y,ty)]
+consCondExprArgs l g [(c,tc),(x,tx),(y,ty)]
   = mseq (consExpr g c tc) $ \(c_,gc) ->
-      mseq (consExpr gc t tt) $ \(t_,gt) ->
-        withGuard gt c_ True x tx >>= \case
-          Just (x_, gx) ->
-              withGuard gx c_ False y ty >>= \case
-                Just (y_, gy) -> return $ Just ([c_,t_,x_,y_], gy)
-                Nothing ->
-                    do ttx       <- cgSafeEnvFindTyM x_ gx
-                       let tty    = fromMaybe ttx ty    -- Dummy type if ty is Nothing
-                       (y_, gy') <- cgEnvAddFresh "6" l tty gx
-                       return    $ Just ([c_,t_,x_,y_], gy')
-          Nothing ->
-              withGuard gt c_ False y ty >>= \case
-                Just (y_, gy) ->
-                    do tty       <- cgSafeEnvFindTyM y_ gy
-                       let ttx    = fromMaybe tty tx    -- Dummy type if tx is Nothing
-                       (x_, gx') <- cgEnvAddFresh "7" l ttx gy
-                       return     $ Just ([c_,t_,x_,y_], gx')
-                Nothing       -> return Nothing
+      withGuard gc c_ True x tx >>= \case
+        Just (x_, gx) ->
+            withGuard gx c_ False y ty >>= \case
+              Just (y_, gy) -> return $ Just ([c_, x_, y_], gy)
+              Nothing ->
+                  do ttx       <- cgSafeEnvFindTyM x_ gx
+                     let tty    = fromMaybe ttx ty    -- Dummy type if ty is Nothing
+                     (y_, gy') <- cgEnvAddFresh "6" l tty gx
+                     return    $ Just ([c_, x_, y_], gy')
+        Nothing ->
+            withGuard gc c_ False y ty >>= \case
+              Just (y_, gy) ->
+                  do tty       <- cgSafeEnvFindTyM y_ gy
+                     let ttx    = fromMaybe tty tx    -- Dummy type if tx is Nothing
+                     (x_, gx') <- cgEnvAddFresh "7" l ttx gy
+                     return     $ Just ([c_, x_, y_], gx')
+              Nothing       -> return Nothing
   where
     withGuard g cond b x tx =
       fmap (mapSnd envPopGuard) <$> consExpr (envAddGuard cond b g) x tx

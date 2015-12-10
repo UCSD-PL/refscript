@@ -380,7 +380,9 @@ addInvariant g t
     typeof t@(TRef{})      _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
     typeof t@(TObj{})      _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
     typeof   (TFun a b _)  _ = TFun a b typeofReft
+    typeof   (TOr ts)      i = TOr (map (`typeof` i) ts)
     typeof t               _ = t
+
     -- | Truthy
     truthy t               | maybeTObj t
                            = t `strengthen` F.reft (vv t) (F.eProp $ vv t)
@@ -611,30 +613,32 @@ subType l Nothing g t1 t2
           nest 2
           (
             text "In Environment:"  $+$ nest 4 (pp γ ) $+$
+            text "With guards:"     $+$ nest 4 (pp gr) $+$
             text "Left hand side:"  $+$ nest 4 (pp τ1) $+$
             text "Right hand side:" $+$ nest 4 (pp τ2)
           )
-    γ       = {- F.subst sbt -} (envNames g)
-    τ1      = {- F.subst sbt -} t1
-    τ2      = {- F.subst sbt -} t2
-    -- tmp     = [ x | (x, _) <- F.toListSEnv (envNames g), N.isTempSymbol x ]
-    -- miniTmp = map (F.expr . F.symbol . ("T" ++) . single) ['a'..]
-    -- sbt     = F.mkSubst (zip tmp miniTmp)
+    γ       = F.subst sbt (cge_names g)
+    gr      = F.subst sbt (cge_guards g)
+    τ1      = F.subst sbt t1
+    τ2      = F.subst sbt t2
+    tmp     = [ x | (x, _) <- F.toListSEnv (envNames g), N.isTempSymbol x ]
+    miniTmp = map (F.expr . F.symbol . ("_" ++) . single) ['a'..]
+    sbt     = F.mkSubst (zip tmp miniTmp)
 
 --
 -- TODO: KVar subst
 --
--- instance F.Subable a => F.Subable (Env a) where
---   substa f = envFromList . map ((***) (F.substa f . F.symbol) (F.substa f)) . envToList
---   substf f = envFromList . map ((***) (F.substf f . F.symbol) (F.substf f)) . envToList
---   subst su = envFromList . map ((***) (F.subst su . F.symbol) (F.subst su)) . envToList
---   syms x   = concat [ F.syms (F.symbol x) ++ F.syms t | (x, t) <- envToList x ]
---
--- instance (PP r, F.Reftable r, F.Subable r) => F.Subable (VarInfo r) where
---   substa f (VI l a i t) = VI l a i $ F.substa f t
---   substf f (VI l a i t) = VI l a i $ F.substf f t
---   subst su (VI l a i t) = VI l a i $ F.subst su t
---   syms     (VI l a i t) = F.syms t
+instance F.Subable a => F.Subable (Env a) where
+  substa f = envFromList . map ((***) (F.substa f . F.symbol) (F.substa f)) . envToList
+  substf f = envFromList . map ((***) (F.substf f . F.symbol) (F.substf f)) . envToList
+  subst su = envFromList . map ((***) (F.subst su . F.symbol) (F.subst su)) . envToList
+  syms x   = concat [ F.syms (F.symbol x) ++ F.syms t | (x, t) <- envToList x ]
+
+instance (PP r, F.Reftable r, F.Subable r) => F.Subable (VarInfo r) where
+  substa f (VI l a i t) = VI l a i $ F.substa f t
+  substf f (VI l a i t) = VI l a i $ F.substf f t
+  subst su (VI l a i t) = VI l a i $ F.subst su t
+  syms     (VI l a i t) = F.syms t
 
 
 -- errorLiquid l g t1 t2         = mkErr k $ printf "Liquid Type Error" where k = srcPos l

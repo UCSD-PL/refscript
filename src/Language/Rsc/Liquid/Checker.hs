@@ -115,8 +115,8 @@ solveConstraints :: Config
 --------------------------------------------------------------------------------
 solveConstraints cfg f cgi
   = do F.Result r s <- solve fpConf (cgi_finfo cgi)
-       let c0        = ppWCI cgi r
-       let r'        = fmap (ci_info . F.sinfo) $ r
+       -- let c0        = ppWCI cgi r
+       let r'        = fmap (ci_info . F.sinfo) r
        let anns      = cgi_annot cgi
        let sol       = applySolution s
        return        $ (A.SomeAnn anns sol, r')
@@ -130,9 +130,10 @@ solveConstraints cfg f cgi
 -- TODO: move elsewhere
 ppWCI cgi (F.Unsafe ws) = vcat $ map f ws
   where
-    f wci = pp (F.sid wci) <+> pp (F.fromListSEnv (F.clhs bs wci)) <+> text "<:" <+> pp (F.crhs wci)
+    f wci = pp (F.sid wci) <+> pp (F.fromListSEnv (F.clhs bs wci)) $+$ nest 2 (text "=>" $+$ pp (F.crhs wci))
     cm    = F.cm $ cgi_finfo cgi
     bs    = F.bs $ cgi_finfo cgi
+ppWCI _ F.Safe = text "SAFE"
 
 instance PP (F.Result Cinfo) where
   pp (F.Result cinfo kvars)
@@ -709,17 +710,8 @@ consExpr g (InfixExpr l o e1 e2) _
 
 -- | e ? e1 : e2
 consExpr g (CondExpr l e e1 e2) (Just t)
-  = do  -- opTy    <- ltracePP l (ppshow to) <$> mkTy to <$> cgSafeEnvFindTyM (builtinOpId BICondExpr) g
-        opTy    <- mkCondExprTy l g t
-        -- tt'     <- freshTyFun g l (rType tt)
-        -- (v,g')  <- mapFst (VarRef l) <$> cgEnvAddFresh "14" l tt' g
+  = do  opTy <- mkCondExprTy l g t
         consCallCondExpr g l BICondExpr (zwNth [e, e1, e2]) opTy
-        -- [(e,Nothing), (v,Nothing), (e1,rType <$> to), (e2,rType <$> to)] opTy
-  where
-    -- tt       = fromMaybe tTop to
-    -- mkTy Nothing (TAll cv (TAll tv (TFun [B c_ tc, B t_ _   , B x_ xt, B y_ yt] o r))) =
-    --               TAll cv (TAll tv (TFun [B c_ tc, B t_ tTop, B x_ xt, B y_ yt] o r))
-    -- mkTy _ t = t
 
 consExpr _ e@CondExpr{} Nothing
   = error $ "Cannot check condExpr" ++ ppshow e ++ " with no contextual type."

@@ -230,25 +230,25 @@ mkUnion :: F.Reftable r => [RTypeQ q r] -> RTypeQ q r
 ----------------------------------------------------------------------------------------
 mkUnion [ ] = TPrim TBot fTop
 mkUnion [t] = t
-mkUnion ts  = flattenUnions $ TOr $ filter (not . isTBot) ts
+mkUnion ts  = flattenUnions $ TOr (filter (not . isTBot) ts) fTop
 
 ----------------------------------------------------------------------------------------
-bkUnion :: RTypeQ q t -> [RTypeQ q t]
+bkUnion :: F.Reftable r => RTypeQ q r -> [RTypeQ q r]
 ----------------------------------------------------------------------------------------
-bkUnion (TOr ts) = concatMap bkUnion ts
-bkUnion t        = [t]
+bkUnion (TOr ts r) = concatMap bkUnion $ map (`strengthen` r) ts
+bkUnion t          = [t]
 
 ----------------------------------------------------------------------------------------
-flattenUnions :: RTypeQ q r -> RTypeQ q r
+flattenUnions :: F.Reftable r => RTypeQ q r -> RTypeQ q r
 ----------------------------------------------------------------------------------------
-flattenUnions t@(TOr _) = TOr $ bkUnion t
-flattenUnions t         = t
+flattenUnions t@(TOr _ r) = TOr (bkUnion t) r
+flattenUnions t           = t
 
 ----------------------------------------------------------------------------------------
 orUndef :: F.Reftable r => RType r -> RType r
 ----------------------------------------------------------------------------------------
 orUndef t  | any isTUndef ts = t
-           | otherwise = mkUnion $ tUndef:ts
+           | otherwise = mkUnion (tUndef:ts)
   where ts = bkUnion t
 
 
@@ -257,7 +257,7 @@ toplevel :: (r -> r) -> RTypeQ q r -> RTypeQ q r
 ----------------------------------------------------------------------------------------
 toplevel f (TPrim c r  ) = TPrim c (f r)
 toplevel f (TVar v r   ) = TVar v (f r)
-toplevel f (TOr ts     ) = TOr (map (toplevel f) ts)
+toplevel f (TOr ts r   ) = TOr ts (f r)
 toplevel f (TAnd ts    ) = TAnd (map (second (toplevel f)) ts)
 toplevel f (TRef n r   ) = TRef n (f r)
 toplevel f (TObj m ms r) = TObj m ms (f r)
@@ -299,14 +299,14 @@ isTBool   = isPrim TBoolean
 isBV32    = isPrim TBV32
 
 isTVar   t | TVar _ _ <- t = True | otherwise = False
-isTUnion t | TOr  _   <- t = True | otherwise = False
+isTUnion t | TOr  _ _ <- t = True | otherwise = False
 
 maybeTObj (TRef _ _)   = True
 maybeTObj (TObj _ _ _) = True
 maybeTObj (TClass _)   = True
 maybeTObj (TMod _ )    = True
 maybeTObj (TAll _ t)   = maybeTObj t
-maybeTObj (TOr ts)     = any maybeTObj ts
+maybeTObj (TOr ts _)   = any maybeTObj ts
 maybeTObj _            = False
 
 isTFun (TFun _ _ _)    = True
@@ -325,10 +325,10 @@ isArrayType t | TRef (Gen x [_,_]) _ <- t
 --               = F.symbol x == F.symbol "Array"
 
 
-orNull t@(TOr ts) | any isTNull ts = t
-                  | otherwise      = TOr $ tNull:ts
-orNull t          | isTNull t      = t
-                  | otherwise      = TOr [tNull,t]
+orNull t@(TOr ts r) | any isTNull ts = t
+                    | otherwise      = TOr (tNull:ts) r
+orNull t            | isTNull t      = t
+                    | otherwise      = TOr [tNull,t] fTop
 
 ---------------------------------------------------------------------------------
 eqV :: RType r -> RType r -> Bool
@@ -341,7 +341,7 @@ rTypeR' :: F.Reftable r => RType r -> Maybe r
 ----------------------------------------------------------------------------------
 rTypeR' (TPrim _ r)  = Just r
 rTypeR' (TVar _ r)   = Just r
-rTypeR' (TOr _ )     = Just fTop
+rTypeR' (TOr _ r)    = Just r
 rTypeR' (TFun _ _ r) = Just r
 rTypeR' (TRef _ r)   = Just r
 rTypeR' (TObj _ _ r) = Just r

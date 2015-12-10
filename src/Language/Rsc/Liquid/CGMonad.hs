@@ -317,7 +317,7 @@ envAddGroup l msg ks g (x, xts)
                    , cge_fenv  = F.insertSEnv x ids  $ cge_fenv  g }
   where
     (xs,ls,as,is,ts) = L.unzip5 [(x,loc,a,i,t) | (x, VI loc a i t) <- xts ]
-    -- inv Initialized  = addInvariant g
+    inv Initialized  = addInvariant g
     inv _            = return
     toIBindEnv       = (`F.insertsIBindEnv` F.emptyIBindEnv)
 
@@ -380,7 +380,7 @@ addInvariant g t
     typeof t@(TRef{})      _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
     typeof t@(TObj{})      _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
     typeof   (TFun a b _)  _ = TFun a b typeofReft
-    typeof   (TOr ts)      i = TOr (map (`typeof` i) ts)
+    typeof   (TOr ts r)    i = TOr (map (`typeof` i) ts) r
     typeof t               _ = t
 
     -- | Truthy
@@ -606,24 +606,25 @@ subType l (Just err) g t1 t2
   = modify $ \st -> st { cg_cs = Sub g (ci err l) t1 t2 : cg_cs st }
 
 subType l Nothing g t1 t2
-  = modify $ \st -> st { cg_cs = Sub g (ci err l) t1 t2 : cg_cs st }
+  = subType l (Just $ mkLiquidError l g t1 t2) g t1 t2
+
+mkLiquidError l g t1 t2 = mkErr l $ show
+              $ text "Liquid Type Error" $+$
+                nest 2
+                (
+                  text "In Environment:"  $+$ nest 4 (pp γ ) $+$
+                  text "With guards:"     $+$ nest 4 (vcat $ map pp gr) $+$
+                  text "Left hand side:"  $+$ nest 4 (pp τ1) $+$
+                  text "Right hand side:" $+$ nest 4 (pp τ2)
+                )
   where
-    err = mkErr l $ show
-        $ text "Liquid Type Error" $+$
-          nest 2
-          (
-            text "In Environment:"  $+$ nest 4 (pp γ ) $+$
-            text "With guards:"     $+$ nest 4 (pp gr) $+$
-            text "Left hand side:"  $+$ nest 4 (pp τ1) $+$
-            text "Right hand side:" $+$ nest 4 (pp τ2)
-          )
-    γ       = F.subst sbt (cge_names g)
-    gr      = F.subst sbt (cge_guards g)
-    τ1      = F.subst sbt t1
-    τ2      = F.subst sbt t2
-    tmp     = [ x | (x, _) <- F.toListSEnv (envNames g), N.isTempSymbol x ]
-    miniTmp = map (F.expr . F.symbol . ("_" ++) . single) ['a'..]
-    sbt     = F.mkSubst (zip tmp miniTmp)
+    γ         = {- F.subst sbt -} (cge_names g)
+    gr        = {- F.subst sbt -} (cge_guards g)
+    τ1        = {- F.subst sbt -} t1
+    τ2        = {- F.subst sbt -} t2
+    tmp       = [ x | (x, _) <- F.toListSEnv (envNames g), N.isTempSymbol x ]
+    miniTmp   = map (F.expr . F.symbol . ("_" ++) . single) ['a'..]
+    sbt       = F.mkSubst (zip tmp miniTmp)
 
 --
 -- TODO: KVar subst
@@ -789,12 +790,14 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
 
 -- | Unions
 --
-splitC (Sub g c t1 t2)
+splitC (Sub g c@(Ci e l) t1 t2)
   | any isTUnion [t1, t2]
-  = do  mCs     <- concatMapM (\(_,t,t') -> splitC (Sub g c t t')) mts
-        nCs     <- concatMapM (splitIncompatC g c) t1s'
-        return   $ mCs ++ nCs
+  = do  m1      <- bsplitC g c t1 t2
+        mCs     <- concatMapM (\(_,t,t') -> splitC (Sub g    (ci (ee t t') l) t t')) mts
+        nCs     <- concatMapM (\t -> splitIncompatC g (ci (ee t (mkBot t)) l) t) t1s'
+        return   $ m1 ++ mCs ++ nCs
     where
+      ee         = mkLiquidError l g
       (t1s, t2s) = mapPair bkUnion (t1, t2)
       it1s       = ([0..]::[Int]) `zip` t1s
       mts        = [ (i, τ1, τ2) | (i, τ1) <- it1s, τ2 <- t2s, τ1 ~~ τ2 ]
@@ -1007,8 +1010,10 @@ splitW (W g i t@(TRef (Gen _ ts) _))
 splitW (W g i (TAnd (map snd -> ts)))
   = concatMapM splitW [W g i t | t <- ts]
 
-splitW (W g i (TOr ts))
-  = concatMapM splitW [W g i t | t <- ts]
+splitW (W g i t@(TOr ts r))
+  = do let ws = bsplitW g t i
+       ws'   <- concatMapM splitW [W g i t | t <- ts]
+       return $ ws ++ ws'
 
 splitW (W g i t@(TObj _ ms _))
   = do let bws = bsplitW g t i

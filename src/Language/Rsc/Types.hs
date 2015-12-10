@@ -58,7 +58,7 @@ data RTypeQ q r =
   --
   -- Union
   --
-  | TOr [RTypeQ q r]
+  | TOr [RTypeQ q r] r
   --
   -- Intersection
   --

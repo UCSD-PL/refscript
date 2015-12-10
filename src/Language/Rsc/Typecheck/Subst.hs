@@ -76,7 +76,7 @@ class Free a where
 instance Free (RType r) where
   free (TPrim _ _)          = S.empty
   free (TVar α _)           = S.singleton α
-  free (TOr ts)             = free ts
+  free (TOr ts _)           = free ts
   free (TAnd ts)            = free $ snd <$> ts
   free (TRef n _)           = free n
   free (TObj m es _)        = free m `mappend` free es
@@ -263,7 +263,7 @@ appTy :: F.Reftable r => RSubstQ q r -> RTypeQ q r -> RTypeQ q r
 ---------------------------------------------------------------------------------
 appTy _        (TPrim p r)   = TPrim p r
 appTy (Su m) t@(TVar α r)    = (HM.lookupDefault t α m) `strengthen` r
-appTy θ        (TOr ts)      = TOr (apply θ ts)
+appTy θ        (TOr ts r)    = TOr (apply θ ts) r
 appTy θ        (TAnd ts)     = TAnd (mapSnd (apply θ) <$> ts)
 appTy θ        (TRef n r)    = TRef (apply θ n) r
 appTy θ        (TObj m es r) = TObj (apply θ m) (apply θ es) r
@@ -301,7 +301,7 @@ instance F.Reftable r => Eq (BTVar r) where
 instance (F.Reftable r) => Eq (RType r) where
   TPrim p _    == TPrim p' _    = p == p'
   TVar α _     == TVar α' _     = α == α'
-  TOr ts       == TOr ts'       = ts == ts'
+  TOr ts _     == TOr ts' _     = ts == ts'
   TAnd ts      == TAnd ts'      = ts == ts'
   TRef g _     == TRef g' _     = g == g'
   TObj m ms _  == TObj m' ms' _ = m == m && ms == ms'

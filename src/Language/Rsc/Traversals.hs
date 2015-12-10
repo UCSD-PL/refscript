@@ -61,7 +61,7 @@ efold f g h                  = go
   where
     go γ z t@(TPrim _ r)     = h γ r $ g γ t z
     go γ z t@(TVar _ r)      = h γ r $ g γ t z
-    go γ z t@(TOr ts)        = g γ t $ gos γ z ts
+    go γ z t@(TOr ts r)      = h γ r $ g γ t $ gos γ z ts
     go γ z t@(TAnd ts)       = g γ t $ gos γ z $ map snd ts
     go γ z t@(TRef n r  )    = h γ r $ g γ t $ gos γ z $ g_args n
     go γ z t@(TObj m xts r)  = h γ r $ g γ t $ efoldTypeMembers' f g h xts γ $ go γ z m

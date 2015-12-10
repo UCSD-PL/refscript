@@ -51,7 +51,7 @@ getProp ::
 --------------------------------------------------------------------------------
 getProp l γ f t@(TPrim _ _) = getPropPrim l γ f t
 
-getProp l γ f (TOr ts) = getPropUnion l γ f ts
+getProp l γ f (TOr ts _) = getPropUnion l γ f ts
 
 -- | TODO: Chain up to 'Object'
 getProp l γ f t@(TObj _ _ _)
@@ -186,7 +186,7 @@ getPropUnion ::
 --------------------------------------------------------------------------------
 getPropUnion l γ f ts =
   case rights (map (getProp l γ f) ts) of
-    [ ] -> Left (errorUnionLookup l f (TOr ts))
+    [ ] -> Left (errorUnionLookup l f (TOr ts fTop))
     tfs -> Right (concat tfs)
 
 --------------------------------------------------------------------------------

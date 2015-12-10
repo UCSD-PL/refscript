@@ -164,7 +164,7 @@ rTypeSort (TVar α _)          = F.FObj $ F.symbol α
 rTypeSort (TAll v t)          = rTypeSortForAll $ TAll v t
 rTypeSort (TFun xts t _)      = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TPrim c _)         = rTypeSortPrim c
-rTypeSort (TOr ts)            = F.fAppTC (rawStringFTycon unionName) []
+rTypeSort (TOr ts _)          = F.fAppTC (rawStringFTycon unionName) []
 rTypeSort (TAnd ts)           = F.fAppTC (rawStringFTycon intersName) []
 rTypeSort (TRef (Gen n ts) _) = F.fAppTC (rawSymbolFTycon (F.symbol n)) (rTypeSort <$> ts)
 rTypeSort (TObj _ _ _ )       = F.fAppTC (rawStringFTycon objectName) []
@@ -200,6 +200,7 @@ stripRTypeBase (TRef _ r)   = Just r
 stripRTypeBase (TVar _ r)   = Just r
 stripRTypeBase (TFun _ _ r) = Just r
 stripRTypeBase (TObj _ _ r) = Just r
+stripRTypeBase (TOr _ r)    = Just r
 stripRTypeBase _            = Nothing
 
 ------------------------------------------------------------------------------------------

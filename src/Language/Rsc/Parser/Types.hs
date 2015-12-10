@@ -227,7 +227,6 @@ bareTypeP c         = bareAllP c bareUnionTypeP
 
 bareUnionTypeP     :: PContext -> Parser RRType
 bareUnionTypeP c    = mkUnion <$> bareUnionMemberP c `sepBy1` plus
--- bareUnionTypeP c    = mkUnion <$> parenNullP (bareUnionMemberP c `sepBy1` plus)
 
 bareUnionMemberP   :: PContext -> Parser RRType
 bareUnionMemberP c  =  try (funcSigP c)

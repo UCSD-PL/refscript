@@ -153,7 +153,7 @@ transRType f               = go
   where
     go αs xs (TPrim c r)   = f αs xs $ TPrim c r
     go αs xs (TVar v r)    = f αs xs $ TVar v r
-    go αs xs (TOr ts)      = f αs xs $ TOr ts'       where ts' = go αs xs <$> ts
+    go αs xs (TOr ts r)    = f αs xs $ TOr ts' r     where ts' = go αs xs <$> ts
     go αs xs (TAnd ts)     = f αs xs $ TAnd ts'      where ts' = mapSnd (go αs xs) <$> ts
     go αs xs (TRef n r)    = f αs xs $ TRef n' r     where n'  = trans f αs xs n
     go αs xs (TObj m ms r) = f αs xs $ TObj m' ms' r where m'  = trans f αs xs m
@@ -262,7 +262,8 @@ ntransRType f g t    = go t
     go (TPrim p r)   = pure $ TPrim p r
     go (TVar v r)    = pure $ TVar v r
     go (TExp e)      = pure $ TExp e
-    go (TOr ts)      = TOr  <$> ts'       where ts' = mapM go ts
+    go (TOr ts r)    = TOr  <$> ts'
+                            <*> pure r    where ts' = mapM go ts
     go (TAnd ts)     = TAnd <$> ts'       where ts' = mapM (mapSndM go) ts
     go (TRef n r)    = TRef <$> n'
                             <*> pure r    where n'  = ntrans f g n
@@ -301,7 +302,7 @@ emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts)
 emapReft f γ (TObj m xts r) = TObj (emapReft f γ m) (emapReftTM f γ xts) (f γ r)
 emapReft f γ (TClass n)     = TClass (emapReftBGen f γ n)
 emapReft _ _ (TMod m)       = TMod m
-emapReft f γ (TOr ts)       = TOr (emapReft f γ <$> ts)
+emapReft f γ (TOr ts r)     = TOr (emapReft f γ <$> ts) (f γ r)
 emapReft f γ (TAnd ts)      = TAnd (mapSnd (emapReft f γ) <$> ts)
 emapReft _ _ _              = error "Not supported in emapReft"
 
@@ -330,7 +331,7 @@ mapReftM f (TRef n r)      = TRef    <$> mapReftGenM f n <*> f r
 mapReftM f (TFun xts t r)  = TFun    <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> f r
 mapReftM f (TAll α t)      = TAll    <$> mapReftBTV f α <*> mapReftM f t
 mapReftM f (TAnd ts)       = TAnd    <$> mapM (mapSndM (mapReftM f)) ts
-mapReftM f (TOr ts)        = TOr     <$> mapM (mapReftM f) ts
+mapReftM f (TOr ts r)      = TOr     <$> mapM (mapReftM f) ts <*> f r
 mapReftM f (TObj m xts r)  = TObj    <$> mapReftM f m <*> mapTypeMembers f xts <*> f r
 mapReftM f (TClass n)      = TClass  <$> mapReftBGenM f n
 mapReftM _ (TMod a)        = TMod    <$> pure a

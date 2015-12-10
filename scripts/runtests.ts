@@ -65,10 +65,10 @@ let commandPrefix = ['stack exec -- rsc']
 let testDir = path.join(__dirname, "../tests");
 let polarities = ["pos", "neg"];
 let categories = [
-    "operators",
-    "simple",
-    "scope",
-    "arrays"
+    "operators"
+    // "simple",
+    // "scope",
+    // "arrays"
 ];
 
 let testQueries: TestQuery[] = _.flatten(polarities.map(polarity => categories.map(category =>
@@ -169,4 +169,9 @@ function postProcess() {
         console.log((exceptions.length + " EXCEPTIONS").bold.red);
         exceptions.forEach(f => console.log(f));
     }
+    
+    if (failures.length === 0 && exceptions.length === 0) {
+        console.log("All tests passed!");
+    }
+    
 }

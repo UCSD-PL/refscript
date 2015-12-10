@@ -1,5 +1,5 @@
-/*@ foo :: (number) => number */
-function foo(x: number): number {
+
+export function foo(x: number): number {
     let y: number = 0;
     if (0 < x) {
         y = x + y;

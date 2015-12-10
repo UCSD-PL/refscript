@@ -109,8 +109,13 @@ instance PP (QP l) where
   pp (QP _ _ []) = pp "[Top-Level]"
   pp (QP _ _ ms) = hcat $ punctuate dot $ map pp ms
 
-instance (Ord a, F.Fixpoint a) => PP (F.FixResult a) where
-  pp = F.resultDoc
+
+---------------------------------------------------------------------
+-- | Fixpoint
+---------------------------------------------------------------------
+
+-- instance (Ord a, F.Fixpoint a) => PP (F.FixResult a) where
+--   pp = F.resultDoc
 
 instance PP F.Pred where
   pp = pprint

@@ -59,7 +59,7 @@ module Language.Rsc.Liquid.CGMonad (
 
   ) where
 
-import           Control.Applicative
+import           Control.Applicative             hiding (empty)
 import           Control.Arrow                   ((***))
 import           Control.Exception               (throw)
 import           Control.Monad
@@ -73,6 +73,7 @@ import           Data.Monoid                     (mappend, mempty)
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Names         (symbolString, symbolText)
+import qualified Language.Fixpoint.Names         as N
 import qualified Language.Fixpoint.Types         as F
 import           Language.Fixpoint.Visitor       (SymConsts (..))
 import           Language.Rsc.Annotations
@@ -86,7 +87,7 @@ import           Language.Rsc.Liquid.Constraint
 import           Language.Rsc.Liquid.Environment
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc               (concatMapM, mapPair)
+import           Language.Rsc.Misc               (concatMapM, mapPair, single)
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
@@ -526,7 +527,7 @@ freshTyInst l g bs τs tbody
   where
     αs        = btvToTV <$> bs
     subt t b  | BTV v _ (Just b) <- b
-              = subType l (errorBoundSubt l v b) g t b
+              = subType l (Just $ errorBoundSubt l v b) g t b
               | otherwise
               = return ()
 
@@ -597,10 +598,46 @@ freshenModuleDefM g (a, m)
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-subType :: AnnLq -> Error -> CGEnv -> RefType -> RefType -> CGM ()
+subType :: AnnLq -> Maybe Error -> CGEnv -> RefType -> RefType -> CGM ()
 --------------------------------------------------------------------------------
-subType l err g t1 t2
+subType l (Just err) g t1 t2
   = modify $ \st -> st { cg_cs = Sub g (ci err l) t1 t2 : cg_cs st }
+
+subType l Nothing g t1 t2
+  = modify $ \st -> st { cg_cs = Sub g (ci err l) t1 t2 : cg_cs st }
+  where
+    err = mkErr l $ show
+        $ text "Liquid Type Error" $+$
+          nest 2
+          (
+            text "In Environment:"  $+$ nest 4 (pp γ ) $+$
+            text "Left hand side:"  $+$ nest 4 (pp τ1) $+$
+            text "Right hand side:" $+$ nest 4 (pp τ2)
+          )
+    γ       = {- F.subst sbt -} (envNames g)
+    τ1      = {- F.subst sbt -} t1
+    τ2      = {- F.subst sbt -} t2
+    -- tmp     = [ x | (x, _) <- F.toListSEnv (envNames g), N.isTempSymbol x ]
+    -- miniTmp = map (F.expr . F.symbol . ("T" ++) . single) ['a'..]
+    -- sbt     = F.mkSubst (zip tmp miniTmp)
+
+--
+-- TODO: KVar subst
+--
+-- instance F.Subable a => F.Subable (Env a) where
+--   substa f = envFromList . map ((***) (F.substa f . F.symbol) (F.substa f)) . envToList
+--   substf f = envFromList . map ((***) (F.substf f . F.symbol) (F.substf f)) . envToList
+--   subst su = envFromList . map ((***) (F.subst su . F.symbol) (F.subst su)) . envToList
+--   syms x   = concat [ F.syms (F.symbol x) ++ F.syms t | (x, t) <- envToList x ]
+--
+-- instance (PP r, F.Reftable r, F.Subable r) => F.Subable (VarInfo r) where
+--   substa f (VI l a i t) = VI l a i $ F.substa f t
+--   substf f (VI l a i t) = VI l a i $ F.substf f t
+--   subst su (VI l a i t) = VI l a i $ F.subst su t
+--   syms     (VI l a i t) = F.syms t
+
+
+-- errorLiquid l g t1 t2         = mkErr k $ printf "Liquid Type Error" where k = srcPos l
 
 
 -- TODO: Restore this check !!!
@@ -786,6 +823,10 @@ splitC (Sub g i t1@(TRef n1@(Gen x1 (m1:t1s)) r1) t2@(TRef n2@(Gen x2 (m2:t2s)) 
         return $ cs ++ cs'
   --
   -- * Non-immutable, same name: invariance
+  --
+  --
+  --  TODO: For arrays do the same trick as with objects and UQ
+  --
   --
   | x1 == x2
   , not (F.isFalse r2)

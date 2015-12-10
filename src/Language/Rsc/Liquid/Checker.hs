@@ -86,7 +86,7 @@ verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
       cha1  <- liftEither       $ mkCHA tc
       _     <- liftIO           $ dumpJS f cha1 "-tc" tc
       cgi   <- announce "CG"    $ pure (generateConstraints cfg f tc cha)
-      res   <- announce "Solve" $ liftIO (solveConstraints cfg' tc f cgi)
+      res   <- announce "Solve" $ liftIO (solveConstraints cfg' f cgi)
       return   res
 
 announce s a = liftIO (startPhase Loud s) >> a
@@ -109,24 +109,49 @@ eAct m = do
 -- | solveConstraint: solve with `ueqAllSorts` enabled.
 --------------------------------------------------------------------------------
 solveConstraints :: Config
-                 -> RefScript
                  -> FilePath
                  -> CGInfo
                  -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
-solveConstraints cfg p f cgi
-  = do F.Result r s <- solve fpConf $ cgi_finfo cgi
-       let r'   = fmap (ci_info . F.sinfo) r
-       let anns = cgi_annot cgi
-       let sol  = applySolution s
-       return (A.SomeAnn anns sol, r')
+solveConstraints cfg f cgi
+  = do F.Result r s <- solve fpConf (cgi_finfo cgi)
+       let c0        = ppWCI cgi r
+       let r'        = fmap (ci_info . F.sinfo) $ r
+       let anns      = cgi_annot cgi
+       let sol       = applySolution s
+       return        $ (A.SomeAnn anns sol, r')
   where
-    fpConf      = def { C.real        = real cfg
-                      , C.ueqAllSorts = C.UAS True
-                      , C.srcFile     = f
-                      , C.extSolver   = extSolver cfg
-                      }
+    fpConf     = def { C.real        = real cfg
+                     , C.ueqAllSorts = C.UAS True
+                     , C.srcFile     = f
+                     , C.extSolver   = extSolver cfg
+                     }
 
+-- TODO: move elsewhere
+ppWCI cgi (F.Unsafe ws) = vcat $ map f ws
+  where
+    f wci = pp (F.sid wci) <+> pp (F.fromListSEnv (F.clhs bs wci)) <+> text "<:" <+> pp (F.crhs wci)
+    cm    = F.cm $ cgi_finfo cgi
+    bs    = F.bs $ cgi_finfo cgi
+
+instance PP (F.Result Cinfo) where
+  pp (F.Result cinfo kvars)
+    = vcat ((ppB <$>) (HM.toList kvars))
+    where
+      ppB (x, t) = pp x <+> dcolon <+> pp t
+
+instance PP (F.FixResult (F.WrappedC Cinfo)) where
+  pp (F.Unsafe ws) = vcat $ map ppW ws
+    where
+      ppW wci = text "ID" <+> pp (F.sid wci) -- text "<:" <+> pp (F.crhs wci)
+--       _ = F.sinfo wci
+--       _ = F.clhs undefined wci
+
+  pp F.Safe = text "Safe"
+
+
+instance PP F.KVar where
+  pp k = pprint k
 
 --------------------------------------------------------------------------------
 applySolution :: F.FixSolution -> A.UAnnInfo RefType -> A.UAnnInfo RefType
@@ -283,8 +308,6 @@ consFun _ s
 
 -- | @consCallable@ checks a function body against a *one* of multiple
 --   conjuncts of an overloaded (intersection) type signature.
---   Assume: len ts' = len xs
-
 consCallable l g f xs body ift
   = initCallableEnv l g f ift xs body >>= (`consStmts` body)
 
@@ -360,7 +383,7 @@ consStmt g (VarDeclStmt _ ds)
 
 -- return
 consStmt g (ReturnStmt l Nothing)
-  = do _ <- subType l (errorLiquid l) g tVoid (cgEnvFindReturn g)
+  = do _ <- subType l Nothing g tVoid (cgEnvFindReturn g)
        return Nothing
 
 -- return e
@@ -436,7 +459,7 @@ consVarDecl g (VarDecl l x (Just e))
       Just (VI lc  WriteLocal _ t) ->
         mseq (consExpr g e $ Just t) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
-          _       <- subType l (errorVarDecl l x t e eT) gy eT t
+          _       <- subType l Nothing gy eT t
           Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc WriteLocal Initialized eT)] gy
 
       -- | Global
@@ -444,15 +467,15 @@ consVarDecl g (VarDecl l x (Just e))
         fta       <- freshenType WriteGlobal g l t
         mseq (consExpr g e $ Just fta) $ \(y, gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
-          _       <- subType l (errorVarDecl l x t e eT) gy eT fta
-          _       <- subType l (errorVarDecl l x t e eT) gy fta t
+          _       <- subType l Nothing gy eT fta
+          _       <- subType l Nothing gy fta t
           Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc WriteGlobal Initialized fta)] gy
 
       -- | ReadOnly
       Just (VI lc RdOnly _ t) ->
         mseq (consExpr g e (Just t)) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
-          _       <- subType l (errorVarDecl l x t e eT) gy eT t
+          _       <- subType l Nothing gy eT t
           Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc RdOnly Initialized t)] gy
 
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
@@ -587,18 +610,18 @@ consAsgn l g x e =
                  Just  <$> cgEnvAdds l "consAsgn-1" [(x, VI Local WriteLocal Initialized t)] g'
 
 
---------------------------------------------------------------------------------
-withContextual :: PP a => AnnLq -> a -> Maybe RefType -> CGM (Maybe (Id AnnLq, CGEnv))
-                                                      -> CGM (Maybe (Id AnnLq, CGEnv))
---------------------------------------------------------------------------------
-withContextual l e (Just s) act = act >>= go
-  where
-    go (Just (x, g)) = do t <- cgSafeEnvFindTyM x g
-                          subType l errMsg g t s
-                          return (Just (x, g))
-    go Nothing       = return Nothing
-    errMsg           = errorContextual l e s
-withContextual _ _ _ act = act
+-- --------------------------------------------------------------------------------
+-- withContextual :: PP a => AnnLq -> a -> Maybe RefType -> CGM (Maybe (Id AnnLq, CGEnv))
+--                                                       -> CGM (Maybe (Id AnnLq, CGEnv))
+-- --------------------------------------------------------------------------------
+-- withContextual l e (Just s) act = act >>= go
+--   where
+--     go (Just (x, g)) = do t <- cgSafeEnvFindTyM x g
+--                           subType l errMsg g t s
+--                           return (Just (x, g))
+--     go Nothing       = return Nothing
+--     errMsg           = errorContextual l e s
+-- withContextual _ _ _ act = act
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh,
 -- temporary (A-Normalized) variable holding the value of `e`,
@@ -609,8 +632,8 @@ consExpr :: CGEnv -> Expression AnnLq -> Maybe RefType -> CGM (Maybe (Id AnnLq, 
 -- | DeadCast
 consExpr g (Cast_ l e) s
   = case envGetContextCast g l of
-      CDead [] t -> subType l (bugDeadCast l) g t (tBot t)    >> return Nothing
-      CDead es t -> mapM_ (\e -> subType l e g t (tBot t)) es >> return Nothing
+      CDead [] t -> subType l (Just $ bugDeadCast l) g t (tBot t)     >> return Nothing
+      CDead es t -> mapM_ (\e -> subType l (Just e)  g t (tBot t)) es >> return Nothing
       _          -> consExpr g e s
   where
        tBot t = t `strengthen` F.bot (rTypeR t)
@@ -871,8 +894,8 @@ consCheckArgs :: PP a => AnnLq -> CGEnv -> a
 --------------------------------------------------------------------------------
 consCheckArgs l g fn ft ts xes
   = do  (rhs, rt) <- instantiateFTy l g fn xes ft
-        lhs       <- zipWithM  (instantiateTy l g) [1..] (ts ++ ts)
-        _         <- zipWithM_ (subType l (errorLiquid l) g) lhs rhs
+        lhs       <- zipWithM  (instantiateTy l g) [1..] ts
+        _         <- zipWithM_ (subType l Nothing g) lhs rhs
         Just      <$> cgEnvAddFresh "5" l rt g
 
 --------------------------------------------------------------------------------
@@ -999,18 +1022,15 @@ consWhile g l cond body
 
 consWhileBase l xs tIs g
   = do  baseT <- mapM (`cgSafeEnvFindTyM` g) xs
-        zipWithM_ (subType l err g) baseT tIs
-  where
-    err = errorLiquid l
+        zipWithM_ (subType l Nothing g) baseT tIs
 
 consWhileStep l xs tIs gI''
   = do  stepTs <- mapM (`cgSafeEnvFindTyM` gI'') xs'
-        zipWithM_ (subType l err gI'') stepTs tIs'                           -- (f)
+        zipWithM_ (subType l Nothing gI'') stepTs tIs'                           -- (f)
   where
     tIs' = F.subst su <$> tIs
     xs'  = mkNextId   <$> xs
     su   = F.mkSubst   $  safeZip "consWhileStep" (F.symbol <$> xs) (F.eVar <$> xs')
-    err  = errorLiquid l
 
 whenJustM Nothing  _ = return ()
 whenJustM (Just x) f = f x
@@ -1053,8 +1073,8 @@ envJoin' l g g1 g2
         (g',ls)   <- freshTyPhis' l g xls $ (\(VI loc a i t) -> VI loc a i $ toType t) <$> l1s
         l1s'      <- mapM (`cgSafeEnvFindTyM` g1') xls
         l2s'      <- mapM (`cgSafeEnvFindTyM` g2') xls
-        _         <- zipWithM_ (subType l err g1') l1s' ls
-        _         <- zipWithM_ (subType l err g2') l2s' ls
+        _         <- zipWithM_ (subType l Nothing g1') l1s' ls
+        _         <- zipWithM_ (subType l Nothing g2') l2s' ls
         --
         -- GLOBALS:
         --
@@ -1062,8 +1082,8 @@ envJoin' l g g1 g2
         (g'',gls) <- freshTyPhis' l g' xgs $ (\(VI loc a i t) -> VI loc a i $ toType t) <$> gl1s
         gl1s'     <- mapM (`cgSafeEnvFindTyM` g1') xgs
         gl2s'     <- mapM (`cgSafeEnvFindTyM` g2') xgs
-        _         <- zipWithM_ (subType l err g1') gl1s' gls
-        _         <- zipWithM_ (subType l err g2') gl2s' gls
+        _         <- zipWithM_ (subType l Nothing g1') gl1s' gls
+        _         <- zipWithM_ (subType l Nothing g2') gl2s' gls
         --
         -- PARTIALLY UNINITIALIZED
         --
@@ -1077,7 +1097,6 @@ envJoin' l g g1 g2
         -- t2s : the types of the phi vars in the 2nd branch
         (xls, l1s, l2s) = unzip3 $ locals (zip3 xs t1s t2s)
         xs    = [ xs | PhiVarTC xs <- fFact l]
-        err   = errorLiquid l
 
 
 getPhiTypes _ g1 g2 x =

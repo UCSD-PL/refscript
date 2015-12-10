@@ -20,6 +20,7 @@ import           Language.Fixpoint.PrettyPrint
 mkErr = err . sourceSpanSrcSpan
 -- mkDie = die . sourceSpanSrcSpan
 
+
 ---------------------------------------------------------------------------
 -- | Bugs
 ---------------------------------------------------------------------------
@@ -182,7 +183,6 @@ errorTAliasNumArgs l t a x n  = mkErr l $ printf "Invalid type alias application
 errorTAliasMismatch l t a     = mkErr l $ printf "Invalid type alias application %s : Cannot convert %s into value argument" (ppshow t) (ppshow a)
 
 errorBadPAlias l p nx ne      = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." (ppshow p) nx ne
-errorLiquid l                 = mkErr k $ printf "Liquid Type Error" where k = srcPos l
 errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for '%s'.\nArgument Types: %s\nFunction Type: %s" (ppshow fn) (ppshow $ map toType ts) (ppshow $ map toType t)
 errorMultipleCasts l cs       = mkErr l $ printf "Multiple Casts: %s" (ppshow cs)
 errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"
@@ -228,3 +228,4 @@ errorArrayLitType l e t       = mkErr l $ printf "Cannot cast array '%s' with no
 bugArrayBIType l f t          = mkErr l $ printf "[BUG] Inconsistent built-in arrray literal ('%s') type '%s'." (ppshow f) (ppshow t)
 errorBoundSubt l v t          = mkErr l $ printf "Could not find a valid instantiation to satisfy the bound of '%s': '%s'" (ppshow v) (ppshow t)
 errorVarDecl l x t e s        = mkErr l $ printf "Expression '%s' of type '%s' cannot be assigned to variable '%s' with expected type '%s'" (ppshow e) (ppshow s) (ppshow x) (ppshow t)
+

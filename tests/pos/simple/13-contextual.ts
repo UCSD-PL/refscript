@@ -1,12 +1,13 @@
 /*@ qualif Lt3(v: int) : (v < 3) */
+/*@ qualif Lt3(v: int) : (0 <= v) */
+/*@ qualif Lt3(x: a, v: int) : v = len x */
 
 
 /*@ foo :: <T>(a: IArray<T>, i: IArray<idx<a>>) => { IArray<T> | len v = len i } */
 declare function foo_13<T>(a: IArray<T>, i: IArray<number>): IArray<T>;
 
-/*@ readonly */ let a_123 = [1, 2, 3];
-
-/*  readonly a_012 :: { IArray<idx<a_123>> | len v = 3 } */
+let a_123 = [1, 2, 3];
+/* local a_012 :: IArray<{number | 0 <= v && v < 3 }> */
 let a_012 = [0, 1, 2];
 
 assert(a_012.length === 3);

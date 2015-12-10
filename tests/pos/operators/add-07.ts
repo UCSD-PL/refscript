@@ -23,8 +23,7 @@ function num_one(a) {
     return d;
 }
 
-/*@ num_str :: (a:number) => string */
-export function num_str(a) {
+export function num_str(a: number): string {
     let d = myPlusOk(0, "cat");
     return d;
 }

@@ -57,7 +57,7 @@ import           Language.Nano.Syntax
 import           Language.Nano.Misc (errortext)
 import           Language.Nano.Syntax.PrettyPrint
 
-import           Language.Fixpoint.Names (symbolString)
+import           Language.Fixpoint.Types.Names (symbolString)
 import           Language.Fixpoint.Misc hiding (mkGraph)
 import qualified Language.Fixpoint.Types        as F
 

@@ -8,9 +8,9 @@ import Text.Printf
 import Text.PrettyPrint.HughesPJ
 import Language.Nano.Locations
 import Language.Nano.Syntax.PrettyPrint
-import Language.Fixpoint.Errors
+import Language.Fixpoint.Types.Errors
 import Language.Fixpoint.Misc
-import Language.Fixpoint.PrettyPrint
+import Language.Fixpoint.Types.PrettyPrint
 
 mkErr = err . sourceSpanSrcSpan
 

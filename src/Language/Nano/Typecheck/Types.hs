@@ -97,12 +97,12 @@ import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Names
-import           Language.Fixpoint.Names (symbolString)
+import           Language.Fixpoint.Types.Names (symbolString)
 import qualified Language.Fixpoint.Types        as F
-import qualified Language.Fixpoint.Bitvector    as BV
+import qualified Language.Fixpoint.Smt.Bitvector    as BV
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.Types.Errors
+import           Language.Fixpoint.Types.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 import           Text.Parsec.Pos                    (initialPos)
 

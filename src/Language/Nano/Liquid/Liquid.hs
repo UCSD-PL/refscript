@@ -26,13 +26,13 @@ import           Language.Nano.Syntax
 import           Language.Nano.Syntax.Annotations
 import           Language.Nano.Syntax.PrettyPrint
 
-import           Language.Fixpoint.Names            (symbolString)
-import qualified Language.Fixpoint.Config           as C
+import           Language.Fixpoint.Types.Names            (symbolString)
+import qualified Language.Fixpoint.Types.Config           as C
 import qualified Language.Fixpoint.Types            as F
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Visitor          as V
-import           Language.Fixpoint.Interface        (solve)
+import qualified Language.Fixpoint.Types.Visitor          as V
+import           Language.Fixpoint.Solver        (solve)
 
 import           Language.Nano.Misc                 (mseq)
 import           Language.Nano.Annots

@@ -74,11 +74,11 @@ import           Language.Nano.Annots           hiding (err)
 import           Language.Nano.Program
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Liquid.Types     ()
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Names        (symbolString, symSepName)
+import           Language.Fixpoint.Types.Errors
+import           Language.Fixpoint.Types.Names        (symbolString, symSepName)
 import           Language.Fixpoint.Misc hiding ((<$$>))
 import qualified Language.Fixpoint.Types        as F
-import qualified Language.Fixpoint.Visitor      as V
+import qualified Language.Fixpoint.Types.Visitor      as V
 
 -- import           Debug.Trace                        (trace)
 

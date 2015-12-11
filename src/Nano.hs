@@ -24,11 +24,11 @@ import           System.Exit
 import           System.Directory                   (createDirectoryIfMissing, doesFileExist)
 import           System.Process
 import           System.FilePath.Posix
-import           Language.Fixpoint.Interface        (resultExit)
+import           Language.Fixpoint.Solver        (resultExit)
 import qualified Language.Fixpoint.Types      as    F
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Files
+import           Language.Fixpoint.Types.Errors
+import           Language.Fixpoint.Utils.Files
 import           Text.PrettyPrint.HughesPJ
 import           Language.Nano.Syntax.PrettyPrint
 import qualified Data.ByteString.Lazy.Char8   as    B

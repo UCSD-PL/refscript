@@ -94,13 +94,13 @@ import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
 
-import qualified Language.Fixpoint.Bitvector as BV
+import qualified Language.Fixpoint.Smt.Bitvector as BV
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Names (symbolText)
+import           Language.Fixpoint.Types.Names (symbolText)
 import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.PrettyPrint
-import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Visitor as V
+import           Language.Fixpoint.Types.PrettyPrint
+import           Language.Fixpoint.Types.Errors
+import qualified Language.Fixpoint.Types.Visitor as V
 
 -- import           Debug.Trace                        (trace)
 

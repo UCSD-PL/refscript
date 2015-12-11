@@ -49,9 +49,9 @@ import           Control.Applicative                     ((<$>), (<*>) , (<*) , 
 
 import           Language.Fixpoint.Types          hiding (quals, Loc, Expression, Located)
 import           Language.Fixpoint.Parse          hiding (qualifierP)
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Misc                  (fst3)
-import           Language.Fixpoint.Names                 (symbolString)
+import           Language.Fixpoint.Types.Names                 (symbolString)
 
 import           Language.Nano.Annots
 import           Language.Nano.Errors

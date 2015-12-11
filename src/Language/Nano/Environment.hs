@@ -12,7 +12,7 @@ import           Language.Nano.Types
 import           Language.Nano.Env
 import           Language.Nano.Names
 import           Language.Nano.Program
-import           Language.Fixpoint.Names
+import           Language.Fixpoint.Types.Names
 import           Language.Nano.Syntax.PrettyPrint
 import qualified Language.Fixpoint.Types            as F
 

@@ -89,12 +89,12 @@ import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Liquid.Environment
 import           Language.Nano.Liquid.Types
 
-import           Language.Fixpoint.Visitor (SymConsts(..))
+import           Language.Fixpoint.Types.Visitor (SymConsts(..))
 
-import           Language.Fixpoint.Names (symbolString, symbolText)
+import           Language.Fixpoint.Types.Names (symbolString, symbolText)
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Errors
 
 import           Language.Nano.Syntax
 import           Language.Nano.Syntax.PrettyPrint
@@ -147,7 +147,7 @@ cgStateCInfo :: FilePath -> NanoRefType -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGS
 -------------------------------------------------------------------------------
 cgStateCInfo f pgm ((fcs, fws), cg) = CGI finfo (cg_ann cg)
   where
-    finfo    = F.fi fcs fws bs lits F.ksEmpty (pQuals pgm) mempty f
+    finfo    = F.fi fcs fws bs lits mempty (pQuals pgm) mempty f
     bs       = binds cg
     lits     = lits1 `mappend` lits2
     lits1    = F.sr_sort <$> measureEnv pgm

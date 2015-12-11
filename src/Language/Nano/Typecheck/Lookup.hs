@@ -20,7 +20,7 @@ import           Language.Nano.Syntax.PrettyPrint
 import           Language.Nano.Syntax
 
 import qualified Language.Fixpoint.Types as F
-import qualified Language.Fixpoint.Bitvector as BV
+import qualified Language.Fixpoint.Smt.Bitvector as BV
 
 import           Language.Nano.Names
 import           Language.Nano.Types

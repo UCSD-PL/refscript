@@ -23,7 +23,7 @@ import qualified Data.HashSet                       as S
 import qualified Data.Map.Strict                    as M
 import           Data.Maybe                         (fromMaybe)
 import           Control.Monad.State
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Misc
 
 import           Language.Nano.Syntax.PrettyPrint

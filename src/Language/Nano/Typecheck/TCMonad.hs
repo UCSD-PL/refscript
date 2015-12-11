@@ -61,7 +61,7 @@ import           Data.List                          (isPrefixOf)
 import           Data.Monoid
 import qualified Data.IntMap.Strict                 as I
 
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types            as F
 

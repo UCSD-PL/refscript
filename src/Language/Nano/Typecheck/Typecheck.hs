@@ -47,8 +47,8 @@ import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Visitor
 
-import           Language.Fixpoint.Names            (symbolString)
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Names            (symbolString)
+import           Language.Fixpoint.Types.Errors
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc             as FM
 import           Language.Nano.Syntax

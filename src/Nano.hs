@@ -24,11 +24,11 @@ import           System.Exit
 import           System.Directory                   (createDirectoryIfMissing, doesFileExist)
 import           System.Process
 import           System.FilePath.Posix
-import           Language.Fixpoint.Interface        (resultExit)
+import           Language.Fixpoint.Solver        (resultExit)
 import qualified Language.Fixpoint.Types      as    F
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Files
+import           Language.Fixpoint.Types.Errors
+import           Language.Fixpoint.Utils.Files
 import           Text.PrettyPrint.HughesPJ
 import           Language.Nano.Syntax.PrettyPrint
 import qualified Data.ByteString.Lazy.Char8   as    B
@@ -63,10 +63,10 @@ withExistingFile cfg f
         (code, stdOut, _) <- readProcessWithExitCode tsCmd (mkArgs libs) ""
         case code of
           ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
-                                Left  s  -> return $ Left  $ F.UnknownError $ "withExistingFile1: " ++ s
+                                Left  s  -> return $ Left  $ F.Crash [] $ "withExistingFile1: " ++ s
                                 Right fs -> return $ Right fs
           ExitFailure _   -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
-                                Left  s  -> return $ Left $ F.UnknownError $ "withExistingFile2: " ++ s
+                                Left  s  -> return $ Left $ F.Crash [] $ "withExistingFile2: " ++ s
                                 Right e  -> return $ Left e
   | otherwise
   = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
@@ -78,6 +78,7 @@ withExistingFile cfg f
                      , "--refscript"] ++
                      concatMap (("--lib":) . single) libs ++
                      [ f ]
+
 
 getIncludeLibs :: Config -> IO [FilePath]
 getIncludeLibs cfg = case prelude cfg of
@@ -130,7 +131,7 @@ procDoc              = mapi pad . filter (not . null . words) . lines . render
 resDocs F.Safe             = [text "SAFE"]
 resDocs (F.Crash xs s)     = text ("CRASH: " ++ s) : pprManyOrdered xs
 resDocs (F.Unsafe xs)      = text "UNSAFE"         : pprManyOrdered (nub xs)
-resDocs (F.UnknownError d) = [text "PANIC: Unexpected Error: " <+> text d, reportUrl]
+-- resDocs (F.UnknownError d) = [text "PANIC: Unexpected Error: " <+> text d, reportUrl]
 reportUrl                  = text "Please submit a bug report at: https://github.com/ucsd-pl/RefScript"
 
 pprManyOrdered = map pp . sort

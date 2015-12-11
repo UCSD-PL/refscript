@@ -12,7 +12,7 @@ module Language.Nano.Typecheck.Unify (
   ) where
 
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Errors
 import           Language.Nano.Misc (mapPair)
 import           Language.Nano.Errors
 import           Language.Nano.Locations

@@ -30,10 +30,10 @@ import           Data.Monoid
 import           Data.Aeson
 import           GHC.Exts                           (groupWith, sortWith)
 
-import           Language.Fixpoint.Files()
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Utils.Files()
+import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Misc             (inserts)
-import           Language.Fixpoint.Names            (symbolString)
+import           Language.Fixpoint.Types.Names            (symbolString)
 import qualified Language.Fixpoint.Types    as F
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Syntax.PrettyPrint
@@ -115,7 +115,7 @@ mkAnnMap res ann = AnnMap (mkAnnMapStatus res) (mkAnnMapTyp ann) (mkAnnMapErr re
 mkAnnMapStatus (F.Crash _ _)      = "error"
 mkAnnMapStatus (F.Safe)           = "safe"
 mkAnnMapStatus (F.Unsafe _)       = "unsafe"
-mkAnnMapStatus (F.UnknownError _) = "crash"
+ -- mkAnnMapStatus (F.UnknownError _) = "crash"
 
 mkAnnMapErr (F.Unsafe ls)         = eInfo "Liquid Error: "   <$> ls
 mkAnnMapErr (F.Crash ls msg)      = eInfo ("Crash: " ++ msg) <$> ls

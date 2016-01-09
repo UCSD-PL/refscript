@@ -34,7 +34,7 @@ module Language.Rsc.Locations (
 
 import           Data.Generics            (Data)
 import           Data.Typeable            (Typeable)
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types  as F
 import           Text.Parsec.Pos          (SourcePos)

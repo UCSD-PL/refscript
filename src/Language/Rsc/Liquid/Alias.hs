@@ -7,9 +7,9 @@ import           Control.Monad
 import           Control.Monad.State
 import           Data.Generics
 import           Data.Maybe
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Errors
 import qualified Language.Fixpoint.Types      as F
-import qualified Language.Fixpoint.Visitor    as V
+import qualified Language.Fixpoint.Types.Visitor    as V
 import           Language.Rsc.Annotations
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors

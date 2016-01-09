@@ -62,7 +62,7 @@ import qualified Data.IntMap.Strict                 as I
 import           Data.List                          (isPrefixOf)
 import           Data.Maybe                         (catMaybes)
 import           Data.Monoid
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types            as F
 import           Language.Rsc.Annotations

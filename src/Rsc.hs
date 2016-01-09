@@ -11,8 +11,8 @@ import           Data.Aeson.Types               hiding (Error, Parser, parse)
 import qualified Data.ByteString.Lazy.Char8     as B
 import           Data.List                      (nub, sort)
 import           Data.Monoid
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Files
+import           Language.Fixpoint.Types.Errors
+import           Language.Fixpoint.Utils.Files
 import           Language.Fixpoint.Interface    (resultExit)
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types        as F

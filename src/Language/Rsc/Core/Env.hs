@@ -48,8 +48,8 @@ import qualified Data.List                     as L
 import           Data.Maybe                    (isJust)
 import           Data.Monoid                   (Monoid (..))
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Names       (symbolString)
-import           Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.Types.Names       (symbolString)
+import           Language.Fixpoint.Types.PrettyPrint
 import qualified Language.Fixpoint.Types       as F
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Locations

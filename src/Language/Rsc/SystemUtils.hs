@@ -30,8 +30,8 @@ import           Data.Monoid
 import qualified Data.Text                 as T
 import qualified Data.Vector               as V
 import           GHC.Exts                  (groupWith, sortWith)
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Files   ()
+import           Language.Fixpoint.Types.Errors
+import           Language.Fixpoint.Utils.Files   ()
 import           Language.Fixpoint.Misc    (inserts)
 import qualified Language.Fixpoint.Types   as F
 import           Language.Rsc.Locations

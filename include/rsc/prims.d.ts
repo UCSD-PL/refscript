@@ -140,7 +140,8 @@ declare function builtin_BIFalsy<A>(x: A): boolean;
 
 // GENERAL PURPOSE AUXILIARY DEFINITIONS
 
-declare function crash<A>(): A;
+/*@ crash :: <A>() => A */
+declare function crash(): any;
 
 /*@ assume :: <A>(x: A) => {v:void | Prop x} */
 declare function assume<A>(x: A): void;

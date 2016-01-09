@@ -26,8 +26,8 @@ module Language.Rsc.Liquid.Constraint (
   ) where
 
 import           Control.DeepSeq
-import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types         as F
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Liquid.Environment
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations

@@ -19,13 +19,13 @@ module Language.Rsc.Typecheck.Environment
     ) where
 
 import           Data.Data
-import           Data.Function                (on)
-import           Data.List                    (sortBy)
+import           Data.Function                  (on)
+import           Data.List                      (sortBy)
 import           Data.Monoid
 import           Data.Typeable
-import           Language.Fixpoint.Errors     (die)
-import           Language.Fixpoint.Misc       (fst3, safeZip)
-import qualified Language.Fixpoint.Types      as F
+import           Language.Fixpoint.Misc         (fst3, safeZip)
+import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Types.Errors (die)
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
@@ -33,7 +33,7 @@ import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc            (single)
+import           Language.Rsc.Misc              (single)
 import           Language.Rsc.Misc
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty

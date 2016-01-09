@@ -22,12 +22,12 @@ module Language.Rsc.Environment (
 
 ) where
 
-import           Control.Applicative          ((<$>))
-import           Control.Exception            (throw)
+import           Control.Applicative            ((<$>))
+import           Control.Exception              (throw)
 import           Data.Default
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Names
-import qualified Language.Fixpoint.Types      as F
+import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Types.Errors
+import           Language.Fixpoint.Types.Names
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Core.Env

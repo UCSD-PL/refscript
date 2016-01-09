@@ -13,10 +13,10 @@ module Language.Rsc.Lookup (
   , extractCtor
   ) where
 
-import           Control.Applicative          ((<$>))
-import           Data.Either                  (rights)
-import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types      as F
+import           Control.Applicative            ((<$>))
+import           Data.Either                    (rights)
+import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Core.Env

@@ -15,25 +15,25 @@ module Language.Rsc.Transformations (
   , fixFunBinders
   ) where
 
-import           Control.Applicative          hiding (empty)
-import           Control.Exception            (throw)
-import           Control.Monad                (liftM2)
+import           Control.Applicative             hiding (empty)
+import           Control.Exception               (throw)
+import           Control.Monad                   (liftM2)
 import           Control.Monad.State.Strict
 import           Data.Default
 import           Data.Functor.Identity
 import           Data.Generics
-import qualified Data.HashSet                 as HS
-import qualified Data.IntMap.Strict           as I
-import           Data.List                    (find)
-import           Data.Maybe                   (fromMaybe)
-import           Data.Maybe                   (listToMaybe)
-import           Data.Monoid                  hiding ((<>))
-import           Data.Text                    (pack, splitOn)
-import qualified Data.Traversable             as T
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Names      (symSepName, symbolString)
-import qualified Language.Fixpoint.Types      as F
-import qualified Language.Fixpoint.Visitor    as FV
+import qualified Data.HashSet                    as HS
+import qualified Data.IntMap.Strict              as I
+import           Data.List                       (find)
+import           Data.Maybe                      (fromMaybe)
+import           Data.Maybe                      (listToMaybe)
+import           Data.Monoid                     hiding ((<>))
+import           Data.Text                       (pack, splitOn)
+import qualified Data.Traversable                as T
+import qualified Language.Fixpoint.Types         as F
+import           Language.Fixpoint.Types.Errors
+import           Language.Fixpoint.Types.Names   (suffixSymbol, symbolString)
+import qualified Language.Fixpoint.Types.Visitor as FV
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
@@ -475,7 +475,7 @@ fixFunBinders p@(Rsc { code = Src ss }) = p'
 fixFunBindersInType _ bs = go
   where
     ks               = [ y | B y _ <- bs ]
-    ss               = (`mappend` F.symbol [symSepName])
+    ss               = (`suffixSymbol` F.symbol "")
     ks'              = map (F.eVar . ss) ks
     sub             :: F.Subable a => a -> a
     sub              = F.subst (F.mkSubst (zip ks ks'))

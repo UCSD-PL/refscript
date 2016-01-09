@@ -63,7 +63,59 @@ Executable rsc
 --  ghc-options:    -W -O2
   Main-is:        Rsc.hs
   hs-source-dirs: src
-
+  other-modules:    Language.Rsc.AST
+                  , Language.Rsc.AST.Annotations
+                  , Language.Rsc.AST.Check
+                  , Language.Rsc.AST.Syntax
+                  , Language.Rsc.Annotations
+                  , Language.Rsc.ClassHierarchy
+                  , Language.Rsc.CmdLine
+                  , Language.Rsc.Core.EitherIO
+                  , Language.Rsc.Core.Env
+                  , Language.Rsc.Core.Files
+                  , Language.Rsc.Environment
+                  , Language.Rsc.Errors
+                  , Language.Rsc.Liquid.Alias
+                  , Language.Rsc.Liquid.CGMonad
+                  , Language.Rsc.Liquid.Checker
+                  , Language.Rsc.Liquid.Constraint
+                  , Language.Rsc.Liquid.Environment
+                  , Language.Rsc.Liquid.Qualifiers
+                  , Language.Rsc.Liquid.Types
+                  , Language.Rsc.Locations
+                  , Language.Rsc.Lookup
+                  , Language.Rsc.Misc
+                  , Language.Rsc.Names
+                  , Language.Rsc.Options
+                  , Language.Rsc.Parser
+                  , Language.Rsc.Parser.Annotations
+                  , Language.Rsc.Parser.Common
+                  , Language.Rsc.Parser.Declarations
+                  , Language.Rsc.Parser.Lexer
+                  , Language.Rsc.Parser.Types
+                  , Language.Rsc.Pretty
+                  , Language.Rsc.Pretty.Annotations
+                  , Language.Rsc.Pretty.Common
+                  , Language.Rsc.Pretty.Errors
+                  , Language.Rsc.Pretty.Syntax
+                  , Language.Rsc.Pretty.Types
+                  , Language.Rsc.Program
+                  , Language.Rsc.SSA.SSA
+                  , Language.Rsc.SSA.SSAMonad
+                  , Language.Rsc.SystemUtils
+                  , Language.Rsc.Transformations
+                  , Language.Rsc.Traversals
+                  , Language.Rsc.TypeUtilities
+                  , Language.Rsc.Typecheck.Checker
+                  , Language.Rsc.Typecheck.Environment
+                  , Language.Rsc.Typecheck.Sub
+                  , Language.Rsc.Typecheck.Subst
+                  , Language.Rsc.Typecheck.TCMonad
+                  , Language.Rsc.Typecheck.Types
+                  , Language.Rsc.Typecheck.Unify
+                  , Language.Rsc.Types
+                  , Language.Rsc.Visitor
+                  , Paths_refscript
 
 Library
   Default-language: Haskell2010
@@ -151,7 +203,7 @@ Library
                     Language.Rsc.Typecheck.Environment,
                     Language.Rsc.Typecheck.Sub,
                     Language.Rsc.Visitor
-  
+
 test-suite test
   default-language: Haskell98
   type:             exitcode-stdio-1.0

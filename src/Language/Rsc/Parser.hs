@@ -29,10 +29,10 @@ import           Data.Maybe                       (catMaybes)
 import           Data.Monoid
 import           Data.Traversable                 (mapAccumL)
 import           Data.Tuple
-import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Parse          (Parser)
 import qualified Language.Fixpoint.Types          as F
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations         hiding (err)
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env

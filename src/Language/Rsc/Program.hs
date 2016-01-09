@@ -26,12 +26,12 @@ module Language.Rsc.Program (
 
   ) where
 
-import           Control.Applicative      hiding (empty)
+import           Control.Applicative           hiding (empty)
 import           Data.Generics
-import           Data.List                (stripPrefix)
-import           Data.Monoid              hiding ((<>))
-import           Language.Fixpoint.Names  (symbolString)
-import qualified Language.Fixpoint.Types  as F
+import           Data.List                     (stripPrefix)
+import           Data.Monoid                   hiding ((<>))
+import qualified Language.Fixpoint.Types       as F
+import           Language.Fixpoint.Types.Names (symbolString)
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env

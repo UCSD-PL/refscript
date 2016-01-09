@@ -7,23 +7,22 @@
 
 module Language.Rsc.SSA.SSA (ssaTransform) where
 
-import           Control.Applicative          (pure, (<$>), (<*>))
-import           Control.Arrow                ((***))
+import           Control.Applicative            (pure, (<$>), (<*>))
+import           Control.Arrow                  ((***))
 import           Control.Monad
 import           Data.Data
 import           Data.Default
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
-import qualified Data.HashSet                 as S
-import qualified Data.IntMap.Strict           as IM
-import qualified Data.IntSet                  as I
-import qualified Data.List                    as L
-import           Data.Maybe                   (catMaybes, fromMaybe,
-                                               listToMaybe)
-import           Data.Typeable                ()
-import qualified Language.Fixpoint.Errors     as E
+import qualified Data.HashSet                   as S
+import qualified Data.IntMap.Strict             as IM
+import qualified Data.IntSet                    as I
+import qualified Data.List                      as L
+import           Data.Maybe                     (catMaybes, fromMaybe, listToMaybe)
+import           Data.Typeable                  ()
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types      as F
+import qualified Language.Fixpoint.Types        as F
+import qualified Language.Fixpoint.Types.Errors as E
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy

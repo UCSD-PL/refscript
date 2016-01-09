@@ -49,9 +49,9 @@ import           Data.Maybe                        (fromMaybe, isJust, listToMay
 import           Data.Monoid                       hiding ((<>))
 import qualified Data.Traversable                  as T
 import           Data.Tuple                        (swap)
-import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc            (intersperse)
 import qualified Language.Fixpoint.Types           as F
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations          hiding (err)
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env

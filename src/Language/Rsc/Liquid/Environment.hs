@@ -9,10 +9,10 @@
 
 module Language.Rsc.Liquid.Environment where
 
-import           Data.Maybe                   (catMaybes)
-import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types      as F
-import           Language.Rsc.Annotations     ()
+import           Data.Maybe                     (catMaybes)
+import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Types.Errors
+import           Language.Rsc.Annotations       ()
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment

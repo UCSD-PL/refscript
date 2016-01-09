@@ -12,22 +12,22 @@
 
 module Language.Rsc.Parser.Types where
 
-import           Control.Applicative          ((*>), (<$>), (<*>))
+import           Control.Applicative            ((*>), (<$>), (<*>))
 import           Control.Monad
-import           Data.Char                    (isLower)
-import           Data.Foldable                (concat)
-import           Data.Generics                hiding (Generic)
-import qualified Data.HashSet                 as S
-import           Data.List                    (foldl')
-import           Data.Maybe                   (maybeToList)
+import           Data.Char                      (isLower)
+import           Data.Foldable                  (concat)
+import           Data.Generics                  hiding (Generic)
+import qualified Data.HashSet                   as S
+import           Data.List                      (foldl')
+import           Data.Maybe                     (maybeToList)
 import           Data.Monoid
-import qualified Data.Text                    as DT
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Names
+import qualified Data.Text                      as DT
 import           Language.Fixpoint.Parse
-import qualified Language.Fixpoint.Types      as F
+import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Types.Errors
+import           Language.Fixpoint.Types.Names
 import           Language.Rsc.Liquid.Types
-import           Language.Rsc.Misc            (mapEither)
+import           Language.Rsc.Misc              (mapEither)
 import           Language.Rsc.Names
 import           Language.Rsc.Options
 import           Language.Rsc.Parser.Common
@@ -36,9 +36,9 @@ import           Language.Rsc.Pretty
 import           Language.Rsc.Transformations
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Prelude                      hiding (concat, mapM)
-import           Text.Parsec                  hiding (State, parse)
-import           Text.PrettyPrint.HughesPJ    ((<+>))
+import           Prelude                        hiding (concat, mapM)
+import           Text.Parsec                    hiding (State, parse)
+import           Text.PrettyPrint.HughesPJ      ((<+>))
 
 -- import           Language.Rsc.Pretty
 

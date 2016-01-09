@@ -49,15 +49,15 @@ module Language.Rsc.SSA.SSAMonad (
 
    ) where
 
-import           Control.Applicative         ((<$>), (<*>))
+import           Control.Applicative            ((<$>), (<*>))
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
-import qualified Data.HashSet                as S
-import qualified Data.IntMap.Strict          as IM
-import qualified Data.IntSet                 as I
-import           Data.Maybe                  (fromMaybe)
-import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types     as F
+import qualified Data.HashSet                   as S
+import qualified Data.IntMap.Strict             as IM
+import qualified Data.IntSet                    as I
+import           Data.Maybe                     (fromMaybe)
+import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy

@@ -13,22 +13,22 @@ module Language.Rsc.AST.Check
     , IsRsc(..)
     ) where
 
-import           Control.Applicative           ((<$>))
-import           Control.Exception             (throw)
+import           Control.Applicative                 ((<$>))
+import           Control.Exception                   (throw)
 import           Data.Default
-import           Data.Foldable                 (Foldable)
-import           Data.Generics                 (Data, Typeable)
-import           Data.Traversable              (Traversable)
+import           Data.Foldable                       (Foldable)
+import           Data.Generics                       (Data, Typeable)
+import           Data.Traversable                    (Traversable)
 import           GHC.Generics
-import           Language.Fixpoint.PrettyPrint
-import           Language.Rsc.AST.Annotations  ()
+import           Language.Fixpoint.Types.PrettyPrint
+import           Language.Rsc.AST.Annotations        ()
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Pretty.Errors
 import           Language.Rsc.Pretty.Syntax
-import           Text.Parsec.Pos               (SourcePos)
+import           Text.Parsec.Pos                     (SourcePos)
 import           Text.PrettyPrint.HughesPJ
 
 ---------------------------------------------------------------------

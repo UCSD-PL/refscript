@@ -16,19 +16,19 @@ module Language.Rsc.Parser.Common
     , withinSpacesP
     ) where
 
-import           Control.Applicative          ((<$>), (<*>))
-import qualified Data.HashSet                 as HS
-import           Data.Maybe                   (listToMaybe)
-import           Language.Fixpoint.Errors
+import           Control.Applicative            ((<$>), (<*>))
+import qualified Data.HashSet                   as HS
+import           Data.Maybe                     (listToMaybe)
 import           Language.Fixpoint.Parse
-import qualified Language.Fixpoint.Types      as F
+import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
-import           Language.Rsc.Locations       hiding (val)
+import           Language.Rsc.Locations         hiding (val)
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Text.Parsec                  hiding (State, parse)
-import qualified Text.Parsec.Token            as T
+import           Text.Parsec                    hiding (State, parse)
+import qualified Text.Parsec.Token              as T
 
 ----------------------------------------------------------------------------------
 dot :: Parser String

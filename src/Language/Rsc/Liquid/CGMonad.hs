@@ -70,12 +70,11 @@ import qualified Data.HashMap.Strict             as HM
 import qualified Data.List                       as L
 import           Data.Maybe                      (catMaybes)
 import           Data.Monoid                     (mappend, mempty)
-import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Names         (symbolString, symbolText)
-import qualified Language.Fixpoint.Names         as N
 import qualified Language.Fixpoint.Types         as F
-import           Language.Fixpoint.Visitor       (SymConsts (..))
+import           Language.Fixpoint.Types.Errors
+import           Language.Fixpoint.Types.Names   (isPrefixOfSym, symbolString, symbolText, tempPrefix)
+import           Language.Fixpoint.Types.Visitor (SymConsts (..))
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
@@ -188,7 +187,7 @@ cgStateCInfo :: FilePath -> RefScript -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGSta
 --------------------------------------------------------------------------------
 cgStateCInfo f pgm ((fcs, fws), cg) = CGI finfo (cg_ann cg)
   where
-    finfo    = F.fi fcs fws bs lits F.ksEmpty (pQuals pgm) mempty f
+    finfo    = F.fi fcs fws bs lits mempty (pQuals pgm) mempty f
     bs       = cg_binds cg
     lits     = lits1 `mappend` lits2
     lits1    = F.sr_sort <$> measureEnv pgm
@@ -622,7 +621,7 @@ mkLiquidError l g t1 t2 = mkErr l $ show
     gr        = {- F.subst sbt -} (cge_guards g)
     τ1        = {- F.subst sbt -} t1
     τ2        = {- F.subst sbt -} t2
-    tmp       = [ x | (x, _) <- F.toListSEnv (envNames g), N.isTempSymbol x ]
+    tmp       = [ x | (x, _) <- F.toListSEnv (envNames g), isPrefixOfSym tempPrefix x ]
     miniTmp   = map (F.expr . F.symbol . ("_" ++) . single) ['a'..]
     sbt       = F.mkSubst (zip tmp miniTmp)
 

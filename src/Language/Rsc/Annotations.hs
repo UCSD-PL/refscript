@@ -28,10 +28,10 @@ module Language.Rsc.Annotations (
 
 import           Data.Default
 import           Data.Generics
-import qualified Data.IntMap.Strict           as I
+import qualified Data.IntMap.Strict             as I
 import           Data.Monoid
-import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types      as F
+import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.AST.Annotations
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Locations

@@ -57,21 +57,21 @@ module Language.Rsc.Misc (
 
 ) where
 
-import           Control.Applicative       (pure, (<$>), (<*>))
+import           Control.Applicative            (pure, (<$>), (<*>))
 import           Control.Exception.Base
-import           Control.Monad             (foldM, liftM2)
+import           Control.Monad                  (foldM, liftM2)
 import           Data.Data
-import           Data.Function             (on)
+import           Data.Function                  (on)
 import           Data.Generics.Aliases
 import           Data.Hashable
-import qualified Data.HashMap.Strict       as M
+import qualified Data.HashMap.Strict            as M
 import           Data.HashSet
-import qualified Data.List                 as L
-import           Data.Maybe                (isJust)
-import           Data.Monoid               (Monoid, mappend)
-import           Language.Fixpoint.Errors
+import qualified Data.List                      as L
+import           Data.Maybe                     (isJust)
+import           Data.Monoid                    (Monoid, mappend)
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types   as F
+import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Types.Errors
 import           Text.PrettyPrint.HughesPJ
 
 -------------------------------------------------------------------------------

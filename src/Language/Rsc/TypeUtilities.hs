@@ -22,8 +22,8 @@ module Language.Rsc.TypeUtilities (
 
   ) where
 
-import           Language.Fixpoint.Names      (symbolString)
-import qualified Language.Fixpoint.Types      as F
+import qualified Language.Fixpoint.Types       as F
+import           Language.Fixpoint.Types.Names (symbolString)
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment

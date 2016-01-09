@@ -68,24 +68,24 @@ module Language.Rsc.Typecheck.Types (
 
   ) where
 
-import           Control.Applicative         hiding (empty)
-import           Control.Arrow               (second)
+import           Control.Applicative             hiding (empty)
+import           Control.Arrow                   (second)
 import           Data.Default
-import qualified Data.List                   as L
-import           Data.Maybe                  (fromMaybe, maybeToList)
-import           Data.Monoid                 hiding ((<>))
-import           Data.Typeable               ()
-import qualified Language.Fixpoint.Bitvector as BV
+import qualified Data.List                       as L
+import           Data.Maybe                      (fromMaybe, maybeToList)
+import           Data.Monoid                     hiding ((<>))
+import           Data.Typeable                   ()
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Names     (symbolString)
-import qualified Language.Fixpoint.Types     as F
+import qualified Language.Fixpoint.Smt.Bitvector as BV
+import qualified Language.Fixpoint.Types         as F
+import           Language.Fixpoint.Types.Names   (symbolString)
 import           Language.Rsc.AST.Syntax
-import qualified Language.Rsc.Core.Env       as E
+import qualified Language.Rsc.Core.Env           as E
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc           (mapFst, mapSnd3)
+import           Language.Rsc.Misc               (mapFst, mapSnd3)
 import           Language.Rsc.Names
 import           Language.Rsc.Types
-import           Text.Parsec.Pos             (initialPos)
+import           Text.Parsec.Pos                 (initialPos)
 
 -- import           Debug.Trace (trace)
 

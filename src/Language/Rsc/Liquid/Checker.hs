@@ -19,14 +19,14 @@ import           Data.List                       (sortBy)
 import           Data.Maybe                      (catMaybes, fromJust, fromMaybe)
 import qualified Data.Text                       as T
 import qualified Data.Traversable                as T
-import qualified Language.Fixpoint.Config        as C
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Files         (Ext (..), extFileName)
-import           Language.Fixpoint.Interface     (solve)
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Names         (symbolString)
+import           Language.Fixpoint.Solver        (solve)
 import qualified Language.Fixpoint.Types         as F
-import qualified Language.Fixpoint.Visitor       as V
+import qualified Language.Fixpoint.Types.Config  as C
+import           Language.Fixpoint.Types.Errors
+import           Language.Fixpoint.Types.Names   (symbolString)
+import qualified Language.Fixpoint.Types.Visitor as V
+import           Language.Fixpoint.Utils.Files   (Ext (..), extFileName)
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
@@ -115,44 +115,57 @@ solveConstraints :: Config
 --------------------------------------------------------------------------------
 solveConstraints cfg f cgi
   = do F.Result r s <- solve fpConf (cgi_finfo cgi)
-       -- let c0        = ppWCI cgi r
-       let r'        = fmap (ci_info . F.sinfo) r
-       let anns      = cgi_annot cgi
-       let sol       = applySolution s
-       return        $ (A.SomeAnn anns sol, r')
+       let r'   = fmap  ci_info            r
+       -- let r'= fmap (ci_info . F.sinfo) r
+       let anns = cgi_annot cgi
+       let sol  = applySolution s
+       return   $ (A.SomeAnn anns sol, r')
   where
-    fpConf     = def { C.real        = real cfg
+    fpConf      = def { C.real        = real cfg
                      , C.ueqAllSorts = C.UAS True
                      , C.srcFile     = f
-                     , C.extSolver   = extSolver cfg
                      }
 
--- TODO: move elsewhere
-ppWCI cgi (F.Unsafe ws) = vcat $ map f ws
-  where
-    f wci = pp (F.sid wci) <+> pp (F.fromListSEnv (F.clhs bs wci)) $+$ nest 2 (text "=>" $+$ pp (F.crhs wci))
-    cm    = F.cm $ cgi_finfo cgi
-    bs    = F.bs $ cgi_finfo cgi
-ppWCI _ F.Safe = text "SAFE"
-
-instance PP (F.Result Cinfo) where
-  pp (F.Result cinfo kvars)
-    = vcat ((ppB <$>) (HM.toList kvars))
-    where
-      ppB (x, t) = pp x <+> dcolon <+> pp t
-
-instance PP (F.FixResult (F.WrappedC Cinfo)) where
-  pp (F.Unsafe ws) = vcat $ map ppW ws
-    where
-      ppW wci = text "ID" <+> pp (F.sid wci) -- text "<:" <+> pp (F.crhs wci)
---       _ = F.sinfo wci
---       _ = F.clhs undefined wci
-
-  pp F.Safe = text "Safe"
+-- NOT VALID WITH NEW L-F -- solveConstraints cfg f cgi
+-- NOT VALID WITH NEW L-F --   = do F.Result r s <- solve fpConf (cgi_finfo cgi)
+-- NOT VALID WITH NEW L-F --        -- let c0        = ppWCI cgi r
+-- NOT VALID WITH NEW L-F --        let r'        = fmap (ci_info . F.sinfo) r
+-- NOT VALID WITH NEW L-F --        let anns      = cgi_annot cgi
+-- NOT VALID WITH NEW L-F --        let sol       = applySolution s
+-- NOT VALID WITH NEW L-F --        return        $ (A.SomeAnn anns sol, r')
+-- NOT VALID WITH NEW L-F --   where
+-- NOT VALID WITH NEW L-F --     fpConf     = def { C.real        = real cfg
+-- NOT VALID WITH NEW L-F --                      , C.ueqAllSorts = C.UAS True
+-- NOT VALID WITH NEW L-F --                      , C.srcFile     = f
+-- NOT VALID WITH NEW L-F --                      }
 
 
-instance PP F.KVar where
-  pp k = pprint k
+-- NOT VALID WITH NEW L-F -- -- TODO: move elsewhere
+-- NOT VALID WITH NEW L-F -- ppWCI cgi (F.Unsafe ws) = vcat $ map f ws
+-- NOT VALID WITH NEW L-F --   where
+-- NOT VALID WITH NEW L-F --     f wci = pp (F.sid wci) <+> pp (F.fromListSEnv (F.clhs bs wci)) $+$ nest 2 (text "=>" $+$ pp (F.crhs wci))
+-- NOT VALID WITH NEW L-F --     cm    = F.cm $ cgi_finfo cgi
+-- NOT VALID WITH NEW L-F --     bs    = F.bs $ cgi_finfo cgi
+-- NOT VALID WITH NEW L-F -- ppWCI _ F.Safe = text "SAFE"
+-- NOT VALID WITH NEW L-F --
+-- NOT VALID WITH NEW L-F -- instance PP (F.Result Cinfo) where
+-- NOT VALID WITH NEW L-F --   pp (F.Result cinfo kvars)
+-- NOT VALID WITH NEW L-F --     = vcat ((ppB <$>) (HM.toList kvars))
+-- NOT VALID WITH NEW L-F --     where
+-- NOT VALID WITH NEW L-F --       ppB (x, t) = pp x <+> dcolon <+> pp t
+-- NOT VALID WITH NEW L-F --
+-- NOT VALID WITH NEW L-F -- instance PP (F.FixResult (F.WrappedC Cinfo)) where
+-- NOT VALID WITH NEW L-F --   pp (F.Unsafe ws) = vcat $ map ppW ws
+-- NOT VALID WITH NEW L-F --     where
+-- NOT VALID WITH NEW L-F --       ppW wci = text "ID" <+> pp (F.sid wci) -- text "<:" <+> pp (F.crhs wci)
+-- NOT VALID WITH NEW L-F -- --       _ = F.sinfo wci
+-- NOT VALID WITH NEW L-F -- --       _ = F.clhs undefined wci
+-- NOT VALID WITH NEW L-F --
+-- NOT VALID WITH NEW L-F --   pp F.Safe = text "Safe"
+-- NOT VALID WITH NEW L-F --
+-- NOT VALID WITH NEW L-F --
+-- NOT VALID WITH NEW L-F -- instance PP F.KVar where
+-- NOT VALID WITH NEW L-F --   pp k = pprint k
 
 --------------------------------------------------------------------------------
 applySolution :: F.FixSolution -> A.UAnnInfo RefType -> A.UAnnInfo RefType

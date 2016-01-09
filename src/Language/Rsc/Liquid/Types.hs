@@ -48,14 +48,14 @@ module Language.Rsc.Liquid.Types (
 
 import           Control.Applicative
 import           Data.Default
-import qualified Data.HashMap.Strict          as HM
-import qualified Data.List                    as L
-import           Data.Maybe                   (catMaybes, fromMaybe)
-import           Data.Monoid                  (mconcat)
-import qualified Data.Text                    as T
-import qualified Language.Fixpoint.Bitvector  as BV
-import           Language.Fixpoint.Names      (symbolText)
-import qualified Language.Fixpoint.Types      as F
+import qualified Data.HashMap.Strict             as HM
+import qualified Data.List                       as L
+import           Data.Maybe                      (catMaybes, fromMaybe)
+import           Data.Monoid                     (mconcat)
+import qualified Data.Text                       as T
+import qualified Language.Fixpoint.Smt.Bitvector as BV
+import qualified Language.Fixpoint.Types         as F
+import           Language.Fixpoint.Types.Names   (symbolText)
 import           Language.Rsc.AST
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty

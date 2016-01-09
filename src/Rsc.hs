@@ -11,11 +11,11 @@ import           Data.Aeson.Types               hiding (Error, Parser, parse)
 import qualified Data.ByteString.Lazy.Char8     as B
 import           Data.List                      (nub, sort)
 import           Data.Monoid
+import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Solver       (resultExit)
+import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Utils.Files
-import           Language.Fixpoint.Interface    (resultExit)
-import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types        as F
 import           Language.Rsc.CmdLine
 import           Language.Rsc.Core.EitherIO
 import           Language.Rsc.Core.Files
@@ -71,10 +71,10 @@ withExistingFile cfg f
         (code, stdOut, _) <- readProcessWithExitCode "node" (mkArgs tsBin libs) ""
         case code of
           ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
-                                Left  s  -> return $ Left  $ F.UnknownError $ s <//> stdOut
+                                Left  s  -> return $ Left $ F.Crash [] $ s <//> stdOut
                                 Right fs -> return $ Right fs
           ExitFailure _   -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
-                                Left  s  -> return $ Left $ F.UnknownError $ s <//> stdOut
+                                Left  s  -> return $ Left $ F.Crash [] $ s <//> stdOut
                                 Right e  -> return $ Left e
   | otherwise
   = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
@@ -142,7 +142,6 @@ procDoc              = mapi pad . filter (not . null . words) . lines . render
 resDocs F.Safe             = [text "SAFE"]
 resDocs (F.Crash xs s)     = text ("CRASH: " ++ s) : pprManyOrdered xs
 resDocs (F.Unsafe xs)      = text "UNSAFE"         : pprManyOrdered (nub xs)
-resDocs (F.UnknownError d) = [text "PANIC: Unexpected Error: " <+> text d, reportUrl]
 reportUrl                  = text "Please submit a bug report at: https://github.com/ucsd-pl/refscript"
 
 pprManyOrdered = map pp . sort

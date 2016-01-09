@@ -20,26 +20,26 @@ module Language.Rsc.SystemUtils (
   , annotVimString
   ) where
 
-import           Control.Applicative       ((<$>))
+import           Control.Applicative            ((<$>))
 import           Data.Aeson
-import qualified Data.ByteString.Lazy      as B
-import qualified Data.HashMap.Strict       as M
-import qualified Data.List                 as L
+import qualified Data.ByteString.Lazy           as B
+import qualified Data.HashMap.Strict            as M
+import qualified Data.List                      as L
 import           Data.List.Split
 import           Data.Monoid
-import qualified Data.Text                 as T
-import qualified Data.Vector               as V
-import           GHC.Exts                  (groupWith, sortWith)
+import qualified Data.Text                      as T
+import qualified Data.Vector                    as V
+import           GHC.Exts                       (groupWith, sortWith)
+import           Language.Fixpoint.Misc         (inserts)
+import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
-import           Language.Fixpoint.Utils.Files   ()
-import           Language.Fixpoint.Misc    (inserts)
-import qualified Language.Fixpoint.Types   as F
+import           Language.Fixpoint.Utils.Files  ()
 import           Language.Rsc.Locations
 import           Language.Rsc.Parser
 import           Language.Rsc.Pretty
-import           Language.Rsc.Types        ()
+import           Language.Rsc.Types             ()
 import           Text.Parsec.Pos
-import           Text.PrettyPrint.HughesPJ (nest, punctuate, render, text, vcat, ($+$), (<+>))
+import           Text.PrettyPrint.HughesPJ      (nest, punctuate, render, text, vcat, ($+$), (<+>))
 
 ------------------------------------------------------------------------------
 -- | Type Definitions For Annotations
@@ -111,18 +111,17 @@ data AnnMap  = AnnMap {
 
 mkAnnMap res ann = AnnMap (mkAnnMapStatus res) (mkAnnMapTyp ann) (mkAnnMapErr res)
 
-mkAnnMapStatus (F.Crash _ _)      = "error"
-mkAnnMapStatus (F.Safe)           = "safe"
-mkAnnMapStatus (F.Unsafe _)       = "unsafe"
-mkAnnMapStatus (F.UnknownError _) = "crash"
+mkAnnMapStatus (F.Crash _ _) = "error"
+mkAnnMapStatus (F.Safe)      = "safe"
+mkAnnMapStatus (F.Unsafe _)  = "unsafe"
 
-mkAnnMapErr (F.Unsafe ls)         = eInfo "Liquid Error: "   <$> ls
-mkAnnMapErr (F.Crash ls msg)      = eInfo ("Crash: " ++ msg) <$> ls
-mkAnnMapErr _                     = []
+mkAnnMapErr (F.Unsafe ls)    = eInfo "Liquid Error: "   <$> ls
+mkAnnMapErr (F.Crash ls msg) = eInfo ("Crash: " ++ msg) <$> ls
+mkAnnMapErr _                = []
 
-eInfo msg err                     = (srcPos $ errLoc err', errMsg err')
+eInfo msg err                = (srcPos $ errLoc err', errMsg err')
   where
-    err'                          = catMessage err msg
+    err'                     = catMessage err msg
 
 mkAnnMapTyp (AI m)
   = M.map (\a -> (F.symbolSafeString $ ann_bind a, render $ pp (ann_type a)))

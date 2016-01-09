@@ -17,9 +17,9 @@ import qualified Data.List                          as L
 import qualified Data.Map.Strict                    as M
 import           Data.Maybe                         (maybeToList)
 import           Data.Monoid
-import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types            as F
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment

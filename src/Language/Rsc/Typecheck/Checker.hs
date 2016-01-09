@@ -21,9 +21,9 @@ import qualified Data.IntMap.Strict                 as I
 import           Data.List                          (find, sortBy)
 import           Data.Maybe                         (catMaybes, fromMaybe)
 import qualified Data.Traversable                   as T
-import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc             as FM
 import qualified Language.Fixpoint.Types            as F
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy

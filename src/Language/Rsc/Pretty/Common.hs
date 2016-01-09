@@ -13,25 +13,23 @@ module Language.Rsc.Pretty.Common (
   , inComments
   ) where
 
-import           Control.Applicative           ((<$>))
+import           Control.Applicative                 ((<$>))
 import           Control.Exception.Base
 import           Data.Data
-import           Data.Function                 (on)
+import           Data.Function                       (on)
 import           Data.Interned
-import qualified Data.IntMap                   as I
-import           Data.List                     (isPrefixOf, sortBy)
-import qualified Data.Text                     as T
-import           Language.Fixpoint.Errors
+import qualified Data.IntMap                         as I
+import           Data.List                           (isPrefixOf, sortBy)
+import qualified Data.Text                           as T
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Names       (symbolText)
-import           Language.Fixpoint.PrettyPrint
-import qualified Language.Fixpoint.Types       as F
-import qualified Language.Fixpoint.Types       as F
+import qualified Language.Fixpoint.Types             as F
+import           Language.Fixpoint.Types.Errors
+import           Language.Fixpoint.Types.Names       (symbolText)
+import           Language.Fixpoint.Types.PrettyPrint
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
-import           Prelude                       hiding (maybe)
+import           Prelude                             hiding (maybe)
 import           Text.PrettyPrint.HughesPJ
 
 dot = text "."

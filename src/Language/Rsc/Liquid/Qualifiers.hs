@@ -2,10 +2,10 @@
 
 module Language.Rsc.Liquid.Qualifiers (scrapeQuals) where
 
-import           Data.List                 (delete, nub)
-import           Data.Maybe                (fromMaybe)
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Types   hiding (quals)
+import           Data.List                      (delete, nub)
+import           Data.Maybe                     (fromMaybe)
+import           Language.Fixpoint.Types        hiding (quals)
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
@@ -14,7 +14,7 @@ import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Traversals
-import qualified Language.Rsc.Types        as T
+import qualified Language.Rsc.Types             as T
 import           Language.Rsc.Visitor
 
 qualifiers xts = concatMap (refTypeQualifiers γ0) xts

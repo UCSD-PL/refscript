@@ -12,9 +12,9 @@ import           Language.Rsc.Typecheck.Types
 import           Text.PrettyPrint.HughesPJ
 import           Text.Printf
 
-import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.Types.Errors
+import           Language.Fixpoint.Types.PrettyPrint
 
 
 mkErr = err . sourceSpanSrcSpan

@@ -16,18 +16,18 @@ module Language.Rsc.Traversals (
   , checkTypeWF
   ) where
 
-import           Control.Applicative          hiding (empty)
-import           Control.Monad                (forM_)
+import           Control.Applicative            hiding (empty)
+import           Control.Monad                  (forM_)
 import           Data.Default
-import qualified Data.Foldable                as Fld
+import qualified Data.Foldable                  as Fld
 import           Data.Generics
-import qualified Data.HashSet                 as H
-import qualified Data.List                    as L
-import           Data.Maybe                   (catMaybes, fromMaybe, listToMaybe, maybeToList)
+import qualified Data.HashSet                   as H
+import qualified Data.List                      as L
+import           Data.Maybe                     (catMaybes, fromMaybe, listToMaybe, maybeToList)
 import           Data.Monoid
-import           Language.Fixpoint.Errors
-import qualified Language.Fixpoint.Types      as F
-import           Language.Rsc.Annotations     hiding (err)
+import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Types.Errors
+import           Language.Rsc.Annotations       hiding (err)
 import           Language.Rsc.AST
 import           Language.Rsc.Locations
 import           Language.Rsc.Names

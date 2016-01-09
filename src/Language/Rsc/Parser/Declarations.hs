@@ -14,17 +14,17 @@ module Language.Rsc.Parser.Declarations (
   ) where
 
 import           Control.Monad
-import           Data.Aeson                       ()
-import           Data.Aeson.Types                 hiding (Error, Parser, parse)
-import qualified Data.Aeson.Types                 as AI
-import           Data.Vector                      ((!))
-import           Language.Fixpoint.Errors
+import           Data.Aeson                      ()
+import           Data.Aeson.Types                hiding (Error, Parser, parse)
+import qualified Data.Aeson.Types                as AI
+import           Data.Vector                     ((!))
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.AST
 import           Language.Rsc.Names
 import           Language.Rsc.Parser.Annotations
-import           Prelude                          hiding (mapM)
-import           Text.Parsec                      hiding (State, parse)
-import           Text.Parsec.Pos                  (newPos)
+import           Prelude                         hiding (mapM)
+import           Text.Parsec                     hiding (State, parse)
+import           Text.Parsec.Pos                 (newPos)
 
 instance FromJSON SourcePos where
   parseJSON (Array v) = do

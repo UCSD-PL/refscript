@@ -1,0 +1,3 @@
+[submodule "liquid-fixpoint"]
+	path = liquid-fixpoint
+	url = git@github.com:ucsd-progsys/liquid-fixpoint.git

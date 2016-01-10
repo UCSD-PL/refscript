@@ -140,7 +140,8 @@ declare function builtin_BIFalsy<A>(x: A): boolean;
 
 // GENERAL PURPOSE AUXILIARY DEFINITIONS
 
-declare function crash<A>(): A;
+/*@ crash :: <A>() => A */
+declare function crash(): any;
 
 /*@ assume :: <A>(x: A) => {v:void | Prop x} */
 declare function assume<A>(x: A): void;
@@ -203,7 +204,7 @@ declare type negint = number;
 /*@ qualif True (v: a           ): (Prop v)     */
 /*@ qualif False(v: a           ): not (Prop v) */
 /*@ qualif Tag  (v: Str , x: a  ): v = ttag x   */
-/*@ qualif Len  (v: int , x: a  ): v < len w    */
+/*@ qualif Len  (v: int , x: a  ): v < len x    */
 
 /**
  * 	hasProperty: this property is true if the first string argument is a

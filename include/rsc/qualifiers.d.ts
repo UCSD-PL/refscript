@@ -18,4 +18,4 @@
 /*@ qualif True (v: a           ): (Prop v)     */
 /*@ qualif False(v: a           ): not (Prop v) */
 /*@ qualif Tag  (v: Str , x: a  ): v = ttag x   */
-/*@ qualif Len  (v: int , x: a  ): v < len w    */
+/*@ qualif Len  (v: int , x: a  ): v < len x    */

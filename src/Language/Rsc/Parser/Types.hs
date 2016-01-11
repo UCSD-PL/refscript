@@ -84,11 +84,21 @@ instance PP PContext where
 -- | Type Binders
 --------------------------------------------------------------------------------
 
-idBindP :: PContext -> Parser (Id SrcSpan, RRType)
-idBindP ctx = withinSpacesP $ xyP identifierP dcolon (bareTypeP ctx)
+idBindP2 :: PContext -> Parser (Id SrcSpan, RRType)
+idBindP2 ctx = withinSpacesP $ xyP identifierP dcolon (bareTypeP ctx)
 
-idBindP' :: PContext -> Parser (Id SrcSpan, Assignability, Maybe RRType)
-idBindP' ctx = withinSpacesP $ axyP identifierP dcolon (Just <$> bareTypeP ctx)
+assignabilityP
+  =  try (withinSpacesP (reserved "WriteGlobal") >> return WriteGlobal)
+ <|> try (withinSpacesP (reserved "WriteLocal" ) >> return WriteLocal )
+ <|> try (withinSpacesP (reserved "Ambient"    ) >> return Ambient    )
+ <|>     (withinSpacesP (reserved "ReadOnly"   ) >> return RdOnly     )
+
+idBindP3 :: PContext -> Parser (Id SrcSpan, Assignability, Maybe RRType)
+idBindP3 ctx
+  = do  a <- option WriteGlobal assignabilityP -- WG is default assignability
+        i <- withinSpacesP identifierP
+        t <- optionMaybe (withinSpacesP dcolon >> withinSpacesP (bareTypeP ctx))
+        return (i, a, t)
 
 functionExpressionP :: PContext -> Parser RRType
 functionExpressionP = funcSigP

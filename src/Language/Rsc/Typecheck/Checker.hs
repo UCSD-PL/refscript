@@ -92,14 +92,12 @@ castErrors (FA _ l facts) = downErrors
   where
     downErrors = [errorDownCast l t1 t2 | TCast _ (CDn t1 t2) <- facts]
 
-
 --------------------------------------------------------------------------------
 typeCheck :: Unif r => Config -> TcRsc r -> ClassHierarchy r -> IO (Either FError (TcRsc r))
 --------------------------------------------------------------------------------
 typeCheck cfg pgm cha
   = do  v <- V.getVerbosity
         pure $ execute cfg v pgm $ tcRsc pgm cha
-
 
 --------------------------------------------------------------------------------
 -- | TypeCheck program
@@ -373,11 +371,11 @@ tcVarDecl γ v@(VarDecl l x (Just e))
 
       c -> fatal (unimplemented l "tcVarDecl" ("case: " ++ ppshow c)) (v, Just γ)
 
-tcVarDecl γ v@(VarDecl _ x Nothing)
+tcVarDecl γ v@(VarDecl l x Nothing)
   = case envFindTy x (tce_names γ) of
       Just (VI lc Ambient _ t) ->
           return $ (v, Just $ tcEnvAdds [(x, VI lc Ambient Initialized t)] γ)
-      _ -> error "TC-tcVarDecl: this shouldn't happen"
+      _ -> fatal (bug l "TC-tcVarDecl: this shouldn't happen") (v, Just γ)
 
 
 --------------------------------------------------------------------------------

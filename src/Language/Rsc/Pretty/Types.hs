@@ -171,6 +171,7 @@ mutSym (TRef (F.symbol -> s) _)
   | s == F.symbol "Immutable"     = Just "_IM_"
   | s == F.symbol "ReadOnly"      = Just "_RO_"
   | s == F.symbol "AssignsFields" = Just "_AF"
+
 mutSym _ = Nothing
 
 ppMut t@TVar{} = pp t

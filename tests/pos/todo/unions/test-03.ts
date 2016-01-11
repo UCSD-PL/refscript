@@ -1,19 +1,19 @@
 
 /*@ check_undefined :: <T>(T + undefined) => T */
-function check_undefined<T>(x: any): T {
+function check_undefined<T>(x: T): T {
     if (typeof x === "undefined")
         return crash();
-    return <T>x;
+    return x;
 }
 
 /*@ bob :: (number) => number + undefined */
-function bob(x: number): any {
-    if (x > 0) return x;
+function bob(x: number): number {
+    if (x > 0)
+        return x;
     return undefined;
 }
 
-/*@ bar :: ({number | 0 < 1}) => number */
-function bar(x: number): any {
+export function bar(x: number): number {
     let z = bob(x);
     let r = check_undefined(z);
     return r;

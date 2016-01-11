@@ -9,12 +9,11 @@
 {-# LANGUAGE UndecidableInstances      #-}
 
 
-module Language.Rsc.Parser.Common
-    (
-      xyP, axyP, withSpan, postP
-    , dot, plus, question
-    , withinSpacesP
-    ) where
+module Language.Rsc.Parser.Common (
+    xyP, withSpan, postP
+  , dot, plus, question
+  , withinSpacesP
+  ) where
 
 import           Control.Applicative            ((<$>), (<*>))
 import qualified Data.HashSet                   as HS
@@ -48,19 +47,6 @@ withinSpacesP p = do { spaces; a <- p; spaces; return a }
 xyP lP sepP rP
   = (\x _ y -> (x, y)) <$> lP <*> (spaces >> sepP) <*> rP
 
-
-assignabilityP
-  =  try (withinSpacesP (reserved "WriteGlobal") >> return WriteGlobal)
- <|> try (withinSpacesP (reserved "WriteLocal" ) >> return WriteLocal )
- <|> try (withinSpacesP (reserved "Ambient"    ) >> return Ambient    )
- <|>     (withinSpacesP (reserved "ReadOnly"   ) >> return RdOnly     )
-
-axyP lP sepP rP
-  = do  a <- option WriteGlobal assignabilityP -- WG is default assignability
-        i <- withinSpacesP lP
-        spaces >> sepP
-        r <- rP
-        return (i,a,r)
 
 withSpan f p = do pos   <- getPosition
                   x     <- p

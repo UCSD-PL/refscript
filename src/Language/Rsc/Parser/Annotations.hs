@@ -113,24 +113,23 @@ instance PP Spec where
 parseRawSpec :: PContext -> RawSpec -> Parser Spec
 parseRawSpec ctx = go
   where
-    go (FunctionDeclarationRawSpec (ss, _)) = FunctionDeclarationSpec <$> patch2 ss <$> idBindP ctx
-    go (VariableDeclarationRawSpec (ss, _)) = VariableDeclarationSpec <$> patch3 ss <$> idBindP' ctx
+    go (FunctionDeclarationRawSpec (ss, _)) = FunctionDeclarationSpec <$> patch2 ss <$> idBindP2 ctx
+    go (VariableDeclarationRawSpec (ss, _)) = VariableDeclarationSpec <$> patch3 ss <$> idBindP3 ctx
     go (FunctionExpressionRawSpec  (_ , _)) = FunctionExpressionSpec  <$> functionExpressionP ctx
-    go (InterfaceRawSpec           (_ , _)) = InterfaceSpec <$> interfaceP
-    go (ClassRawSpec               (_ , _)) = ClassSpec     <$> classDeclP
-    go (ModuleRawSpec              (_ , _)) = ModuleSpec    <$> moduleDeclP
-    go (FieldRawSpec               (_ , _)) = FieldSpec     <$> (propP ctx >>= \(_,_,o,m,t) -> return (FI o m t))
-    go (MethodRawSpec              (_ , _)) = MethodSpec    <$> (methP ctx >>= \(_,_,o,m,t) -> return (MI o [(m, t)]))
-    go (ConstructorRawSpec         (_ , _)) = ConstructorSpec    <$> ctorP ctx
-    go (CastRawSpec                (ss, _)) = CastSpec ss        <$> bareTypeP ctx
+    go (InterfaceRawSpec           (_ , _)) = InterfaceSpec           <$> interfaceP
+    go (ClassRawSpec               (_ , _)) = ClassSpec               <$> classDeclP
+    go (ModuleRawSpec              (_ , _)) = ModuleSpec              <$> moduleDeclP
+    go (FieldRawSpec               (_ , _)) = FieldSpec               <$> (propP ctx >>= \(_,_,o,m,t) -> return (FI o m t))
+    go (MethodRawSpec              (_ , _)) = MethodSpec              <$> (methP ctx >>= \(_,_,o,m,t) -> return (MI o [(m, t)]))
+    go (ConstructorRawSpec         (_ , _)) = ConstructorSpec         <$> ctorP ctx
+    go (CastRawSpec                (ss, _)) = CastSpec ss             <$> bareTypeP ctx
+    go (MeasureRawSpec             (ss, _)) = MeasureSpec             <$> patch2 ss <$> idBindP2 ctx
+    go (TypeAliasRawSpec           (ss, _)) = TypeAliasSpec           <$> patch2 ss <$> tAliasP
+    go (PredicateAliasRawSpec      (ss, _)) = PredicateAliasSpec      <$> patch2 ss <$> pAliasP
+    go (QualifierRawSpec           (_ , _)) = QualifierSpec           <$> qualifierP sortP
+    go (InvariantRawSpec           (ss, _)) = InvariantSpec ss        <$> bareTypeP ctx
     go (ExportRawSpec              (_ , _)) = return ExportedSpec
-    go (MeasureRawSpec             (ss, _)) = MeasureSpec        <$> patch2 ss <$> idBindP ctx
-    go (TypeAliasRawSpec           (ss, _)) = TypeAliasSpec      <$> patch2 ss <$> tAliasP
-    go (PredicateAliasRawSpec      (ss, _)) = PredicateAliasSpec <$> patch2 ss <$> pAliasP
-    go (QualifierRawSpec           (_ , _)) = QualifierSpec      <$> qualifierP sortP
-    go (InvariantRawSpec           (ss, _)) = InvariantSpec ss   <$> bareTypeP ctx
-    go (OptionRawSpec              (ss, o)) = -- OptionSpec         <$> optionP
-                                              return   $ OptionSpec         (Loc ss o)
+    go (OptionRawSpec              (ss, o)) = return $ OptionSpec (Loc ss o)
 
     patch2 ss (i,t)   = (fmap (const ss) i,t)
     patch3 ss (i,a,t) = (fmap (const ss) i,a,t)

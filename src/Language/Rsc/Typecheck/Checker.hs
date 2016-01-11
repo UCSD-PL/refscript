@@ -42,6 +42,7 @@ import           Language.Rsc.Program
 import           Language.Rsc.SSA.SSA
 import           Language.Rsc.SystemUtils
 import           Language.Rsc.Typecheck.Environment
+import           Language.Rsc.Typecheck.Sub
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.TCMonad
 import           Language.Rsc.Typecheck.Types
@@ -226,14 +227,14 @@ tcStmt γ (ExprStmt l (AssignExpr l1 OpAssign (LVar lx x) e))
 tcStmt γ@(envCHA -> c) (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do  (e1'', te1) <- tcExpr γ e1' Nothing
         case (getMutability c te1, e1) of
-          (Just m, _        ) | isSubtype γ m tMU ->
+          (Just m, _        ) | isSubtype l γ m tMU ->
               case getProp l γ f te1 of
                 Left e        -> tcError e
                 Right (map snd -> fs) ->
                     do  (e2', _) <- foldM (tcSetPropMut γ l f te1) (e2, tBot) fs
                         return (mkAsgnExp e1'' e2', Just γ)
 
-          (Just m, ThisRef _) | isSubtype γ m tAF ->
+          (Just m, ThisRef _) | isSubtype l γ m tAF ->
               case getProp l γ f te1 of
                 Left e        -> tcError e
                 Right (map snd -> fs) ->
@@ -512,12 +513,12 @@ tcExprWD γ e t = (tcWrap $ tcExpr γ e t) >>= tcEW γ e >>= \case
 tcNormalCallW γ l o es t
   = (tcWrap $ tcNormalCall γ l o (es `zip` nths) t) >>= \case
       Right (es', t') -> return (es', Just t')
-      Left e -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) e) es
+      Left e -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) [e]) es
 
 tcNormalCallWCtx γ l o es t
   = (tcWrap $ tcNormalCall γ l o es t) >>= \case
       Right (es', t') -> return (es', Just t')
-      Left err -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) err) (fst <$> es)
+      Left err -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) [err]) (fst <$> es)
 
 tcRetW γ l (Just e)
   | VarRef lv x <- e
@@ -532,7 +533,7 @@ tcRetW γ l (Just e)
   | otherwise
   = (tcWrap $ tcNormalCall γ l "return" [(e, Just retTy)] (returnTy retTy True)) >>= \case
        Right ([e'], _) -> (,Nothing) . ReturnStmt l . Just <$> return e'
-       Left err        -> (,Nothing) . ReturnStmt l . Just <$> deadcastM (tce_ctx γ) err e
+       Left err        -> (,Nothing) . ReturnStmt l . Just <$> deadcastM (tce_ctx γ) [err] e
   where
     retTy     = tcEnvFindReturn γ
 
@@ -549,11 +550,11 @@ tcRetW γ l Nothing
 --                -> TCM r ((ExprSSAR r), Maybe b)
 --------------------------------------------------------------------------------
 tcEW _ _ (Right (e', t')) = return (e', Just t')
-tcEW γ e (Left er)        = (,Nothing) <$> deadcastM (tce_ctx γ) er e
+tcEW γ e (Left er)        = (,Nothing) <$> deadcastM (tce_ctx γ) [er] e
 
 -- Execute a and if it fails wrap e in a deadcast
 tcWA γ e a = tcWrap a >>= \x -> case x of Right r -> return $ Right r
-                                          Left  l -> Left <$> deadcastM (tce_ctx γ) l e
+                                          Left  l -> Left <$> deadcastM (tce_ctx γ) [l] e
 
 --------------------------------------------------------------------------------
 tcExpr :: Unif r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
@@ -851,7 +852,7 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
 
     callStep tRcvr mRcvr (es_, t) (MI o mts)
       | o == Req
-      = do  let ft = mkAnd [ ft_ | (m, ft_) <- mts, isSubtype γ mRcvr m ]
+      = do  let ft = mkAnd [ ft_ | (m, ft_) <- mts, isSubtype l γ mRcvr m ]
             (es', t') <- tcNormalCall γ l em (es_ `zip` nths) ft
             return (es', mkUnion [t, t'])
       | otherwise
@@ -882,7 +883,7 @@ tcNormalCall γ l fn etos ft0
                 addSubst l θ
                 tcWrap (tcCallCase γ l fn ets ft) >>= \case
                   Right ets' -> return ets'
-                  Left  er  -> (,tNull) <$> T.mapM (deadcastM (tce_ctx γ) er . fst) ets
+                  Left  er  -> (,tNull) <$> T.mapM (deadcastM (tce_ctx γ) [er] . fst) ets
          Nothing -> tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) (unzip ets)
 
 
@@ -949,11 +950,11 @@ tcCallCaseTry γ l fn ts ((i,ft):fts)
       θ              <- unifyTypesM (srcPos l) γ ts1 its1
       let (ts2, its2) = apply θ (ts1, its1)
       let (ts', cs)   = unzip [(t, c) | (t, BTV _ _ (Just c)) <- zip ts2 βs]
-      if not (and (zipWith (isSubtype γ) ts' cs))
+      if not (and (zipWith (isSubtype l γ) ts' cs))
         then
           return Nothing
         else
-          if and (zipWith (isSubtype γ) ts2 its2)
+          if and (zipWith (isSubtype l γ) ts2 its2)
             then return $ Just θ
             else return Nothing
     )
@@ -1118,7 +1119,7 @@ unifyPhiTypes l γ x t1 t2 θ
     substE      = unifys (srcPos l) γ θ [t1] [t2]
     cleanNull   = mkUnion . filter (not . isTNull)  . bkUnion
     cleanUndef  = mkUnion . filter (not . isTUndef) . bkUnion
-    equiv a b   = isSubtype γ a b && isSubtype γ b a
+    equiv a b   = isSubtype l γ a b && isSubtype l γ b a
     maybeNull   = any isTNull . bkUnion
     maybeUndef  = any isTNull . bkUnion
 

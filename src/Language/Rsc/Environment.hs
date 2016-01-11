@@ -12,7 +12,7 @@ module Language.Rsc.Environment (
   , EnvEntry
   , chkEnvFindTy, chkEnvFindTy'
   , safeEnvFindTy
-  , envFindBound
+  , envFindBound, envFindBoundOpt
   , resolveModuleInEnv, resolveTypeInEnv, resolveEnumInEnv
   , toFgn
 
@@ -97,6 +97,13 @@ envFindBound :: (CheckingEnvironment r t, F.Reftable r) => t r -> RType r -> RTy
 -------------------------------------------------------------------------------
 envFindBound (envBounds -> b) t | TVar a _ <- t, Just s <- envFindTy a b = s
                                 | otherwise = tTop
+
+-------------------------------------------------------------------------------
+envFindBoundOpt :: (CheckingEnvironment r t, F.Reftable r) => t r -> RType r -> Maybe (RType r)
+-------------------------------------------------------------------------------
+envFindBoundOpt (envBounds -> b) t | TVar a _ <- t = envFindTy a b
+                                   | otherwise     = Nothing
+
 
 --------------------------------------------------------------------------------
 resolveModuleInEnv  :: (PPR r, CheckingEnvironment r t) => t r -> AbsPath -> Maybe (ModuleDef r)

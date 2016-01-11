@@ -178,6 +178,7 @@ rTypeSortPrim TString    = F.strSort
 rTypeSortPrim TBoolean   = F.fAppTC (rawStringFTycon boolName) []
 rTypeSortPrim TVoid      = F.fAppTC (rawStringFTycon voidName) []
 rTypeSortPrim TTop       = F.fAppTC (rawStringFTycon topName) []
+rTypeSortPrim TAny       = F.fAppTC (rawStringFTycon anyName) []
 rTypeSortPrim TNull      = F.fAppTC (rawStringFTycon nullName) []
 rTypeSortPrim TUndefined = F.fAppTC (rawStringFTycon undefName) []
 rTypeSortPrim TFPBool    = F.boolSort

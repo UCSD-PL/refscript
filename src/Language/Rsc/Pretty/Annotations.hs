@@ -20,11 +20,11 @@ instance (PP r, F.Reftable r) => PP (Cast r) where
   pp (CUp t1 t2)  = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
   pp (CDn t1 t2)  = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
 
-instance PP SubTRes where
-  pp EqT        = text "="
-  pp (SubErr _) = text "dead"
-  pp SubT       = text "UP"
-  pp SupT       = text "DN"
+-- instance PP SubTRes where
+--   pp EqT        = text "="
+--   pp (SubErr _) = text "dead"
+--   pp SubT       = text "UP"
+--   pp SupT       = text "DN"
 
 instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)             = text "phi"          <+> pp x

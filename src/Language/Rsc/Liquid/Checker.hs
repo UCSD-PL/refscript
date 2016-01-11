@@ -762,7 +762,7 @@ consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
 
     callOne g_ xRcvr tRcvr mRcvr [MI o mts]
       | o == Req
-      = let ft = mkAnd [ ft_ | (m, ft_) <- mts, isSubtype g_ mRcvr m ]
+      = let ft = mkAnd [ ft_ | (m, ft_) <- mts, isSubtype l g_ mRcvr m ]
                & substThis xRcvr in
         consCall g_ l em (es `zip` nths) ft
       | otherwise
@@ -885,7 +885,7 @@ consCall :: PP a => CGEnv -> AnnLq -> a -> [(Expression AnnLq, Maybe RefType)]
 --------------------------------------------------------------------------------
 consCall g l fn ets (validOverloads g l -> fts)
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      ts <- mapM (`cgSafeEnvFindTyM` g') xes
+      ts <- ltracePP l (ppshow fn) <$> mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
         ft:_ -> consCheckArgs l g' fn ft ts xes
         _    -> cgError $ errorNoMatchCallee (srcPos l) fn ts fts

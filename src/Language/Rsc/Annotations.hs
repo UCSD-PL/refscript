@@ -15,7 +15,9 @@ module Language.Rsc.Annotations (
   , scrapeVarDecl
 
   -- * Casts
-  , CastQ(..), Cast, SubTRes(..), castType
+  , CastQ(..), Cast
+  -- , SubTRes(..)
+  , castType
 
   -- * Annotations & aliases
   , Annot (..)
@@ -54,27 +56,6 @@ type Cast  = CastQ AK   -- Version with absolute types
 
 castType CNo = tNull
 castType c   = tgt c
-
-
-data SubTRes = EqT              -- .
-             | SubErr  [Error]   -- |dead code|
-             | SubT              -- <UP>
-             | SupT              -- <DN>
-             deriving (Eq, Ord, Show, Data, Typeable)
-
-instance Monoid SubTRes where
- mempty                          = EqT
- mappend (SubErr e1) (SubErr e2) = SubErr $ e1 ++ e2
- mappend _           (SubErr e2) = SubErr e2
- mappend (SubErr e1) _           = SubErr e1
- mappend SubT        SupT        = SubErr []
- mappend SupT        SubT        = SubErr []
- mappend SupT        _           = SupT
- mappend _           SupT        = SupT
- mappend SubT        _           = SubT
- mappend _           SubT        = SubT
- mappend EqT         EqT         = EqT
-
 
 -----------------------------------------------------------------------------
 -- | Facts

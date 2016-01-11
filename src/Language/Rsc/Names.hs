@@ -53,6 +53,7 @@ module Language.Rsc.Names (
   , unionName
   , intersName
   , topName
+  , anyName
   , nullName
   , undefName
   , objectName
@@ -213,14 +214,13 @@ offsetName = "offset"
 -- | Global Names
 ----------------------------------------------------------------------
 
-
-
 arrayName, boolName, voidName, unionName, topName, nullName, undefName :: F.Symbol
 arrayName = "Array"
 boolName  = "Boolean"
 voidName  = "Void"
 unionName = "Union"
 topName   = "Top"
+anyName   = "Any"
 nullName  = "Tull"
 undefName = "Undefined"
 

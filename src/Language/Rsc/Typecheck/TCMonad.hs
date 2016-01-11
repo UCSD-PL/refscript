@@ -39,7 +39,7 @@ module Language.Rsc.Typecheck.TCMonad (
   , unifyTypeM, unifyTypesM
 
   -- * Subtyping
-  , subtypeM, isSubtype, checkTypes
+  , checkTypes
 
   -- * Casts
   , castM, deadcastM, freshCastId, isCastId
@@ -50,8 +50,8 @@ module Language.Rsc.Typecheck.TCMonad (
   )  where
 
 
-import           Control.Arrow                      (second)
 import           Control.Applicative                ((<$>), (<*>))
+import           Control.Arrow                      (second)
 import           Control.Monad.Except               (catchError)
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
@@ -62,9 +62,9 @@ import qualified Data.IntMap.Strict                 as I
 import           Data.List                          (isPrefixOf)
 import           Data.Maybe                         (catMaybes)
 import           Data.Monoid
-import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types            as F
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
@@ -342,10 +342,14 @@ unifyTypeM l γ t t' = unifyTypesM l γ [t] [t']
 
 -- | @deadcastM@ wraps an expression @e@ with a dead-cast around @e@.
 --------------------------------------------------------------------------------
-deadcastM :: (Unif r) => IContext -> Error -> Expression (AnnSSA r) -> TCM r (Expression (AnnSSA r))
+deadcastM :: (Unif r) => IContext -> [Error] -> Expression (AnnSSA r) -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-deadcastM ξ err e
-  = addCast ξ e $ CDead [err] tNull
+deadcastM ξ es e = addAnn i fact >> wrapCast loc fact e
+  where
+    c            = CDead es tNull
+    i            = fId (getAnnotation e)
+    loc          = fSrc (getAnnotation e)
+    fact         = TCast ξ c
 
 -- | For the expression @e@, check the subtyping relation between the type @t1@
 --   (the actual type for @e@) and @t2@ (the target type) and insert the cast.
@@ -353,13 +357,9 @@ deadcastM ξ err e
 castM :: Unif r => TCEnv r -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 castM γ e t1 t2
-  -- = case ltracePP e (ppshow t1 ++ " => " ++ ppshow t2) $ convert (srcPos e) γ t1 t2 of
   = case convert (srcPos e) γ t1 t2 of
-      CNo   -> return e
-      CUp{} -> return e
-      CDn{} -> return e
-      -- Only deadcasts add annotation now
-      c     -> addCast (tce_ctx γ) e c
+      ConvOK      -> return e
+      ConvFail es -> deadcastM (tce_ctx γ) es e
 
 -- | Run the monad `a` in the current state. This action will not alter the state.
 --------------------------------------------------------------------------------
@@ -373,22 +373,6 @@ runMaybeM :: Unif r => TCM r a -> TCM r (Maybe a)
 runMaybeM a = runFailM a >>= \case
                 Right rr -> return $ Just rr
                 Left _   -> return $ Nothing
-
--- | subTypeM will throw error if subtyping fails
---------------------------------------------------------------------------------
-subtypeM :: Unif r => SrcSpan -> TCEnv r -> RType r -> RType r -> TCM r ()
---------------------------------------------------------------------------------
-subtypeM l γ t1 t2
-  = case convert l γ t1 t2 of
-      CNo     -> return  ()
-      CUp _ _ -> return  ()
-      _       -> tcError $ errorSubtype l t1 t2
-
-addCast ξ e c = addAnn i fact >> wrapCast loc fact e
-  where
-    i         = fId  $ getAnnotation e
-    loc       = fSrc $ getAnnotation e
-    fact      = TCast ξ c
 
 wrapCast _ f (Cast_ (FA i l fs) e) = Cast_ <$> freshenAnn (FA i l (f:fs)) <*> return e
 wrapCast l f e                     = Cast_ <$> freshenAnn (FA (-1) l [f]) <*> return e

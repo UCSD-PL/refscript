@@ -789,19 +789,19 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
 
 -- | Unions
 --
-splitC (Sub g c@(Ci e l) t1 t2)
+splitC (Sub g c t1 t2)
   | any isTUnion [t1, t2]
   = do  m1      <- bsplitC g c t1 t2
-        mCs     <- concatMapM (\(_,t,t') -> splitC (Sub g    (ci (ee t t') l) t t')) mts
+        mCs     <- concatMapM (\(_,t,t') -> splitC (Sub g (ci (ee t t') l) t t')) mts
         nCs     <- concatMapM (\t -> splitIncompatC g (ci (ee t (mkBot t)) l) t) t1s'
         return   $ m1 ++ mCs ++ nCs
     where
+      l          = srcPos c
       ee         = mkLiquidError l g
       (t1s, t2s) = mapPair bkUnion (t1, t2)
       it1s       = ([0..]::[Int]) `zip` t1s
-      mts        = [ (i, τ1, τ2) | (i, τ1) <- it1s, τ2 <- t2s, τ1 ~~ τ2 ]
+      mts        = [ (i, τ1, τ2) | (i, τ1) <- it1s, τ2 <- t2s, isSubtype l g τ1 τ2 ]
       t1s'       = [ τ1          | (i, τ1) <- it1s, i `notElem` map fst3 mts ]
-      (~~)       = on (isConvertible (void g)) toType
 
 -- | Type references
 --
@@ -816,7 +816,7 @@ splitC (Sub g i t1@(TRef n1@(Gen x1 (m1:t1s)) r1) t2@(TRef n2@(Gen x2 (m2:t2s)) 
   --
   -- * Incompatible mutabilities
   --
-  | not (isSubtype g m1 m2)
+  | not (isSubtype (srcPos i) g m1 m2)
   = splitIncompatC g i t1
   --
   -- * Both immutable, same name, non arrays: Co-variant subtyping
@@ -1114,25 +1114,6 @@ unqualifyThis g t = F.subst $ F.mkSubst fieldSu
     qFld x f  = qualifySymbol (F.symbol x) f
     subPair f = (qFld this f, F.expr f)
 
-
--- --------------------------------------------------------------------------------
--- -- | zipType wrapper
--- --
--- --   TODO: What is the purpose of this substitution ???
--- --
--- zipTypeUpM g x t1 t2
---   | Just (f, (F.Reft (s,ras))) <- zipType g x t1 t2
---   = let su  = F.mkSubst [(s, F.expr x)] in
---     let rs  = F.simplify $ F.Reft (s, F.subst su ras) `F.meet` F.uexprReft x in
---     return  $ f rs
---   | otherwise
---   = cgError $ bugZipType (srcPos x) t1 t2
---
--- zipTypeDownM g x t1 t2
---   | Just (f, r) <- zipType g x t1 t2
---   = return $ f r
---   | otherwise
---   = cgError $ bugZipType (srcPos x) t1 t2
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

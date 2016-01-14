@@ -1,9 +1,6 @@
 
-/*@ foo ::  (number + boolean) => number + { string | 0 < 1 } */
-function foo(x) {
-
-  if (typeof x === "number") 
-    return x;
-  return "a";
+export function foo(x: number | boolean): number | string {
+    if (typeof x === "number")
+        return x;
+    return "a";
 }
-

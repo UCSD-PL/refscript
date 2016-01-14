@@ -48,6 +48,10 @@ unify :: (Unif r)
       -> RType r
       -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
+
+unify _ _ θ t1 t2 | any isTBot [t1, t2] = return θ
+
+-- | TVars
 unify l _ θ (TVar α _) (TVar β _) = varEql l θ α β
 unify l _ θ (TVar α _) t'         = varAsn l θ α t'
 unify l _ θ t          (TVar α _) = varAsn l θ α t
@@ -101,12 +105,12 @@ unifyUnions l γ θ t1 t2
   = unifys l γ θ c1s' c2s'
 
   | [v1] <- v1s, [  ] <- v2s
-  = unify l γ θ v1 (mkUnion unmatched2) >>= \θ1 ->
-    unifys l γ θ1 c1s' c2s'
+  =  do  θ' <- unify l γ θ v1 (mkUnion unmatched2)
+         unifys l γ θ' c1s' c2s'
 
   | [  ] <- v1s, [v2] <- v2s
-  = unify l γ θ (mkUnion unmatched1) v2 >>= \θ1 ->
-     unifys l γ θ1 c1s' c2s'
+  = do  θ' <- unify l γ θ (mkUnion unmatched1) v2
+        unifys l γ θ' c1s' c2s'
 
   | [v1] <- v1s, [v2] <- v2s
   = do  θ1 <- unify l γ θ  v1 (mkUnion unmatched2)
@@ -122,6 +126,7 @@ unifyUnions l γ θ t1 t2
     (t1s, t2s)   = mapPair bkUnion (t1, t2)
     (v1s,c1s)    = L.partition isTVar t1s
     (v2s,c2s)    = L.partition isTVar t2s
+    clc1s        = filter
     (c1s', c2s') = unzip [ (c1, c2) | c1 <- c1s, c2 <- c2s, c1 `match` c2 ]
     unmatched1   = [ c1 | c1 <- c1s, not $ any (match c1) c2s, nonTriv c1 ]
     unmatched2   = [ c2 | c2 <- c2s, not $ any (match c2) c1s, nonTriv c2 ]

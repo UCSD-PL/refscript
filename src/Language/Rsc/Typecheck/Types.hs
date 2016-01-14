@@ -25,6 +25,7 @@ module Language.Rsc.Typecheck.Types (
   -- * Deconstructing Types
   , bkFun, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion
 
+  , stripNull, stripUndefined
   , orUndef, padUndefineds
 
   , rTypeR
@@ -44,7 +45,7 @@ module Language.Rsc.Typecheck.Types (
 
   --   # Tests
   , isTPrim, isTAny, isTTop, isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
-  , isTNull, isTVoid, isTFun, isArrayType
+  , isTNull, isTVoid, isTFun, isArrayType, isTBot
 
   --   # Operations
   , orNull
@@ -237,6 +238,13 @@ bkUnion :: F.Reftable r => RTypeQ q r -> [RTypeQ q r]
 ----------------------------------------------------------------------------------------
 bkUnion (TOr ts r) = concatMap bkUnion $ map (`strengthen` r) ts
 bkUnion t          = [t]
+
+----------------------------------------------------------------------------------------
+stripNull      :: F.Reftable r => RType r -> RType r
+stripUndefined :: F.Reftable r => RType r -> RType r
+----------------------------------------------------------------------------------------
+stripNull      = mkUnion . filter (not . isTNull)  . bkUnion
+stripUndefined = mkUnion . filter (not . isTUndef) . bkUnion
 
 ----------------------------------------------------------------------------------------
 flattenUnions :: F.Reftable r => RTypeQ q r -> RTypeQ q r

@@ -1,13 +1,12 @@
 
-/*@ foo :: ({number | 0 < 1}) => { number | v = 1 } + boolean  */
+/*@ foo :: (x: number) => { number | v = 1 } + boolean  */
 function foo(x) {
-  /*@ r :: number + boolean */
-  var r: any = 1;
-  if (x > 0) {
-    r = 1;  
-  }
-  else {
-    r = true;
-  }
-  return r;
+    /*@ global */ let r: number | boolean = 1;
+    if (x > 0) {
+        r = 1;
+    }
+    else {
+        r = true;
+    }
+    return r;
 }

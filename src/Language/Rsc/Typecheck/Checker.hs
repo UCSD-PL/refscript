@@ -1107,16 +1107,14 @@ unifyPhiTypes l γ x t1 t2 θ
             | isTUndef b   = Right $ orUndef a
             | isTNull a    = Right $ orNull b
             | isTNull b    = Right $ orNull a
-            | maybeNull a  = orNull  <$> go (cleanNull a) b
-            | maybeNull b  = orNull  <$> go a (cleanNull b)
-            | maybeUndef a = orUndef <$> go (cleanUndef a) b
-            | maybeUndef b = orUndef <$> go a (cleanUndef b)
+            | maybeNull a  = orNull  <$> go (stripNull a) b
+            | maybeNull b  = orNull  <$> go a (stripNull b)
+            | maybeUndef a = orUndef <$> go (stripUndefined a) b
+            | maybeUndef b = orUndef <$> go a (stripUndefined b)
             | a `equiv` b  = Right a
             | otherwise    = Left $ errorEnvJoin (srcPos l) x (toType t1) (toType t2)
 
     substE      = unifys (srcPos l) γ θ [t1] [t2]
-    cleanNull   = mkUnion . filter (not . isTNull)  . bkUnion
-    cleanUndef  = mkUnion . filter (not . isTUndef) . bkUnion
     equiv a b   = isSubtype l γ a b && isSubtype l γ b a
     maybeNull   = any isTNull . bkUnion
     maybeUndef  = any isTNull . bkUnion

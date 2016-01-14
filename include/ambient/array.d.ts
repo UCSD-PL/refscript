@@ -180,49 +180,16 @@ declare type ROArray<T> = Array<ReadOnly, T>;
 /*@ builtin_getLength :: <M extends ReadOnly, T>(a: Array<M,T>) => { v: number | v >= 0 } */
 declare function builtin_getLength<M extends ReadOnly,T>(a: Array<M, T>): number;
 
-// interface ArrayConstructor {
-//     new (arrayLength?: number): any[];
-//     new <T>(arrayLength: number): T[];
-//     new <T>(...items: T[]): T[];
-//     (arrayLength?: number): any[];
-//     <T>(arrayLength: number): T[];
-//     <T>(...items: T[]): T[];
-//     isArray(arg: any): arg is Array<any>;
-//     prototype: Array<any>;
-// }
+interface ArrayConstructor<M extends ReadOnly> {
+    // new (arrayLength?: number): any[];
+    /*@ new <T>(arrayLength: number): { v: Array<M,T> | len v = arrayLength } */
+    new <T>(arrayLength: number): Array<M,T>;
+    // new <T>(...items: T[]): T[];
+    // (arrayLength?: number): any[];
+    // <T>(arrayLength: number): T[];
+    // <T>(...items: T[]): T[];
+    // isArray(arg: any): arg is Array<any>;
+    // prototype: Array<any>;
+}
 
-// declare var Array: {
-//
-//     /*@ forall M T . () => { v: Array<M, T> | (len v) = 0 } */
-//     (): any[];
-//
-//     /*@ forall M T. (arrayLength: number) => { v: Array<M, T> | (len v) = arrayLength } */
-//     <T>(arrayLength: number): T[];
-//
-//     /*@ new forall M T . () => { v: Array<M, T> | (len v) = 0 } */
-//     new (): any[];
-//
-//     /*@ new forall M T. (arrayLength: number) => { v: Array<M, T> | (len v) = arrayLength } */
-//     new <T>(arrayLength: number): T[];
-//
-//     // new <T>(...items: T[]): T[];
-//
-//
-//     // <T>(...items: T[]): T[];
-//
-//     /*@ isArray:
-//         /\ forall M T. (arg: Array<M,T>): { v: boolean | Prop(v) }
-//         /\ forall A . (arg: A): {boolean | true}
-//     */
-//     isArray(arg: any): boolean;
-//
-//     prototype: Array<any>;
-// }
-//
-//
-//
-// interface IArguments {
-//     [index: number]: any;
-//     length: number;
-//     // callee: Function;
-// }
+declare let Array: ArrayConstructor<ReadOnly>;

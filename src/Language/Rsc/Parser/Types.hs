@@ -85,7 +85,7 @@ instance PP PContext where
 --------------------------------------------------------------------------------
 
 idBindP2 :: PContext -> Parser (Id SrcSpan, RRType)
-idBindP2 ctx = withinSpacesP $ xyP identifierP dcolon (bareTypeP ctx)
+idBindP2 ctx = withinSpacesP $ xyP identifierP dcolon (typeP0 ctx)
 
 assignabilityP
   =  try (withinSpacesP (reserved "WriteGlobal") >> return WriteGlobal)
@@ -97,7 +97,7 @@ idBindP3 :: PContext -> Parser (Id SrcSpan, Assignability, Maybe RRType)
 idBindP3 ctx
   = do  a <- option WriteGlobal assignabilityP -- WG is default assignability
         i <- withinSpacesP identifierP
-        t <- optionMaybe (withinSpacesP dcolon >> withinSpacesP (bareTypeP ctx))
+        t <- optionMaybe (withinSpacesP dcolon >> withinSpacesP (typeP0 ctx))
         return (i, a, t)
 
 functionExpressionP :: PContext -> Parser RRType
@@ -127,7 +127,7 @@ tAliasP
         name      <- identifierP
         (αs, πs)  <- mapEither aliasVarT <$> aliasVarsP
         reservedOp "="
-        body      <- bareTypeP $ pCtxFromList (map tvToBTV αs)
+        body      <- typeP1 $ pCtxFromList (map tvToBTV αs)
         return (name, Alias name αs πs body)
 
 aliasVarsP =  try (brackets avarsP)
@@ -184,7 +184,7 @@ extendsGenP s c = option [] $ reserved s >> sepBy1 (extendsGen1P c) comma
 extendsGen1P :: PContext -> Parser (TGenQ RK F.Reft)
 extendsGen1P c
   = do  qn    <- qnameP
-        ts    <- option [] $ angles $ sepBy (bareTypeP c) comma
+        ts    <- option [] $ angles $ sepBy (typeP1 c) comma
         return $ Gen qn ts
 
 extendsP :: PContext -> Parser [TGenQ RK F.Reft]
@@ -230,45 +230,92 @@ bTParP c = angles $ sepBy (btvarP c) comma
 
 --------------------------------------------------------------------------------
 -- | RefTypes
+--
+--      T0 ::= ∀a . T1
+--           | T1
+--
+--      T1 ::= (x: T1) => T1
+--           | T2
+--
+--      T2 ::= { v: T3 | r }
+--           | T3
+--
+--      T3 ::= T4 + T4 + ...
+--
+--      T4 ::= { v: T5 | r }
+--           | T5
+--
+--      T5 ::= a
+--           | B
+--           | { f : T1 }
+--           | C<T2>
+--           | ( T1 )
+--
+--      B  ::= number
+--           | string
+--           | ...
+--
 --------------------------------------------------------------------------------
 
-bareTypeP          :: PContext -> Parser RRType
-bareTypeP c         = bareAllP c bareUnionTypeP
+typeP0      :: PContext -> Parser RRType
+typeP0 c     = allP c typeP1
 
-bareUnionTypeP     :: PContext -> Parser RRType
-bareUnionTypeP c    = mkUnion <$> bareUnionMemberP c `sepBy1` plus
+typeP1      :: PContext -> Parser RRType
+typeP1 c     =  try (funP   c)
+            <|> try (typeP2 c)
 
-bareUnionMemberP   :: PContext -> Parser RRType
-bareUnionMemberP c  =  try (funcSigP c)
-                   <|> bareAllP c (bareAtomP bbaseP)
+typeP1'     :: PContext -> Parser (F.Reft -> RRType)
+typeP1' c    =  try (funP'  c)
+            <|> try (typeP3 c)
 
--- parenNullP         :: Parser a -> Parser a
--- parenNullP p        =  try ((tNull:) <$> postP p question)
---                    <|> p
+typeP2      :: PContext -> Parser RRType
+typeP2 c     = atomP $ typeP3 c
 
-funcSigP           :: PContext -> Parser RRType
-funcSigP c          = bareAllP c bareFunP
+typeP3      :: PContext -> Parser (F.Reft -> RRType)
+typeP3 c     = mkUnion' <$> typeP4 c `sepBy1` plus
 
-methSigP           :: PContext -> Parser RRType
-methSigP c          = bareAllP c bareMethP
+typeP4      :: PContext -> Parser RRType
+typeP4 c     = atomP (typeP5 c)
 
-bareFunP           :: PContext -> Parser RRType
-bareFunP c          = bareArrowP c (reserved "=>")    --  (x:t, ...) => t
+typeP5      :: PContext -> Parser (F.Reft -> RRType)
+typeP5 c     =  try (tVarP  c)
+            <|> try (tPrimP c)
+            <|> try (tObjP  c)
+            <|> try (tRefP  c)
+            <|> try (parens (typeP1' c))
 
-bareMethP          :: PContext -> Parser RRType
-bareMethP c         = bareArrowP c colon              --  (x:t, ...): t
+atomP       :: (Parser (F.Reft -> a)) -> Parser a
+atomP p      =  try (dummyP p)
+            <|> try (xrefP  p)
+            <|>     (refP   p)
 
-bareArrowP         :: PContext -> Parser a -> Parser RRType
+funP'       :: PContext -> Parser (F.Reft -> RRType)
+funP' c      = do f <- funP c
+                  return $ \_ -> f
+
+funP        :: PContext -> Parser RRType
+funP c       = bareArrowP c (reserved "=>")    --  (x:t, ...) => t
+
+bareArrowP  :: PContext -> Parser a -> Parser RRType
 bareArrowP c f
   = do  args  <- parens $ sepBy (bareArgP c) comma
         _     <- f
-        ret   <- bareTypeP c
+        ret   <- typeP1 c
         r     <- topP
         return $ TFun args ret r
 
+funcSigP    :: PContext -> Parser RRType
+funcSigP c   = allP c funP
+
+methSigP    :: PContext -> Parser RRType
+methSigP c   = allP c bareMethP
+
+bareMethP   :: PContext -> Parser RRType
+bareMethP c  = bareArrowP c colon              --  (x:t, ...): t
+
 bareArgP :: PContext -> Parser (BindQ RK F.Reft)
-bareArgP c          =  try (boundTypeP c)
-                   <|> (argBind <$> bareTypeP c)
+bareArgP c   =  try (boundTypeP c)
+            <|> try (argBind <$> typeP1 c)
 
 -- TODO: Take the optional argument into account
 boundTypeP :: PContext -> Parser (BindQ RK F.Reft)
@@ -276,54 +323,45 @@ boundTypeP c
   = do  s <- symbol <$> identifierP
         optional (char '?')
         withinSpacesP colon
-        t <- bareTypeP c
+        t <- typeP1 c
         return $ B s t
 
 argBind :: RRType -> BindQ RK F.Reft
 argBind t = B (rTypeValueVar t) t
 
--- bareAtomP :: (PContext -> Parser (F.Reft -> a)) -> PContext -> Parser a
-bareAtomP p c
-  =  try (xrefP  (p c))
- <|> try (refP   (p c))
- <|>     (dummyP (p c))
+tObjP c = TObj (ambientMutability c) <$> typeBodyP c
 
-bbaseP :: PContext -> Parser (F.Reft -> RRType)
-bbaseP c
-  =  try (TVar        <$> tvarP     c)     -- V
- <|> try (TObj ambMut <$> typeBodyP c)     -- {f1: T1; ... ; fn: Tn}
- <|> try (TPrim       <$> tPrimP     )     -- number, boolean, etc...
- <|>     (TRef        <$> tGenP     c)     -- List<A>, Tree<A,B> etc...
-  where
-    ambMut | Just b <- pctx_mut c
-           = TVar (btvToTV b) fTop
-           | otherwise
-           = trIM
+ambientMutability c
+  | Just b <- pctx_mut c = TVar (btvToTV b) fTop
+  | otherwise            = trIM
 
-tGenP c = Gen <$> qnameP <*> bareTyArgsP c
+tRefP   c = TRef     <$> tGenP c
+tGenP   c = Gen      <$> qnameP <*> bareTyArgsP c
 
 bareTyArgsP c
   =  try (brackets argsP)
  <|> try (angles   argsP)
- <|> return []
+ <|>      return []
      where
        argsP = sepBy (bareTyArgP c) comma
 
 bareTyArgP c
-  =  try (bareTypeP c)
- <|> (TExp <$> exprP)
+  =  try (typeP2 c)
+ <|> try (TExp <$> exprP)
 
-tvarP :: PContext -> Parser TVar
-tvarP c = try (
-    do  t <- withSpan tvar $ wordP isTvar
-        if t `elem` (pctx_vars c)
-          then return t
-          else fail "not a tvar"
-  )
+tVarP c = TVar <$> tVarP0 c
+
+tVarP0 :: PContext -> Parser TVar
+tVarP0 c = try $ do
+  t <- withSpan tvar $ wordP isTvar
+  if t `elem` (pctx_vars c)
+    then return t
+    else fail "not a tvar"
 
 btvarP :: PContext -> Parser (BTVarQ RK F.Reft)
-btvarP c = withSpan btvar $ (,) <$> wordP isTvar
-                                <*> optionMaybe (reserved "extends" *> bareTypeP c)
+btvarP c = withSpan btvar
+         $ (,) <$> wordP isTvar
+               <*> optionMaybe (reserved "extends" *> typeP1 c)
 
 tvar l x = TV x l
 
@@ -335,21 +373,23 @@ wordP  = condIdP ok
   where
     ok = S.fromList $ ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
-tPrimP :: Parser TPrim
-tPrimP =  try (reserved "number"      >> return TNumber)
-      <|> try (reserved "bitvector32" >> return TBV32)
-      <|> try (reserved "boolean"     >> return TBoolean)
-      <|> try (reserved "undefined"   >> return TUndefined)
-      <|> try (reserved "void"        >> return TVoid)
-      <|> try (reserved "top"         >> return TTop)
-      <|> try (reserved "string"      >> return TString)
-      <|> try (reserved "null"        >> return TNull)
-      <|> try (reserved "bool"        >> return TFPBool)
-      <|> try (reserved "any"         >> return TAny)
+tPrimP _ = fmap TPrim tPrimP0
+
+tPrimP0 :: Parser TPrim
+tPrimP0  =  try (reserved "number"      >> return TNumber)
+        <|> try (reserved "bitvector32" >> return TBV32)
+        <|> try (reserved "boolean"     >> return TBoolean)
+        <|> try (reserved "undefined"   >> return TUndefined)
+        <|> try (reserved "void"        >> return TVoid)
+        <|> try (reserved "top"         >> return TTop)
+        <|> try (reserved "string"      >> return TString)
+        <|> try (reserved "null"        >> return TNull)
+        <|> try (reserved "bool"        >> return TFPBool)
+        <|> try (reserved "any"         >> return TAny)
 
 
-bareAllP :: PContext -> (PContext -> Parser RRType) -> Parser RRType
-bareAllP c p
+allP :: PContext -> (PContext -> Parser RRType) -> Parser RRType
+allP c p
   = do tvs   <- optionMaybe $ angles $ btvarP c `sepBy1` comma
        t     <- p $ c `mappend` pCtxFromList (concat tvs)
        return $ maybe t (`tAll` t) tvs
@@ -364,7 +404,7 @@ propBindP c  = sepEndBy memberP semi
            <|> try (    Ctor <$> ctorP c) -- Ctor needs to be before Meth
            <|> try (unc Prop <$> propP c)
            <|> try (unc Meth <$> methP c)
-           <|>     (    Call <$> callP c)
+           <|> try (    Call <$> callP c)
 
 data EltKind = Prop Symbol StaticKind Optionality FieldAsgn RRType
              | Meth Symbol StaticKind Optionality RMutability RRType
@@ -394,7 +434,7 @@ eltKindsToTypeMembers = foldl' go mempty
 -- | [f: string]: t
 -- | [f: number]: t
 idxP c
-  = do  ((_, k), t) <- xyP (brackets indexP) colon (bareTypeP c)
+  = do  ((_, k), t) <- xyP (brackets indexP) colon (typeP1 c)
         case k of
           "number" -> return $ NIdx t
           "string" -> return $ SIdx t
@@ -418,11 +458,8 @@ propP c
         x     <- symbol <$> withinSpacesP binderP
         o     <- option Req (withinSpacesP (char '?') *> return Opt)
         _     <- colon
-        t     <- bareTypeP c
+        t     <- typeP1 c
         return $ (x, s, o, a, t)
-  where
-    ambMut | Just b <- pctx_mut c = TVar (btvToTV b) fTop
-           | otherwise            = trIM
 
 
 -- | [STATIC] [@MUTABILITY] m[<A..>](x:t,..): t
@@ -448,7 +485,7 @@ callP c         = withinSpacesP (methSigP c)
 ctorP c         = withinSpacesP (reserved "new")
                *> withinSpacesP (methSigP c)
 
-mutabilityP     =  brackets . bareTypeP
+mutabilityP     =  brackets . typeP2
 
 methMutabilityP =  try (reserved "@Mutable"       >> return trMU)
                <|> try (reserved "@Immutable"     >> return trIM)
@@ -476,6 +513,8 @@ freshIntP'
 -- | Parses refined types of the form: `{ kind | refinement }`
 --------------------------------------------------------------------------------
 xrefP :: Parser (F.Reft -> a) -> Parser a
+-- xrefP = refDefP (symbol "v") refaP
+
 xrefP kindP
   = braces $ do
       t  <- kindP

@@ -20,7 +20,7 @@ module Language.Rsc.Typecheck.Types (
   , ExprReftable(..)
 
   -- * Constructing Types
-  , mkUnion, mkFun, mkAll, mkAnd, mkAndOpt, mkInitFldTy, mkTCons
+  , mkUnion, mkUnion', mkFun, mkAll, mkAnd, mkAndOpt, mkInitFldTy, mkTCons
 
   -- * Deconstructing Types
   , bkFun, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion
@@ -227,11 +227,13 @@ instance F.Reftable r => Monoid (RTypeQ q r) where
 mkTCons         = (`TObj` fTop)
 
 ----------------------------------------------------------------------------------------
-mkUnion :: F.Reftable r => [RTypeQ q r] -> RTypeQ q r
+mkUnion' :: F.Reftable r => [RTypeQ q r] -> r -> RTypeQ q r
+mkUnion  :: F.Reftable r => [RTypeQ q r] -> RTypeQ q r
 ----------------------------------------------------------------------------------------
-mkUnion [ ] = TPrim TBot fTop
-mkUnion [t] = t
-mkUnion ts  = flattenUnions $ TOr (filter (not . isTBot) ts) fTop
+mkUnion' [ ] = TPrim TBot
+mkUnion' [t] = (t `strengthen`)
+mkUnion' ts  = flattenUnions . TOr (filter (not . isTBot) ts)
+mkUnion  ts  = mkUnion' ts fTop
 
 ----------------------------------------------------------------------------------------
 bkUnion :: F.Reftable r => RTypeQ q r -> [RTypeQ q r]

@@ -122,12 +122,12 @@ parseRawSpec ctx = go
     go (FieldRawSpec               (_ , _)) = FieldSpec               <$> (propP ctx >>= \(_,_,o,m,t) -> return (FI o m t))
     go (MethodRawSpec              (_ , _)) = MethodSpec              <$> (methP ctx >>= \(_,_,o,m,t) -> return (MI o [(m, t)]))
     go (ConstructorRawSpec         (_ , _)) = ConstructorSpec         <$> ctorP ctx
-    go (CastRawSpec                (ss, _)) = CastSpec ss             <$> bareTypeP ctx
+    go (CastRawSpec                (ss, _)) = CastSpec ss             <$> typeP1 ctx
     go (MeasureRawSpec             (ss, _)) = MeasureSpec             <$> patch2 ss <$> idBindP2 ctx
     go (TypeAliasRawSpec           (ss, _)) = TypeAliasSpec           <$> patch2 ss <$> tAliasP
     go (PredicateAliasRawSpec      (ss, _)) = PredicateAliasSpec      <$> patch2 ss <$> pAliasP
     go (QualifierRawSpec           (_ , _)) = QualifierSpec           <$> qualifierP sortP
-    go (InvariantRawSpec           (ss, _)) = InvariantSpec ss        <$> bareTypeP ctx
+    go (InvariantRawSpec           (ss, _)) = InvariantSpec ss        <$> typeP1 ctx
     go (ExportRawSpec              (_ , _)) = return ExportedSpec
     go (OptionRawSpec              (ss, o)) = return $ OptionSpec (Loc ss o)
 

@@ -2,21 +2,19 @@
 /*@ foo :: (x:number) => number + undefined */
 function foo(x:number) {
     /*@ res :: number + undefined */
-    var res = undefined;
+    let res = undefined;
     if (x > 0){
 	    res = x;
     }
     return res;
 }
 
-/*@ inc :: (x:number) => {number | 0 < 1} */
-function inc(x:number):number {
+function inc(x:number) {
     return x + 1;
 }
 
-/*@ bar :: (y:number) => {number | 0 < 1} */
-function bar(y:number):number {
-    var z = foo(y);
+export function bar(y:number):number {
+    let z = foo(y);
     if (typeof z === "number"){
 	    return inc(z);
     }

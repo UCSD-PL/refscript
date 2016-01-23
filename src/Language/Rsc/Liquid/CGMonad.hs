@@ -810,35 +810,28 @@ splitC (Sub g c t1@(TOr t1s r) t2)
 -- | S-Union-R
 --
 splitC (Sub g c s t@(TOr ts _))
-  -- = do  m0        <- bsplitC g c s t
-  = do  -- m0        <- bsplitC g c s (ltracePP c ("TOP-LEVEL: " ++ ppshow s) t)
-        (mi, g')  <- foldM step ([], g) (init ts)
-        ml        <- splitC $ Sub g' c s (ltracePP c ("SUBT with grd: " ++ ppshow (cge_guards g')) (last ts))
-        -- ml        <- splitC $ Sub g' c s (last ts)
-        return     $ {- m0 ++ mi ++ -} tracePP "" ml
-  where
-    step (ms, g) t2 =
-      do  bk    <- refresh tBool
-          _     <- wellFormed c g bk
-          pk    <- pure   $ F.reftPred (rTypeReft bk)
-          g'    <- pure   $ g { cge_guards =        pk : cge_guards g }
-          g''   <- pure   $ g { cge_guards = F.PNot pk : cge_guards g }
+  = do  m0      <- bsplitC g c s t
+        mss     <- mapM (splitC . Sub g c s) ts
+        ts      <- pure (map (sameTag g s) ts)
+        case L.find fst (zip ts mss) of
+          Just (_, ms) -> return (m0 ++ ms)
+          Nothing      -> splitIncompatC g c s
 
-          ms'   <- splitC $ Sub g' c s (ltracePP c ("SUBT with grd: " ++ ppshow (cge_guards g')) t2)
-          -- ms'   <- splitC $ Sub g' c s t2
-          return $ (ms ++ ms', g'')
 
---         bs  <- pure (map (\_ -> tBool) ts)
---         ks  <- mapM refresh bs
---         _   <- mapM (wellFormed c g) bs
---         xgs <- mapM (\b -> cgEnvAddFresh "split-union" c b g) bs
---         ms  <- concat <$> zipWithM (\t' (x', g') -> splitC (Sub g' c t1 t')) ts xgs
---         m   <- bsplitC g c tBool (ltracePP c "RHS" $ toOr (map fst xgs))
+-- splitC (Sub g c s t@(TOr ts _))
+--   = do  m0        <- bsplitC g c s t
+--         (mi, g')  <- foldM step ([], g) (init ts)
+--         ml        <- splitC $ Sub g' c s (last ts)
+--         return     $ m0 ++ mi ++ ml
 --   where
---     toOr :: [RefType] -> RefType
---     toOr = (tBool `strengthen`) . F.predReft . F.pOr . map (F.reftPred . rTypeReft)
---     toOr = (tBool `strengthen`) . F.predReft . F.pOr . map F.eProp
-
+--     step (ms, g) t2 =
+--       do  bk    <- refresh tBool
+--           _     <- wellFormed c g bk
+--           pk    <- pure   $ F.reftPred (rTypeReft bk)
+--           g'    <- pure   $ g { cge_guards =        pk : cge_guards g }
+--           g''   <- pure   $ g { cge_guards = F.PNot pk : cge_guards g }
+--           ms'   <- splitC $ Sub g' c s t2
+--           return $ (ms ++ ms', g'')
 
 -- | S-Ref
 --
@@ -867,9 +860,7 @@ splitC (Sub g i t1@(TRef n1@(Gen x1 (m1:t1s)) r1) t2@(TRef n2@(Gen x2 (m2:t2s)) 
   --
   -- * Non-immutable, same name: invariance
   --
-  --
   --  TODO: For arrays do the same trick as with objects and UQ
-  --
   --
   | x1 == x2
   , not (F.isFalse r2)
@@ -897,8 +888,8 @@ splitC (Sub g i t1@(TRef n1@(Gen x1 (m1:t1s)) r1) t2@(TRef n2@(Gen x2 (m2:t2s)) 
 splitC (Sub g i t1@(TPrim c1 _) t2@(TPrim c2 _))
   | isTTop t2 = return []
   | isTAny t2 = return []
-  | c1 == c2  = bsplitC g i t1 $ ltracePP i ("PRIM " ++ ppshow t1) t2
-  | otherwise = splitIncompatC g i $ ltracePP i "INCOMPAT" t1
+  | c1 == c2  = bsplitC g i t1 t2
+  | otherwise = splitIncompatC g i t1
 
 -- | S-Obj
 --
@@ -971,6 +962,7 @@ conjoinPred :: F.Pred -> F.SortedReft -> F.SortedReft
 conjoinPred p r    = r {F.sr_reft = F.Reft (v, F.pAnd [pr, p]) }
   where
     F.Reft (v, pr) = F.sr_reft r
+
 
 
 --------------------------------------------------------------------------------
@@ -1160,6 +1152,24 @@ narrowType l g t1@(TOr t1s r) t2
   = mkUnion' (L.filter (\t1 -> isSubtype l g t1 (ofType t2)) t1s) r
 
 narrowType _ _ t1 _ = t1
+
+
+--------------------------------------------------------------------------------
+-- | Runtime tag checks
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+sameTag :: CGEnv -> RefType -> RefType -> Bool
+--------------------------------------------------------------------------------
+sameTag _ (TPrim c1 _) (TPrim c2 _) = c1 == c2
+sameTag _ (TVar  v1 _) (TVar  v2 _) = v1 == v2
+sameTag g t1@TRef{}    t2@TRef{}    = isSubtype dummySpan g t1 t2 || isSubtype dummySpan g t2 t1
+sameTag _ TObj{}       TObj{}       = True
+sameTag _ TObj{}       TRef{}       = True
+sameTag _ TRef{}       TObj{}       = True
+sameTag _ TFun{}       TFun{}       = True
+sameTag _ _            _            = False
+
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

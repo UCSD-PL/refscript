@@ -650,8 +650,10 @@ consExpr g (Cast_ l e) s
   = case envGetContextCast g l of
       -- Type-cast
       CType s  -> mseq (consExpr g e (Just $ ofType s)) $ \(x, g') -> do
-                    t   <- ltracePP l "_cast_" <$> cgSafeEnvFindTyM x g'
-                    t'  <- ltracePP l ("narrowed with " ++ ppshow s) <$> pure (narrowType l g t s)
+                    t   <- cgSafeEnvFindTyM x g'
+                    _   <- subType l Nothing g t (ofType s)
+                    t'  <- pure (narrowType l g t s)
+
                     Just <$> cgEnvAddFresh "cast_" l t' g
 
       -- Dead-cast
@@ -896,7 +898,7 @@ consCall :: PP a => CGEnv -> AnnLq -> a -> [(Expression AnnLq, Maybe RefType)]
 --------------------------------------------------------------------------------
 consCall g l fn ets (validOverloads g l -> fts)
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      ts <- ltracePP l (ppshow fn) <$> mapM (`cgSafeEnvFindTyM` g') xes
+      ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
         ft:_ -> consCheckArgs l g' fn ft ts xes
         _    -> cgError $ errorNoMatchCallee (srcPos l) fn ts fts

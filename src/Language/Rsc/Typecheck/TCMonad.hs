@@ -368,8 +368,8 @@ castM :: Unif r => TCEnv r -> Expression (AnnSSA r) -> RType r -> RType r -> TCM
 --------------------------------------------------------------------------------
 castM γ e t1 t2
   = case convert (srcPos e) γ t1 t2 of
-      ConvOK      -> return $ ltracePP e "ConvOK" e
-      ConvWith t  -> ltracePP e "ConvWith" <$> typecastM (tce_ctx γ) e (toType t2)
+      ConvOK      -> return e
+      ConvWith t  -> typecastM (tce_ctx γ) e (toType t2)
       ConvFail es -> deadcastM (tce_ctx γ) es e
 
 -- | Run the monad `a` in the current state. This action will not alter the state.

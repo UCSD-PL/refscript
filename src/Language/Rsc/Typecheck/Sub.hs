@@ -97,8 +97,8 @@ instance Monoid SubtypingResult where
 convert :: (PPRE r, FE g r, IsLocated l) => l -> g r -> RType r -> RType r -> ConversionResult
 --------------------------------------------------------------------------------
 convert l g t1 t2
-  = case ltracePP l (ppshow t1 ++ " <: " ++ ppshow t2) $ subtype l g t1 t2 of
-  -- = case subtype l g t1 t2 of
+  -- = case ltracePP l (ppshow t1 ++ " <: " ++ ppshow t2) $ subtype l g t1 t2 of
+  = case subtype l g t1 t2 of
     EqT       -> ConvOK
     SubT      -> ConvOK -- ConvWith (toType t2)
     SubErr es -> castable l g es t1 t2

@@ -49,3 +49,4 @@ cabal.sandbox.config
 .stylish-haskell.yaml
 src/Paths_refscript.hs
 tags
+.liquid

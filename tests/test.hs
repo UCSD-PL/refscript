@@ -29,7 +29,7 @@ unitTests = group "Unit"
   , testGroup "pos-ops"    <$> dirTests rscCmd "tests/pos/scope"      [] ExitSuccess
   , testGroup "pos-simple" <$> dirTests rscCmd "tests/pos/simple"     [] ExitSuccess
 --   , testGroup "pos-scope"  <$> dirTests rscCmd "tests/pos/scope"      [] ExitSuccess
---   , testGroup "pos-union"  <$> dirTests rscCmd "tests/pos/unions"     [] ExitSuccess
+  , testGroup "pos-union"  <$> dirTests rscCmd "tests/pos/unions"     [] ExitSuccess
 --   , testGroup "pos-alias"  <$> dirTests rscCmd "tests/pos/typealias"  [] ExitSuccess
 --   , testGroup "pos-fb"     <$> dirTests rscCmd "tests/pos/fb"         [] ExitSuccess
 --   , testGroup "pos-incl"   <$> dirTests eCmd   "tests/pos/inclusion"  [] ExitSuccess
@@ -41,7 +41,7 @@ unitTests = group "Unit"
   , testGroup "neg-ops"    <$> dirTests rscCmd "tests/neg/operators"  [] (ExitFailure 1)
   , testGroup "neg-simple" <$> dirTests rscCmd "tests/neg/scope"      [] (ExitFailure 1)
   , testGroup "neg-simple" <$> dirTests rscCmd "tests/neg/simple"     [] (ExitFailure 1)
---   , testGroup "neg-union"  <$> dirTests rscCmd "tests/neg/unions"     [] (ExitFailure 1)
+  , testGroup "neg-union"  <$> dirTests rscCmd "tests/neg/unions"     [] (ExitFailure 1)
 --   , testGroup "neg-alias"  <$> dirTests rscCmd "tests/neg/typealias"  [] (ExitFailure 1)
 --   , testGroup "neg-fb"     <$> dirTests rscCmd "tests/neg/fb"         [] (ExitFailure 1)
 --   , testGroup "neg-incl"   <$> dirTests eCmd   "tests/neg/inclusion"  [] (ExitFailure 1)

@@ -177,15 +177,6 @@ applySolution  = fmap . fmap . tx
     appSol s k = Just $ HM.lookupDefault F.PTop k s
 
 
-
--- --------------------------------------------------------------------------------
--- generateConstraints :: Config -> FilePath -> RefScript-> CGInfo
--- --------------------------------------------------------------------------------
--- generateConstraints cfg f pgm = getCGInfo cfg f pgm $ consRsc pgm
---
-
-
-
 -- | Debug info
 --
 dumpJS f cha s p = writeFile (extFileName Result (dropExtension f ++ s)) $ show
@@ -899,8 +890,8 @@ consCall g l fn ets ft@(validOverloads g l -> fts)
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
-        ft:_ -> consCheckArgs l g' fn ft ts xes
-        _    -> cgError $ errorNoMatchCallee (srcPos l) fn ts ft
+        ft : _ -> traceTypePP l (ppshow fn ++ " :: " ++ ppshow ft) $ consCheckArgs l g' fn ft ts xes
+        _      -> cgError $ errorNoMatchCallee (srcPos l) fn ts ft
 
 -- | `consCheckArgs` does the subtyping between the types of the arguments
 --   @xes@ and the formal paramaters of @ft@.
@@ -912,8 +903,8 @@ consCheckArgs :: PP a => AnnLq -> CGEnv -> a
                       -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
 consCheckArgs l g fn ft ts xes
-  = do  (rhs, rt) <- instantiateFTy l g fn xes ft
-        lhs       <- zipWithM  (instantiateTy l g) [1..] ts
+  = do  (rhs, rt) <- ltracePP l "rhs" <$> instantiateFTy l g fn xes ft
+        lhs       <- ltracePP l "lhs" <$> zipWithM  (instantiateTy l g) [1..] ts
         _         <- zipWithM_ (subType l Nothing g) lhs rhs
         Just      <$> cgEnvAddFresh "5" l rt g
 

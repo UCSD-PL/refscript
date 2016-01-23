@@ -890,9 +890,9 @@ splitC (Sub g i t1@(TRef n1@(Gen x1 (m1:t1s)) r1) t2@(TRef n2@(Gen x2 (m2:t2s)) 
 
 -- | S-Prim
 --
-splitC (Sub g i t1@(TPrim c1 _) t2@(TPrim c2 _))
-  | isTTop t2 = return []
-  | isTAny t2 = return []
+splitC (Sub g i t1@(TPrim c1 _) t2@(TPrim c2 r2))
+  | isTTop t2 = bsplitC g i t1 (rTop t1 `strengthen` r2)
+  | isTAny t2 = bsplitC g i t1 (rTop t1 `strengthen` r2)
   | c1 == c2  = bsplitC g i t1 t2
   | otherwise = splitIncompatC g i t1
 

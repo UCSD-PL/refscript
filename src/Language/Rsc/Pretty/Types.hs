@@ -125,7 +125,7 @@ instance PP TPrim where
   pp TUndefined  = text "undefined"
   pp TNull       = text "null"
   pp TBot        = text "_|_"
-  pp TTop        = text " T "
+  pp TTop        = text "Top"
   pp TAny        = text "any"
   pp TFPBool     = text "_bool_"
 

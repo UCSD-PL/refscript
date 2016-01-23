@@ -40,6 +40,7 @@ import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
+import           Text.PrettyPrint.HughesPJ      (vcat, (<+>))
 
 type FE g r = (CheckingEnvironment r g, Functor g)
 type PPRE r = (ExprReftable Int r, PPR r)
@@ -71,6 +72,12 @@ data ConversionResult =
     ConvOK
   | ConvWith Type
   | ConvFail [Error]
+
+instance PP ConversionResult where
+  pp ConvOK        = pp "ConvOK"
+  pp (ConvWith t)  = pp "ConvWith" <+> pp t
+  pp (ConvFail es) = pp "ConvFail" <+> vcat (map pp es)
+
 
 data SubtypingResult  = EqT | SubT | SubErr [Error] deriving (Eq, Ord, Show)
 

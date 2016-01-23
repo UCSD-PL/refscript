@@ -205,7 +205,7 @@ instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body
 
 instance (PP r, F.Reftable r) => PP (Rsc a r) where
-  pp pgm@(Rsc {code = (Src s) }) =  inComments extras
+  pp pgm@(Rsc {code = (Src s) }) =  extras
                                 $+$ text "\n// CODE"
                                 $+$ pp s
     where

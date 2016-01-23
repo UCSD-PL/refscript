@@ -188,14 +188,14 @@ applySolution  = fmap . fmap . tx
 
 -- | Debug info
 --
-dumpJS f cha s p = writeFile (extFileName Ts (dropExtension f ++ s)) $ show
+dumpJS f cha s p = writeFile (extFileName Result (dropExtension f ++ s)) $ show
                  $  pp p
-                $+$ inComments (pp cha)
+                $+$ pp cha
                 $+$ ppCasts p
 
 ppCasts (Rsc { code = Src fs })
   | isEmpty castDoc = empty
-  | otherwise       = inComments (nest 2 castDoc)
+  | otherwise       = nest 2 castDoc
   where
     castDoc = fcat $ map ppEntry entries
     ppEntry = \(_, c) -> pp c
@@ -656,11 +656,10 @@ consExpr g (Cast_ l e) s
 
                     Just <$> cgEnvAddFresh "cast_" l t' g
 
-      -- Dead-cast
-      CDead es -> mseq (consExpr g e s) $ \(x, g') -> do
-                    t <- cgSafeEnvFindTyM x g'
-                    mapM_ (\e -> subType l (Just e) g t (tBot t)) es
-                    return Nothing
+      -- Dead-cast: Do not attempt to check the enclosed expression
+      CDead es -> do  mapM_ (\e -> subType l (Just e) g tVoid (tBot tVoid)) es
+                      return Nothing
+
       CNo      -> consExpr g e s
   where
        tBot t = t `strengthen` F.bot (rTypeR t)
@@ -896,12 +895,12 @@ validOverloads g l ft0
 consCall :: PP a => CGEnv -> AnnLq -> a -> [(Expression AnnLq, Maybe RefType)]
                  -> RefType -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
-consCall g l fn ets (validOverloads g l -> fts)
+consCall g l fn ets ft@(validOverloads g l -> fts)
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
         ft:_ -> consCheckArgs l g' fn ft ts xes
-        _    -> cgError $ errorNoMatchCallee (srcPos l) fn ts fts
+        _    -> cgError $ errorNoMatchCallee (srcPos l) fn ts ft
 
 -- | `consCheckArgs` does the subtyping between the types of the arguments
 --   @xes@ and the formal paramaters of @ft@.
@@ -939,12 +938,12 @@ instantiateFTy l g fn xes ft@(bkAll -> (αs, t))
 -- | consCallCondExpr: Special casing conditional expression call here because we'd like the
 --   arguments to be typechecked under a different guard each.
 --
-consCallCondExpr g l fn ets (validOverloads g l -> fts)
+consCallCondExpr g l fn ets ft@(validOverloads g l -> fts)
   = mseq (consCondExprArgs (srcPos l) g ets) $ \(xes, g') -> do
       ts <- T.mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
         [ft] -> consCheckArgs l g' fn ft ts xes
-        _    -> cgError $ errorNoMatchCallee (srcPos l) fn ts fts
+        _    -> cgError $ errorNoMatchCallee (srcPos l) fn ts ft
 
 
 ---------------------------------------------------------------------------------

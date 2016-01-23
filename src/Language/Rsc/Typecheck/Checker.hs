@@ -882,7 +882,8 @@ tcNormalCall γ l fn etos ft0
          Just (i, θ, ft) ->
              do addAnn (fId l) (Overload (tce_ctx γ) i)
                 addSubst l θ
-                tcWrap (tcCallCase γ l fn ets ft) >>= \case
+                (es, ts) <- pure (unzip ets)
+                tcWrap (tcCallCase γ l fn es ts ft) >>= \case
                   Right ets' -> return ets'
                   Left  er  -> (,tNull) <$> T.mapM (deadcastM (tce_ctx γ) [er] . fst) ets
          Nothing -> tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) (unzip ets)
@@ -965,9 +966,9 @@ tcCallCaseTry γ l fn ts ((i,ft):fts)
 
 --------------------------------------------------------------------------------
 tcCallCase :: (PP a, Unif r)
-  => TCEnv r -> AnnTc r -> a -> [(ExprSSAR r, RType r)] -> RType r -> TCM r ([ExprSSAR r], RType r)
+  => TCEnv r -> AnnTc r -> a -> [ExprSSAR r] -> [RType r] -> RType r -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
-tcCallCase γ@(tce_ctx -> ξ) l fn (unzip -> (es, ts)) ft
+tcCallCase γ@(tce_ctx -> ξ) l fn es ts ft
   = do  (βs, rhs, ot)   <- instantiateFTy l ξ fn ft
         lhs             <- zipWithM (instantiateTy l ξ) [1..] ts
         θ               <- unifyTypesM (srcPos l) γ lhs rhs

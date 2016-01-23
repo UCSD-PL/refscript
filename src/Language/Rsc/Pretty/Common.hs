@@ -11,6 +11,7 @@ module Language.Rsc.Pretty.Common (
   , PPR
   , diePP
   , inComments
+  , ticks
   ) where
 
 import           Control.Applicative                 ((<$>))
@@ -147,4 +148,7 @@ inComments p
   =   text "/*"
   $+$ p
   $+$ text "*/"
+
+ticks :: Doc -> Doc
+ticks p = text "`" <> p <> text "`"
 

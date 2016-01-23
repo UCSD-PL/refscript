@@ -246,6 +246,11 @@ envPushContext c g = g { cge_ctx = pushContext c (cge_ctx g) }
 
 data Cast = CNo | CDead [Error] | CType Type
 
+instance PP Cast where
+  pp CNo       = pp "No cast"
+  pp (CDead e) = pp "Deadcast" $+$ vcat (map pp e)
+  pp (CType t) = pp "TypeCast to" <+> pp t
+
 --------------------------------------------------------------------------------
 envGetContextCast :: CGEnv -> AnnLq -> Cast
 --------------------------------------------------------------------------------

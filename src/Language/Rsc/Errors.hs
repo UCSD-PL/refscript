@@ -18,8 +18,6 @@ import           Language.Fixpoint.Types.PrettyPrint
 
 
 mkErr = err . sourceSpanSrcSpan
--- mkDie = die . sourceSpanSrcSpan
-
 
 ---------------------------------------------------------------------------
 -- | Bugs
@@ -134,9 +132,11 @@ errorObjSubtype l t t' fs     = mkErr l $ printf "Object type '%s' is not a subt
 errorFuncSubtype l t t'       = mkErr l $ printf "Function type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
 
 -- Typechecking
-errorCallNotSup l fn ft es ts = mkErr l $ printf "Cannot call '%s' of type '%s' with argument(s): %s of type: %s" (ppshow fn) (ppshow ft)
-                                                  (show $ intersperse comma $ map pp es)
-                                                  (show $ intersperse comma $ map pp ts)
+errorCallNotSup l fn ft es ts = mkErr l $ show $ text "Cannot call"       <+> ticks (pp fn)                 <+>
+                                                 text "with signature"    $+$ nest 2 (pp ft)                $+$
+                                                 text "with argument(s):" <+> intersperse comma (map pp es) $+$
+                                                 text "of type(s):"       <+> intersperse comma (map pp ts)
+
 errorCallNotFound l e f       = mkErr l $ printf "Cannot find callable property '%s' of type '%s'." (ppshow f) (ppshow e)
 errorCallMatch l fn ts        = mkErr l $ printf "Could not match call to '%s' to a particular signature. Argument(s) with types '%s' are invalid." (ppshow fn) (ppshow ts)
 errorCallReceiver l e f       = mkErr l $ printf "Could not call method '%s' of '%s'." (ppshow f) (ppshow e)
@@ -183,12 +183,20 @@ errorTAliasNumArgs l t a x n  = mkErr l $ printf "Invalid type alias application
 errorTAliasMismatch l t a     = mkErr l $ printf "Invalid type alias application %s : Cannot convert %s into value argument" (ppshow t) (ppshow a)
 
 errorBadPAlias l p nx ne      = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." (ppshow p) nx ne
-errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for '%s'.\nArgument Types: %s\nFunction Type: %s" (ppshow fn) (ppshow $ map toType ts) (ppshow $ map toType t)
+
+errorNoMatchCallee l fn ts ft = mkErr l $ show $ text "No matching callee type for:" <+> ticks (pp fn)      $+$
+                                                 text "Argument Types:" <+> intersperse comma (map (pp . toType) ts) $+$
+                                                 text "Function Type:"  <+> pp (toType ft)
+
 errorMultipleCasts l cs       = mkErr l $ printf "Multiple Casts: %s" (ppshow cs)
 errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"
 errorWellFormed l             = mkErr l $ printf "Well-formedness Error"
-errorForbiddenSyms l t xs     = mkErr l $ printf "Symbol(s): %s, is (are) not readonly, local, or an immutable field, so should not be appearing in the refinement of type '%s'."
-                                (show $ intersperse comma $ map pp xs) (ppshow t)
+errorForbiddenSyms l t xs     = mkErr l $ show $ text "Symbol(s):" <+>
+                                                 intersperse comma (map (ticks . pp) xs) <+>
+                                                 text "is (are) not readonly, local, or an immutable field," <+>
+                                                 text "so should not be appearing in the refinement of type" $+$
+                                                 pp t
+
 errorUnboundSyms l x t s m    = mkErr l $ printf "Symbol '%s', appearing in type '%s' of '%s' is unbound [ERROR_CODE: %s]." (ppshow s) (ppshow t) (ppshow x) (ppshow m)
 unimplementedReservedSyms l   = mkErr l $ printf "Please avoid using 'func' and 'obj' as symbols in refinements."
 errorAsgnInRef l x t a        = mkErr l $ printf "Only readonly variables can be used in refinements. In type '%s' symbol '%s' is %s." (ppshow t) (ppshow x) (ppshow a)

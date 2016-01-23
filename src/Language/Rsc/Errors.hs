@@ -106,7 +106,7 @@ errorUniqueTypeParams l       = mkErr l $ printf "Only unique type paramteres ar
 
 -- Subtyping
 errorUserCast l t e           = mkErr l $ printf "User cast of type '%s' on '%s' failed." (ppshow t) (ppshow e)
-errorDownCast l t1 t2         = mkErr l $ printf "Downcast: %s => %s" (ppshow t1) (ppshow t2)
+errorDownCast l t             = mkErr l $ printf "Downcast to '%s'" (ppshow t)
 errorClassExtends l x y t1 t2 = mkErr l $ printf "Type '%s' cannot extend type '%s'. Type for '%s': '%s'. Type for '%s': '%s'" (ppshow x) (ppshow y)
                                                   (ppshow x) (ppshow t1) (ppshow y) (ppshow t2)
 errorIncompatTypes l a b      = mkErr l $ printf "Type '%s' is not assignable to '%s'." (ppshow a) (ppshow b)
@@ -194,6 +194,7 @@ unimplementedReservedSyms l   = mkErr l $ printf "Please avoid using 'func' and 
 errorAsgnInRef l x t a        = mkErr l $ printf "Only readonly variables can be used in refinements. In type '%s' symbol '%s' is %s." (ppshow t) (ppshow x) (ppshow a)
 errorContextual l e t         = mkErr l $ printf "Contextual error occured when checking expression '%s' under type '%s'." (ppshow e) (ppshow t)
 bugDeadCast l                 = mkErr l $ "Dead-cast with no error associated."
+unimplSplitUnion l t1 t2      = mkErr l $ printf "Cannot generate constraints for the subtyping of '%s' and '%s'." (ppshow t1) (ppshow t2)
 
 ---------------------------------------------------------------------------
 -- | Pervasive (typechecking TC and Liquid)

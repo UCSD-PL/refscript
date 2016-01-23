@@ -66,9 +66,6 @@ instance Transformable BindQ where
 instance Transformable FactQ where
   trans = transFact
 
-instance Transformable CastQ where
-  trans = transCast
-
 instance Transformable TypeDeclQ where
   trans f αs xs (TD s@(TS _ b _) es) = TD (trans f αs xs s) (trans f αs' xs es)
     where
@@ -129,18 +126,11 @@ transFact f = go
     go αs xs (CtorAnn t)         = CtorAnn       $ trans f αs xs t
     go αs xs (UserCast t)        = UserCast      $ trans f αs xs t
     go αs xs (SigAnn l t)        = SigAnn l      $ trans f αs xs t
-    go αs xs (TCast x c)         = TCast x       $ trans f αs xs c
     go αs xs (ClassAnn l ts)     = ClassAnn l    $ trans f αs xs ts
     go αs xs (InterfaceAnn td)   = InterfaceAnn  $ trans f αs xs td
 
+    -- TODO: do we need to translate TypeCast?
     go _ _   t                   = t
-
-transCast f = go
-  where
-    go _  _ CNo          = CNo
-    go αs xs (CDead e t) = CDead e $ trans f αs xs t
-    go αs xs (CUp t1 t2) = CUp (trans f αs xs t1) (trans f αs xs t2)
-    go αs xs (CDn t1 t2) = CDn (trans f αs xs t1) (trans f αs xs t2)
 
 -- | transRType :
 --
@@ -190,9 +180,6 @@ instance NameTransformable BindQ where
 instance NameTransformable FactQ where
   ntrans = ntransFact
 
-instance NameTransformable CastQ where
-  ntrans = ntransCast
-
 instance NameTransformable TypeDeclQ where
   ntrans f g (TD s m) = TD <$> ntrans f g s <*> ntrans f g m
 
@@ -233,6 +220,8 @@ ntransFact f g = go
     go (Overload x i)      = pure $ Overload x i
     go (EnumAnn e)         = pure $ EnumAnn e
     go (BypassUnique)      = pure $ BypassUnique
+    go (DeadCast x es)     = pure $ DeadCast x es
+    go (TypeCast x t)      = pure $ TypeCast x t -- TODO: transform this?
     go (ModuleAnn l m)     = ModuleAnn l   <$> g m
     go (PhiVarTy (v,t))    = PhiVarTy      <$> (v,) <$>  ntrans f g t
     go (TypInst x y ts)    = TypInst x y   <$> mapM (ntrans f g) ts
@@ -242,18 +231,9 @@ ntransFact f g = go
     go (CtorAnn t)         = CtorAnn       <$> ntrans f g t
     go (UserCast t)        = UserCast      <$> ntrans f g t
     go (SigAnn l t)        = SigAnn l      <$> ntrans f g t
-    go (TCast x c)         = TCast x       <$> ntrans f g c
     go (ClassAnn l t)      = ClassAnn l    <$> ntrans f g t
     go (InterfaceAnn t)    = InterfaceAnn  <$> ntrans f g t
 
-ntransCast :: (Monad m, Applicative m, F.Reftable r)
-           => (QN p -> m (QN q)) -> (QP p -> m (QP q)) -> CastQ p r -> m (CastQ q r)
-ntransCast f g = go
-  where
-    go CNo         = pure CNo
-    go (CDead e t) = CDead e <$> ntrans f g t
-    go (CUp t1 t2) = CUp     <$> ntrans f g t1 <*> ntrans f g t2
-    go (CDn t1 t2) = CUp     <$> ntrans f g t1 <*> ntrans f g t2
 
 ntransRType :: (Monad m, Applicative m, F.Reftable r)
             => (QN p -> m (QN q)) -> (QP p -> m (QP q)) -> RTypeQ p r -> m (RTypeQ q r)

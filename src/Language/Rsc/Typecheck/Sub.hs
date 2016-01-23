@@ -67,8 +67,17 @@ isConvertible _ _ _ _
   = False
 
 
-data ConversionResult = ConvOK | ConvFail [Error]   deriving (Eq, Ord, Show)
+data ConversionResult =
+    ConvOK
+  | ConvWith Type
+  | ConvFail [Error]
+
 data SubtypingResult  = EqT | SubT | SubErr [Error] deriving (Eq, Ord, Show)
+
+instance PP SubtypingResult where
+  pp EqT  = pp "equal types"
+  pp SubT = pp "subtypes"
+  pp _    = pp "error in subtyping"
 
 instance Monoid SubtypingResult where
   mempty                          = EqT
@@ -88,19 +97,20 @@ instance Monoid SubtypingResult where
 convert :: (PPRE r, FE g r, IsLocated l) => l -> g r -> RType r -> RType r -> ConversionResult
 --------------------------------------------------------------------------------
 convert l g t1 t2
-  = case subtype l g t1 t2 of
+  = case ltracePP l (ppshow t1 ++ " <: " ++ ppshow t2) $ subtype l g t1 t2 of
+  -- = case subtype l g t1 t2 of
     EqT       -> ConvOK
-    SubT      -> ConvOK
+    SubT      -> ConvOK -- ConvWith (toType t2)
     SubErr es -> castable l g es t1 t2
 
 castable l γ _ (TOr t1s _) t2
   | any (\t1 -> isSubtype l γ t1 t2) t1s
-  = ConvOK
+  = ConvWith (toType t2)
 
 -- XXX: Only non generic casting allowed at the moment
 castable l γ _ t1@(TRef (Gen _ [_]) _) t2@(TRef (Gen _ [_]) _)
   | not (mutRelated t1), not (mutRelated t2), isSubtype l γ t1 t2
-  = ConvOK
+  = ConvWith (toType t2)
 
 castable _ _ es _ _ = ConvFail es
 
@@ -124,7 +134,8 @@ subtype l γ (TPrim c1 _) (TPrim c2 _)
 
 -- | Unions
 subtype l γ (TOr ts1 _) t2
-  | all (\t1 -> isSubtype l γ t1 t2) ts1 = SubT
+  | all (\t1 -> isSubtype l γ t1 t2) ts1
+  = SubT
 
 subtype l γ t1 (TOr ts2 _)
   | any (\t2 -> isSubtype l γ t1 t2) ts2

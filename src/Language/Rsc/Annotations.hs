@@ -14,11 +14,6 @@ module Language.Rsc.Annotations (
 
   , scrapeVarDecl
 
-  -- * Casts
-  , CastQ(..), Cast
-  -- , SubTRes(..)
-  , castType
-
   -- * Annotations & aliases
   , Annot (..)
   , FAnnQ (..)
@@ -43,21 +38,6 @@ import           Language.Rsc.Types
 
 
 -----------------------------------------------------------------------------
--- | Casts
------------------------------------------------------------------------------
-
-data CastQ q r = CNo                                            -- .
-               | CDead { err :: [Error]   , tgt :: RTypeQ q r } -- |dead code|
-               | CUp   { org :: RTypeQ q r, tgt :: RTypeQ q r } -- <t1 UP t2>
-               | CDn   { org :: RTypeQ q r, tgt :: RTypeQ q r } -- <t1 DN t2>
-               deriving (Data, Typeable, Functor)
-
-type Cast  = CastQ AK   -- Version with absolute types
-
-castType CNo = tNull
-castType c   = tgt c
-
------------------------------------------------------------------------------
 -- | Facts
 -----------------------------------------------------------------------------
 
@@ -73,7 +53,8 @@ data FactQ q r
   | TypInst       Int IContext [RTypeQ q r]
 
   -- Typechecking
-  | TCast         IContext (CastQ q r)
+  | DeadCast      IContext [Error]
+  | TypeCast      IContext Type
 
   -- Overloading
   | EltOverload   IContext (MutabilityQ q r) (RTypeQ q r)

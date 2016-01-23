@@ -91,15 +91,12 @@ idTy t = mkFun ([], [B sx t], t `strengthen` uexprReft sx)
 
 idTys = mkAnd . map idTy
 
-
 --------------------------------------------------------------------------------------------
 castTy :: (ExprReftable F.Symbol r, F.Reftable r) => RType r -> RType r
 --------------------------------------------------------------------------------------------
 castTy t = TFun [B sx t] (t `eSingleton` sx) fTop
   where
     sx    = F.symbol "x"
-
-
 
 ---------------------------------------------------------------------------------
 -- | Array literal types

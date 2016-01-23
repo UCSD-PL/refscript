@@ -65,17 +65,17 @@ import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
 
--------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Refinement Types and Annotations
--------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 type RefType     = RType F.Reft
 
 
-------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Converting `Rsc` values into `Fixpoint` values,
 --   i.e. *language* level entities into *logic* level entities.
-------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 instance F.Expression (Id a) where
   expr = F.eVar
@@ -99,9 +99,9 @@ instance F.Predicate  (Expression a) where
   prop e@(InfixExpr _ _ _ _ )      = eProp e
   prop e                           = convertError "F.Pred" e
 
-------------------------------------------------------------------
+--------------------------------------------------------------------------------
 eProp :: Expression a -> F.Pred
-------------------------------------------------------------------
+--------------------------------------------------------------------------------
 eProp (InfixExpr _ OpLT   e1 e2)       = F.PAtom F.Lt (F.expr e1) (F.expr e2)
 eProp (InfixExpr _ OpLEq  e1 e2)       = F.PAtom F.Le (F.expr e1) (F.expr e2)
 eProp (InfixExpr _ OpGT   e1 e2)       = F.PAtom F.Gt (F.expr e1) (F.expr e2)
@@ -114,9 +114,9 @@ eProp (InfixExpr _ OpLAnd e1 e2)       = F.pAnd [F.prop e1, F.prop e2]
 eProp (InfixExpr _ OpLOr  e1 e2)       = F.pOr  [F.prop e1, F.prop e2]
 eProp e                                = convertError "InfixExpr -> F.Prop" e
 
-------------------------------------------------------------------
+--------------------------------------------------------------------------------
 bop       :: InfixOp -> F.Bop
-------------------------------------------------------------------
+--------------------------------------------------------------------------------
 bop OpSub = F.Minus
 bop OpAdd = F.Plus
 bop OpMul = F.Times
@@ -125,9 +125,9 @@ bop OpMod = F.Mod
 bop o     = convertError "F.Bop" o
 
 
-------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Embedding Values as RefTypes
-------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 class RefTypable a where
   rType :: a -> RefType
@@ -144,22 +144,22 @@ eSingleton t e  = t `strengthen` (uexprReft e)
 pSingleton      :: (F.Predicate p) => RefType -> p -> RefType
 pSingleton t p  = t `strengthen` (F.propReft p)
 
-------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Converting RType to Fixpoint
-------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
--- rTypeSortedReft   ::  F.Reftable r => RTypeQ q r -> F.SortedReft
+--------------------------------------------------------------------------------
+rTypeSortedReft   :: F.Reftable r => RTypeQ q r -> F.SortedReft
+rTypeReft         :: F.Reftable r => RTypeQ q r -> F.Reft
+rTypeValueVar     :: F.Reftable r => RTypeQ q r -> F.Symbol
+--------------------------------------------------------------------------------
 rTypeSortedReft t = F.RR (rTypeSort t) (rTypeReft t)
-
--- rTypeReft         :: (F.Reftable r) => RTypeQ q r -> F.Reft
 rTypeReft         = fromMaybe fTop . fmap F.toReft . stripRTypeBase
-
--- rTypeValueVar     :: (F.Reftable r) => RTypeQ q r -> F.Symbol
 rTypeValueVar t   = vv where F.Reft (vv,_) = rTypeReft t
 
-------------------------------------------------------------------------------------------
--- rTypeSort :: F.Reftable r => RTypeQ q r -> F.Sort
-------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+rTypeSort :: F.Reftable r => RTypeQ q r -> F.Sort
+--------------------------------------------------------------------------------
 rTypeSort (TVar α _)          = F.FObj $ F.symbol α
 rTypeSort (TAll v t)          = rTypeSortForAll $ TAll v t
 rTypeSort (TFun xts t _)      = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
@@ -170,7 +170,7 @@ rTypeSort (TRef (Gen n ts) _) = F.fAppTC (rawSymbolFTycon (F.symbol n)) (rTypeSo
 rTypeSort (TObj _ _ _ )       = F.fAppTC (rawStringFTycon objectName) []
 rTypeSort (TClass _)          = F.fAppTC (rawStringFTycon className ) []
 rTypeSort (TMod _)            = F.fAppTC (rawStringFTycon moduleName) []
-rTypeSort t                   = error $ render $ text ("BUG: Unsupported in rTypeSort " ++ ppshow t)
+rTypeSort t                   = error $ render $ text "BUG: Unsupported in rTypeSort"
 
 rTypeSortPrim TBV32      = BV.mkSort BV.S32
 rTypeSortPrim TNumber    = F.intSort
@@ -193,9 +193,9 @@ rTypeSortForAll t        = genSort n θ $ rTypeSort tbody
 genSort n θ (F.FFunc _ t) = F.FFunc n (F.sortSubst θ <$> t)
 genSort n θ t             = F.FFunc n [F.sortSubst θ t]
 
-------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 stripRTypeBase :: RTypeQ q r -> Maybe r
-------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 stripRTypeBase (TPrim _ r)  = Just r
 stripRTypeBase (TRef _ r)   = Just r
 stripRTypeBase (TVar _ r)   = Just r
@@ -204,14 +204,14 @@ stripRTypeBase (TObj _ _ r) = Just r
 stripRTypeBase (TOr _ r)    = Just r
 stripRTypeBase _            = Nothing
 
-------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 singleton :: F.Expression x => RefType -> x -> RefType
-------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 singleton t x = toplevel (const (F.uexprReft x)) t
 
-------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 noKVars :: F.Reft -> F.Reft
-------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 noKVars (F.Reft (x, p))     = F.Reft (x, dropKs p)
   where
     dropKs                  = F.pAnd . filter (not . isK) . F.conjuncts
@@ -219,9 +219,9 @@ noKVars (F.Reft (x, p))     = F.Reft (x, dropKs p)
     isK _                   = False
 
 
-------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Substitutions
-------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 instance (PPR r, F.Subable r) => F.Subable (RTypeQ q r) where
   syms        = foldReft (\r acc -> F.syms r ++ acc) []
@@ -231,9 +231,9 @@ instance (PPR r, F.Subable r) => F.Subable (RTypeQ q r) where
   subst1 t su = emapReft (\xs r -> F.subst1Except xs r su) [] t
 
 
-------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 isTrivialRefType :: RefType -> Bool
-------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | The only allowed top-level refinement of a function type is the
 --   ('function') tag, So ignore this for this check.
 isTrivialRefType (TFun a b _) = isTrivialRefType' (TFun a b fTop)
@@ -254,9 +254,9 @@ rawStringFTycon = F.symbolFTycon
 
 
 
------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Helpers for extracting specifications from @Rsc@ @Statement@
------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 getInvariant :: Statement a -> F.Pred
 

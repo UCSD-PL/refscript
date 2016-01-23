@@ -104,12 +104,6 @@ instance Free (TypeMember r) where
 instance Free a => Free [a] where
   free                      = S.unions . map free
 
-instance Free (Cast r) where
-  free CNo                  = S.empty
-  free (CDead _ t)          = free t
-  free (CUp t t')           = free [t,t']
-  free (CDn t t')           = free [t,t']
-
 instance Free (Fact r) where
   free (PhiVarTy (_,t))     = free t
   free (TypInst _ _ ts)     = free ts
@@ -119,9 +113,9 @@ instance Free (Fact r) where
   free (CtorAnn c)          = free c
   free (UserCast t)         = free t
   free (SigAnn _ c)         = free c
-  free (TCast _ c)          = free c
   free (ClassAnn _ t)       = free t --  foldr S.delete (free $ e ++ i) vs
   free (InterfaceAnn t)     = free t --  foldr S.delete (free $ e ++ i) vs
+  -- TODO: TypeCast
   free _                    = S.empty
 
 instance Free (TypeSig r) where
@@ -172,12 +166,6 @@ instance SubstitutableQ q r t => SubstitutableQ q r (Located t) where
 instance F.Reftable r => SubstitutableQ q r (VarInfoQ q r) where
   apply θ (VI l a i t)      = VI l a i $ apply θ t
 
-instance F.Reftable r => SubstitutableQ q r (CastQ q r) where
-  apply _ CNo         = CNo
-  apply θ (CDead z t) = CDead z         (apply θ t)
-  apply θ (CUp t t')  = CUp (apply θ t) (apply θ t')
-  apply θ (CDn t t')  = CDn (apply θ t) (apply θ t')
-
 instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   apply θ (PhiVarTy (v,t))     = PhiVarTy . (v,) $ apply θ t
   apply θ (TypInst i ξ ts)     = TypInst i ξ     $ apply θ ts
@@ -187,9 +175,9 @@ instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   apply θ (CtorAnn t)          = CtorAnn         $ apply θ t
   apply θ (UserCast t)         = UserCast        $ apply θ t
   apply θ (SigAnn l t)         = SigAnn l        $ apply θ t
-  apply θ (TCast ξ t)          = TCast ξ         $ apply θ t
   apply θ (ClassAnn l t)       = ClassAnn l      $ apply θ t
   apply θ (InterfaceAnn t)     = InterfaceAnn    $ apply θ t
+  -- TODO: TypeCast
   apply _ a                    = a
 
 instance F.Reftable r => SubstitutableQ q r (TypeMemberQ q r) where

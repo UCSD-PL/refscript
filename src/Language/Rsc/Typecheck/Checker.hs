@@ -90,7 +90,7 @@ castErrors :: Unif r => AnnTc r -> [Error]
 --------------------------------------------------------------------------------
 castErrors (FA _ l facts) = downErrors
   where
-    downErrors = [errorDownCast l t1 t2 | TCast _ (CDn t1 t2) <- facts]
+    downErrors = [ errorDownCast l t | TypeCast _ t <- facts]
 
 --------------------------------------------------------------------------------
 typeCheck :: Unif r => Config -> TcRsc r -> ClassHierarchy r -> IO (Either FError (TcRsc r))
@@ -129,7 +129,8 @@ patch fs
     vld PhiVarTy{}    = True
     vld PhiVarTC{}    = True
     vld PhiVar{}      = True
-    vld TCast{}       = True
+    vld TypeCast{}    = True
+    vld DeadCast{}    = True
     vld _             = False
 
 -- accumNodeIds :: Unif r => Statement (AnnTc r) -> [(Int, [Fact r])]
@@ -661,12 +662,14 @@ tcExpr γ ex@(Cast l e) _
 --   typechecked, so just return the inferred type.
 --
 tcExpr γ (Cast_ l e) to
-  = case [ t_ | TCast ξ t_ <- fFact l, tce_ctx γ == ξ ] of
+  = case [ t_ | TypeCast ξ t_ <- fFact l, tce_ctx γ == ξ ] of
       [ ] -> do (e', t)    <- tcExpr γ e to
                 case e' of
                   Cast_ {} -> die $ bugNestedCasts (srcPos l) e
                   _        -> (,t) . (`Cast_` e') <$> freshenAnn l
-      [c] -> return (Cast_ l e, castType c)
+
+      [t] -> return (Cast_ l e, ofType t)
+
       _   -> die $ bugNestedCasts (srcPos l) e
 
 -- | e.f

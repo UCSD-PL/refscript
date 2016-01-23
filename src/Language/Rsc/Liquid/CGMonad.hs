@@ -41,7 +41,9 @@ module Language.Rsc.Liquid.CGMonad (
 
   , envAddGuard, envPopGuard
   , envFindTyWithAsgn
-  , envPushContext, envGetContextCast, envGetContextTypArgs
+  , envPushContext
+
+  , Cast(..), envGetContextCast, envGetContextTypArgs
 
   -- * Add Subtyping Constraints
   , subType, wellFormed -- , safeExtends
@@ -52,8 +54,8 @@ module Language.Rsc.Liquid.CGMonad (
   -- * Function Types
   , cgFunTys, substNoCapture
 
-  -- * Zip type wrapper
-  -- , zipTypeUpM, zipTypeDownM
+  -- * Type narrowing
+  , narrowType
 
   , unqualifyThis
 
@@ -238,15 +240,28 @@ cgError err = throwE $ catMessage err "CG-ERROR\n"
 
 --------------------------------------------------------------------------------
 envPushContext    :: (CallSite a) => a -> CGEnv -> CGEnv
-envGetContextCast :: CGEnv -> AnnLq -> Cast F.Reft
 --------------------------------------------------------------------------------
 envPushContext c g = g { cge_ctx = pushContext c (cge_ctx g) }
 
+
+data Cast = CNo | CDead [Error] | CType Type
+
+--------------------------------------------------------------------------------
+envGetContextCast :: CGEnv -> AnnLq -> Cast
+--------------------------------------------------------------------------------
 envGetContextCast g a
-  = case [(errs, t) | CDead errs t <- [ c | TCast cx c <- fFact a, cx == cge_ctx g]] of
-      [ ] -> CNo
-      cs  -> let (errs', ts) = unzip cs in
-             CDead (concat errs') (mkUnion ts)
+  | [t ] <- [ t_  | TypeCast ξ t_  <- fFact a, ξ == cge_ctx g ]
+  = CType t
+  | [es] <- [ es_ | DeadCast ξ es_ <- fFact a, ξ == cge_ctx g ]
+  = CDead es
+  | otherwise
+  = CNo
+
+
+--   = case [(errs, t) | CDead errs t <- [ c | TCast cx c <- fFact a, cx == cge_ctx g]] of
+--       [ ] -> CNo
+--       cs  -> let (errs', ts) = unzip cs in
+--              CDead (concat errs') (mkUnion ts)
 
 -- | Returns the type instantiations for parameters @αs@ in context @n@
 --------------------------------------------------------------------------------
@@ -729,17 +744,11 @@ trueRefType    = mapReftM true
 
 
 --------------------------------------------------------------------------------
--- | Splitting Subtyping Constraints
---------------------------------------------------------------------------------
---
--- The types that are split should be aligned by type
---
--- Premise: |t1| = |t2| -- raw type equality
---
---------------------------------------------------------------------------------
 splitC :: SubC -> CGM [FixSubC]
 --------------------------------------------------------------------------------
 
+-- | S-Mut
+--
 splitC (Sub g i t1 t2)
   | mutRelated t1, mutRelated t2
   = return []
@@ -748,7 +757,7 @@ splitC (Sub g i t1 t2)
   | mutRelated t2
   = error "Only `splitC` mutability types with eachother."
 
--- | Function types
+-- | S-Fun
 --
 splitC (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
   = do bcs       <- bsplitC g i tf1 tf2
@@ -762,13 +771,17 @@ splitC (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
        su         = F.mkSubst $ zipWith bSub xt1s xt2s
        bSub b1 b2 = (b_sym b1, F.eVar $ b_sym b2)
 
+-- | S-And-L
+--
 splitC (Sub _ _ TAnd{} _)
   = error "TAnd not supported in splitC"
 
+-- | S-And-R
+--
 splitC (Sub _ _ _ TAnd{})
   = error "TAnd not supported in splitC"
 
--- | TAlls
+-- | S-All
 --
 splitC (Sub g i (TAll α1 t1) (TAll α2 t2))
   | α1 == α2
@@ -779,7 +792,7 @@ splitC (Sub g i (TAll α1 t1) (TAll α2 t2))
     θ   = fromList [(btvToTV α2, btVar α1 :: RefType)]
     t2' = apply θ t2
 
--- | TVars
+-- | S-Var
 --
 splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   | α1 == α2
@@ -787,23 +800,47 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   | otherwise
   = splitIncompatC g i t1
 
--- | Unions
+-- | S-Union-L
 --
-splitC (Sub g c t1 t2)
-  | any isTUnion [t1, t2]
+splitC (Sub g c t1@(TOr t1s r) t2)
   = do  m1      <- bsplitC g c t1 t2
-        mCs     <- concatMapM (\(_,t,t') -> splitC (Sub g (ci (ee t t') l) t t')) mts
-        nCs     <- concatMapM (\t -> splitIncompatC g (ci (ee t (mkBot t)) l) t) t1s'
-        return   $ m1 ++ mCs ++ nCs
-    where
-      l          = srcPos c
-      ee         = mkLiquidError l g
-      (t1s, t2s) = mapPair bkUnion (t1, t2)
-      it1s       = ([0..]::[Int]) `zip` t1s
-      mts        = [ (i, τ1, τ2) | (i, τ1) <- it1s, τ2 <- t2s, isSubtype l g τ1 τ2 ]
-      t1s'       = [ τ1          | (i, τ1) <- it1s, i `notElem` map fst3 mts ]
+        ms      <- concatMapM (\t -> splitC (Sub g c (t `strengthen` r) t2)) t1s
+        return   $ m1 ++ ms
 
--- | Type references
+-- | S-Union-R
+--
+splitC (Sub g c s t@(TOr ts _))
+  -- = do  m0        <- bsplitC g c s t
+  = do  -- m0        <- bsplitC g c s (ltracePP c ("TOP-LEVEL: " ++ ppshow s) t)
+        (mi, g')  <- foldM step ([], g) (init ts)
+        ml        <- splitC $ Sub g' c s (ltracePP c ("SUBT with grd: " ++ ppshow (cge_guards g')) (last ts))
+        -- ml        <- splitC $ Sub g' c s (last ts)
+        return     $ {- m0 ++ mi ++ -} tracePP "" ml
+  where
+    step (ms, g) t2 =
+      do  bk    <- refresh tBool
+          _     <- wellFormed c g bk
+          pk    <- pure   $ F.reftPred (rTypeReft bk)
+          g'    <- pure   $ g { cge_guards =        pk : cge_guards g }
+          g''   <- pure   $ g { cge_guards = F.PNot pk : cge_guards g }
+
+          ms'   <- splitC $ Sub g' c s (ltracePP c ("SUBT with grd: " ++ ppshow (cge_guards g')) t2)
+          -- ms'   <- splitC $ Sub g' c s t2
+          return $ (ms ++ ms', g'')
+
+--         bs  <- pure (map (\_ -> tBool) ts)
+--         ks  <- mapM refresh bs
+--         _   <- mapM (wellFormed c g) bs
+--         xgs <- mapM (\b -> cgEnvAddFresh "split-union" c b g) bs
+--         ms  <- concat <$> zipWithM (\t' (x', g') -> splitC (Sub g' c t1 t')) ts xgs
+--         m   <- bsplitC g c tBool (ltracePP c "RHS" $ toOr (map fst xgs))
+--   where
+--     toOr :: [RefType] -> RefType
+--     toOr = (tBool `strengthen`) . F.predReft . F.pOr . map (F.reftPred . rTypeReft)
+--     toOr = (tBool `strengthen`) . F.predReft . F.pOr . map F.eProp
+
+
+-- | S-Ref
 --
 --  TODO: restore co/contra-variance
 --
@@ -855,13 +892,15 @@ splitC (Sub g i t1@(TRef n1@(Gen x1 (m1:t1s)) r1) t2@(TRef n2@(Gen x2 (m2:t2s)) 
   | otherwise
   = splitIncompatC g i t1
 
+-- | S-Prim
+--
 splitC (Sub g i t1@(TPrim c1 _) t2@(TPrim c2 _))
   | isTTop t2 = return []
   | isTAny t2 = return []
-  | c1 == c2  = bsplitC g i t1 t2
-  | otherwise = splitIncompatC g i t1
+  | c1 == c2  = bsplitC g i t1 $ ltracePP i ("PRIM " ++ ppshow t1) t2
+  | otherwise = splitIncompatC g i $ ltracePP i "INCOMPAT" t1
 
--- | TObj
+-- | S-Obj
 --
 --    TODO: case for Unique
 --
@@ -1114,6 +1153,13 @@ unqualifyThis g t = F.subst $ F.mkSubst fieldSu
     qFld x f  = qualifySymbol (F.symbol x) f
     subPair f = (qFld this f, F.expr f)
 
+-------------------------------------------------------------------------------
+narrowType :: (IsLocated l) => l -> CGEnv -> RefType-> Type -> RefType
+-------------------------------------------------------------------------------
+narrowType l g t1@(TOr t1s r) t2
+  = mkUnion' (L.filter (\t1 -> isSubtype l g t1 (ofType t2)) t1s) r
+
+narrowType _ _ t1 _ = t1
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

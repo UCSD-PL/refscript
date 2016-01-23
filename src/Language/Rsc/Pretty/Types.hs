@@ -53,7 +53,8 @@ instance PP Char where
 instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp (TPrim c r)     = F.ppTy r $ pp c
   pp (TVar α r)      = F.ppTy r $ pp α
-  pp (TOr ts r)      = F.ppTy r $ ppArgs id (text " +") ts
+  pp (TOr ts r)      = F.ppTy r $ sep $ pp (head ts)
+                     :      [text "+"   <+> pp t | t <- tail ts]
   pp (TAnd ts)       = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TRef t r)      = F.ppTy r (pp t)
   pp (TObj _ ms r)   = F.ppTy r $ braces $ pp ms
@@ -233,5 +234,5 @@ instance PP F.Reft where
   pp = pprint
 
 instance PP (F.SubC c) where
-  pp s = text "TODO PP F.SubC" -- pp (F.lhsCs s) <+> text " <: " <+> pp (F.rhsCs s)
+  pp s =  parens (pp (F.slhs s)) <+> text " => " <+> pp (F.srhs s)
 

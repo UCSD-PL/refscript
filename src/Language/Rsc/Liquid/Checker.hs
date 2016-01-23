@@ -199,8 +199,8 @@ ppCasts (Rsc { code = Src fs })
   where
     castDoc = fcat $ map ppEntry entries
     ppEntry = \(_, c) -> pp c
-    entries = [ (srcPos a, c) | a <- concatMap FO.toList fs
-                              , TCast _ c <- fFact a ]
+    entries = [ (srcPos a, t) | a <- concatMap FO.toList fs
+                              , TypeCast _ t <- fFact a ]
 
 --------------------------------------------------------------------------------
 generateConstraints :: Config -> FilePath -> RefScript -> ClassHierarchy F.Reft -> CGInfo
@@ -637,18 +637,29 @@ consAsgn l g x e =
 --     errMsg           = errorContextual l e s
 -- withContextual _ _ _ act = act
 
+
+
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh,
 -- temporary (A-Normalized) variable holding the value of `e`,
 -- g' is g extended with a binding for x' (and other temps required for `e`)
 --------------------------------------------------------------------------------
 consExpr :: CGEnv -> Expression AnnLq -> Maybe RefType -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
--- | DeadCast
+-- | Dead-casts / Type-casts
 consExpr g (Cast_ l e) s
   = case envGetContextCast g l of
-      CDead [] t -> subType l (Just $ bugDeadCast l) g t (tBot t)     >> return Nothing
-      CDead es t -> mapM_ (\e -> subType l (Just e)  g t (tBot t)) es >> return Nothing
-      _          -> consExpr g e s
+      -- Type-cast
+      CType s  -> mseq (consExpr g e (Just $ ofType s)) $ \(x, g') -> do
+                    t   <- ltracePP l "_cast_" <$> cgSafeEnvFindTyM x g'
+                    t'  <- ltracePP l ("narrowed with " ++ ppshow s) <$> pure (narrowType l g t s)
+                    Just <$> cgEnvAddFresh "cast_" l t' g
+
+      -- Dead-cast
+      CDead es -> mseq (consExpr g e s) $ \(x, g') -> do
+                    t <- cgSafeEnvFindTyM x g'
+                    mapM_ (\e -> subType l (Just e) g t (tBot t)) es
+                    return Nothing
+      CNo      -> consExpr g e s
   where
        tBot t = t `strengthen` F.bot (rTypeR t)
 
@@ -885,7 +896,7 @@ consCall :: PP a => CGEnv -> AnnLq -> a -> [(Expression AnnLq, Maybe RefType)]
 --------------------------------------------------------------------------------
 consCall g l fn ets (validOverloads g l -> fts)
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      ts <- mapM (`cgSafeEnvFindTyM` g') xes
+      ts <- ltracePP l (ppshow fn) <$> mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
         ft:_ -> consCheckArgs l g' fn ft ts xes
         _    -> cgError $ errorNoMatchCallee (srcPos l) fn ts fts

@@ -14,12 +14,6 @@ import           Language.Rsc.Types
 import           Prelude                    hiding (maybe)
 import           Text.PrettyPrint.HughesPJ
 
-instance (PP r, F.Reftable r) => PP (Cast r) where
-  pp CNo          = text "No cast"
-  pp (CDead es t) = vcat $ map (\e -> text "Fatal" <+> pp e) es
-  pp (CUp t1 t2)  = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
-  pp (CDn t1 t2)  = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
-
 -- instance PP SubTRes where
 --   pp EqT        = text "="
 --   pp (SubErr _) = text "dead"
@@ -34,7 +28,8 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (TypInst i ξ ts)       = text "inst"         <+> pp i <+> pp ξ <+> pp ts
   pp (Overload ξ i)         = text "overload"     <+> pp ξ <+> pp i
   pp (EltOverload ξ m t)    = text "elt_overload" <+> pp ξ <+> pp m <+> pp t
-  pp (TCast  ξ c)           = text "cast"         <+> pp ξ <+> pp c
+  pp (TypeCast ξ t)         = text "cast"         <+> pp ξ <+> pp t
+  pp (DeadCast ξ _)         = text "deadcast"     <+> pp ξ
   pp (VarAnn _ _ t)         = text "Var Ann"      <+> pp t
   pp (CtorAnn c)            = text "Ctor Ann"     <+> pp c
   pp (UserCast c)           = text "Cast Ann"     <+> pp c

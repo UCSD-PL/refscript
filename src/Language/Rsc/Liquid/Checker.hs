@@ -481,7 +481,7 @@ consVarDecl g (VarDecl l x (Just e))
         mseq (consExpr g e (Just t)) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
           _       <- subType l Nothing gy eT t
-          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc RdOnly Initialized t)] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc RdOnly Initialized eT)] gy
 
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 

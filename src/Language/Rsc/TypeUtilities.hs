@@ -29,6 +29,7 @@ import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Types
+import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Typecheck.Types
@@ -103,19 +104,19 @@ castTy t = TFun [B sx t] (t `eSingleton` sx) fTop
 ---------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------
--- arrayLitTy :: F.Subable (RType r) =>RType r -> Int -> RType r -> RType r
+arrayLitTy :: (Monad m, F.Reftable r, IsLocated l, PP r, PP a1, CheckingEnvironment r t)
+           => l -> t r -> a1 -> Maybe (RType r) -> Int -> m (Either F.Error (RType r))
 ---------------------------------------------------------------------------------
 arrayLitTy l g@(envCHA -> c) e (Just t0) n
   | TRef nm _          <- t0
   , Just (Gen _ [m,t]) <- weaken c nm (mkAbsName [] arrayName)
   = if isIM m then mkImmArrTy l g t n
-              else mkArrTy    l g t n
+              else mkArrTy    l g n
   | otherwise
   = return $ Left $ errorArrayLitType l e t0
 
-arrayLitTy l _ e _ _
-  = return $ Left $ errorArrayLitCtxType l e
-
+arrayLitTy l g e Nothing n
+  = mkArrTy l g n
 
 mkImmArrTy l g t n
   = do  opTy <- safeEnvFindTy l g (builtinOpId BIImmArrayLit)
@@ -128,14 +129,13 @@ mkImmArrTy l g t n
     rt t_    = F.subst1 t_ (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
     tox x    = F.symbol . ((symbolString x) ++) . show
 
-mkArrTy l g t n
+mkArrTy l g n
   = do  opTy <- safeEnvFindTy l g (builtinOpId BIArrayLit)
         case opTy of
           TAll μ (TAll α (TFun [B x_ t_] rt r)) ->
             return $ Right $ mkAll [μ,α] (TFun (bs x_ t_) rt r)
   where
     bs x_ t_ = [ B (tox x_ i) t_ | i <- [1..n] ]
-    rt       = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
     tox x    = F.symbol . ((symbolString x) ++) . show
 
 

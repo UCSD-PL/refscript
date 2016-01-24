@@ -28,7 +28,6 @@ unitTests = group "Unit"
     testGroup "pos-ops"    <$> dirTests rscCmd "tests/pos/operators"  [] ExitSuccess
   , testGroup "pos-ops"    <$> dirTests rscCmd "tests/pos/scope"      [] ExitSuccess
   , testGroup "pos-simple" <$> dirTests rscCmd "tests/pos/simple"     [] ExitSuccess
---   , testGroup "pos-scope"  <$> dirTests rscCmd "tests/pos/scope"      [] ExitSuccess
   , testGroup "pos-union"  <$> dirTests rscCmd "tests/pos/unions"     [] ExitSuccess
 --   , testGroup "pos-alias"  <$> dirTests rscCmd "tests/pos/typealias"  [] ExitSuccess
 --   , testGroup "pos-fb"     <$> dirTests rscCmd "tests/pos/fb"         [] ExitSuccess

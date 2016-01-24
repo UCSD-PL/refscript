@@ -890,7 +890,7 @@ consCall g l fn ets ft@(validOverloads g l -> fts)
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
-        ft : _ -> traceTypePP l (ppshow fn ++ " :: " ++ ppshow ft) $ consCheckArgs l g' fn ft ts xes
+        ft : _ -> consCheckArgs l g' fn ft ts xes
         _      -> cgError $ errorNoMatchCallee (srcPos l) fn ts ft
 
 -- | `consCheckArgs` does the subtyping between the types of the arguments
@@ -903,8 +903,8 @@ consCheckArgs :: PP a => AnnLq -> CGEnv -> a
                       -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
 consCheckArgs l g fn ft ts xes
-  = do  (rhs, rt) <- ltracePP l "rhs" <$> instantiateFTy l g fn xes ft
-        lhs       <- ltracePP l "lhs" <$> zipWithM  (instantiateTy l g) [1..] ts
+  = do  (rhs, rt) <- instantiateFTy l g fn xes ft
+        lhs       <- zipWithM  (instantiateTy l g) [1..] ts
         _         <- zipWithM_ (subType l Nothing g) lhs rhs
         Just      <$> cgEnvAddFresh "5" l rt g
 

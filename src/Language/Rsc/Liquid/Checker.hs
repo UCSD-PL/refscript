@@ -463,9 +463,9 @@ consVarDecl g (VarDecl l x (Just e))
 
       -- Local (with type annotation)
       Just (VI lc  WriteLocal _ t) -> do
-        fta       <- ltracePP l "Fresh Type" <$> freshenType WriteGlobal g l t
+        fta       <- freshenType WriteGlobal g l t
         mseq (consExpr g e $ Just t) $ \(y,gy) -> do
-          eT      <- ltracePP l "Inferred Type" <$> cgSafeEnvFindTyM y gy
+          eT      <- cgSafeEnvFindTyM y gy
           _       <- subType l Nothing gy eT fta
           _       <- subType l Nothing gy fta t
           Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc WriteLocal Initialized fta)] gy

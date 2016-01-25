@@ -480,11 +480,13 @@ consVarDecl g (VarDecl l x (Just e))
           Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc WriteGlobal Initialized fta)] gy
 
       -- | ReadOnly
-      Just (VI lc RdOnly _ t) ->
+      Just (VI lc RdOnly _ t) -> do
+        fta       <- freshenType WriteGlobal g l t
         mseq (consExpr g e (Just t)) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
-          _       <- subType l Nothing gy eT t
-          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc RdOnly Initialized eT)] gy
+          _       <- subType l Nothing gy eT fta
+          _       <- subType l Nothing gy fta t
+          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc RdOnly Initialized fta)] gy
 
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 

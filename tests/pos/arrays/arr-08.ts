@@ -1,4 +1,7 @@
 
+/*@ qualif Length(v: a): len v = 1  */
+
+
 /*@ readonly arr :: IArray<string> */
 let arr = ["a"];
 

@@ -51,6 +51,7 @@ interface Array<M extends ReadOnly, T> {
     [n: number]: T;
 }
 
+declare type UArray<T>  = Array<Unique, T>;
 declare type IArray<T>  = Array<Immutable, T>;
 declare type MArray<T>  = Array<Mutable, T>;
 declare type ROArray<T> = Array<ReadOnly, T>;

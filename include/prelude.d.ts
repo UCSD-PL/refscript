@@ -1,19 +1,5 @@
 
-
-// /**
-//  *  Only 'length' is extractable from an array type.
-//  */
-// /* builtin_BIDotRef :: <T>(a: IArray<T>, f: "length") => { v: number | v = len a } */
-// declare function builtin_BIDotRef<T>(a: IArray<T>, f: "length"): number;
-// /* builtin_BIDotRef :: <T>(a: IArray<T>, f: { string | false }) => number */
-// declare function builtin_BIDotRef<M extends ReadOnly, T>(a: Array<M, T>, f: string): number;
-// declare function builtin_BIDotRef<T>(a: { f: T }, f: string): T;
-
-
- /*  builtin_BIBracketRef :: <M,A>(x: Array<M,A>, n: number + undefined) => A + undefined */
- /*  builtin_BIBracketRef :: <M,A>(x: Array<M,A>, n: undefined) => undefined */
- /*  builtin_BIBracketRef :: <A>  (o: [Immutable] {[y: string]: A }, x: string) => { A | has Property(x,o) } + { undefined | not (hasProperty(x,o)) } */
-
+/*@ builtin_BIBracketRef :: <A>(x: UArray<A> , n: idx<x>)  => A */
 /*@ builtin_BIBracketRef :: <A>(x: IArray<A> , n: idx<x>)  => A */
 /*@ builtin_BIBracketRef :: <A>(x: MArray<A> , n: number)  => A + undefined */
 /*@ builtin_BIBracketRef :: <A>({[y: string]: A }, string) => A + undefined */
@@ -21,7 +7,7 @@ declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
 
 // TODO : add case for A<AssignsFields> or A<Unique>
 
-/*@ builtin_BIBracketAssign :: <A>(x: IArray<A> , n: idx<x>, v: A) => void */
+/*@ builtin_BIBracketAssign :: <A>(x: UArray<A> , n: idx<x>, v: A) => void */
 /*@ builtin_BIBracketAssign :: <M extends ReadOnly,A>(x: Array<M,A>, n: number, v: A) => void */
 /*@ builtin_BIBracketAssign :: <A>(a: {[y: string]: A}, s: string, v: A) => void */
 declare function builtin_BIBracketAssign<A>(a: any, s: any, v: A): void;
@@ -360,6 +346,7 @@ interface Array<M extends ReadOnly, T> {
     [n: number]: T;
 }
 
+declare type UArray<T>  = Array<Unique, T>;
 declare type IArray<T>  = Array<Immutable, T>;
 declare type MArray<T>  = Array<Mutable, T>;
 declare type ROArray<T> = Array<ReadOnly, T>;

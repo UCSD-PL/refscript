@@ -157,8 +157,8 @@ subtype l γ t1 t2
   | isTFun t1, isTFun t2 = subtypeFun l γ t1 t2
 
 -- | Rest (Fail)
-subtype _ _ _  _
-  = SubErr []     -- TODO
+subtype l _ t1 t2
+  = SubErr [errorUncaughtSub l t1 t2]
 
 --------------------------------------------------------------------------------
 subtypeObj :: (PPRE r, FE g r, IsLocated l) => l -> g r -> RType r -> RType r -> SubtypingResult

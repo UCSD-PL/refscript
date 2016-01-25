@@ -133,6 +133,12 @@ errorObjSubtype l t t' fs     = mkErr l $ printf "Object type '%s' is not a subt
                                                   (show $ intersperse comma $ map pp fs)
 errorFuncSubtype l t t'       = mkErr l $ printf "Function type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
 
+errorUncaughtSub l t t'       = mkErr l $ show $ text "Subtyping between types" $+$
+                                                 nest 2 (pp t) $+$
+                                                 text "and" $+$
+                                                 nest 2 (pp t') $+$
+                                                 text "is unhandled."
+
 -- Typechecking
 errorCallNotSup l fn ft es ts = mkErr l $ show $ text "Cannot call"       <+> ticks (pp fn)                 <+>
                                                  text "with signature"    $+$ nest 2 (pp ft)                $+$

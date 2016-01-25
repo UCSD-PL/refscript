@@ -857,11 +857,10 @@ splitC (Sub g i t1@(TRef n1@(Gen x1 (m1:t1s)) r1) t2@(TRef n2@(Gen x2 (m2:t2s)) 
   | not (isSubtype (srcPos i) g m1 m2)
   = splitIncompatC g i t1
   --
-  -- * Both immutable, same name, non arrays: Co-variant subtyping
+  -- * Both immutable, same name: Co-variant subtyping
   --
   | x1 == x2
   , isIM m2
-  , not (isArrayType t1)
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- concatMapM splitC $ safeZipWith "splitc-4" (Sub g i) t1s t2s
         return $ cs ++ cs'

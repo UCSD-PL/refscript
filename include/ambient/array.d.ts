@@ -9,7 +9,7 @@ interface Array<M extends ReadOnly, T> {
     push(x: T): number;
     // push<N>(...items: Array<T>): number;
 
-    /*@ @Mutable push(): T */
+    /*@ @Mutable pop(): T */
     pop(): T;
 
     /*@ @Immutable concat   (item: IArray<T> ): { Array<Unique,T> | len v = len this + len item } */
@@ -38,7 +38,11 @@ interface Array<M extends ReadOnly, T> {
     /*@ map<U,N>(callbackfn: (value: T) => U): Array<N,U> */
     map<U>(callbackfn: (value: T, index: number, array: T[]) => U, thisArg?: any): U[];
 
-    // filter(callbackfn: (value: T, index: number, array: T[]) => boolean, thisArg?: any): T[];
+    /*@ filter (callbackfn: (v: T) => boolean): Array<Unique,T> */
+    /*@ filter (callbackfn: (v: T, i: number) => boolean): Array<Unique, T> */
+    /*@ filter (callbackfn: (v: T, i: number, a: IArray<T>) => boolean): Array<Unique, T> */
+    filter(callbackfn: (value: T, index: number, array: T[]) => boolean, thisArg?: any): T[];
+
     // reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
     // reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
     // reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
@@ -60,8 +64,10 @@ declare function builtin_getLength<M extends ReadOnly,T>(a: Array<M, T>): number
 
 interface ArrayConstructor<M extends ReadOnly> {
     // new (arrayLength?: number): any[];
-    /*@ new <T>(arrayLength: number): { v: Array<M,T> | len v = arrayLength } */
+
+    /*@ new <T>(arrayLength: number): { v: Array<Unique,T> | len v = arrayLength } */
     new <T>(arrayLength: number): Array<M,T>;
+
     // new <T>(...items: T[]): T[];
     // (arrayLength?: number): any[];
     // <T>(arrayLength: number): T[];

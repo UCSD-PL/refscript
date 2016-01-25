@@ -1,10 +1,10 @@
 
-/*@ is_num :: (x:number + undefined) => {boolean | 0 < 1} */
+/*@ is_num :: (x: number + undefined) => boolean */
 function is_num(x:any) {
     return !isNaN(x);
 }
 
-/*@ foo :: (IArray<number>) => { IArray<number> | 0 < 1 } */ 
-function foo(arr:any) {
+/*@ foo :: (IArray<number>) => IArray<number> */
+export function foo(arr:any) {
     return arr.filter(is_num);
 }

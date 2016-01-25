@@ -1,8 +1,4 @@
-/*@ foo :: (#Array[#Immutable, number], (x:number) => string) => {#Array[#Immutable, string] | 0 < 1} */ 
-function foo(arr:any, f:any) {
+
+export function foo(arr: IArray<number>, f: (x: number) => string): IArray<string> {
   return arr.map(f);
 }
-
-
-
-

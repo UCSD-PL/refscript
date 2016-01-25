@@ -1,14 +1,12 @@
 
-/*@ readonly garr :: # */
-let garr  : number[] = [1,2,3,4];
+/*@ readonly a :: IArray<posint> */
+let a = [1, 2, 3, 4];
 
-/*@ foo :: () => void */
-function foo() : void {
-  garr[2] = 10;
+function foo(): void {
+    a[2] = 10;
 }
 
-/*@ bar :: ({number | (0 <= v && v <= 3)}) => {number | v > 0} */
-function bar(n : number) : number{
-  let z : number = garr[n];
-  return z;
+/*@ bar :: (n: idx<a>) => {number | v > 0} */
+function bar(n: number): number {
+    return a[n];
 }

@@ -1,10 +1,7 @@
 
+/*@ qualif Length(v: a): len v = 5 */
 
-// TODO: Better message ...
-
-
-/*@ where :: ( ) => { IArray<number> | len v = 5 } */
-function where( ) {
-	let result = new Array<number>(5);
-	return result;
+/*@ mkArray :: ( ) => { IArray<number> | len v = 5 } */
+export function mkArray( ) {
+	return new Array<number>(5);
 }

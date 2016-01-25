@@ -136,8 +136,9 @@ errorFuncSubtype l t t'       = mkErr l $ printf "Function type '%s' is not a su
 -- Typechecking
 errorCallNotSup l fn ft es ts = mkErr l $ show $ text "Cannot call"       <+> ticks (pp fn)                 <+>
                                                  text "with signature"    $+$ nest 2 (pp ft)                $+$
-                                                 text "with argument(s):" <+> intersperse comma (map pp es) $+$
-                                                 text "of type(s):"       <+> intersperse comma (map pp ts)
+                                                 text "with argument(s):" $+$
+                                                 nest 2 (vcat $ map (\(e,t) -> pp e <+> dcolon <+> pp t)
+                                                        (safeZip "errorCallNotSup" es ts))
 
 errorMethMutIncomp l fn mts m = mkErr l $ show $ text "Cannot call"       <+> ticks (pp fn)                 <+>
                                                  text "with signature:"   $+$ nest 2 (vcat (map pp mts))    $+$
@@ -175,7 +176,7 @@ errorTypeParamConstr l f t c  = mkErr l $ printf "Call to function '%s' with typ
 -- Lookup
 errorEnumLookup l e n         = mkErr l $ printf "Cannot find member '%s' in enumeration '%s'" (ppshow n) (ppshow e)
 errorPrimLookup l e n         = mkErr l $ printf "Cannot find member '%s' in primitive type '%s'" (ppshow n) (ppshow e)
-errorMemLookup l t m          = mkErr l $ printf "Cannot find MEmber '%s' in type '%s'" (ppshow m) (ppshow t)
+errorMemLookup l m t          = mkErr l $ printf "Cannot find member '%s' in type '%s'" (ppshow m) (ppshow t)
 errorGenericLookup l t f      = mkErr l $ printf "Cannot find member '%s' in type '%s'" (ppshow f) (ppshow t)
 errorAmbientLookup l t f      = mkErr l $ printf "Cannot find member '%s' in ambient element '%s'" (ppshow f) (ppshow t)
 errorUnionLookup l t f        = mkErr l $ printf "Cannot find member '%s' in any part of the union '%s'" (ppshow f) (ppshow t)

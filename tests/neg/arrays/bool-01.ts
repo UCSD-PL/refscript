@@ -4,5 +4,4 @@ let emp = [];
 
 assert(emp === null);
 
-assert(false);
-
+// assert(false);

@@ -1,6 +1,6 @@
 
-/*@ writeIndex :: (a:IArray<number>, i:{ number | ( v < (len a)) }) => void */
+/*@ writeIndex :: (a: IArray<number>, i: { number |  v < len a }) => void */
 function writeIndex(a, i) {
-  a[i] = 10;
-  return;
+    a[i] = 10;
+    return;
 }

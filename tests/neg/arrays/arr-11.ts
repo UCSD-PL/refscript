@@ -3,15 +3,9 @@
 
 /*@ foo :: () => {void | 0 < 1} */
 export function foo(){
-
-  /*@ a :: IArray<number> */
-  let a = [1,2,3];
-
+  let a: IArray<number> = [1,2,3];
   /*@ b :: { IArray<number> | len v = 4 } */
   let b = [1,2,3,4];
-
   assert(a.length + b.length === 7);
-
   return;
-
 }

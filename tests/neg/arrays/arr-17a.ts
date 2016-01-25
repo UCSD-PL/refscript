@@ -1,8 +1,6 @@
 
-
-
-/*@ where :: ( ) => { IArray<number> | (len v) = 5 } */
-function where( ) {
-	let result = new Array<number>(20);
-	return result;
+/*@ where :: ( ) => { IArray<number> | len v = 2 } */
+function where() {
+    let result = new Array<number>(20);
+    return result;
 }

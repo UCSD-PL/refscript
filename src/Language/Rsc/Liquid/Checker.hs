@@ -647,12 +647,12 @@ consExpr g (Cast_ l e) s
                     t   <- cgSafeEnvFindTyM x g'
                     _   <- subType l Nothing g t (ofType s)
                     t'  <- pure (narrowType l g t s)
-
                     Just <$> cgEnvAddFresh "cast_" l t' g
 
       -- Dead-cast: Do not attempt to check the enclosed expression
-      CDead es -> do  mapM_ (\e -> subType l (Just e) g tVoid (tBot tVoid)) es
-                      return Nothing
+      CDead [] -> subType l Nothing g tBool (tBot tBool) >> return Nothing
+
+      CDead es -> mapM_ (\e -> subType l (Just e) g tBool (tBot tBool)) es >> return Nothing
 
       CNo      -> consExpr g e s
   where

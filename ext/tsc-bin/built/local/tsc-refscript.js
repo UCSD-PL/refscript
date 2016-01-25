@@ -2458,7 +2458,8 @@ var ts;
         refscript_Unsupported_prefix_operator_0: { code: 10045, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Unsupported prefix operator '{0}'." },
         refscript_Does_not_supported_function_expressions_as_field_initializers: { code: 10046, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Does not supported function expressions as field initializers." },
         refscript_Only_supports_block_scoped_variables_let_or_const: { code: 10047, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Only supports block-scoped variables (let or const)." },
-        refscript_Unsupported_postfix_operator_0: { code: 10048, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Unsupported postfix operator '{0}'." }
+        refscript_Unsupported_postfix_operator_0: { code: 10048, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Unsupported postfix operator '{0}'." },
+        refscript_Unsupported_for_loop_initialization_expression_0: { code: 10049, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Unsupported for loop initialization expression '{0}'." }
     };
 })(ts || (ts = {}));
 /// <reference path="core.ts"/>
@@ -27017,6 +27018,8 @@ var ts;
                         return whileStatementToRsStmt(state, node);
                     case ts.SyntaxKind.EmptyStatement:
                         return emptyStatementToRsStmt(state, node);
+                    case ts.SyntaxKind.ForStatement:
+                        return forStatementToRsStmt(state, node);
                 }
                 state.error(node, ts.Diagnostics.refscript_0_SyntaxKind_1_not_supported_yet, "nodeToRsStmt", ts.SyntaxKind[node.kind]);
             }
@@ -27414,6 +27417,25 @@ var ts;
             }
             function emptyStatementToRsStmt(state, node) {
                 return new ts.RsEmptyStmt(nodeToSrcSpan(node), []);
+            }
+            function forStatementToRsStmt(state, node) {
+                var init;
+                if (node.initializer) {
+                    if (node.initializer.kind === ts.SyntaxKind.VariableDeclarationList) {
+                        var vdList = node.initializer;
+                        var vds = vdList.declarations.map(function (vd) {
+                            return new ts.RsVarDecl(nodeToSrcSpan(vd), [], nodeToRsId(state, vd.name), (vd.initializer) ? new ts.RsJust(nodeToRsExp(state, vd.initializer)) : new ts.RsNothing());
+                        });
+                        init = new ts.RsVarInit(nodeToSrcSpan(node), [], new ts.RsList(vds));
+                    }
+                    else {
+                        throw new Error(ts.Diagnostics.refscript_Unsupported_for_loop_initialization_expression_0.key);
+                    }
+                }
+                else {
+                    init = new ts.RsNoInit(nodeToSrcSpan(node), []);
+                }
+                return new ts.RsForStmt(nodeToSrcSpan(node), [], init, (node.condition) ? new ts.RsJust(nodeToRsExp(state, node.condition)) : new ts.RsNothing(), (node.incrementor) ? new ts.RsJust(nodeToRsExp(state, node.incrementor)) : new ts.RsNothing(), nodeToRsStmt(state, node.statement));
             }
             function constructorDeclarationToRsClassElts(state, node) {
                 var isAmbient = !!(node.flags & 2);

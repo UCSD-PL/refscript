@@ -1,9 +1,9 @@
 
 /*@ revInc :: <M>(a: IArray<number>) => { IArray<number> | len v = len a } */
-function revInc(a: number[]) {
-    a.reverse();
-    for (let i = 0; i < a.length; i++) {
-        a[i] = a[i] + 1;
-    }
-    return a;
+export function revInc(a: number[]) {
+  // a.reverse();       // currently not allowed on non-mutable arrays
+  for (let i = 0; i < a.length; i++) {
+    a[i] = a[i] + 1;
+  }
+  return a;
 }

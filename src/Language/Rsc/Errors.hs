@@ -111,7 +111,9 @@ errorIncompatTypes l a b      = mkErr l $ printf "Type '%s' is not assignable to
 errorIncompatCovFields l a b  = mkErr l $ printf "Incompatible covariant fields when converting between elements: '%s' and '%s'." (ppshow a) (ppshow b)
 errorIncompatInvFields l a b  = mkErr l $ printf "Incompatible invariant fields when converting between elements: '%s' and '%s'." (ppshow a) (ppshow b)
 errorNonObjectType l t        = mkErr l $ printf "Type '%s' cannot be treated as an object type." (ppshow t)
-errorIncompMutTy l t t'       = mkErr l $ printf "Types '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
+
+errorIncompMutTy l t t'       = mkErr l $ show $ sep [text "Types:", nest 2 (pp t), text "and", nest 2 (pp t'), text "have incompatible mutabilities."]
+
 errorIncompMethMut l m        = mkErr l $ printf "Mutability modifiers of method '%s' are incompatible." (ppshow m)
 errorIncompCallSigs l t t'    = mkErr l $ printf "Types '%s' and '%s' have incompatible call signatures." (ppshow t) (ppshow t')
 errorIncompCtorSigs l t t'    = mkErr l $ printf "Types '%s' and '%s' have incompatible constructor signatures." (ppshow t) (ppshow t')
@@ -136,6 +138,10 @@ errorCallNotSup l fn ft es ts = mkErr l $ show $ text "Cannot call"       <+> ti
                                                  text "with signature"    $+$ nest 2 (pp ft)                $+$
                                                  text "with argument(s):" <+> intersperse comma (map pp es) $+$
                                                  text "of type(s):"       <+> intersperse comma (map pp ts)
+
+errorMethMutIncomp l fn mts m = mkErr l $ show $ text "Cannot call"       <+> ticks (pp fn)                 <+>
+                                                 text "with signature:"   $+$ nest 2 (vcat (map pp mts))    $+$
+                                                 text "on" <+> pp m <+> text "receiver."
 
 errorCallNotFound l e f       = mkErr l $ printf "Cannot find callable property '%s' of type '%s'." (ppshow f) (ppshow e)
 errorCallMatch l fn ts        = mkErr l $ printf "Could not match call to '%s' to a particular signature. Argument(s) with types '%s' are invalid." (ppshow fn) (ppshow ts)

@@ -865,15 +865,19 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
     checkEltCall (Left er) _ = tcError er
 
     checkWithMut (Just mR) te [m] = call te mR m
-    checkWithMut (Just _ ) _  _   = error "checkWithMut add error here"
+    checkWithMut (Just _ ) _  _   = error "TODO checkWithMut add error here"
     checkWithMut Nothing   te _   = fatal (bugGetMutability l te) (es, tBot)
 
     call tR _ (FI Req _ ft) = tcNormalCall γ l em (es `zip` nths) ft
     call tR _ (FI _   _ _ ) = fatal (errorCallOptional l f tR) (es, tBot)
 
-    call tR mR (MI Req mts) = tcNormalCall γ l em (es `zip` nths)
-                            $ mkAnd [ ft_ | (m, ft_) <- mts, isSubtype l γ mR m ]
-    call tR _     _         = fatal (errorCallOptional l f tR) (es, tBot)
+    call tR mR (MI Req mts)
+      | any (isSubtype l γ mR . fst) mts
+      = tcNormalCall γ l em (es `zip` nths)
+      $ mkAnd [ ft_ | (m, ft_) <- mts, isSubtype l γ mR m ]
+      | otherwise
+      = fatal (errorMethMutIncomp l em mts mR) (es, tBot)
+    call tR _ _ = fatal (errorCallOptional l f tR) (es, tBot)
 
 -- | `e(es)`
 tcCall γ (CallExpr l e es)

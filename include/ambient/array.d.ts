@@ -18,7 +18,7 @@ interface Array<M extends ReadOnly, T> {
     // concat<U extends T[]>(...items: U[]): T[];
     // concat(...items: T[]): T[];
 
-    /*@ @Mutalbe reverse(): Array<M, T> */
+    /*@ @Mutable reverse(): Array<M, T> */
     reverse(): T[];
 
     // toString(): string;

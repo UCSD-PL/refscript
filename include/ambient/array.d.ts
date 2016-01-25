@@ -40,8 +40,8 @@ interface Array<M extends ReadOnly, T> {
       */
     // concat(...items: T[]): T[];
 
-    /*@ @Immutable concat<M0>    (items: IArray<T>  ): { Array<M0,T> | len v = len this + len items } */
-    /*@            concat<M1, M2>(items: Array<M1,T>): { Array<M2,T> | true } */
+    /*@ @Immutable concat   (item: IArray<T> ): { Array<Unique,T> | len v = len this + len item } */
+    /*@            concat<M>(item: Array<M,T>): Array<Unique,T> */
     concat(item: T[]): T[];
 
     // /**

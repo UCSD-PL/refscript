@@ -349,23 +349,24 @@ tcVarDecl γ (VarDecl l x (Just e@FuncExpr{}))
 
 tcVarDecl γ v@(VarDecl l x (Just e))
   = case envFindTy x (tce_names γ) of
-      -- | Local
+      -- Local (no type annotation)
       Nothing ->
         do  (e', to) <- tcExprW γ e
             return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ VI Local WriteLocal Initialized <$> to)
 
+      -- Local (with type annotation)
       Just (VI lc WriteLocal _ t) ->
-        do  (e', t') <- tcExpr γ e (Just t)
+        do  (e', t') <- tcExprT l "VarDecl" γ e t
             return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (VI lc WriteLocal Initialized t') γ)
 
-      -- | Global
+      -- Global
       Just (VI _ WriteGlobal _ _) ->
         -- PV: the global variable should be in scope already,
         --     since it is being hoisted to the beginning of the
         --     scope.
         first (VarDecl l x . Just) <$> tcAsgn l γ x e
 
-      -- | ReadOnly
+      -- ReadOnly
       Just (VI lc RdOnly _ t) ->
         do  ([e'], Just t') <- tcNormalCallWCtx γ l "VarDecl-RO" [(e, Just t)] (idTy t)
             return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (VI lc RdOnly Initialized t') γ)
@@ -490,6 +491,12 @@ tcSetPropImm γ l f t0 (e, t') (FI _ a t)
   = tcExprT l BISetProp γ e t
 
 
+-- | `tcExprT l fn γ e t` checks expression @e@ under environment @γ@
+--   enforcing a type @t@.
+--------------------------------------------------------------------------------
+tcExprT :: (Unif r , PP f)
+        => AnnTc r -> f -> TCEnv r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
+--------------------------------------------------------------------------------
 tcExprT l fn γ e t
   = do ([e'], _) <- tcNormalCall γ l fn [(e, Just t)] (idTy t)
        return (e', t)
@@ -592,7 +599,7 @@ tcExpr γ e@(VarRef l x) _
   = return (e,t)
 
   | Just t <- to, isUMRef t
-  = fatal (errorAssignsFields (fSrc l) x t) (e, tBot)
+  = tcError (errorAssignsFields (fSrc l) x t)
 
   | Just t <- to
   = return (e,t)
@@ -617,16 +624,14 @@ tcExpr γ e@(InfixExpr _ _ _ _) _
   = tcCall γ e
 
 -- | f(e)
-tcExpr γ e@(CallExpr _ _ _) _
+tcExpr γ e@(CallExpr _ _ _) s
   = tcCall γ e
 
 -- | [e1,..,en]
 tcExpr γ e@(ArrayLit l es) to
   = arrayLitTy l γ e to (length es) >>= \case
       Left ee    -> fatal ee (e, tBot)
-      Right opTy ->
-          do  (es', t) <- tcNormalCall γ l BIArrayLit (es `zip` nths) opTy
-              return $ (ArrayLit l es', t)
+      Right opTy -> first (ArrayLit l) <$> tcNormalCall γ l BIArrayLit (es `zip` nths) opTy
 
 -- | { f1: e1, ..., fn: tn }
 tcExpr γ ex@(ObjectLit l pes) to
@@ -794,28 +799,40 @@ tcCall γ c@(NewExpr l e es)
 
 -- | e.f
 --
-tcCall γ ef@(DotRef l e f)
-  = runFailM (tcExpr γ e Nothing) >>= \case
-      Right (_, tRcvr)
-        | isArrayType tRcvr
-        , F.symbol f == F.symbol "length" ->
-            do  l1   <- freshenAnn l
-                l2   <- freshenAnn l
-                let i = Id l2 "__getLength"
-                tcExpr γ (CallExpr l1 (DotRef l e i) []) Nothing
-
-        | otherwise -> case getProp l γ f tRcvr of
-            Left er -> tcError er
-            Right tfs -> do (e', _) <- tcExprT l ef γ e (rcvrTy tfs)
-                            if isOptional tfs
-                              then return (DotRef l e' f, mkUnion $ tUndef : typesOf tfs)
-                              else return (DotRef l e' f, mkUnion $          typesOf tfs)
-
-      Left er -> fatal er (ef, tBot)
+tcCall γ ef@(DotRef l e f) = runFailM (tcExpr γ e Nothing) >>= checkAccess
   where
+    checkAccess (Right (_, tRcvr))
+      | isArrayLen tRcvr = checkArrayLength
+      | otherwise        = checkProp (getProp l γ f tRcvr)
+    checkAccess (Left er) = fatal er (ef, tBot)
+
+    -- `array.length`
+    checkArrayLength
+      = do  l1  <- freshenAnn l
+            l2  <- freshenAnn l
+            i   <- pure $ Id l2 "__getLength"
+            tcExpr γ (CallExpr l1 (DotRef l e i) []) Nothing
+
+    -- Normal property access
+    checkProp (Left er)   = tcError er
+    checkProp (Right tfs) = adjustOpt tfs . fst <$> tcExprT l ef γ e (rcvrTy tfs)
+
+    -- Add `or undef` in case of an optional field access
+    adjustOpt tfs e_
+      | isOptional tfs
+      = (DotRef l e_ f, tOr $ tUndef : typesOf tfs)
+      | otherwise
+      = (DotRef l e_ f, tOr $          typesOf tfs)
+
+    isArrayLen t = isArrayType t && F.symbol f == F.symbol "length"
+
+    isArrayType (TRef (Gen x _) _) = F.symbol x == F.symbol "Array"
+    isArrayType (TOr _ _) = True
+    isArrayType _ = False
+
     isOptional tfs = Opt `elem` [ o | (_, FI o _ _) <- tfs ]
     typesOf    tfs = [ t | (_, FI _ _ t) <- tfs]
-    rcvrTy         = mkUnion . map fst
+    rcvrTy         = tOr . map fst
 
 -- | `super(e1,...,en)`
 --
@@ -827,39 +844,36 @@ tcCall _ (CallExpr _ (SuperRef _)  _)
 -- | `e.m(es)`
 --
 tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
-  | isVariadicCall f
-  = fatal (unimplemented l "Variadic" ex) (ex, tBot)
-
-  | otherwise
-  = runFailM (tcExpr γ e Nothing) >>= \case
-      Right (_, te) ->
-          case getProp l γ f te of
-            Right (unzip -> (ts, fs)) ->
-                do  (e', _) <- tcExprT l1 em γ e (mkUnion ts)
-                    case getMutability (envCHA γ) te of
-                      Just mRcvr ->
-                          do  (es', t') <- foldM (callStep te mRcvr) (es, tBot) fs
-                              return (CallExpr l (DotRef l1 e' f) es', t')
-                      Nothing -> fatal (bugGetMutability l te) (ex, tBot)
-            Left er -> tcError er
-      Left er -> fatal er (ex, tBot)
+  | isVariadicCall f = tcError (unimplemented l "Variadic" ex)
+  | otherwise        = checkNonVariadic
   where
-    callStep tRcvr _ (es_, t) (FI o _ ft)
-      | o == Req
-      = do  (es', t') <- tcNormalCall γ l em (es_ `zip` nths) ft
-            return (es', mkUnion [t, t'])
-      | otherwise
-      = fatal (errorCallOptional l f tRcvr) (es_, tBot)
-
-    callStep tRcvr mRcvr (es_, t) (MI o mts)
-      | o == Req
-      = do  let ft = mkAnd [ ft_ | (m, ft_) <- mts, isSubtype l γ mRcvr m ]
-            (es', t') <- tcNormalCall γ l em (es_ `zip` nths) ft
-            return (es', mkUnion [t, t'])
-      | otherwise
-      = fatal (errorCallOptional l f tRcvr) (es_, tBot)
-
+    -- Variadic check
     isVariadicCall f_ = F.symbol f_ == F.symbol "call"
+
+    -- Non-variadic
+    checkNonVariadic = runFailM (tcExpr γ e Nothing)
+                   >>= checkWithRcvr
+
+    -- Check receiver
+    checkWithRcvr (Right (_, te)) = checkEltCall (getProp l γ f te) te
+    checkWithRcvr (Left er      ) = fatal er (ex, tBot)
+
+    checkEltCall (Right (unzip -> (ts, fs))) te
+      = do  (e', _  )       <- tcExprT l1 em γ e (tOr ts)
+            (es', t')       <- checkWithMut (getMutability (envCHA γ) te) te fs
+            return           $ (CallExpr l (DotRef l1 e' f) es', t')
+    checkEltCall (Left er) _ = tcError er
+
+    checkWithMut (Just mR) te [m] = call te mR m
+    checkWithMut (Just _ ) _  _   = error "checkWithMut add error here"
+    checkWithMut Nothing   te _   = fatal (bugGetMutability l te) (es, tBot)
+
+    call tR _ (FI Req _ ft) = tcNormalCall γ l em (es `zip` nths) ft
+    call tR _ (FI _   _ _ ) = fatal (errorCallOptional l f tR) (es, tBot)
+
+    call tR mR (MI Req mts) = tcNormalCall γ l em (es `zip` nths)
+                            $ mkAnd [ ft_ | (m, ft_) <- mts, isSubtype l γ mR m ]
+    call tR _     _         = fatal (errorCallOptional l f tR) (es, tBot)
 
 -- | `e(es)`
 tcCall γ (CallExpr l e es)
@@ -872,7 +886,8 @@ tcCall _ e = fatal (unimplemented (srcPos e) "tcCall" e) (e, tBot)
 --------------------------------------------------------------------------------
 -- | @tcNormalCall@ resolves overloads and returns cast-wrapped versions of the arguments.
 --------------------------------------------------------------------------------
-tcNormalCall :: (Unif r, PP a) => TCEnv r -> AnnTc r -> a -> [(ExprSSAR r, Maybe (RType r))]
+tcNormalCall :: (Unif r, PP a)
+             => TCEnv r -> AnnTc r -> a -> [(ExprSSAR r, Maybe (RType r))]
              -> RType r -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
 tcNormalCall γ l fn etos ft0
@@ -950,15 +965,13 @@ tcCallCaseTry γ l fn ts ((i,ft):fts)
       (βs, its1, _)  <- instantiateFTy l (tce_ctx γ) fn ft
       ts1            <- zipWithM (instantiateTy l $ tce_ctx γ) [1..] ts
       θ              <- unifyTypesM (srcPos l) γ ts1 its1
-      let (ts2, its2) = apply θ (ts1, its1)
-      let (ts', cs)   = unzip [(t, c) | (t, BTV _ _ (Just c)) <- zip ts2 βs]
-      if not (and (zipWith (isSubtype l γ) ts' cs))
-        then
-          return Nothing
-        else
-          if and (zipWith (isSubtype l γ) ts2 its2)
-            then return $ Just θ
-            else return Nothing
+      (ts2, its2)    <- pure $ apply θ (ts1, its1)
+      (ts', cs)      <- pure $ unzip [(t, c) | (t, BTV _ _ (Just c)) <- zip ts2 βs]
+      case not (and (zipWith (isSubtype l γ) ts' cs)) of
+        True -> return Nothing
+        _    -> case and (zipWith (isSubtype l γ) ts2 its2) of
+                  True -> return $ Just θ
+                  _    -> return Nothing
     )
     >>= \case
           Right (Just θ') -> return $ Just (i, θ', ft)
@@ -972,28 +985,30 @@ tcCallCase γ@(tce_ctx -> ξ) l fn es ts ft
   = do  (βs, rhs, ot)   <- instantiateFTy l ξ fn ft
         lhs             <- zipWithM (instantiateTy l ξ) [1..] ts
         θ               <- unifyTypesM (srcPos l) γ lhs rhs
-        let θβ           = fromList [ (TV s l_, t) | BTV s l_ (Just t) <- βs ]
-        let θ'           = θ `mappend` θβ
-        let (lhs', rhs') = apply θ' $ (lhs, rhs)
+        θβ              <- pure $ fromList [ (TV s l_, t) | BTV s l_ (Just t) <- βs ]
+        θ'              <- pure $ θ `mappend` θβ
+        (lhs', rhs')    <- pure $ apply θ' $ (lhs, rhs)
         es'             <- zipWith3M (castM γ) es lhs' rhs'
         return           $ (es', apply θ ot)
 
 --------------------------------------------------------------------------------
 instantiateTy :: Unif r => AnnTc r -> IContext -> Int -> RType r -> TCM r (RType r)
 --------------------------------------------------------------------------------
-instantiateTy l ξ i (bkAll -> (bs, t)) = snd <$> freshTyArgs l i ξ (btvToTV <$> bs) t
+instantiateTy l ξ i (bkAll -> (bs, t))
+  = do  (fbs, t)  <- freshTyArgs l i ξ bs t
+        -- TODO: need to take `fbs` into account, i.e. add the
+        --       constraint to the environment
+        return     $ t
 
 --------------------------------------------------------------------------------
-instantiateFTy :: (Unif r, PP a) => AnnTc r -> IContext -> a -> RType r -> TCM r ([BTVar r], [RType r], RType r)
+instantiateFTy :: (Unif r, PP a) => AnnTc r -> IContext -> a -> RType r
+                                 -> TCM r ([BTVar r], [RType r], RType r)
 --------------------------------------------------------------------------------
 instantiateFTy l ξ fn ft@(bkAll -> (bs, t))
-  = do  (βs, ft')   <- freshTyArgs l 0 ξ αs t
-        (_, ts, t') <- maybe er return (bkFunNoBinds ft')
-        return       $ (mkBs βs, ts, t')
+  = do  (fbs, ft')      <- freshTyArgs l 0 ξ bs t
+        (_, ts, t')     <- maybe er return (bkFunNoBinds ft')
+        return           $ (fbs, ts, t')
     where
-      αs      = [ TV α l_     | BTV α l_ _ <- bs ]
-      cs      = [ c           | BTV _ _ c <- bs ]
-      mkBs βs = [ BTV β' l_ c | (TV β' l_, c) <- zip βs cs ]
       er      = tcError $ errorNonFunction (srcPos l) fn ft
 
 --------------------------------------------------------------------------------

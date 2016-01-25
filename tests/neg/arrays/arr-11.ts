@@ -2,16 +2,16 @@
 /*@ qualif Length(v:number): (len v) = 3 */
 
 /*@ foo :: () => {void | 0 < 1} */
-function foo(){
+export function foo(){
 
   /*@ a :: IArray<number> */
   let a = [1,2,3];
 
   /*@ b :: { IArray<number> | len v = 4 } */
   let b = [1,2,3,4];
- 
-  assert(a.length + b.length === 70);
-  
+
+  assert(a.length + b.length === 7);
+
   return;
 
 }

@@ -455,17 +455,20 @@ consVarDecl g (VarDecl _ x (Just e@FuncExpr{}))
 
 consVarDecl g (VarDecl l x (Just e))
   = case envFindTy x (cge_names g) of
-      -- | Local
+      -- Local (no type annotation)
       Nothing ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
           Just   <$> cgEnvAdds l "consVarDecl" [(x, VI Local WriteLocal Initialized eT)] gy
 
-      Just (VI lc  WriteLocal _ t) ->
+      -- Local (with type annotation)
+      Just (VI lc  WriteLocal _ t) -> do
+        fta       <- ltracePP l "Fresh Type" <$> freshenType WriteGlobal g l t
         mseq (consExpr g e $ Just t) $ \(y,gy) -> do
-          eT      <- cgSafeEnvFindTyM y gy
-          _       <- subType l Nothing gy eT t
-          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc WriteLocal Initialized eT)] gy
+          eT      <- ltracePP l "Inferred Type" <$> cgSafeEnvFindTyM y gy
+          _       <- subType l Nothing gy eT fta
+          _       <- subType l Nothing gy fta t
+          Just   <$> cgEnvAdds l "consVarDecl" [(x, VI lc WriteLocal Initialized fta)] gy
 
       -- | Global
       Just (VI lc WriteGlobal _ t) -> do
@@ -904,15 +907,15 @@ consCheckArgs :: PP a => AnnLq -> CGEnv -> a
 --------------------------------------------------------------------------------
 consCheckArgs l g fn ft ts xes
   = do  (rhs, rt) <- instantiateFTy l g fn xes ft
-        lhs       <- zipWithM  (instantiateTy l g) [1..] ts
+        lhs       <- zipWithM  (instantiateTy l g fn) [1..] ts
         _         <- zipWithM_ (subType l Nothing g) lhs rhs
         Just      <$> cgEnvAddFresh "5" l rt g
 
 --------------------------------------------------------------------------------
-instantiateTy :: AnnLq -> CGEnv -> Int -> RefType -> CGM RefType
+instantiateTy :: PP a => AnnLq -> CGEnv -> a -> Int -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-instantiateTy l g i (bkAll -> (αs, t))
-  = freshTyInst l g αs τs t where τs = envGetContextTypArgs 0 g l αs
+instantiateTy l g fn i (bkAll -> (αs, t))
+  = freshTyInst l g αs τs t where τs = envGetContextTypArgs 0 g l fn αs
 
 --------------------------------------------------------------------------------
 instantiateFTy :: PP a => AnnLq -> CGEnv -> a -> [Id AnnLq] -> RefType
@@ -923,7 +926,7 @@ instantiateFTy l g fn xes ft@(bkAll -> (αs, t))
       Just (_, bs, rt) -> first (map b_type) <$> substNoCapture xes (bs, rt)
       _                -> cgError $ errorNonFunction (srcPos l) fn ft
     where
-      τs = envGetContextTypArgs 0 g l αs
+      τs = envGetContextTypArgs 0 g l fn αs
 
 
 -- | consCallCondExpr: Special casing conditional expression call here because we'd like the

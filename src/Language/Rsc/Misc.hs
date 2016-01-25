@@ -13,7 +13,7 @@ module Language.Rsc.Misc (
     mkEither, either2Bool
 
   -- List
-  , unique, exists, mapi
+  , uniqueBy, exists, mapi
 
   -- Tuples
   , fst4, snd4, thd4, fth4
@@ -150,9 +150,9 @@ maybeM_ :: (Monad m) => (a -> m ()) -> Maybe a -> m ()
 maybeM_ = maybeM ()
 
 -------------------------------------------------------------------------------
-unique :: (Eq a) => [a] -> Bool
+uniqueBy :: (Eq a) => (a -> a -> Bool) -> [a] -> Bool
 -------------------------------------------------------------------------------
-unique xs = length xs == length (L.nub xs)
+uniqueBy f xs = length xs == length (L.nubBy f xs)
 
 -------------------------------------------------------------------------------
 exists :: (a -> Bool) -> [a] -> Bool

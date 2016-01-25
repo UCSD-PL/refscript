@@ -263,23 +263,18 @@ envGetContextCast g a
   = CNo
 
 
---   = case [(errs, t) | CDead errs t <- [ c | TCast cx c <- fFact a, cx == cge_ctx g]] of
---       [ ] -> CNo
---       cs  -> let (errs', ts) = unzip cs in
---              CDead (concat errs') (mkUnion ts)
-
 -- | Returns the type instantiations for parameters @αs@ in context @n@
 --------------------------------------------------------------------------------
-envGetContextTypArgs :: Int -> CGEnv -> AnnLq -> [BTVar F.Reft] -> [RefType]
+envGetContextTypArgs :: PP f => Int -> CGEnv -> AnnLq -> f -> [BTVar F.Reft] -> [RefType]
 --------------------------------------------------------------------------------
 -- NOTE: If we do not need to instantiate any type parameter (i.e. length αs ==
 -- 0), DO NOT attempt to compare that with the TypInst that might hide within
 -- the expression, cause those type instantiations might serve anothor reason
 -- (i.e. might be there for a separate instantiation).
-envGetContextTypArgs _ _ _ [] = []
-envGetContextTypArgs n g a αs
+envGetContextTypArgs _ _ _ _ [] = []
+envGetContextTypArgs n g a f αs
   | [i] <- tys, length i == length αs = i
-  | otherwise = die $ bugMissingTypeArgs $ srcPos a
+  | otherwise = die $ bugMissingTypeArgs (srcPos a) f
   where
     tys = [i | TypInst m ξ' i <- fFact a
              , ξ' == cge_ctx g
@@ -849,6 +844,14 @@ splitC (Sub g i t1@(TRef n1@(Gen x1 (m1:t1s)) r1) t2@(TRef n2@(Gen x2 (m2:t2s)) 
   | F.isFalse (F.simplify r1)
   = return []
   --
+  -- * Unique references can be used as any kind.
+  --
+  -- * Since there's no aliasing we can treat them as Immutable for
+  --   the purpose of subtyping
+  --
+  | isUQ m1
+  = splitC (Sub g i (TRef (Gen x1 (tIM:t1s)) r1) (TRef (Gen x2 (tIM:t2s)) r2))
+  --
   -- * Incompatible mutabilities
   --
   | not (isSubtype (srcPos i) g m1 m2)
@@ -1154,7 +1157,7 @@ unqualifyThis g t = F.subst $ F.mkSubst fieldSu
 narrowType :: (IsLocated l) => l -> CGEnv -> RefType-> Type -> RefType
 -------------------------------------------------------------------------------
 narrowType l g t1@(TOr t1s r) t2
-  = mkUnion' (L.filter (\t1 -> isSubtype l g t1 (ofType t2)) t1s) r
+  = tOrR (L.filter (\t1 -> isSubtype l g t1 (ofType t2)) t1s) r
 
 narrowType _ _ t1 _ = t1
 

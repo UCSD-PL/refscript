@@ -263,7 +263,7 @@ appTy _        (TExp _)      = error "appTy should not be applied to TExp"
 
 
 ---------------------------------------------------------------------------------
--- | Type equality (module α-renaming)
+-- | Type equality (modulo α-renaming)
 ---------------------------------------------------------------------------------
 
 instance (F.Reftable r) => Eq (TGen r) where

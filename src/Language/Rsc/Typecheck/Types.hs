@@ -20,7 +20,7 @@ module Language.Rsc.Typecheck.Types (
   , ExprReftable(..)
 
   -- * Constructing Types
-  , mkUnion, mkUnion', mkFun, mkAll, mkAnd, mkAndOpt, mkInitFldTy, mkTCons
+  , tOr, tOrR, mkFun, mkAll, mkAnd, mkAndOpt, mkInitFldTy, mkTCons
 
   -- * Deconstructing Types
   , bkFun, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion
@@ -88,7 +88,7 @@ import           Language.Rsc.Names
 import           Language.Rsc.Types
 import           Text.Parsec.Pos                 (initialPos)
 
--- import           Debug.Trace (trace)
+-- import           Debug.Trace                     (trace)
 
 ---------------------------------------------------------------------
 -- | Mutability
@@ -227,38 +227,33 @@ instance F.Reftable r => Monoid (RTypeQ q r) where
 mkTCons         = (`TObj` fTop)
 
 ----------------------------------------------------------------------------------------
-mkUnion' :: F.Reftable r => [RTypeQ q r] -> r -> RTypeQ q r
-mkUnion  :: F.Reftable r => [RTypeQ q r] -> RTypeQ q r
+tOrR :: F.Reftable r => [RTypeQ q r] -> r -> RTypeQ q r
+tOr  :: F.Reftable r => [RTypeQ q r] -> RTypeQ q r
 ----------------------------------------------------------------------------------------
-mkUnion' [ ] = TPrim TBot
-mkUnion' [t] = (t `strengthen`)
-mkUnion' ts  = flattenUnions . TOr (filter (not . isTBot) ts)
-mkUnion  ts  = mkUnion' ts fTop
+tOrR [ ] = TPrim TBot
+tOrR [t] = (t `strengthen`)
+tOrR ts  = TOr (concatMap bkUnion ts)
+
+tOr  ts  = tOrR ts fTop
 
 ----------------------------------------------------------------------------------------
 bkUnion :: F.Reftable r => RTypeQ q r -> [RTypeQ q r]
 ----------------------------------------------------------------------------------------
-bkUnion (TOr ts r) = concatMap bkUnion $ map (`strengthen` r) ts
+bkUnion (TOr ts r) = map (`strengthen` r) ts
 bkUnion t          = [t]
 
 ----------------------------------------------------------------------------------------
 stripNull      :: F.Reftable r => RType r -> RType r
 stripUndefined :: F.Reftable r => RType r -> RType r
 ----------------------------------------------------------------------------------------
-stripNull      = mkUnion . filter (not . isTNull)  . bkUnion
-stripUndefined = mkUnion . filter (not . isTUndef) . bkUnion
-
-----------------------------------------------------------------------------------------
-flattenUnions :: F.Reftable r => RTypeQ q r -> RTypeQ q r
-----------------------------------------------------------------------------------------
-flattenUnions t@(TOr _ r) = TOr (bkUnion t) r
-flattenUnions t           = t
+stripNull      = tOr . filter (not . isTNull)  . bkUnion
+stripUndefined = tOr . filter (not . isTUndef) . bkUnion
 
 ----------------------------------------------------------------------------------------
 orUndef :: F.Reftable r => RType r -> RType r
 ----------------------------------------------------------------------------------------
 orUndef t  | any isTUndef ts = t
-           | otherwise = mkUnion (tUndef:ts)
+           | otherwise = tOr (tUndef:ts)
   where ts = bkUnion t
 
 
@@ -324,7 +319,7 @@ isTFun (TAnd ts)       = all isTFun $ snd <$> ts
 isTFun (TAll _ t)      = isTFun t
 isTFun _               = False
 
-isArrayType t | TRef (Gen x [_,_]) _ <- t
+isArrayType t | TRef (Gen x _) _ <- t
               = F.symbol x == F.symbol "Array"
               | otherwise
               = False
@@ -403,8 +398,6 @@ tUndef  = tPrim TUndefined
 tAny    = tPrim TAny
 tNull   = tPrim TNull
 tErr    = tVoid
-
-
 
 
 ---------------------------------------------------------------------------------
@@ -510,23 +503,24 @@ finalizeTy t  | TRef (Gen x (m:ts)) _ <- t, isUQ m
 mkInitFldTy t = mkFun ([], [B (F.symbol "f") t], tVoid)
 
 
-builtinOpId BIUndefined     = builtinId "BIUndefined"
-builtinOpId BIBracketRef    = builtinId "BIBracketRef"
-builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
-builtinOpId BIArrayLit      = builtinId "BIArrayLit"
-builtinOpId BIImmArrayLit   = builtinId "BIImmArrayLit"
-builtinOpId BIObjectLit     = builtinId "BIObjectLit"
-builtinOpId BISetProp       = builtinId "BISetProp"
-builtinOpId BIForInKeys     = builtinId "BIForInKeys"
-builtinOpId BICtorExit      = builtinId "BICtorExit"
-builtinOpId BINumArgs       = builtinId "BINumArgs"
-builtinOpId BITruthy        = builtinId "BITruthy"
-builtinOpId BICondExpr      = builtinId "BICondExpr"
-builtinOpId BICastExpr      = builtinId "BICastExpr"
-builtinOpId BISuper         = builtinId "BISuper"
-builtinOpId BISuperVar      = builtinId "BISuperVar"
-builtinOpId BICtor          = builtinId "BICtor"
-builtinOpId BIThis          = mkId "this"
+builtinOpId BIUndefined      = builtinId "BIUndefined"
+builtinOpId BIBracketRef     = builtinId "BIBracketRef"
+builtinOpId BIBracketAssign  = builtinId "BIBracketAssign"
+builtinOpId BIArrayLit       = builtinId "BIArrayLit"
+builtinOpId BIUniqueArrayLit = builtinId "BIUniqueArrayLit"
+builtinOpId BIImmArrayLit    = builtinId "BIImmArrayLit"
+builtinOpId BIObjectLit      = builtinId "BIObjectLit"
+builtinOpId BISetProp        = builtinId "BISetProp"
+builtinOpId BIForInKeys      = builtinId "BIForInKeys"
+builtinOpId BICtorExit       = builtinId "BICtorExit"
+builtinOpId BINumArgs        = builtinId "BINumArgs"
+builtinOpId BITruthy         = builtinId "BITruthy"
+builtinOpId BICondExpr       = builtinId "BICondExpr"
+builtinOpId BICastExpr       = builtinId "BICastExpr"
+builtinOpId BISuper          = builtinId "BISuper"
+builtinOpId BISuperVar       = builtinId "BISuperVar"
+builtinOpId BICtor           = builtinId "BICtor"
+builtinOpId BIThis           = mkId "this"
 
 infixOpId OpLT              = builtinId "OpLT"
 infixOpId OpLEq             = builtinId "OpLEq"

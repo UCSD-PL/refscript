@@ -272,7 +272,7 @@ typeP2      :: PContext -> Parser RRType
 typeP2 c     = atomP $ typeP3 c
 
 typeP3      :: PContext -> Parser (F.Reft -> RRType)
-typeP3 c     = mkUnion' <$> typeP4 c `sepBy1` plus
+typeP3 c     = tOrR <$> typeP4 c `sepBy1` plus
 
 typeP4      :: PContext -> Parser RRType
 typeP4 c     = atomP (typeP5 c)

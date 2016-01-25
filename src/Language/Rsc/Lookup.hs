@@ -45,9 +45,8 @@ type CEnv r t = (CheckingEnvironment () t, CheckingEnvironment r t , Functor t)
 --   (b) possible accessed members (mutliple for union types)
 --
 --------------------------------------------------------------------------------
-getProp ::
-  (CEnv r t, PP r, PP f, ExprReftable Int r, IsLocated l, F.Symbolic f, F.Reftable r) =>
-  l -> t r -> f -> RType r -> Either Error [(RType r, TypeMember r)]
+getProp :: (CEnv r t, PPRD r, PP f, IsLocated l, F.Symbolic f)
+        => l -> t r -> f -> RType r -> Either Error [(RType r, TypeMember r)]
 --------------------------------------------------------------------------------
 getProp l γ f t@(TPrim _ _) = getPropPrim l γ f t
 
@@ -186,7 +185,7 @@ getPropUnion ::
 --------------------------------------------------------------------------------
 getPropUnion l γ f ts =
   case rights (map (getProp l γ f) ts) of
-    [ ] -> Left (errorUnionLookup l f (TOr ts fTop))
+    [ ] -> Left (errorUnionLookup l f (tOrR ts fTop))
     tfs -> Right (concat tfs)
 
 --------------------------------------------------------------------------------

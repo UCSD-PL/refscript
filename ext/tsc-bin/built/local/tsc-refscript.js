@@ -27244,6 +27244,9 @@ var ts;
                         assignability = (ts.isInAmbientContext(declaration)) ? ts.Assignability.Ambient : ts.Assignability.WriteLocal;
                         type = typeStr;
                     }
+                    if (declaration.type) {
+                        type = typeStr;
+                    }
                     annotations = ts.concatenate(annotations, [new ts.VariableDeclarationAnnotation(nodeToSrcSpan(declaration), assignability, name, type)]);
                 }
                 if (variableStatement.modifiers && variableStatement.modifiers.some(function (modifier) { return modifier.kind === ts.SyntaxKind.ExportKeyword; })) {

@@ -274,6 +274,7 @@ data BuiltinOp = BIUndefined
                | BIBracketAssign
                | BIImmArrayLit
                | BIArrayLit
+               | BIUniqueArrayLit
                | BIObjectLit
                | BINumArgs
                | BITruthy

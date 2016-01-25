@@ -239,4 +239,5 @@ tcEnvAddBounds :: [BTVar r] -> TCEnv r -> TCEnv r
 tcEnvAddBounds = flip $ foldr go
   where
     go (BTV α _ (Just t)) γ = γ { tce_bounds = envAdd α t $ tce_bounds γ }
+    go (BTV _ _ _       ) γ = γ
 

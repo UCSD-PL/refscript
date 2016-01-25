@@ -189,11 +189,11 @@ addSubst l θ = do
     uninstantiated k t    = TVar k fTop `eqV` t
 
 --------------------------------------------------------------------------------
-extSubst :: (F.Reftable r, PP r) => [TVar] -> TCM r ()
+extSubst :: (F.Reftable r, PP r) => [BTVar r] -> TCM r ()
 --------------------------------------------------------------------------------
-extSubst βs = getSubst >>= setSubst . (`mappend` θ)
+extSubst bs = getSubst >>= setSubst . (`mappend` θ)
   where
-    θ       = fromList $ zip βs (tVar <$> βs)
+    θ       = fromList $ map btvToTV bs `zip` map btVar bs
 
 
 --------------------------------------------------------------------------------
@@ -222,26 +222,27 @@ fatal err x = modify (\st -> st { tc_errors = err : tc_errors st}) >> return x
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-freshTyArgs :: Unif r => AnnSSA r -> Int -> IContext -> [TVar] -> RType r -> TCM r ([TVar], RType r)
+freshTyArgs :: Unif r => AnnSSA r -> Int -> IContext -> [BTVar r] -> RType r -> TCM r ([BTVar r], RType r)
 --------------------------------------------------------------------------------
-freshTyArgs a n ξ αs t = do (βs, θ) <- freshSubst a n ξ αs
-                            return   $ (βs, apply θ t)
+freshTyArgs a n ξ bs t
+  = do  (βs, θ) <- freshSubst a n ξ bs
+        return   $ (βs, apply θ t)
 
 --------------------------------------------------------------------------------
-freshSubst :: Unif r => AnnSSA r -> Int -> IContext -> [TVar] -> TCM r ([TVar], RSubst r)
+freshSubst :: Unif r => AnnSSA r -> Int -> IContext -> [BTVar r] -> TCM r ([BTVar r], RSubst r)
 --------------------------------------------------------------------------------
-freshSubst (FA i l _) n ξ αs
-  = do when (not $ unique αs) $ fatal (errorUniqueTypeParams l) ()
-       βs        <- mapM (freshTVar l) αs
-       setTyArgs l i n ξ βs
-       extSubst   $ βs
-       return     $ (βs, fromList $ zip αs (tVar <$> βs))
+freshSubst (FA i l _) n ξ bs
+  = do when (not $ uniqueBy (on (==) btv_sym) bs) $ fatal (errorUniqueTypeParams l) ()
+       fbs       <- mapM (freshTVar l) bs
+       _         <- setTyArgs l i n ξ fbs
+       _         <- extSubst fbs
+       return     $ (fbs, fromList $ map btvToTV bs `zip` map btVar fbs)
 
 --------------------------------------------------------------------------------
-setTyArgs :: (IsLocated l, Unif r) => l -> NodeId -> Int -> IContext -> [TVar] -> TCM r ()
+setTyArgs :: (IsLocated l, Unif r) => l -> NodeId -> Int -> IContext -> [BTVar r] -> TCM r ()
 --------------------------------------------------------------------------------
-setTyArgs _  i n ξ βs
-  = case map tVar βs of
+setTyArgs _  i n ξ bs
+  = case map btVar bs of
       [] -> return ()
       vs -> addAnn i $ TypInst n ξ vs
 
@@ -305,7 +306,9 @@ class Freshable a where
 instance Freshable a => Freshable [a] where
   fresh = mapM fresh
 
-freshTVar l _ =  ((`TV` l). F.intSymbol (F.symbol "T")) <$> tick
+freshTVar l (BTV _ _ t)
+  = do  n     <- tick
+        return $ BTV (F.symbol "T" `F.intSymbol` n) l t
 
 castPrefix        = "__cast_"
 freshCastId l     =  Id l . (castPrefix ++) . show <$> tick

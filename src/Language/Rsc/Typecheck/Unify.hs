@@ -105,16 +105,16 @@ unifyUnions l γ θ t1 t2
   = unifys l γ θ c1s' c2s'
 
   | [v1] <- v1s, [  ] <- v2s
-  =  do  θ' <- unify l γ θ v1 (mkUnion unmatched2)
+  =  do  θ' <- unify l γ θ v1 (tOr unmatched2)
          unifys l γ θ' c1s' c2s'
 
   | [  ] <- v1s, [v2] <- v2s
-  = do  θ' <- unify l γ θ (mkUnion unmatched1) v2
+  = do  θ' <- unify l γ θ (tOr unmatched1) v2
         unifys l γ θ' c1s' c2s'
 
   | [v1] <- v1s, [v2] <- v2s
-  = do  θ1 <- unify l γ θ  v1 (mkUnion unmatched2)
-        θ2 <- unify l γ θ1 (mkUnion unmatched1) v2
+  = do  θ1 <- unify l γ θ  v1 (tOr unmatched2)
+        θ2 <- unify l γ θ1 (tOr unmatched1) v2
         unifys l γ θ2 c1s' c2s'
 
   | length v1s > 1

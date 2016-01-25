@@ -82,19 +82,19 @@ mkDotRefFunTy g f tRcvr mRcvr a tf
 --     toTTV   = (`TVar` fTop) . btvToTV
 
 
---------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 idTy  :: (ExprReftable F.Symbol r, F.Reftable r) => RTypeQ q r -> RTypeQ q r
 idTys :: (ExprReftable F.Symbol r, F.Reftable r) => [RTypeQ q r] -> RTypeQ q r
---------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 idTy t = mkFun ([], [B sx t], t `strengthen` uexprReft sx)
   where
     sx    = F.symbol "x_"
 
 idTys = mkAnd . map idTy
 
---------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 castTy :: (ExprReftable F.Symbol r, F.Reftable r) => RType r -> RType r
---------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 castTy t = TFun [B sx t] (t `eSingleton` sx) fTop
   where
     sx    = F.symbol "x"
@@ -114,10 +114,10 @@ arrayLitTy l g@(envCHA -> c) e (Just t0) n
               else mkArrTy    l g n
   | otherwise
   = return $ Left $ errorArrayLitType l e t0
+arrayLitTy l g e Nothing n = mkUniqueArrTy l g n
 
-arrayLitTy l g e Nothing n
-  = mkArrTy l g n
-
+-- | builtin_BIImmArrayLit :: <A>(x: A) => {v: IArray<A> | len v = builtin_BINumArgs }
+--
 mkImmArrTy l g t n
   = do  opTy <- safeEnvFindTy l g (builtinOpId BIImmArrayLit)
         case opTy of
@@ -129,6 +129,19 @@ mkImmArrTy l g t n
     rt t_    = F.subst1 t_ (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
     tox x    = F.symbol . ((symbolString x) ++) . show
 
+-- | declare function builtin_BIUniqueArrayLit<A>(a: A): Array<Unique, A>
+--
+mkUniqueArrTy l g n
+  = do  opTy <- safeEnvFindTy l g (builtinOpId BIUniqueArrayLit)
+        case opTy of
+          TAll α (TFun [B x_ t_] rt r) ->
+            return $ Right $ mkAll [α] (TFun (bs x_ t_) rt r)
+  where
+    bs x_ t_ = [ B (tox x_ i) t_ | i <- [1..n] ]
+    tox x    = F.symbol . ((symbolString x) ++) . show
+
+-- | declare function builtin_BIArrayLit<M extends ReadOnly, A>(a: A): Array<M, A>
+--
 mkArrTy l g n
   = do  opTy <- safeEnvFindTy l g (builtinOpId BIArrayLit)
         case opTy of

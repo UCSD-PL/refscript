@@ -32,12 +32,12 @@ module Language.Rsc.Locations (
 
 ) where
 
-import           Data.Generics            (Data)
-import           Data.Typeable            (Typeable)
-import           Language.Fixpoint.Types.Errors
+import           Data.Generics                  (Data)
+import           Data.Typeable                  (Typeable)
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types  as F
-import           Text.Parsec.Pos          (SourcePos)
+import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Types.Errors
+import           Text.Parsec.Pos                (SourcePos)
 
 
 ---------------------------------------------------------------------
@@ -97,3 +97,4 @@ srcSpanEndLine   = snd3 . sourcePosElts . sp_stop  . sourceSpanSrcSpan
 srcSpanStartCol  = thd3 . sourcePosElts . sp_start . sourceSpanSrcSpan
 srcSpanEndCol    = thd3 . sourcePosElts . sp_stop  . sourceSpanSrcSpan
 srcSpanFile      = fst3 . sourcePosElts . sp_start . sourceSpanSrcSpan
+

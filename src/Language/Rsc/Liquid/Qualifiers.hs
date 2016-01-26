@@ -1,8 +1,9 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Language.Rsc.Liquid.Qualifiers (scrapeQuals) where
 
-import           Data.List                      (delete, nub)
+import           Data.List                      (delete, isSuffixOf, nub)
 import           Data.Maybe                     (fromMaybe)
 import           Language.Fixpoint.Types        hiding (quals)
 import           Language.Fixpoint.Types.Errors
@@ -13,20 +14,22 @@ import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
+import           Language.Rsc.Pretty
 import           Language.Rsc.Traversals
 import qualified Language.Rsc.Types             as T
 import           Language.Rsc.Visitor
+import           Text.PrettyPrint.HughesPJ
 
 qualifiers xts = concatMap (refTypeQualifiers γ0) xts
   where
      γ0        = envSEnv $ envMap rTypeSort $ envFromList xts
 
-refTypeQualifiers γ0 (l, t) = efoldRType rTypeSort addQs γ0 [] t
+refTypeQualifiers γ0 (l, t)
+                  = efoldRType rTypeSort addQs γ0 [] t
   where
     addQs γ t qs  = mkQuals l γ t ++ qs
 
-mkQuals l γ t     = [ mkQual l γ v so pa | False
-                                         , let (RR so (Reft (v, ra))) = rTypeSortedReft t
+mkQuals l γ t     = [ mkQual l γ v so pa | let (RR so (Reft (v, ra))) = rTypeSortedReft t
                                          , pa                        <- conjuncts ra
                     ]
 
@@ -48,7 +51,7 @@ orderedFreeVars γ = nub . filter (`memberSEnv` γ) . syms
 ---------------------------------------------------------------------------------
 scrapeQuals :: [Qualifier] -> [Statement (AnnRel Reft)] -> [Qualifier]
 ---------------------------------------------------------------------------------
-scrapeQuals qs ss = qs ++ qualifiers (mkUq $ foldStmts tbv [] ss)
+scrapeQuals qs = (qs ++) . qualifiers . mkUq . foldStmts tbv [] . filter nonLibFile
   where
     tbv = defaultVisitor { accStmt = gos, accCElt = goe }
 
@@ -61,6 +64,14 @@ scrapeQuals qs ss = qs ++ qualifiers (mkUq $ foldStmts tbv [] ss)
     goe _ (MemberVarDecl l _ x _)    = [(x, t) | MemberAnn (T.FI _ _ t) <- fFact l ]
     goe _ (MemberMethDecl l _ x _ _) = [(x, t) | MemberAnn (T.MI _ mts) <- fFact l, (_, t) <- mts ]
 
+nonLibFile :: IsLocated a => Statement a -> Bool
+nonLibFile = not . isSuffixOf ".d.ts" . srcSpanFile
+
 mkUq = zipWith tx ([0..] :: [Int])
   where
     tx i (Id l s, t) = (Id l $ s ++ "_" ++ show i, t)
+
+instance {-# OVERLAPPING #-} PP [Qualifier] where
+  pp = vcat . map toFix
+  -- pp qs = vcat $ map (\q -> pp (q_name q) <+> colon <+> pp (q_body q)) qs
+

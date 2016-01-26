@@ -622,7 +622,7 @@ tcExpr γ ex@(CondExpr l e e1 e2) (Just t)
          _  -> error "TODO: error tcExpr condExpr"
 
 tcExpr γ e@(CondExpr l _ _ _) Nothing
-  = error "AAAA" -- tcError $ unimpCondExpCtxType l e
+  = tcError $ unimpCondExpCtxType l e
 
 tcExpr γ e@(PrefixExpr _ _ _) _
   = tcCall γ e

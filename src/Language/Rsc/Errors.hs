@@ -101,6 +101,9 @@ errorFreeTyVar l t            = mkErr l $ printf "Type not fully instantiated: %
 errorUnification l t t'       = mkErr l $ printf "Cannot unify types: %s and %s" (ppshow t) (ppshow t')
 errorMergeSubst l t t'        = mkErr l $ printf "At merging substitutions cannot unify types: %s and %s" (ppshow t) (ppshow t')
 errorUniqueTypeParams l       = mkErr l $ printf "Only unique type paramteres are allowed"
+errorListMismatch l ts ts'    = mkErr l $ show $ text "Cannot unify types:" $+$ cat (map (nest 2 . pp) ts) $+$
+                                                 text "against" $+$ cat (map (nest 2 . pp) ts') $+$
+                                                 text "because of mismatch in count."
 
 -- Subtyping
 errorUserCast l t e           = mkErr l $ printf "User cast of type '%s' on '%s' failed." (ppshow t) (ppshow e)
@@ -164,7 +167,13 @@ errorUnboundPath l x          = mkErr l $ printf "Path '%s' is unbound." (ppshow
 errorUnboundId l x            = mkErr l $ printf "Identifier '%s' is unbound." (ppshow x)
 errorEnvJoin l x t1 t2        = mkErr l $ printf "Variable '%s' has different types ('%s' and '%s') when joining environments." (ppshow x) (ppshow t1) (ppshow t2)
 errorEnvJoinUnif l x t1 t2    = mkErr l $ printf "Error in unifying types '%s' and '%s' for variable '%s' when joining environments." (ppshow t1) (ppshow t2) (ppshow x)
-errorArgMismatch l            = mkErr l $ printf "Mismatch in Number of arguments in signature"
+errorArgMismatch l x t n m    = mkErr l $ show $ text "Mismatch in number of arguments passed to function" <+>
+                                                 ticks (pp x) <> text ". Signature:" $+$ pp t $+$
+                                                 text "expects" <+> pp n <+> text "arguments, but" <+> pp m <+> text "were given."
+
+errorFunArgMismatch l t t'    = mkErr l $ show $ text "Mismatch in number of arguments when subtyping:" $+$
+                                                 nest 2 (pp t) $+$ text "and" $+$ nest 2 (pp t')
+
 errorArgName l x y            = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)
 errorExtractNonFld l f x t    = mkErr l $ printf "Cannot extract non-field '%s' from object '%s' of type '%s'." (ppshow f) (ppshow x) (ppshow t)
 errorMissingFld l f t         = mkErr l $ printf "Field '%s' is missing from type '%s'." (ppshow f) (ppshow t)
@@ -175,7 +184,7 @@ errorUnresolvedType l t       = mkErr l $ printf "Could not resolve type '%s'." 
 errorUnresolvedTypes l t1 t2  = mkErr l $ printf "Could not resolve types '%s' and '%s'." (ppshow t1) (ppshow t2)
 errorConsSigMissing l t       = mkErr l $ printf "Constructor signature for '%s' is missing." (ppshow t)
 errorModuleExport l m x       = mkErr l $ printf "Module '%s' does not export '%s'." (ppshow m) (ppshow x)
-errorDeadCast l t1 t2         = mkErr l $ printf "Generic deadcast error when converting from type '%s' to '%s'" (ppshow t1) (ppshow t2)
+errorDeadCast l               = mkErr l $ printf "Deadcast inserted."
 errorUqMutSubtyping l e t rt  = mkErr l $ printf "No subtyping allowed at unique mutability when returning expression '%s' of type '%s' to type '%s'." (ppshow e) (ppshow t) (ppshow rt)
 errorTypeParamConstr l f t c  = mkErr l $ printf "Call to function '%s' with type parameters '%s' does not fulfill constraints '%s'." (ppshow f) (ppshow t) (ppshow c)
 

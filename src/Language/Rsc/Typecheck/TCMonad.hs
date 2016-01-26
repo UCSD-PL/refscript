@@ -329,7 +329,7 @@ unifyTypesM l γ t1s t2s
           Left err -> tcError $ err
           Right θ' -> setSubst θ' >> return θ'
   | otherwise
-  = tcError $ errorArgMismatch l
+  = tcError $ errorListMismatch l t1s t2s
   where
     (|=|) = (==) `on` length
 
@@ -406,8 +406,8 @@ tcFunTys l f xs ft = either tcError return sigs
   where
     sigs | Just ts <- bkFuns ft
          = case partitionEithers [funTy t | t <- ts] of
-             ([], fts) -> Right $ zip ([0..] :: [Int]) fts
-             (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
+             ([] , fts) -> Right (zip ([0..] :: [Int]) fts)
+             (e:_, _  ) -> Left e
          | otherwise
          = Left $ errorNonFunction (srcPos l) f ft
 
@@ -415,7 +415,7 @@ tcFunTys l f xs ft = either tcError return sigs
                        = let (su, ts') = renameBinds yts' in
                          Right $ (αs, ts', F.subst su t)
                        | otherwise
-                       = Left  $ errorArgMismatch (srcPos l)
+                       = Left  $ errorArgMismatch (srcPos l) f ft (length yts) (length xs)
 
     renameBinds yts = (su, [B x $ F.subst su ty | B x ty <- yts])
       where

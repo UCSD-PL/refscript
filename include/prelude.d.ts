@@ -330,7 +330,9 @@ interface Array<M extends ReadOnly, T> {
     // every(callbackfn: (value: T, index: number, array: T[]) => boolean, thisArg?: any): boolean;
     // some(callbackfn: (value: T, index: number, array: T[]) => boolean, thisArg?: any): boolean;
     // forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void;
+
     /*@ map<U,N>(callbackfn: (value: T) => U): Array<N,U> */
+    /*@ map<U,N>(callbackfn: (value: T, index: number) => U): Array<N,U> */
     map<U>(callbackfn: (value: T, index: number, array: T[]) => U, thisArg?: any): U[];
 
     /*@ filter (callbackfn: (v: T) => boolean): Array<Unique,T> */

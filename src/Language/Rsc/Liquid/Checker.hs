@@ -636,8 +636,8 @@ consAsgn l g x e =
 
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh,
--- temporary (A-Normalized) variable holding the value of `e`,
--- g' is g extended with a binding for x' (and other temps required for `e`)
+--   temporary (A-Normalized) variable holding the value of `e`,
+--   g' is g extended with a binding for x' (and other temps required for `e`)
 --------------------------------------------------------------------------------
 consExpr :: CGEnv -> Expression AnnLq -> Maybe RefType -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
@@ -650,12 +650,9 @@ consExpr g (Cast_ l e) s
                     _   <- subType l Nothing g t (ofType s)
                     t'  <- pure (narrowType l g t s)
                     Just <$> cgEnvAddFresh "cast_" l t' g
-
       -- Dead-cast: Do not attempt to check the enclosed expression
-      CDead [] -> subType l Nothing g tBool (tBot tBool) >> return Nothing
-
+      CDead [] -> subType l (Just (errorDeadCast l)) g tBool (tBot tBool) >> return Nothing
       CDead es -> mapM_ (\e -> subType l (Just e) g tBool (tBot tBool)) es >> return Nothing
-
       CNo      -> consExpr g e s
   where
        tBot t = t `strengthen` F.bot (rTypeR t)

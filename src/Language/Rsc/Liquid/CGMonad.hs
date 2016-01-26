@@ -1108,7 +1108,7 @@ cgFunTys l f xs ft   | Just ts <- bkFuns ft
     fTy (αs, yts, t) | Just yts' <- padUndefineds xs yts
                      = uncurry (αs,,) <$> substNoCapture xs (yts', t)
                      | otherwise
-                     = cgError $ errorArgMismatch (srcPos l)
+                     = cgError $ errorArgMismatch (srcPos l) f ft (length yts) (length xs)
 
 -- | `substNoCapture xs (yts,t)` substitutes formal parameters in `yts` with
 --   actual parameters passed as bindings in `xs`.

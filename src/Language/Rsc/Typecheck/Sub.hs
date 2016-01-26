@@ -182,7 +182,7 @@ subtypeObj l γ t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
   | mutRelated t1, mutRelated t2, isAncestor (envCHA γ) x2 x1
   = SubT
   | mutRelated t1, mutRelated t2
-  = SubErr [] -- TODO
+  = SubErr [errorIncompMutTy l t1 t2]
 
 subtypeObj l γ t1@(TRef (Gen x1 (m1:t1s)) r1) t2@(TRef (Gen x2 (m2:t2s)) r2)
   --
@@ -311,13 +311,13 @@ t1 `eqMutability` t2 | isMU t1, isMU t2  = True
 --------------------------------------------------------------------------------
 subtypeFun :: (PPRE r, FE g r, IsLocated l) => l -> g r -> RType r -> RType r -> SubtypingResult
 --------------------------------------------------------------------------------
-subtypeFun l γ (TFun b1s o1 _) (TFun b2s o2 _)
+subtypeFun l γ t1@(TFun b1s o1 _) t2@(TFun b2s o2 _)
   = mconcat   $ lengthSub
               : subtype l γ o1 o2
               : zipWith (subtype l γ) args2 args1
   where
     lengthSub | length b1s == length b2s = EqT
-              | otherwise                = SubErr [] -- TODO
+              | otherwise                = SubErr [errorFunArgMismatch l t1 t2]
     args1     = map b_type b1s
     args2     = map b_type b2s
 

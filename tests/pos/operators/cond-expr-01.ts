@@ -2,6 +2,5 @@
 
 /*@ foo :: () => { number | v = 4 } */
 export function foo() {
-  let bar = true ? 3 : null;
-  return bar + 1;
+    return (true ? 3 : null) + 1;
 }

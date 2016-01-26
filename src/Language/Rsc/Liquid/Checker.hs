@@ -122,9 +122,10 @@ solveConstraints cfg f cgi
        return   $ (A.SomeAnn anns sol, r')
   where
     fpConf      = def { C.real        = real cfg
-                     , C.ueqAllSorts = C.UAS True
-                     , C.srcFile     = f
-                     }
+                      , C.ueqAllSorts = C.UAS True
+                      , C.srcFile     = f
+                      , C.save        = True
+                      }
 
 -- NOT VALID WITH NEW L-F -- solveConstraints cfg f cgi
 -- NOT VALID WITH NEW L-F --   = do F.Result r s <- solve fpConf (cgi_finfo cgi)
@@ -727,9 +728,29 @@ consExpr g (InfixExpr l o e1 e2) _
        consCall g l o (zwNth [e1, e2]) opTy
 
 -- | e ? e1 : e2
+-- consExpr g (CondExpr l e e1 e2) (Just t)
+--    do  opTy <- ltracePP l "CondExpr" <$> mkCondExprTy l g t
+--         consCallCondExpr g l BICondExpr (zwNth [e, e1, e2]) opTy
+
 consExpr g (CondExpr l e e1 e2) (Just t)
-  = do  opTy <- mkCondExprTy l g t
-        consCallCondExpr g l BICondExpr (zwNth [e, e1, e2]) opTy
+  = mseq checkCond $ \(xc, g') -> do
+      z1 <- consExpr (envAddGuard xc True  g') e1 (Just t)
+      z2 <- consExpr (envAddGuard xc False g') e2 (Just t)
+      case (z1, z2) of
+        (Just (x1, g1'), Just (x2, g2')) -> do
+            t1            <- cgSafeEnvFindTyM x1 g1'
+            t2            <- cgSafeEnvFindTyM x2 g2'
+            (xf, gf, tf)  <- freshTyCondExpr l g' (toType t)
+            _             <- subType l Nothing g1' (tracePP "t1" t1) (tracePP "tf" tf)
+            _             <- subType l Nothing g2' (tracePP "t2" t2) (tracePP "tf" tf)
+            -- g''           <- envJoin l gf (Just g1') (Just g2')
+
+            return         $ Just (xf, gf)
+        _ -> error "TODO fill consExprT CondExpr"
+  where
+    checkCond = do
+        t   <- cgSafeEnvFindTyM (builtinOpId BITruthy) g
+        consCall g l "truthy" [(e, Nothing)] $ ltracePP l "cond" t
 
 consExpr _ e@CondExpr{} Nothing
   = error $ "Cannot check condExpr" ++ ppshow e ++ " with no contextual type."
@@ -913,19 +934,21 @@ consCheckArgs l g fn ft ts xes
 --------------------------------------------------------------------------------
 instantiateTy :: PP a => AnnLq -> CGEnv -> a -> Int -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-instantiateTy l g fn i (bkAll -> (αs, t))
-  = freshTyInst l g αs τs t where τs = envGetContextTypArgs 0 g l fn αs
+instantiateTy l g fn i (bkAll -> (βs, t))
+  = freshTyInst l g βs τs t
+  where
+    τs = envGetContextTypArgs 0 g l fn βs
 
 --------------------------------------------------------------------------------
 instantiateFTy :: PP a => AnnLq -> CGEnv -> a -> [Id AnnLq] -> RefType
                        -> CGM ([RefType], RefType)
 --------------------------------------------------------------------------------
-instantiateFTy l g fn xes ft@(bkAll -> (αs, t))
-  = bkFun <$> freshTyInst l g αs τs t >>= \case
-      Just (_, bs, rt) -> first (map b_type) <$> substNoCapture xes (bs, rt)
-      _                -> cgError $ errorNonFunction (srcPos l) fn ft
+instantiateFTy l g fn xes ft@(bkAll -> (βs, t))
+  = bkFun <$> freshTyInst l g βs τs t >>= \case
+      Just (_, xts, rt) -> first (map b_type) <$> substNoCapture xes (xts, rt)
+      _                 -> cgError $ errorNonFunction (srcPos l) fn ft
     where
-      τs = envGetContextTypArgs 0 g l fn αs
+      τs = envGetContextTypArgs 0 g l fn βs
 
 
 -- | consCallCondExpr: Special casing conditional expression call here because we'd like the
@@ -933,7 +956,7 @@ instantiateFTy l g fn xes ft@(bkAll -> (αs, t))
 --
 consCallCondExpr g l fn ets ft@(validOverloads g l -> fts)
   = mseq (consCondExprArgs (srcPos l) g ets) $ \(xes, g') -> do
-      ts <- T.mapM (`cgSafeEnvFindTyM` g') xes
+      ts <- ltracePP l (ppshow fn) <$> T.mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
         [ft] -> consCheckArgs l g' fn ft ts xes
         _    -> cgError $ errorNoMatchCallee (srcPos l) fn ts ft

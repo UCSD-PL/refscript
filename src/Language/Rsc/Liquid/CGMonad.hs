@@ -26,6 +26,7 @@ module Language.Rsc.Liquid.CGMonad (
 
   -- * Fresh Templates for Unknown Refinement Types
   , freshTyFun, freshenType, freshTyInst, freshTyPhis, freshTyPhis'
+  , freshTyCondExpr
   , freshTyObj, freshenCGEnvM
 
   -- * Freshable
@@ -273,7 +274,7 @@ envGetContextTypArgs :: PP f => Int -> CGEnv -> AnnLq -> f -> [BTVar F.Reft] -> 
 -- (i.e. might be there for a separate instantiation).
 envGetContextTypArgs _ _ _ _ [] = []
 envGetContextTypArgs n g a f αs
-  | [i] <- tys, length i == length αs = i
+  | [its] <- tys, length its == length αs = its
   | otherwise = die $ bugMissingTypeArgs (srcPos a) f
   where
     tys = [i | TypInst m ξ' i <- fFact a
@@ -531,22 +532,21 @@ freshenType _ g l t
 --   2. Adds well-formedness constraints for instantiated type variables
 --   3. Adds subtyping constraints when type vars have bounds
 --   4. Returns the instantiated body of the function.
+--
+--   τs: the type instantiations (from TC)
 --------------------------------------------------------------------------------
 freshTyInst :: AnnLq -> CGEnv -> [BTVar F.Reft] -> [RefType] -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
 freshTyInst l g bs τs tbody
   = do ts    <- mapM  (freshTy "freshTyInst") τs
        _     <- mapM_ (wellFormed l g) ts
-       _     <- zipWithM_ subt ts bs
-       let θ  = fromList (zip αs ts)
+       _     <- mapM_ ff (safeZip "freshTyInst" ts bs)
+       θ     <- pure (fromList (zip αs ts))
        return $ apply θ tbody
   where
+    ff (t, BTV v _ (Just b)) = subType l Nothing g t b
+    ff (_, BTV _ _ Nothing ) = return ()
     αs        = btvToTV <$> bs
-    subt t b  | BTV v _ (Just b) <- b
-              = subType l (Just $ errorBoundSubt l v b) g t b
-              | otherwise
-              = return ()
-
 
 -- | Instantiate Fresh Type (at Phi-site)
 --------------------------------------------------------------------------------
@@ -564,13 +564,22 @@ freshTyPhis l g xs τs
 freshTyPhis' :: AnnLq -> CGEnv -> [Id AnnLq] -> [EnvEntry ()] -> CGM (CGEnv, [RefType])
 --------------------------------------------------------------------------------
 freshTyPhis' l g xs es
-  = do ts' <- mapM (freshTy "freshTyPhis") ts
-       g'  <- cgEnvAdds l "freshTyPhis" (zip xs (L.zipWith4 VI ls as is ts')) g
-       _   <- mapM (wellFormed l g') ts'
-       return (g', ts')
+  = do  ts' <- mapM (freshTy "freshTyPhis") ts
+        g'  <- cgEnvAdds l "freshTyPhis" (zip xs (L.zipWith4 VI ls as is ts')) g
+        _   <- mapM (wellFormed l g') ts'
+        return (g', ts')
   where
     (ls,as,is,ts) = L.unzip4 [ (l,a,i,t) | VI l a i t <- es ]
 
+-- | Instantiate Fresh Type at conditional expression
+--------------------------------------------------------------------------------
+freshTyCondExpr :: AnnLq -> CGEnv -> Type -> CGM (Id AnnLq, CGEnv, RefType)
+--------------------------------------------------------------------------------
+freshTyCondExpr l g t
+  = do  t'      <- freshTy "freshTyCondExpr" t
+        (x, g') <- cgEnvAddFresh "freshTyCondExpr" l t' g
+        _       <- wellFormed l g' t'
+        return    $ (x, g', t')
 
 -- | Fresh Object Type
 --------------------------------------------------------------------------------

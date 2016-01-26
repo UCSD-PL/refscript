@@ -610,9 +610,20 @@ tcExpr γ e@(VarRef l x) _
     to = tcEnvFindTy x γ
 
 tcExpr γ ex@(CondExpr l e e1 e2) (Just t)
-  = do  opTy <- mkCondExprTy l γ t
-        ([e', e1', e2'], t') <- tcNormalCall γ l BICondExpr ([e, e1, e2] `zip` nths) opTy
-        return (CondExpr l e' e1' e2', t')
+  = do opTy         <- safeEnvFindTy l γ (builtinOpId BITruthy)
+       ([e'], z)    <- tcNormalCallW γ l BITruthy [e] opTy
+       case z of
+         Just _  ->
+            do  (e1', t1) <- tcExpr γ e1 (Just t)
+                (e2', t2) <- tcExpr γ e2 (Just t)
+                e1''      <- castM γ e1 t1 t
+                e2''      <- castM γ e2 t2 t
+                return     $ (CondExpr l e' e1'' e2'', t)
+         _  -> error "TODO: error tcExpr condExpr"
+
+--   = do  opTy <- mkCondExprTy l γ t
+--         ([e', e1', e2'], t') <- tcNormalCall γ l BICondExpr ([e, e1, e2] `zip` nths) opTy
+--         return (CondExpr l e' e1' e2', t')
 
 tcExpr γ e@CondExpr{} Nothing
   = error $ "Cannot check condExpr" ++ ppshow e ++ " with no contextual type."

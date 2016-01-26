@@ -19,8 +19,8 @@ declare function builtin_BIUniqueArrayLit<A>(a: A): Array<Unique, A>;
 
 declare function builtin_BIArrayLit<M extends ReadOnly, A>(a: A): Array<M, A>;
 
-/*@ builtin_BICondExpr :: <C, A extends any, B extends any>(c: C, x: A, y: B) => { v: any | if Prop(c) then v ~~ x else v ~~ y } */
-declare function builtin_BICondExpr<C, A extends any, B extends any>(c: C, x: A, y: B): any;
+/*@ builtin_BICondExpr :: <C, A, B>(c: C, x: A, y: B) => { v: any | if Prop(c) then v ~~ x else v ~~ y } */
+declare function builtin_BICondExpr<C, A, B>(c: C, x: A, y: B): any;
 
 /*@ builtin_OpLT :: (x:number, y:number) => {v:boolean | Prop v <=> x < y } */
 /*@ builtin_OpLT :: <T>(x:T, y:T) => boolean */

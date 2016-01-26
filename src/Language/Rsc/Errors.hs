@@ -192,7 +192,7 @@ errorTypeParamConstr l f t c  = mkErr l $ printf "Call to function '%s' with typ
 errorEnumLookup l e n         = mkErr l $ printf "Cannot find member '%s' in enumeration '%s'" (ppshow n) (ppshow e)
 errorPrimLookup l e n         = mkErr l $ printf "Cannot find member '%s' in primitive type '%s'" (ppshow n) (ppshow e)
 errorMemLookup l m t          = mkErr l $ printf "Cannot find member '%s' in type '%s'" (ppshow m) (ppshow t)
-errorGenericLookup l t f      = mkErr l $ printf "Cannot find member '%s' in type '%s'" (ppshow f) (ppshow t)
+errorGenericLookup l f t      = mkErr l $ printf "Cannot find member '%s' in type '%s'" (ppshow f) (ppshow t)
 errorAmbientLookup l t f      = mkErr l $ printf "Cannot find member '%s' in ambient element '%s'" (ppshow f) (ppshow t)
 errorUnionLookup l t f        = mkErr l $ printf "Cannot find member '%s' in any part of the union '%s'" (ppshow f) (ppshow t)
 

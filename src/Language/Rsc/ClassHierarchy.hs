@@ -264,7 +264,7 @@ extractTypeMembers cs = TM ms sms call ctor sidx nidx
     nidx = Nothing
 
 --------------------------------------------------------------------------------
--- fromModuleDef :: QEnv (ModuleDef r) -> ClassHierarchy r
+fromModuleDef :: QEnv (ModuleDef r) -> ClassHierarchy r
 --------------------------------------------------------------------------------
 fromModuleDef ms = CHA graph nk ms
   where

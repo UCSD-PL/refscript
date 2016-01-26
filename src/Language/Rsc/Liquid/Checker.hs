@@ -944,18 +944,6 @@ instantiateFTy l g fn xes ft@(bkAll -> (βs, t))
     where
       τs = envGetContextTypArgs 0 g l fn βs
 
-
--- | consCallCondExpr: Special casing conditional expression call here because we'd like the
---   arguments to be typechecked under a different guard each.
---
-consCallCondExpr g l fn ets ft@(validOverloads g l -> fts)
-  = mseq (consCondExprArgs (srcPos l) g ets) $ \(xes, g') -> do
-      ts <- T.mapM (`cgSafeEnvFindTyM` g') xes
-      case fts of
-        [ft] -> consCheckArgs l g' fn ft ts xes
-        _    -> cgError $ errorNoMatchCallee (srcPos l) fn ts ft
-
-
 ---------------------------------------------------------------------------------
 consScan :: (CGEnv -> a -> b -> CGM (Maybe (c, CGEnv))) -> CGEnv -> [(a,b)] -> CGM (Maybe ([c], CGEnv))
 ---------------------------------------------------------------------------------
@@ -966,36 +954,6 @@ consScan f g xs
           _              -> return   Nothing
   where
     step (ys, g) (x,y) = fmap (mapFst (:ys))   <$> f g x y
-
----------------------------------------------------------------------------------
-consCondExprArgs :: SrcSpan -> CGEnv
-                 -> [(Expression AnnLq, Maybe RefType)]
-                 -> CGM (Maybe ([Id AnnLq], CGEnv))
----------------------------------------------------------------------------------
-consCondExprArgs l g [(c,tc),(x,tx),(y,ty)]
-  = mseq (consExpr g c tc) $ \(c_,gc) ->
-      withGuard gc c_ True x tx >>= \case
-        Just (x_, gx) ->
-            withGuard gx c_ False y ty >>= \case
-              Just (y_, gy) -> return $ Just ([c_, x_, y_], gy)
-              Nothing ->
-                  do ttx       <- cgSafeEnvFindTyM x_ gx
-                     let tty    = fromMaybe ttx ty    -- Dummy type if ty is Nothing
-                     (y_, gy') <- cgEnvAddFresh "6" l tty gx
-                     return    $ Just ([c_, x_, y_], gy')
-        Nothing ->
-            withGuard gc c_ False y ty >>= \case
-              Just (y_, gy) ->
-                  do tty       <- cgSafeEnvFindTyM y_ gy
-                     let ttx    = fromMaybe tty tx    -- Dummy type if tx is Nothing
-                     (x_, gx') <- cgEnvAddFresh "7" l ttx gy
-                     return     $ Just ([c_, x_, y_], gx')
-              Nothing       -> return Nothing
-  where
-    withGuard g cond b x tx =
-      fmap (mapSnd envPopGuard) <$> consExpr (envAddGuard cond b g) x tx
-
-consCondExprArgs l _ _ = cgError $ impossible l "consCondExprArgs"
 
 ---------------------------------------------------------------------------------
 consFold :: (t -> b -> CGM (Maybe t)) -> t -> [b] -> CGM (Maybe t)

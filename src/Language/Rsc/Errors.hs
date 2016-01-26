@@ -255,6 +255,8 @@ errorUnionMergeMods l t a b   = mkErr l $ printf "In type '%s', cannot merge mod
 errorUnionMergeFuns l t       = mkErr l $ printf "In type '%s', cannot merge multiple function types." (ppshow t)
 
 errorArrayLitCtxType l e      = mkErr l $ printf "Cannot type array literal '%s' without a contextual type." (ppshow e)
+unimpCondExpCtxType l e       = mkErr l $ show $ text "[Unimplemented] Cannot type conditional expression" $+$
+                                                 nest 2 (pp e) $+$ text "without a contextual type."
 errorArrayLitType l e t       = mkErr l $ printf "Cannot cast array '%s' with non array type '%s'." (ppshow e) (ppshow t)
 bugArrayBIType l f t          = mkErr l $ printf "[BUG] Inconsistent built-in arrray literal ('%s') type '%s'." (ppshow f) (ppshow t)
 errorBoundSubt l v t          = mkErr l $ printf "Could not find a valid instantiation to satisfy the bound of '%s': '%s'" (ppshow v) (ppshow t)

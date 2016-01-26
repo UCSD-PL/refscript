@@ -124,7 +124,7 @@ solveConstraints cfg f cgi
     fpConf      = def { C.real        = real cfg
                       , C.ueqAllSorts = C.UAS True
                       , C.srcFile     = f
-                      , C.save        = True
+                      -- , C.save        = True
                       }
 
 -- NOT VALID WITH NEW L-F -- solveConstraints cfg f cgi
@@ -728,10 +728,6 @@ consExpr g (InfixExpr l o e1 e2) _
        consCall g l o (zwNth [e1, e2]) opTy
 
 -- | e ? e1 : e2
--- consExpr g (CondExpr l e e1 e2) (Just t)
---    do  opTy <- ltracePP l "CondExpr" <$> mkCondExprTy l g t
---         consCallCondExpr g l BICondExpr (zwNth [e, e1, e2]) opTy
-
 consExpr g (CondExpr l e e1 e2) (Just t)
   = mseq checkCond $ \(xc, g') -> do
       z1 <- consExpr (envAddGuard xc True  g') e1 (Just t)
@@ -741,19 +737,17 @@ consExpr g (CondExpr l e e1 e2) (Just t)
             t1            <- cgSafeEnvFindTyM x1 g1'
             t2            <- cgSafeEnvFindTyM x2 g2'
             (xf, gf, tf)  <- freshTyCondExpr l g' (toType t)
-            _             <- subType l Nothing g1' (tracePP "t1" t1) (tracePP "tf" tf)
-            _             <- subType l Nothing g2' (tracePP "t2" t2) (tracePP "tf" tf)
-            -- g''           <- envJoin l gf (Just g1') (Just g2')
-
+            _             <- subType l Nothing g1' t1 tf
+            _             <- subType l Nothing g2' t2 tf
             return         $ Just (xf, gf)
-        _ -> error "TODO fill consExprT CondExpr"
+        _ -> return Nothing
   where
     checkCond = do
         t   <- cgSafeEnvFindTyM (builtinOpId BITruthy) g
-        consCall g l "truthy" [(e, Nothing)] $ ltracePP l "cond" t
+        consCall g l "truthy" [(e, Nothing)] t
 
-consExpr _ e@CondExpr{} Nothing
-  = error $ "Cannot check condExpr" ++ ppshow e ++ " with no contextual type."
+consExpr _ e@(CondExpr l _ _ _) Nothing
+  = cgError $ unimpCondExpCtxType l e
 
 -- | super(e1,..,en)
 consExpr g (CallExpr l (SuperRef _) _) _
@@ -956,7 +950,7 @@ instantiateFTy l g fn xes ft@(bkAll -> (βs, t))
 --
 consCallCondExpr g l fn ets ft@(validOverloads g l -> fts)
   = mseq (consCondExprArgs (srcPos l) g ets) $ \(xes, g') -> do
-      ts <- ltracePP l (ppshow fn) <$> T.mapM (`cgSafeEnvFindTyM` g') xes
+      ts <- T.mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
         [ft] -> consCheckArgs l g' fn ft ts xes
         _    -> cgError $ errorNoMatchCallee (srcPos l) fn ts ft

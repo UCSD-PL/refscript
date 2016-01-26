@@ -2,5 +2,5 @@
 
 /*@ foo :: () => { number | v = 4 } */
 export function foo() {
-    return (true ? 3 : null) + 1;
+    return (<number>(true ? 3 : null)) + 1;
 }

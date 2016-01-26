@@ -621,12 +621,8 @@ tcExpr γ ex@(CondExpr l e e1 e2) (Just t)
                 return     $ (CondExpr l e' e1'' e2'', t)
          _  -> error "TODO: error tcExpr condExpr"
 
---   = do  opTy <- mkCondExprTy l γ t
---         ([e', e1', e2'], t') <- tcNormalCall γ l BICondExpr ([e, e1, e2] `zip` nths) opTy
---         return (CondExpr l e' e1' e2', t')
-
-tcExpr γ e@CondExpr{} Nothing
-  = error $ "Cannot check condExpr" ++ ppshow e ++ " with no contextual type."
+tcExpr γ e@(CondExpr l _ _ _) Nothing
+  = error "AAAA" -- tcError $ unimpCondExpCtxType l e
 
 tcExpr γ e@(PrefixExpr _ _ _) _
   = tcCall γ e

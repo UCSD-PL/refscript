@@ -1,6 +1,4 @@
 {-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE DeriveDataTypeable    #-}
-{-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -127,7 +125,7 @@ fromModuleDef ms = CHA graph nk ms
                    [ (σ, τ, g) | (t, g) <- ts
                                , σ <- maybeToList $ HM.lookup s nk
                                , τ <- maybeToList $ HM.lookup t nk ]
-    nk         = HM.fromList $ (\(TS _ (BGen n _) _, b) -> (n, b)) <$> swap <$> ns
+    nk         = HM.fromList $ (\(TS _ (BGen n _) _, b) -> (n, b)) . swap <$> ns
 
     data_      = concatMap foo $ qenvToList ms
 
@@ -228,7 +226,7 @@ expandType _ cha t@(TRef (Gen n ts@(mut:_)) r)
     ms      =  expandWithSubst cha
            <$> resolveType cha n
            <*> return ts
-    fltInst = \(TM m _ _ _ s n) -> TM m mempty Nothing Nothing s n
+    fltInst = \(TM m _ _ _ s n) -> TM m mempty Nothing Nothing s N
 
 -- | Ambient type: String, Number, etc.
 --

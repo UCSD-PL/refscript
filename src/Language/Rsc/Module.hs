@@ -161,8 +161,6 @@ moduleEnv (Rsc { code = Src stmts }) =
 
     ss                       = fmap fSrc
 
-
-
 --------------------------------------------------------------------------------
 toDeclaration :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
 --------------------------------------------------------------------------------

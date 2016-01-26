@@ -1,4 +1,6 @@
 {-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE DeriveDataTypeable    #-}
+{-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -7,12 +9,13 @@
 {-# LANGUAGE ViewPatterns          #-}
 
 
-module Language.Rsc.ClassHierarchy
-    ( ClassHierarchy (..)
+module Language.Rsc.ClassHierarchy (
+
+      ClassHierarchy (..)
     , CoercionKind (..)
 
     -- * Build CHA
-    , mkCHA, mkVarEnv
+    , mkCHA
 
     -- * Queries
     , isClassType, isEnumType, isAncestor, ancestors
@@ -34,6 +37,7 @@ module Language.Rsc.ClassHierarchy
 import           Control.Applicative               hiding (empty)
 import           Control.Exception                 (throw)
 import           Control.Monad                     (liftM, void)
+import           Data.Default
 import           Data.Foldable                     (foldlM)
 import           Data.Generics
 import           Data.Graph.Inductive.Graph
@@ -43,13 +47,13 @@ import           Data.Graph.Inductive.Query.DFS
 import           Data.Graph.Inductive.Query.Monad  ((><))
 import qualified Data.HashMap.Strict               as HM
 import qualified Data.HashSet                      as HS
-import           Data.List                         (find, partition)
+import           Data.List                         (find, findIndex, partition)
 import qualified Data.Map.Strict                   as M
 import           Data.Maybe                        (fromMaybe, isJust, listToMaybe, maybeToList)
 import           Data.Monoid                       hiding ((<>))
 import qualified Data.Traversable                  as T
 import           Data.Tuple                        (swap)
-import           Language.Fixpoint.Misc            (intersperse)
+import           Language.Fixpoint.Misc            (intersperse, safeZip)
 import qualified Language.Fixpoint.Types           as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations          hiding (err)
@@ -58,20 +62,20 @@ import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc                 (concatMapM, single)
+import           Language.Rsc.Module
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty.Annotations
 import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Pretty.Errors
 import           Language.Rsc.Pretty.Types
 import           Language.Rsc.Program
+import           Language.Rsc.Symbols
 import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
 import           Text.Printf
-
-type FError = F.FixResult Error
 
 
 data ClassHierarchy r = CHA {
@@ -109,159 +113,8 @@ instance Functor ClassHierarchy where
 --------------------------------------------------------------------------------
 mkCHA :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (ClassHierarchy r)
 --------------------------------------------------------------------------------
-mkCHA rsc = accumModules rsc >>= pure . fromModuleDef
+mkCHA rsc = moduleEnv rsc >>= pure . fromModuleDef
 
-
--- | `accumModules ss` creates a module store from the statements in @ss@
---   For every module we populate:
---
---    * m_variables with: functions, variables, class constructors, modules
---
---    * m_types with: classes and interfaces
---
---------------------------------------------------------------------------------
-accumModules :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (QEnv (ModuleDef r))
---------------------------------------------------------------------------------
-accumModules (Rsc { code = Src stmts }) =
-    (qenvFromList . map toQEnvList) `liftM` mapM mkMod (accumModuleStmts stmts)
-  where
-    toQEnvList p = (m_path p, p)
-    mkMod (p,s) = ModuleDef <$> varEnv p s <*> typeEnv s <*> enumEnv s <*> return p
-
-    -- | Variables
-    varEnv p = return . mkVarEnv . vStmts p
-    vStmts   = concatMap . vStmt
-
-    vStmt _ (VarDeclStmt _ vds)
-      = [ ( ss x
-          , VarDeclKind
-          , VI loc a Uninitialized t
-          )
-          | VarDecl l x _ <- vds
-          , VarAnn loc a (Just t) <- fFact l
-        ]
-    vStmt _ (FunctionStmt l x _ _)
-      = [ ( ss x
-          , FuncDeclKind
-          , VI loc Ambient Initialized t
-          )
-          | SigAnn loc t <- fFact l
-        ]
-    vStmt _ (ClassStmt l x _)
-      = [ ( ss x
-          , ClassDeclKind
-          , VI loc Ambient Initialized (TClass b)
-          )
-          | ClassAnn loc (TS _ b _) <- fFact l
-        ]
-    -- TODO: Fix the Locality in the following two
-    vStmt p (ModuleStmt l x _)
-      = [ ( ss x
-          , ModuleDeclKind
-          , VI Local Ambient Initialized (TMod (pathInPath l p x)))
-        ]
-    vStmt p (EnumStmt _ x _)
-      = [ ( ss x
-          , EnumDeclKind
-          , VI Local Ambient Initialized (TRef (Gen (QN p $ F.symbol x) []) fTop))
-        ]
-    vStmt _ _ = []
-
-    -- | Type Definitions
-    typeEnv = liftM envFromList . tStmts
-    tStmts  = concatMapM tStmt
-
-    tStmt c@ClassStmt{}     = single <$> declOfStmt c
-    tStmt c@InterfaceStmt{} = single <$> declOfStmt c
-    tStmt _                 = return [ ]
-
-    -- | Enumerations
-    enumEnv = return . envFromList . eStmts
-    eStmts  = concatMap eStmt
-
-    eStmt (EnumStmt _ n es)  = [(fmap srcPos n, EnumDef (F.symbol n) (envFromList $ sEnumElt <$> es))]
-    eStmt _                  = []
-    sEnumElt (EnumElt _ s e) = (F.symbol s, void e)
-
-    ss                       = fmap fSrc
-
-
---------------------------------------------------------------------------------
-mkVarEnv :: (PPR r, F.Symbolic s) => [(s, SyntaxKind, VarInfo r)] -> Env (VarInfo r)
---------------------------------------------------------------------------------
-mkVarEnv = envMap snd
-         . envFromListWithKey mergeVarInfo
-         . concatMap f
-         . M.toList
-         . foldl merge M.empty
-  where
-    merge ms (x, k, v) = M.insertWith (++) (F.symbol x) [(k,v)] ms
-
-    f (s, vs) = [(s, (k, v)) | (k@FuncDeclKind  , v) <- vs] ++
-                [(s, (k, v)) | (k@VarDeclKind   , v) <- vs] ++
-                [(s, (k, v)) | (k@ClassDeclKind , v) <- vs] ++
-                [(s, (k, v)) | (k@ModuleDeclKind, v) <- vs] ++
-                [(s, (k, v)) | (k@EnumDeclKind  , v) <- vs]
-
-    mergeVarInfo x (k1, VI l1 a1 i1 t1) (k2, VI l2 a2 i2 t2)
-      | l1 == l2
-      , k1 == k2
-      , a1 == a2
-      , i1 == i2
-      = (k1, VI l1 a1 i1 (t1 `mappend` t2))
-    mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
-
---------------------------------------------------------------------------------
--- declOfStmt :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
---------------------------------------------------------------------------------
-declOfStmt (ClassStmt l c cs)
-  | [ts] <- cas = Right (cc, TD ts $ extractTypeMembers cs)
-  | otherwise   = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
-  where
-    cc     = fmap fSrc c
-    cas    = [ ts | ClassAnn _ ts <- fFact l ]
-    errMsg = "Invalid class annotation: " ++ show (intersperse comma (map pp cas))
-
-declOfStmt (InterfaceStmt l c)
-  | [t] <- ifaceAnns  = Right (fmap fSrc c,t)
-  | otherwise         = Left $ F.Unsafe [err (sourceSpanSrcSpan l) errMsg ]
-  where
-    ifaceAnns         = [ t | InterfaceAnn t <- fFact l ]
-    errMsg            = "Invalid interface annotation: "
-                     ++ show (intersperse comma (map pp ifaceAnns))
-
-declOfStmt s         = Left $ F.Unsafe $ single
-                      $ err (sourceSpanSrcSpan $ getAnnotation s)
-                      $ "Statement\n" ++ ppshow s ++ "\ncannot have a type annotation."
-
--- | Given a list of class elements, returns a @TypeMembers@ structure
---------------------------------------------------------------------------------
-extractTypeMembers :: F.Reftable r => [ClassElt (AnnR r)] -> TypeMembers r
---------------------------------------------------------------------------------
-extractTypeMembers cs = TM ms sms call ctor sidx nidx
-  where
-    ms   = F.fromListSEnv
-         $ [ ( F.symbol x, m )
-             | MemberVarDecl l False x _ <- cs
-             , MemberAnn m <- fFact l
-           ] ++
-           [ ( F.symbol x, m )
-             | MemberMethDecl l False x _ _ <- cs
-             , MemberAnn m <- fFact l
-           ]
-    sms  = F.fromListSEnv
-         $ [ ( F.symbol x, m )
-             | MemberVarDecl l True  x _ <- cs
-             , MemberAnn m <- fFact l
-           ] ++
-           [ ( F.symbol x, m )
-             | MemberMethDecl l True  x _ _ <- cs
-             , MemberAnn m <- fFact l
-           ]
-    call = Nothing
-    ctor = mkAndOpt [ t | Constructor l _ _ <- cs, CtorAnn t <- fFact l ]
-    sidx = Nothing
-    nidx = Nothing
 
 --------------------------------------------------------------------------------
 fromModuleDef :: QEnv (ModuleDef r) -> ClassHierarchy r
@@ -283,7 +136,7 @@ fromModuleDef ms = CHA graph nk ms
                = (s, [ (x, g) | g@(Gen x _) <- uncurry (++) h ])
 
 --------------------------------------------------------------------------------
--- isClassType :: ClassHierarchy r -> RTypeQ AK t -> Bool
+isClassType :: ClassHierarchy r -> RTypeQ AK t -> Bool
 --------------------------------------------------------------------------------
 isClassType cha n | TRef (Gen x _) _ <- n
                   , Just d           <- resolveType cha x
@@ -399,7 +252,7 @@ expandType _ cha (TMod n)
                              .  m_variables
                             <$> resolveModule cha n
   where
-    toFieldInfo (val -> VI _ _ _ t) = FI Req Final t
+    toFieldInfo (val -> SI _ _ _ t) = FI Req Final t
 
 -- Common cases end here. The rest are only valid if non-coercive
 expandType NonCoercive _ _ = Nothing
@@ -530,18 +383,6 @@ getSuperType cha (TRef (Gen nm ts) _)
   | otherwise
   = Nothing
 
-
-instance (F.Reftable r, PP r) => PP (ClassHierarchy r) where
-  pp (CHA g _ ms)  =  text ""
-                  $+$ pp (take 80 (repeat '='))
-                  $+$ text "Class Hierarchy"
-                  $+$ pp (take 80 (repeat '-'))
-                  $+$ vcat (ppEdge <$> edges g)
-                  $+$ pp (take 80 (repeat '='))
-                  $+$ vcat (pp . snd <$> qenvToList ms)
-    where
-      ppEdge (a,b) = ppNode a <+> text "->" <+> ppNode b
-      ppNode       = pp . lab' . context g
 
 
 -- | IGJ's I(..) function

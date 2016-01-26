@@ -10,7 +10,8 @@ module Language.Rsc.Traversals (
     foldReft, efoldReft, efoldRType
 
   -- * Accumulators
-  , accumNamesAndPaths, accumModuleStmts, accumVars, accumVars'
+  , accumNamesAndPaths, accumModuleStmts -- , accumVars, accumVars'
+  , hoistBindings
 
   -- * Check well-formedness
   , checkTypeWF
@@ -31,9 +32,7 @@ import           Language.Rsc.Annotations       hiding (err)
 import           Language.Rsc.AST
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
-import           Language.Rsc.Pretty
 import           Language.Rsc.Program
-import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Language.Rsc.Visitor
 
@@ -157,7 +156,7 @@ efoldTypeMembers' g f h (TM m sm c k s n) γ z =
 -- --   trans f αs xs (ModuleDef v t e p)
 -- --     = ModuleDef (envMap (trans f αs xs) v) (envMap (trans f αs xs) t) e p
 -- --
--- -- instance Foldable VarInfoQ where
+-- -- instance Foldable SymInfoQ where
 -- --   trans f αs xs (VI l a i t) = VI l a i $ trans f αs xs t
 -- --
 -- -- instance Foldable FAnnQ where
@@ -278,25 +277,6 @@ accumAbsNames (QP AK_ _ ss)  = concatMap go
     go (EnumStmt l x _ )    = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
     go (InterfaceStmt l x ) = [ QN (QP AK_ (srcPos l) ss) $ F.symbol x ]
     go _                    = []
-
--- TODO: Add modules as well?
---------------------------------------------------------------------------------
--- accumVars :: F.Reftable r => [Statement (AnnR r)] -> [(Id SrcSpan, SyntaxKind, VarInfo r)]
---------------------------------------------------------------------------------
-accumVars s = [ (fSrc <$> n, k, VI loc a i t) | (n,l,k,a,i) <- hoistBindings s
-                                              , fact        <- fFact l
-                                              , (loc, t)    <- annToType fact ]
-  where
-    annToType (ClassAnn   l (TS _ b _)) = [(l, TClass b)]       -- Class
-    annToType (SigAnn     l t         ) = [(l, t)]              -- Function
-    annToType (VarAnn     l _ (Just t)) = [(l, t)]              -- Variables
-    annToType (ModuleAnn  l q         ) = [(l, TMod q)]         -- Modules
-    annToType _                         = [ ]
-
---------------------------------------------------------------------------------
-accumVars' :: F.Reftable r => [Statement (AnnR r)] -> [(Id SrcSpan, Assignability)]
---------------------------------------------------------------------------------
-accumVars' s = [ (fSrc <$> n, a) | (n,l,k,a,i) <- hoistBindings s ]
 
 
 type BindInfo a = (Id a, a, SyntaxKind, Assignability, Initialization)

@@ -24,6 +24,9 @@ module Language.Rsc.Names (
   , unId
   , symbolId
   , returnId
+  , lenId
+  , argId
+  , argIdInit
 
   -- * Path operations
   , extendAbsPath
@@ -165,7 +168,11 @@ symbolId :: (IsLocated l, F.Symbolic x) => l -> x -> Id l
 symbolId l x = Id l $ symbolString $ F.symbol x
 
 returnId   :: a -> Id a
-returnId x = Id x returnName
+returnId x  = Id x returnName
+lenId l     = Id l "length"
+argIdInit l = Id l $ "arguments"
+argId l i   = Id l $ "arguments_" ++ show i
+
 
 instance Eq (Id a) where
   Id _ x1 == Id _ x2 = x1 == x2

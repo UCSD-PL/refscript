@@ -40,9 +40,11 @@ import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc
+import           Language.Rsc.Module
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
+import           Language.Rsc.Symbols
 import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
@@ -101,8 +103,8 @@ instance Transformable ModuleDefQ where
   trans f αs xs (ModuleDef v t e p)
     = ModuleDef (envMap (trans f αs xs) v) (envMap (trans f αs xs) t) e p
 
-instance Transformable VarInfoQ where
-  trans f αs xs (VI l a i t) = VI l a i $ trans f αs xs t
+instance Transformable SymInfoQ where
+  trans f αs xs (SI l a i t) = SI l a i $ trans f αs xs t
 
 instance Transformable FAnnQ where
   trans f αs xs (FA i s ys) = FA i s $ trans f αs xs <$> ys

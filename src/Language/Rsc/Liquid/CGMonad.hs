@@ -90,9 +90,11 @@ import           Language.Rsc.Liquid.Environment
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc               (concatMapM, mapPair, single)
+import           Language.Rsc.Module
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
+import           Language.Rsc.Symbols
 import qualified Language.Rsc.SystemUtils        as S
 import           Language.Rsc.Transformations
 import           Language.Rsc.Typecheck.Sub
@@ -302,7 +304,7 @@ cgEnvAddFresh msg l t g
        addAnnot l x t
        return (x, g')
   where
-    v = VI Local RdOnly Initialized t
+    v = SI Local RdOnly Initialized t
 
 freshId a = Id <$> freshenAnn a <*> fresh
 
@@ -326,12 +328,12 @@ envAddGroup :: IsLocated l => l -> String -> [F.Symbol] -> CGEnv
 --------------------------------------------------------------------------------
 envAddGroup l msg ks g (x, xts)
   = do  mapM_ cgError $ concat $ zipWith (checkSyms l msg g ks) xs ts
-        es    <- L.zipWith4 VI ls as is <$> zipWithM inv is ts
+        es    <- L.zipWith4 SI ls as is <$> zipWithM inv is ts
         ids   <- toIBindEnv . catMaybes <$> zipWithM (addFixpointBind g) xs es
         return $ g { cge_names = envAdds (zip xs es) $ cge_names g
                    , cge_fenv  = F.insertSEnv x ids  $ cge_fenv  g }
   where
-    (xs,ls,as,is,ts) = L.unzip5 [(x,loc,a,i,t) | (x, VI loc a i t) <- xts ]
+    (xs,ls,as,is,ts) = L.unzip5 [(x,loc,a,i,t) | (x, SI loc a i t) <- xts ]
     inv Initialized  = addInvariant g
     inv _            = return
     toIBindEnv       = (`F.insertsIBindEnv` F.emptyIBindEnv)
@@ -350,7 +352,7 @@ resolveTypeM l γ x
 --------------------------------------------------------------------------------
 objFields :: EnvKey x => CGEnv -> (x, CGEnvEntry) -> (F.Symbol, [(F.Symbol,CGEnvEntry)])
 --------------------------------------------------------------------------------
-objFields g (x, e@(VI loc a _ t))
+objFields g (x, e@(SI loc a _ t))
               | a `elem` [WriteGlobal,ReturnVar] = (x_sym, [(x_sym,e)])
               | otherwise = (x_sym, (x_sym,e):xts)
   where
@@ -358,8 +360,8 @@ objFields g (x, e@(VI loc a _ t))
     xts       = [(mkQualSym x f, vi f o ft) | (f, FI o Final ft) <- fs ]
 
     -- This should remain as is: x.f bindings are not going to change
-    vi f Opt tf = VI loc a Initialized $ orUndef $ ty tf f
-    vi f Req tf = VI loc a Initialized $           ty tf f
+    vi f Opt tf = SI loc a Initialized $ orUndef $ ty tf f
+    vi f Req tf = SI loc a Initialized $           ty tf f
     -- v = offset(x,"f")
     ty t f = substThis x t `eSingleton` mkOffset x f
 
@@ -371,9 +373,9 @@ objFields g (x, e@(VI loc a _ t))
 addFixpointBind :: EnvKey x => CGEnv -> x -> CGEnvEntry -> CGM (Maybe F.BindId)
 --------------------------------------------------------------------------------
 -- No binding for globals or RetVal: shouldn't appear in refinements
-addFixpointBind _ _ (VI _ WriteGlobal _ _) = return Nothing
-addFixpointBind _ _ (VI _ ReturnVar _ _) = return Nothing
-addFixpointBind g x (VI _ _ _ t)
+addFixpointBind _ _ (SI _ WriteGlobal _ _) = return Nothing
+addFixpointBind _ _ (SI _ ReturnVar _ _) = return Nothing
+addFixpointBind g x (SI _ _ _ t)
   = do  bs           <- cg_binds <$> get
         t'           <- addInvariant g t
         let r         = rTypeSortedReft t'
@@ -493,22 +495,22 @@ freshTyFun g l t
   | otherwise          = return t
 
 --------------------------------------------------------------------------------
-freshenVI :: IsLocated l => CGEnv -> l -> VarInfo F.Reft -> CGM (VarInfo F.Reft)
+freshenVI :: IsLocated l => CGEnv -> l -> SymInfo F.Reft -> CGM (SymInfo F.Reft)
 --------------------------------------------------------------------------------
-freshenVI _ _ v@(VI _ Ambient _ _)
+freshenVI _ _ v@(SI _ Ambient _ _)
   = return v
-freshenVI _ _ v@(VI Exported _ _ _)
+freshenVI _ _ v@(SI Exported _ _ _)
   = return v
-freshenVI g l v@(VI loc a@WriteGlobal i t)
+freshenVI g l v@(SI loc a@WriteGlobal i t)
   | isTrivialRefType t
-  = freshTy "freshenVI" (toType t) >>= (VI loc a i <$>) . wellFormed l g
+  = freshTy "freshenVI" (toType t) >>= (SI loc a i <$>) . wellFormed l g
   | otherwise
   = return v
-freshenVI g l v@(VI loc a i t)
+freshenVI g l v@(SI loc a i t)
   | not (isTFun t)
   = return v
   | isTrivialRefType t
-  = freshTy "freshenVI" (toType t) >>= (VI loc a i <$>) . wellFormed l g
+  = freshTy "freshenVI" (toType t) >>= (SI loc a i <$>) . wellFormed l g
   | otherwise
   = return v
 
@@ -554,22 +556,22 @@ freshTyPhis :: AnnLq -> CGEnv -> [Id AnnLq] -> [Type] -> CGM (CGEnv, [RefType])
 --------------------------------------------------------------------------------
 freshTyPhis l g xs τs
   = do ts <- mapM (freshTy "freshTyPhis") τs
-       g' <- cgEnvAdds l "freshTyPhis" (zip xs (VI Local WriteLocal Initialized <$> ts)) g
+       g' <- cgEnvAdds l "freshTyPhis" (zip xs (SI Local WriteLocal Initialized <$> ts)) g
        _  <- mapM (wellFormed l g') ts
        return (g', ts)
 
 
 -- | Instantiate Fresh Type (at Phi-site)
 --------------------------------------------------------------------------------
-freshTyPhis' :: AnnLq -> CGEnv -> [Id AnnLq] -> [EnvEntry ()] -> CGM (CGEnv, [RefType])
+freshTyPhis' :: AnnLq -> CGEnv -> [Id AnnLq] -> [SymInfo ()] -> CGM (CGEnv, [RefType])
 --------------------------------------------------------------------------------
 freshTyPhis' l g xs es
   = do  ts' <- mapM (freshTy "freshTyPhis") ts
-        g'  <- cgEnvAdds l "freshTyPhis" (zip xs (L.zipWith4 VI ls as is ts')) g
+        g'  <- cgEnvAdds l "freshTyPhis" (zip xs (L.zipWith4 SI ls as is ts')) g
         _   <- mapM (wellFormed l g') ts'
         return (g', ts')
   where
-    (ls,as,is,ts) = L.unzip4 [ (l,a,i,t) | VI l a i t <- es ]
+    (ls,as,is,ts) = L.unzip4 [ (l,a,i,t) | SI l a i t <- es ]
 
 -- | Instantiate Fresh Type at conditional expression
 --------------------------------------------------------------------------------
@@ -597,7 +599,7 @@ freshenCGEnvM g@(CGE { cge_names = nms, cge_cha = CHA gr n m })
         return $ g { cge_names = nms'
                    , cge_cha   = cha' }
   where
-    go (x, VI loc a i v@TVar{}) = return (x, VI loc a i v)
+    go (x, SI loc a i v@TVar{}) = return (x, SI loc a i v)
     go (x, v) = (x,) <$> freshenVI g (srcPos x) v
 
 --------------------------------------------------------------------------------
@@ -658,11 +660,11 @@ instance F.Subable a => F.Subable (Env a) where
   subst su = envFromList . map ((***) (F.subst su . F.symbol) (F.subst su)) . envToList
   syms x   = concat [ F.syms (F.symbol x) ++ F.syms t | (x, t) <- envToList x ]
 
-instance (PP r, F.Reftable r, F.Subable r) => F.Subable (VarInfo r) where
-  substa f (VI l a i t) = VI l a i $ F.substa f t
-  substf f (VI l a i t) = VI l a i $ F.substf f t
-  subst su (VI l a i t) = VI l a i $ F.subst su t
-  syms     (VI l a i t) = F.syms t
+instance (PP r, F.Reftable r, F.Subable r) => F.Subable (SymInfo r) where
+  substa f (SI l a i t) = SI l a i $ F.substa f t
+  substf f (SI l a i t) = SI l a i $ F.substf f t
+  subst su (SI l a i t) = SI l a i $ F.subst su t
+  syms     (SI l a i t) = F.syms t
 
 
 -- errorLiquid l g t1 t2         = mkErr k $ printf "Liquid Type Error" where k = srcPos l
@@ -1099,7 +1101,7 @@ bsplitW g t i
 
 envTyAdds msg l xts g
   = cgEnvAdds l (msg ++ " - envTyAdds " ++ ppshow (srcPos l))
-      [(symbolId l x, VI Local WriteLocal Initialized t) | B x t <- xts] g
+      [(symbolId l x, SI Local WriteLocal Initialized t) | B x t <- xts] g
     where
       symbolId l x = Id l $ symbolString $ F.symbol x
 

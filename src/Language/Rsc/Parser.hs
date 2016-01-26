@@ -9,12 +9,7 @@
 {-# LANGUAGE UndecidableInstances      #-}
 
 
-module Language.Rsc.Parser
-    ( FError
-    , parseRscFromFiles
-    , parseScriptFromJSON
-    , parseIdFromJSON
-    ) where
+module Language.Rsc.Parser (parseRscFromFiles, parseScriptFromJSON, parseIdFromJSON) where
 
 import           Control.Applicative              ((<$>))
 import           Control.Arrow                    (second)
@@ -58,8 +53,6 @@ import           Text.Parsec.Error                (errorMessages, showErrorMessa
 -- import           Debug.Trace                             ( trace, traceShow)
 import           Language.Rsc.Pretty
 
-
-type FError = F.FixResult Error
 
 --------------------------------------------------------------------------------
 -- | Parse File and Type Signatures

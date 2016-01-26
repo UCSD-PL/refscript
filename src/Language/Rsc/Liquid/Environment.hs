@@ -21,6 +21,7 @@ import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
+import           Language.Rsc.Symbols
 import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
@@ -30,7 +31,7 @@ import           Language.Rsc.Types
 -------------------------------------------------------------------------------------
 
 data CGEnvR r = CGE {
-    cge_names  :: !(Env (EnvEntry r))
+    cge_names  :: !(Env (SymInfo r))
   , cge_bounds :: !(Env (RType r))
   , cge_ctx    :: !IContext
   , cge_path   :: !AbsPath
@@ -45,7 +46,7 @@ data CGEnvR r = CGE {
 
 type CGEnv = CGEnvR F.Reft
 
-type CGEnvEntry = EnvEntry F.Reft
+type CGEnvEntry = SymInfo F.Reft
 
 instance CheckingEnvironment r CGEnvR where
   envNames  = cge_names
@@ -67,8 +68,8 @@ envFindTyWithAsgn :: (EnvKey x, F.Expression x) => x -> CGEnv -> Maybe CGEnvEntr
 ---------------------------------------------------------------------------------------
 envFindTyWithAsgn x (envNames -> γ) = fmap singleton (envFindTy x γ)
   where
-    singleton v@(VI _ WriteGlobal Initialized   _) = v
-    singleton v@(VI _ WriteGlobal Uninitialized t) = v { v_type = orUndef t }
+    singleton v@(SI _ WriteGlobal Initialized   _) = v
+    singleton v@(SI _ WriteGlobal Uninitialized t) = v { v_type = orUndef t }
     singleton v = v { v_type = eSingleton (v_type v) x }
 
 ---------------------------------------------------------------------------------------
@@ -115,7 +116,7 @@ checkSyms l m g ok x t = efoldRType h f F.emptySEnv [] t
                = Nothing
                | s `elem` biExtra
                = Nothing
-               | Just (VI _ a _ _) <- chkEnvFindTy' s g
+               | Just (SI _ a _ _) <- chkEnvFindTy' s g
                = if a `elem` validAsgn
                    then Nothing
                    else Just $ errorAsgnInRef l s t a

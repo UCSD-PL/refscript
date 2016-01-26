@@ -73,6 +73,7 @@ import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc
+import           Language.Rsc.Module
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program

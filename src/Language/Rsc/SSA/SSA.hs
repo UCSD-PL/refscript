@@ -41,10 +41,6 @@ import           Language.Rsc.Visitor
 
 -- import           Debug.Trace                        hiding (traceShow)
 
-type FError = F.FixResult E.Error
-
--- TODO : SSA needs a proper environment like TC & Liquid
-
 ----------------------------------------------------------------------------------
 ssaTransform :: (PP r, F.Reftable r, Data r)
              => BareRsc r -> ClassHierarchy r -> IO (Either FError (SsaRsc r))

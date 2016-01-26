@@ -190,57 +190,12 @@ type BTVar r          = BTVarQ AK r
 type TypeDecl r       = TypeDeclQ AK r
 type TypeSig r        = TypeSigQ AK r
 type TypeMember r     = TypeMemberQ AK r
-type VarInfo r        = VarInfoQ AK r
 
 type Type             = RType ()
 
 type OverloadSig r    = ([BTVar r], [Bind r], RType r)
 type IOverloadSig r   = (IntCallSite, OverloadSig r)
 
-
---------------------------------------------------------------------------------
--- | Module Body
---------------------------------------------------------------------------------
---
---  As per TypeScript spec par. 10.2:
---
---  Each module body has a declaration space for local variables (including
---  functions, modules, class constructor functions, and enum objects), a
---  declaration space for local named types (classes, interfaces, and enums),
---  and a declaration space for local namespaces (containers of named types).
---  Every declaration (whether local or exported) in a module contributes to
---  one or more of these declaration spaces.
---
---  PV: the last case has not been included
---
-data ModuleDefQ q r = ModuleDef {
-  --
-  -- | Variables (Interfaces excluded, as they don't appear as language bindings)
-  --
-    m_variables :: Env (VarInfoQ q r)
-  --
-  -- | Types definitions
-  --
-  , m_types     :: Env (TypeDeclQ q r)
-  --
-  -- | Enumerations definitions
-  --
-  , m_enums     :: Env EnumDef
-  --
-  -- | Absolute path of module
-  --
-  , m_path      :: AbsPath
-  }
-  deriving (Data, Typeable, Functor)
-
-type ModuleDef = ModuleDefQ AK
-
-instance Monoid (ModuleDefQ q r) where
-  mempty = ModuleDef mempty mempty mempty def
-  ModuleDef v t e p `mappend` ModuleDef v' t' e' _ = ModuleDef (v `mappend` v')
-                                                               (t `mappend` t')
-                                                               (e `mappend` e')
-                                                               p
 
 
 --------------------------------------------------------------------------------
@@ -307,18 +262,6 @@ data Locality =
   --
   | Local
   deriving (Show, Eq, Data, Typeable)
-
-
---------------------------------------------------------------------------------
--- | Variable information
---------------------------------------------------------------------------------
-
-data VarInfoQ q r = VI { v_loc  :: Locality
-                       , v_asgn :: Assignability
-                       , v_init :: Initialization
-                       , v_type :: RTypeQ q r
-                       }
-                       deriving (Data, Typeable, Functor)
 
 
 --------------------------------------------------------------------------------
@@ -390,12 +333,6 @@ instance Monoid Initialization where
   Initialized `mappend` Initialized   = Initialized
   _           `mappend` _             = Uninitialized
 
-
--- instance Monoid (MethodInfo r) where
---   mempty                                = MI Req []
---   MI r t `mappend` MI r' t' | r == r'   = MI r   (t ++ t')
---                             | otherwise = MI Req (t ++ t')
---
 
 --------------------------------------------------------------------------------
 -- | IContext keeps track of context of intersection-type cases

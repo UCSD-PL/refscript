@@ -163,9 +163,6 @@ instance F.Reftable r => SubstitutableQ q r (BindQ q r) where
 instance SubstitutableQ q r t => SubstitutableQ q r (Located t) where
   apply θ (Loc s v)         = Loc s $ apply θ v
 
-instance F.Reftable r => SubstitutableQ q r (VarInfoQ q r) where
-  apply θ (VI l a i t)      = VI l a i $ apply θ t
-
 instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   apply θ (PhiVarTy (v,t))     = PhiVarTy . (v,) $ apply θ t
   apply θ (TypInst i ξ ts)     = TypInst i ξ     $ apply θ ts

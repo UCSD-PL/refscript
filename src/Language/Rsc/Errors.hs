@@ -17,6 +17,9 @@ import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Types.PrettyPrint
 
 
+
+type FError = FixResult Error
+
 mkErr = err . sourceSpanSrcSpan
 
 ---------------------------------------------------------------------------

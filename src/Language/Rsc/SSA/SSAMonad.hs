@@ -68,6 +68,7 @@ import           Language.Rsc.Misc
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
+import           Language.Rsc.Symbols
 import           Language.Rsc.Traversals
 import           Language.Rsc.Types
 
@@ -103,12 +104,12 @@ instance PP (SsaEnv r) where
 initGlobSsaEnv :: F.Reftable r => [Statement (AnnR r)] -> ClassHierarchy r -> SsaEnv r
 -------------------------------------------------------------------------------------
 initGlobSsaEnv fs cha
-  = SsaEnv (envFromListConcat (accumVars' fs)) cha Nothing emptyPath
+  = SsaEnv (envFromListConcat (symbols' fs)) cha Nothing emptyPath
 
 initCallableSsaEnv l g arg ret xs bd = SsaEnv env cha cls path
   where
     env  = envMap toFgn (asgn g)
-         & mappend (envFromListConcat (accumVars' bd))
+         & mappend (envFromListConcat (symbols' bd))
          & envAdd ret ReturnVar
          & envAdd arg RdOnly
          & envAdds (xs `zip` repeat WriteLocal)
@@ -123,7 +124,7 @@ envToFgn = envMap toFgn
 
 initModuleSsaEnv l g m ss = SsaEnv env cha cls path
   where
-    env  = envFromListConcat (accumVars' ss) `mappend` envMap toFgn (asgn g)
+    env  = envFromListConcat (symbols' ss) `mappend` envMap toFgn (asgn g)
     cha  = ssaCHA g
     cls  = curClass g
     path = pathInPath l (curPath g) m

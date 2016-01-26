@@ -60,7 +60,7 @@ module Language.Rsc.Typecheck.Types (
   , infixOpId, prefixOpId, builtinOpId, finalizeTy
 
   -- * Builtin: Binders
-  , mkId, argId, argIdInit, mkArgTy, returnTy
+  , mkId, argId, argIdInit, returnTy
 
   -- * BitVector
   , bitVectorValue
@@ -416,10 +416,6 @@ freshBTV l s b n  = (bv,t)
     v             = TV i (srcPos l)
     t             = TVar v fTop
 
-lenId l           = Id l "length"
-argIdInit l       = Id l $ "arguments"
-argId l i         = Id l $ "arguments_" ++ show i
-
 instance F.Symbolic (LValue a) where
   symbol (LVar _ x) = F.symbol x
   symbol lv         = F.symbol "DummyLValue"
@@ -429,34 +425,6 @@ instance F.Symbolic (Prop a) where
   symbol (PropString _ s)    = F.symbol $ "propString_" ++ s
   symbol (PropNum _ n)       = F.symbol $ "propNum_"    ++ show n
 
-
--- | @argBind@ returns a dummy type binding `arguments :: T `
---   where T is an object literal containing the non-undefined `ts`.
---------------------------------------------------------------------------------------------
-mkArgTy :: (F.Reftable r, IsLocated l) => l -> [RType r] -> VarInfo r
---------------------------------------------------------------------------------------------
-mkArgTy l ts   = VI Local RdOnly Initialized
-               $ immObjectLitTy [pLen] [tLen]
-  where
-    ts'        = take k ts
-    ps'        = PropNum l . toInteger <$> [0 .. k-1]
-    pLen       = PropId l $ lenId l
-    tLen       = tNum `strengthen` rLen
-    rLen       = F.ofReft $ F.uexprReft k
-    k          = fromMaybe (length ts) $ L.findIndex isTUndef ts
-
---------------------------------------------------------------------------------------------
-immObjectLitTy :: F.Reftable r => [Prop l] -> [RType r] -> RType r
---------------------------------------------------------------------------------------------
-immObjectLitTy ps ts | length ps == length ts
-                     = TObj tIM elts fTop
-                     | otherwise
-                     = error "Mismatched args for immObjectLit"
-  where
-    elts = typeMembersFromList [ ( F.symbol p
-                             , FI Req Final t )
-                             | (p,t) <- safeZip "immObjectLitTy" ps ts
-                           ]
 
 --------------------------------------------------------------------------------------------
 typeMembers :: F.SEnv (TypeMemberQ q r) -> TypeMembersQ q r

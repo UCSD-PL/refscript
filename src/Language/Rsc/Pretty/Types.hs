@@ -182,18 +182,6 @@ ppMut t        | Just s <- mutSym t = pp s
 instance PP EnumDef where
   pp (EnumDef n m) = pp n <+> braces (pp m)
 
-instance (F.Reftable r, PP r) => PP (VarInfo r) where
-  pp (VI _ a _ t) = brackets (pp a) <+> pp t
-
-instance (PP r, F.Reftable r) => PP (ModuleDef r) where
-  pp (ModuleDef vars tys enums path) =
-          pp (take 80 (repeat '-'))
-      $+$ text "module" <+> pp path
-      $+$ pp (take 80 (repeat '-'))
-      $+$ text "Variables"    $+$ nest 4 (pp vars)
-      $+$ text "Types"        $+$ nest 4 (pp tys)
-      $+$ text "Enums"        $+$ nest 4 (pp enums)
-
 instance PP IContext where
   pp (IC x) = text "Context: " <+> pp x
 

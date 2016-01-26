@@ -36,8 +36,9 @@ import           Language.Rsc.Locations
 import           Language.Rsc.Misc              (single)
 import           Language.Rsc.Misc
 import           Language.Rsc.Names
-import           Language.Rsc.Pretty
+import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Program
+import           Language.Rsc.Symbols
 import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
@@ -62,7 +63,7 @@ type Unif r = ( PP r
 --------------------------------------------------------------------------------
 
 data TCEnv r  = TCE {
-    tce_names  :: Env (EnvEntry r)
+    tce_names  :: Env (SymInfo r)
   , tce_bounds :: Env (RType r)
   , tce_ctx    :: IContext
   , tce_path   :: AbsPath
@@ -101,7 +102,7 @@ initGlobalEnv :: Unif r => TcRsc r -> ClassHierarchy r -> TCEnv r
 initGlobalEnv pgm@(Rsc { code = Src ss }) cha
   = TCE nms bnds ctx pth cha mut tThis (-1)
   where
-    nms   = mkVarEnv (accumVars ss)
+    nms   = symEnv ss
     bnds  = mempty
     ctx   = emptyContext
     pth   = emptyPath
@@ -125,12 +126,12 @@ initCallableEnv l γ f fty xs s
   & tcEnvAdds tyBs
   where
     nms   = toFgn (envNames γ)
-          & mappend (mkVarEnv (accumVars s))
-          & envAddReturn f (VI Local ReturnVar Initialized t)
+          & mappend (symEnv s)
+          & envAddReturn f (SI Local ReturnVar Initialized t)
 
-    tyBs  = [(Loc (srcPos l) α, VI Local Ambient Initialized $ tVar α) | α <- αs]
-    varBs = [(x, VI Local WriteLocal Initialized t) | (x, t) <- safeZip "initCallableEnv" xs ts]
-    arg   = single (argId (srcPos l) (fId l), mkArgTy l ts)
+    tyBs  = [(Loc (srcPos l) α, SI Local Ambient Initialized $ tVar α) | α <- αs]
+    varBs = [(x, SI Local WriteLocal Initialized t) | (x, t) <- safeZip "initCallableEnv" xs ts]
+    arg   = single (argId (srcPos l) (fId l), mkArgumentsSI l ts)
     bnds  = envAdds [(s,t) | BTV s _ (Just t) <- bs] $ envBounds γ
     ctx   = pushContext i (envCtx γ)
     pth   = envPath γ
@@ -161,7 +162,7 @@ initModuleEnv :: (Unif r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (Ann
 --------------------------------------------------------------------------------
 initModuleEnv γ n s = TCE nms bnds ctx pth cha mut tThis fnId
   where
-    nms   = mkVarEnv (accumVars s) `mappend` toFgn (envNames γ)
+    nms   = symEnv s `mappend` toFgn (envNames γ)
     bnds  = envBounds γ
     ctx   = envCtx γ
     pth   = extendAbsPath (envPath γ) n
@@ -181,7 +182,7 @@ initClassCtorEnv (TS _ (BGen nm bs) _) γ
       }
   &  tcEnvAdd ctorExit ctorExitVI
   where
-    ctorExitVI = VI Local Ambient Initialized exitTy
+    ctorExitVI = SI Local Ambient Initialized exitTy
     ctorExit = builtinOpId BICtorExit
     -- XXX: * Keep the right order of fields
     --      * Make the return object immutable to avoid contra-variance
@@ -209,20 +210,20 @@ tcEnvFindTy :: (Unif r, F.Symbolic x, IsLocated x) => x -> TCEnv r -> Maybe (RTy
 tcEnvFindTy x γ = fmap v_type (tcEnvFindTyWithAgsn x γ)
 
 --------------------------------------------------------------------------------
-tcEnvFindTyWithAgsn :: (Unif r, F.Symbolic x) => x -> TCEnv r -> Maybe (EnvEntry r)
+tcEnvFindTyWithAgsn :: (Unif r, F.Symbolic x) => x -> TCEnv r -> Maybe (SymInfo r)
 --------------------------------------------------------------------------------
 tcEnvFindTyWithAgsn x γ | Just t <- envFindTy x $ tce_names γ
                         = Just $ adjustInit t
                         | otherwise
                         = Nothing
   where
-    adjustInit s@(VI _ _ Initialized _) = s
-    adjustInit (VI loc a _ t) = VI loc a Uninitialized $ orUndef t
+    adjustInit s@(SI _ _ Initialized _) = s
+    adjustInit (SI loc a _ t) = SI loc a Uninitialized $ orUndef t
 
 -- This is a variant of the above that doesn't add the ' + undefined' for
 -- non-initialized variables.
 --------------------------------------------------------------------------------
-tcEnvFindTyForAsgn    :: (Unif r, F.Symbolic x) => x -> TCEnv r -> Maybe (EnvEntry r)
+tcEnvFindTyForAsgn    :: (Unif r, F.Symbolic x) => x -> TCEnv r -> Maybe (SymInfo r)
 --------------------------------------------------------------------------------
 tcEnvFindTyForAsgn x γ = envFindTy x $ tce_names γ
 

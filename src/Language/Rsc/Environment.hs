@@ -8,8 +8,8 @@
 
 module Language.Rsc.Environment (
 
+  -- * Environments
     CheckingEnvironment (..)
-  , EnvEntry
   , chkEnvFindTy, chkEnvFindTy'
   , safeEnvFindTy
   , envFindBound, envFindBoundOpt
@@ -19,37 +19,44 @@ module Language.Rsc.Environment (
   -- Global definitions
   , globalLengthType
 
-
 ) where
 
 import           Control.Applicative            ((<$>))
 import           Control.Exception              (throw)
 import           Data.Default
+import           Data.Generics
+import qualified Data.List                      as L
+import           Data.Maybe                     (fromMaybe)
+import           Language.Fixpoint.Misc         (safeZip)
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Types.Names
+import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
+import           Language.Rsc.Module
 import           Language.Rsc.Names
-import           Language.Rsc.Pretty
+import           Language.Rsc.Pretty.Common
+import           Language.Rsc.Symbols
+import           Language.Rsc.Traversals
+import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
+
 
 -------------------------------------------------------------------------------
 -- | Typecheck Environment
 -------------------------------------------------------------------------------
 
-type EnvEntry r = VarInfo r
-
 class CheckingEnvironment r t where
   --
   -- | Bindings in scope
   --
-  envNames  :: t r -> Env (EnvEntry r)
+  envNames  :: t r -> Env (SymInfo r)
   --
   -- | Bounds for type variables
   --
@@ -83,7 +90,7 @@ class CheckingEnvironment r t where
 
 
 -------------------------------------------------------------------------------
-chkEnvFindTy' :: (CheckingEnvironment r t, Symbolic a) => a -> t r -> Maybe (EnvEntry r)
+chkEnvFindTy' :: (CheckingEnvironment r t, Symbolic a) => a -> t r -> Maybe (SymInfo r)
 -------------------------------------------------------------------------------
 chkEnvFindTy' x (envNames -> γ) = envFindTy x γ
 
@@ -115,11 +122,11 @@ resolveTypeInEnv   (envCHA -> c) = resolveType c
 resolveEnumInEnv   (envCHA -> c) = resolveEnum c
 
 --------------------------------------------------------------------------------
-toFgn :: Env (VarInfoQ q r) -> Env (VarInfoQ q r)
+toFgn :: Env (SymInfoQ q r) -> Env (SymInfoQ q r)
 --------------------------------------------------------------------------------
 toFgn = envMap go
   where
-    go (VI loc WriteLocal i t) = VI loc ForeignLocal i t
+    go (SI loc WriteLocal i t) = SI loc ForeignLocal i t
     go v = v
 
 --------------------------------------------------------------------------------

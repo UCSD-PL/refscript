@@ -436,6 +436,9 @@ ctorVisitor g ms          = defaultVisitor { endStmt = es } { endExpr = ee }
     ts r@(ReturnStmt l _) = maybeBlock <$> fr_ l <*> ((:[r]) <$> ctorExit l ms)
     ts r                  = return $ r
 
+-------------------------------------------------------------------------------------
+ctorExit :: AnnSSA r -> [Id t] -> SSAM r (Statement (AnnSSA r))
+-------------------------------------------------------------------------------------
 ctorExit l ms
   = do  m     <- VarRef <$> fr <*> freshenIdSSA (builtinOpId BICtorExit)
         es    <- mapM ((VarRef <$> fr <*>) . return . mkCtorId l) ms

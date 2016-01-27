@@ -309,9 +309,9 @@ nonStaticFields :: ClassHierarchy r -> AbsName -> [F.Symbol]
 nonStaticFields (CHA g m modules) x
   = HS.toList . HS.unions $ HS.fromList . flds <$> ps
   where
-    flds (QN p y) = [ s | ms      <- maybeToList $ qenvFindTy p modules
-                        , TD _ es <- maybeToList $ envFindTy y  $ m_types ms
-                        , s       <- map fst     $ F.toListSEnv $ i_mems  es ]
+    flds (QN p y) = [ s | ms        <- maybeToList  $ qenvFindTy p modules
+                        , TD _ es   <- maybeToList  $ envFindTy y  $ m_types ms
+                        , (s, FI{}) <- F.toListSEnv $ i_mems  es ]
 
     ps            = [ n | cur <- maybeToList $ HM.lookup x m
                         , anc <- reachable cur g

@@ -627,15 +627,15 @@ tcExpr γ ex@(CondExpr l e e1 e2) (Just t)
 tcExpr γ e@(CondExpr l _ _ _) Nothing
   = tcError $ unimpCondExpCtxType l e
 
-tcExpr γ e@(PrefixExpr _ _ _) _
-  = tcCall γ e
+tcExpr γ e@(PrefixExpr _ _ _) s
+  = tcCall γ e s
 
-tcExpr γ e@(InfixExpr _ _ _ _) _
-  = tcCall γ e
+tcExpr γ e@(InfixExpr _ _ _ _) s
+  = tcCall γ e s
 
 -- | f(e)
 tcExpr γ e@(CallExpr _ _ _) s
-  = tcCall γ e
+  = tcCall γ e s
 
 -- | [e1,..,en]
 tcExpr γ e@(ArrayLit l es) to
@@ -688,8 +688,8 @@ tcExpr γ (Cast_ l e) to
       _   -> die $ bugNestedCasts (srcPos l) e
 
 -- | e.f
-tcExpr γ e@(DotRef _ _ _) _
-  = tcCall γ e
+tcExpr γ e@(DotRef _ _ _) s
+  = tcCall γ e s
 
 -- -- | e1["s"]
 -- tcExpr γ (BracketRef l1 e1 (StringLit l2 s)) to
@@ -700,16 +700,16 @@ tcExpr γ e@(DotRef _ _ _) _
 --   = tcExpr γ (DotRef l1 e1 (Id l2 $ show i)) to
 --
 -- | e1[e2]
-tcExpr γ e@(BracketRef _ _ _) _
-  = tcCall γ e
+tcExpr γ e@(BracketRef _ _ _) s
+  = tcCall γ e s
 
 -- | e1[e2] = e3
-tcExpr γ e@(AssignExpr _ OpAssign (LBracket _ _ _) _) _
-  = tcCall γ e
+tcExpr γ e@(AssignExpr _ OpAssign (LBracket _ _ _) _) s
+  = tcCall γ e s
 
 -- | new C(e, ...)
-tcExpr γ e@(NewExpr _ _ _) _
-  = tcCall γ e
+tcExpr γ e@(NewExpr _ _ _) s
+  = tcCall γ e s
 
 -- | super
 tcExpr γ e@(SuperRef l) _
@@ -743,11 +743,11 @@ tcCast l γ e tc
         return       $ (e', t')
 
 --------------------------------------------------------------------------------
-tcCall :: Unif r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
+tcCall :: Unif r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
 --------------------------------------------------------------------------------
 
 -- | `o e`
-tcCall γ c@(PrefixExpr l o e)
+tcCall γ c@(PrefixExpr l o e) _
   = do opTy <- safeEnvFindTy l γ (prefixOpId o)
        z    <- tcNormalCall γ l o [(e, Nothing)] opTy
        case z of
@@ -755,7 +755,7 @@ tcCall γ c@(PrefixExpr l o e)
          _ -> fatal (impossible (srcPos l) "tcCall PrefixExpr") (c, tBot)
 
 -- | `e1 o e2`
-tcCall γ c@(InfixExpr l o@OpInstanceof e1 e2)
+tcCall γ c@(InfixExpr l o@OpInstanceof e1 e2) _
   = do (e2',t) <- tcExpr γ e2 Nothing
        case t of
          TClass (BGen (QN _ x) _)  ->
@@ -768,7 +768,7 @@ tcCall γ c@(InfixExpr l o@OpInstanceof e1 e2)
   where
     l2 = getAnnotation e2
 
-tcCall γ c@(InfixExpr l o e1 e2)
+tcCall γ c@(InfixExpr l o e1 e2) _
   = do opTy <- safeEnvFindTy l γ (infixOpId o)
        z    <- tcNormalCall γ l o ([e1,e2] `zip` nths) opTy
        case z of
@@ -778,7 +778,7 @@ tcCall γ c@(InfixExpr l o e1 e2)
 -- | `e1[e2]` Special case for Enumeration, and object literals with numeric
 -- or string arguments.
 --
-tcCall γ e@(BracketRef l e1 e2)
+tcCall γ e@(BracketRef l e1 e2) _
   = runFailM (tcExpr γ e1 Nothing) >>= \case
       -- Enumeration
       Right (_, t) | isEnumType (envCHA γ) t -> fatal (unimplemented (srcPos l) msg e) (e, tBot)
@@ -791,7 +791,7 @@ tcCall γ e@(BracketRef l e1 e2)
           _ -> fatal (impossible (srcPos l) "tcCall BracketRef") (e, tBot)
 
 -- | `e1[e2] = e3`
-tcCall γ e@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
+tcCall γ e@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3) _
   = do opTy <- safeEnvFindTy l γ (builtinOpId BIBracketAssign)
        z <- tcNormalCall γ l BIBracketAssign ([e1,e2,e3] `zip` nths) opTy
        case z of
@@ -799,7 +799,7 @@ tcCall γ e@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
          _ -> fatal (impossible (srcPos l) "tcCall AssignExpr") (e, tBot)
 
 -- | `new e(e1,...,en)`
-tcCall γ c@(NewExpr l e es)
+tcCall γ c@(NewExpr l e es) (Just s)
   = do (e',t) <- tcExpr γ e Nothing
        case extractCtor γ t of
          Just ct ->
@@ -807,9 +807,13 @@ tcCall γ c@(NewExpr l e es)
                return (NewExpr l e' es', t')
          _ -> fatal (errorConstrMissing (srcPos l) t) (c, tBot)
 
+tcCall γ c@(NewExpr l e es) Nothing
+  = tcError $ errorNewExprCtxType l c
+
 -- | e.f
 --
-tcCall γ ef@(DotRef l e f) = runFailM (tcExpr γ e Nothing) >>= checkAccess
+tcCall γ ef@(DotRef l e f) _
+  = runFailM (tcExpr γ e Nothing) >>= checkAccess
   where
     checkAccess (Right (_, tRcvr))
       | isArrayLen tRcvr = checkArrayLength
@@ -848,12 +852,12 @@ tcCall γ ef@(DotRef l e f) = runFailM (tcExpr γ e Nothing) >>= checkAccess
 --
 --   XXX: there shouldn't be any `super(..)` calls after SSA ...
 --
-tcCall _ (CallExpr _ (SuperRef _)  _)
+tcCall _ (CallExpr _ (SuperRef _)  _) _
   = error "BUG: super(..) calls should have been eliminated"
 
 -- | `e.m(es)`
 --
-tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
+tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es) _
   | isVariadicCall f = tcError (unimplemented l "Variadic" ex)
   | otherwise        = checkNonVariadic
   where
@@ -882,20 +886,20 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
     call tR _ (FI _   _ _ ) = fatal (errorCallOptional l f tR) (es, tBot)
 
     call tR mR (MI Req mts)
-      | any (isSubtype l γ mR . fst) mts
-      = tcNormalCall γ l em (es `zip` nths)
-      $ mkAnd [ ft_ | (m, ft_) <- mts, isSubtype l γ mR m ]
-      | otherwise
-      = fatal (errorMethMutIncomp l em mts mR) (es, tBot)
+      = case [ t | (m, t) <- mts, isSubtype l γ mR m ] of
+        [] -> fatal (errorMethMutIncomp l em mts mR) (es, tBot)
+        ts -> tcNormalCall γ l em (es `zip` nths) (mkAnd ts)
+
     call tR _ _ = fatal (errorCallOptional l f tR) (es, tBot)
 
 -- | `e(es)`
-tcCall γ (CallExpr l e es)
+tcCall γ (CallExpr l e es) _
   = do (e', ft0) <- tcExpr γ e Nothing
        (es', t)  <- tcNormalCall γ l e (es `zip` nths) ft0
        return $ (CallExpr l e' es', t)
 
-tcCall _ e = fatal (unimplemented (srcPos e) "tcCall" e) (e, tBot)
+tcCall _ e _
+  = fatal (unimplemented (srcPos e) "tcCall" e) (e, tBot)
 
 --------------------------------------------------------------------------------
 -- | @tcNormalCall@ resolves overloads and returns cast-wrapped versions of the arguments.
@@ -945,15 +949,13 @@ resolveOverload :: (Unif r, PP a)
 --
 --   * If the function requires a 'self' argument, the parameters provide one.
 --
-resolveOverload γ l fn es ft
-  | [(i,t)] <- validOverloads
-  = Just . (i,,t) <$> getSubst
-  | otherwise
-  = tcCallCaseTry γ l fn (snd <$> es) validOverloads
+resolveOverload γ l fn es ft =
+  case validOverloads of
+    [(i,t)] -> Just . (i,,t) <$> getSubst
+    _       -> tcCallCaseTry γ l fn (snd <$> es) validOverloads
   where
     validOverloads = [ (i, mkFun s) | (i, s@(_, bs, _)) <- extractCall γ ft
                                     , length bs == length es ]
-
 
 --------------------------------------------------------------------------------
 -- | A successful pairing of formal to actual parameters will return `Just θ`,

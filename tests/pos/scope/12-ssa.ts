@@ -1,5 +1,5 @@
 
-/*@ qualif Cmp(v: number, n: number): v = 3 */
+/*@ qualif Cmp(v: int): v = 3 */
 
 export function bar() {
     let x = 1;

@@ -261,6 +261,7 @@ errorUnionMergeMods l t a b   = mkErr l $ printf "In type '%s', cannot merge mod
 errorUnionMergeFuns l t       = mkErr l $ printf "In type '%s', cannot merge multiple function types." (ppshow t)
 
 errorArrayLitCtxType l e      = mkErr l $ printf "Cannot type array literal '%s' without a contextual type." (ppshow e)
+errorNewExprCtxType l e       = mkErr l $ printf "Cannot type new expression '%s' without a contextual type." (ppshow e)
 unimpCondExpCtxType l e       = mkErr l $ show $ text "[Unimplemented] Cannot type conditional expression" $+$
                                                  nest 2 (pp e) $+$ text "without a contextual type."
 errorArrayLitType l e t       = mkErr l $ printf "Cannot cast array '%s' with non array type '%s'." (ppshow e) (ppshow t)

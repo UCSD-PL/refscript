@@ -171,7 +171,7 @@ moduleEnv (Rsc { code = Src stmts }) =
 toDeclaration :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
 --------------------------------------------------------------------------------
 toDeclaration (ClassStmt l c cs)
-  | [ts] <- cas = Right (cc, TD ts $ extractTypeMembers cs)
+  | [ts] <- cas = Right (cc, TD ts (extractTypeMembers cs))
   | otherwise   = Left $ F.Unsafe [F.err (sourceSpanSrcSpan l) errMsg ]
   where
     cc     = fmap fSrc c
@@ -192,30 +192,17 @@ toDeclaration s       = Left $ F.Unsafe $ single
 
 -- | Given a list of class elements, returns a @TypeMembers@ structure
 --------------------------------------------------------------------------------
-extractTypeMembers :: F.Reftable r => [ClassElt (AnnR r)] -> TypeMembers r
+extractTypeMembers :: PPR r => [ClassElt (AnnR r)] -> TypeMembers r
 --------------------------------------------------------------------------------
-extractTypeMembers cs = TM ms sms call ctor sidx nidx
+extractTypeMembers cs  = mkTypeMembers ms sms call ctor sidx nidx
   where
-    ms   = F.fromListSEnv
-         $ [ ( F.symbol x, m )
-             | MemberVarDecl l False x _ <- cs
-             , MemberAnn m <- fFact l
-           ] ++
-           [ ( F.symbol x, m )
-             | MemberMethDecl l False x _ _ <- cs
-             , MemberAnn m <- fFact l
-           ]
-    sms  = F.fromListSEnv
-         $ [ ( F.symbol x, m )
-             | MemberVarDecl l True  x _ <- cs
-             , MemberAnn m <- fFact l
-           ] ++
-           [ ( F.symbol x, m )
-             | MemberMethDecl l True  x _ _ <- cs
-             , MemberAnn m <- fFact l
-           ]
-    call = Nothing
-    ctor = mkAndOpt [ t | Constructor l _ _ <- cs, CtorAnn t <- fFact l ]
-    sidx = Nothing
-    nidx = Nothing
+    ms   = [(sym x, m) | MemberVarDecl  l False x _   <- cs, MemberAnn m <- fFact l]
+        ++ [(sym x, m) | MemberMethDecl l False x _ _ <- cs, MemberAnn m <- fFact l]
+    sms  = [(sym x, m) | MemberVarDecl  l True  x _   <- cs, MemberAnn m <- fFact l]
+        ++ [(sym x, m) | MemberMethDecl l True  x _ _ <- cs, MemberAnn m <- fFact l]
+    call = []
+    ctor = [t | Constructor l _ _ <- cs, CtorAnn t <- fFact l]
+    sidx = []
+    nidx = []
+    sym  = F.symbol
 

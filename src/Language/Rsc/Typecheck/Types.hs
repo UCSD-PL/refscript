@@ -54,7 +54,7 @@ module Language.Rsc.Typecheck.Types (
   , fTop
 
   -- * Type Definitions
-  , typeMembers, typeMembersFromList, typesOfTM
+  , mkTypeMembers, typeMembers, typeMembersFromList, typesOfTM
 
   -- * Operator Types
   , infixOpId, prefixOpId, builtinOpId, finalizeTy
@@ -425,6 +425,25 @@ instance F.Symbolic (Prop a) where
   symbol (PropString _ s)    = F.symbol $ "propString_" ++ s
   symbol (PropNum _ n)       = F.symbol $ "propNum_"    ++ show n
 
+
+
+---------------------------------------------------------------------------------
+mkTypeMembers :: [(F.Symbol, TypeMemberQ q r)] -> [(F.Symbol, TypeMemberQ q r)]
+              -> [RTypeQ q r] -> [RTypeQ q r] -> [RTypeQ q r] -> [RTypeQ q r]
+              -> TypeMembersQ q r
+---------------------------------------------------------------------------------
+mkTypeMembers lms lsms lcs lct lsi lni = TM ms sms call ctor sidx nidx
+  where
+    ms   = L.foldl' step mempty lms
+    sms  = L.foldl' step mempty lsms
+    call | [] <- lcs = Nothing | otherwise = Just (mkAnd lcs)
+    ctor | [] <- lct = Nothing | otherwise = Just (mkAnd lct)
+    sidx | [] <- lsi = Nothing | otherwise = Just (mkAnd lsi)
+    nidx | [] <- lni = Nothing | otherwise = Just (mkAnd lni)
+
+    step g (x, MI o mts) | Just (MI o' mts') <- F.lookupSEnv x g
+                         = F.insertSEnv x (MI (o `mappend` o') (mts' ++ mts)) g
+    step g (x, f)        = F.insertSEnv x f g
 
 --------------------------------------------------------------------------------------------
 typeMembers :: F.SEnv (TypeMemberQ q r) -> TypeMembersQ q r

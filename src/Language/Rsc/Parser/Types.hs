@@ -19,7 +19,7 @@ import           Data.Foldable                  (concat)
 import           Data.Generics                  hiding (Generic)
 import qualified Data.HashSet                   as S
 import           Data.List                      (foldl')
-import           Data.Maybe                     (maybeToList)
+import           Data.Maybe                     (catMaybes, maybeToList)
 import           Data.Monoid
 import qualified Data.Text                      as DT
 import           Language.Fixpoint.Parse
@@ -146,7 +146,7 @@ aliasVarT (l, x)
     x'        = symbolString x
 
 --
--- PV: Insert your option parser here
+-- PV: Add your option parser here
 --
 optionP   = string "REALS" >> return RealOption
 
@@ -415,21 +415,34 @@ data EltKind = Prop Symbol StaticKind Optionality FieldAsgn RRType
              deriving (Data, Typeable)
 
 eltKindsToTypeMembers :: [EltKind] -> TypeMembersQ RK F.Reft
-eltKindsToTypeMembers = foldl' go mempty
+eltKindsToTypeMembers eks = mkTypeMembers
+    (catMaybes (map ek2itm eks))
+    (catMaybes (map ek2stm eks))
+    (catMaybes (map ek2cl eks))
+    (catMaybes (map ek2ct eks))
+    (catMaybes (map ek2si eks))
+    (catMaybes (map ek2ni eks))
   where
-    go ms (Prop f InstanceK o m t) = ms { i_mems = F.insertSEnv f (FI o m t) (i_mems ms) }
-    go ms (Prop f StaticK   o m t) = ms { s_mems = F.insertSEnv f (FI o m t) (s_mems ms) }
-    go ms (Meth n InstanceK o m t) = ms { i_mems = insert (i_mems ms) n o (m,t) }
-    go ms (Meth n StaticK   o m t) = ms { s_mems = insert (s_mems ms) n o (m,t) }
-    go ms (Call t) = ms { tm_call = Just t `mappend` tm_call ms }
-    go ms (Ctor t) = ms { tm_ctor = Just t }
-    go ms (SIdx t) = ms { tm_sidx = Just t }
-    go ms (NIdx t) = ms { tm_nidx = Just t }
+    ek2itm (Prop f InstanceK o m t) = Just (f, FI o m t)
+    ek2itm (Meth n InstanceK o m t) = Just (n, MI o [(m,t)])
+    ek2itm _                        = Nothing
 
-    insert g x o mt | Just (MI o' mts') <- F.lookupSEnv x g
-                    = F.insertSEnv x (MI (o `mappend` o') (mts' ++ [mt])) g
-                    | otherwise
-                    = F.insertSEnv x (MI o [mt]) g
+    ek2stm (Prop f StaticK   o m t) = Just (f, FI o m t)
+    ek2stm (Meth n StaticK   o m t) = Just (n, MI o [(m,t)])
+    ek2stm _                        = Nothing
+
+    ek2cl (Call t)                  = Just t
+    ek2cl _                         = Nothing
+
+    ek2ct (Ctor t)                  = Just t
+    ek2ct _                         = Nothing
+
+    ek2si (SIdx t)                  = Just t
+    ek2si _                         = Nothing
+
+    ek2ni (NIdx t)                  = Just t
+    ek2ni _                         = Nothing
+
 
 -- | [f: string]: t
 -- | [f: number]: t

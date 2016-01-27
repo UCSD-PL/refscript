@@ -1,5 +1,6 @@
 
 class FooT<M extends ReadOnly> {
+    
     public fff<U>(a: (x: U) => U): Array<Immutable, U>;
     public fff<V>(a: (x: V, y: V) => V): Array<Immutable, V>;
     public fff(x: any): any {

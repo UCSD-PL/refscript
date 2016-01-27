@@ -506,8 +506,8 @@ methMutabilityP =  try (reserved "@Mutable"       >> return trMU)
                <|> try (reserved "@AssignsFields" >> return trAF)
                <|>     (                             return trRO)       -- default
 
-fieldAsgnP      =  try (reserved "@assignable"    >> return Assignable)
-               <|> try (reserved "@final"         >> return Final     )
+fieldAsgnP      =  try (reserved "@Assignable"    >> return Assignable)
+               <|> try (reserved "@Final"         >> return Final     )
                <|>     (                             return Inherited ) -- default
 
 dummyP ::  Parser (F.Reft -> b) -> Parser b

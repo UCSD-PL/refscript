@@ -340,15 +340,15 @@ mapTypeMembersM :: (Applicative m, Monad m)
                 => (RType r -> m (RType r)) -> TypeMembers r -> m (TypeMembers r)
 --------------------------------------------------------------------------------
 mapTypeMembersM f (TM m sm c k s n)
-  = TM <$> T.mapM (mapMethInfoM f) m
-       <*> T.mapM (mapMethInfoM f) sm
+  = TM <$> T.mapM memMapM m
+       <*> T.mapM memMapM sm
        <*> T.mapM f c
        <*> T.mapM f k
        <*> T.mapM f s
        <*> T.mapM f n
-
-mapFieldInfoM f (FI o a t) = FI o a <$> f t
-mapMethInfoM  f (MI o mts) = MI o   <$> mapM (mapSndM f) mts
+  where
+    memMapM (FI o a t) = FI o a <$> f t
+    memMapM (MI o mts) = MI o   <$> mapM (mapSndM f) mts
 
 
 --------------------------------------------------------------------------------

@@ -76,11 +76,4 @@ class A<M extends ReadOnly> {
 }
 
 
-let a: {
-    objectfoo(x: number): number;
-    objectfoo(x: string): string;
-    objectfoo(x: boolean): boolean;
-    objectfoo(x: any): any;
-};
-
 let s = M.exported(1);

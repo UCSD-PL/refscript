@@ -31,7 +31,9 @@ refTypeQualifiers γ0 (l, t)
 
 mkQuals l γ t     = [ mkQual l γ v so pa | let (RR so (Reft (v, ra))) = rTypeSortedReft t
                                          , pa                        <- conjuncts ra
-                    ]
+                                         , noThis (syms pa) ]
+  where
+    noThis        = all (not . isPrefixOfSym thisSym)
 
 mkQual l γ v so p = Q (symbol "Auto") ((v, so) : yts) (subst θ p) l0
   where

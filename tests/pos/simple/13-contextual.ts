@@ -1,7 +1,4 @@
 /*@ qualif Lt3(v: a): len v = 3 */
-/*@ qualif Lt3(v: int): v <= 0 */
-/*@ qualif Lt3(v: a, n: int): n < len v */
-
 
 /*@ foo :: <T>(a: IArray<T>, i: IArray<idx<a>>) => { IArray<T> | len v = len i } */
 declare function foo_13<T>(a: IArray<T>, i: IArray<number>): IArray<T>;

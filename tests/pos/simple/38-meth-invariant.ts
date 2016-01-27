@@ -1,10 +1,10 @@
 
-/*@ qualif ArrLen(v: number, x: a) : v = (len x) */
+/*@ qualif ArrLen(v: int, x: a) : v = len x */
 
 //adapted from navier-stokes
 export class Foo<M extends ReadOnly> {
 
-    /*@ size : [Immutable] {number | v > 0} */
+    /*@ @Final size: {number | v > 0} */
     size = 5;
 
     constructor() { }

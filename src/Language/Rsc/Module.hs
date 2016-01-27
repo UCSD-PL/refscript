@@ -15,21 +15,24 @@ module Language.Rsc.Module (
 
 ) where
 
-import           Control.Monad                (liftM, void)
+import           Control.Monad                   (liftM, void)
 import           Data.Default
 import           Data.Generics
-import           Data.List                    (find, findIndex, partition)
-import           Data.Maybe                   (fromMaybe)
-import           Language.Fixpoint.Misc       (intersperse, safeZip)
-import qualified Language.Fixpoint.Types      as F
+import           Data.List                       (find, findIndex, partition)
+import           Data.Maybe                      (fromMaybe)
+import           Language.Fixpoint.Misc          (intersperse, safeZip)
+import qualified Language.Fixpoint.Types         as F
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc            (concatMapM, single)
+import           Language.Rsc.Misc               (concatMapM, single)
 import           Language.Rsc.Names
+import           Language.Rsc.Pretty.Annotations
 import           Language.Rsc.Pretty.Common
+import           Language.Rsc.Pretty.Errors
+import           Language.Rsc.Pretty.Symbols
 import           Language.Rsc.Program
 import           Language.Rsc.Symbols
 import           Language.Rsc.Traversals
@@ -101,12 +104,15 @@ moduleEnv :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (ModuleEn
 moduleEnv (Rsc { code = Src stmts }) =
     (qenvFromList . map toQEnvList) `liftM` mapM mkMod (accumModuleStmts stmts)
   where
-    toQEnvList p = (m_path p, p)
-    mkMod (p,s) = ModuleDef <$> varEnv p s <*> typeEnv s <*> enumEnv s <*> return p
+    toQEnvList p  = (m_path p, p)
+    mkMod (p,s)   = ModuleDef <$> varEnv p s
+                              <*> typeEnv s
+                              <*> enumEnv s
+                              <*> return p
 
     -- | Variables
-    varEnv p = return . symEnv' . vStmts p
-    vStmts   = concatMap . vStmt
+    varEnv p =  return . symEnv' . SL . vStmts p
+    vStmts p s = concatMap (vStmt p) s
 
     vStmt _ (VarDeclStmt _ vds)
       = [ ( ss x

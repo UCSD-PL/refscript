@@ -226,7 +226,7 @@ expandType _ cha t@(TRef (Gen n ts@(mut:_)) r)
     ms      =  expandWithSubst cha
            <$> resolveType cha n
            <*> return ts
-    fltInst = \(TM m _ _ _ s n) -> TM m mempty Nothing Nothing s N
+    fltInst = \(TM m _ _ _ s n) -> TM m mempty Nothing Nothing s n
 
 -- | Ambient type: String, Number, etc.
 --

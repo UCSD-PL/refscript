@@ -58,6 +58,9 @@ instance PP (Prop a) where
 instance PP (Id a) where
   pp (Id _ x) = text x
 
+instance PP (VarDecl a) where
+  pp = ppVarDecl True
+
 
 indentationLevel = 4
 
@@ -475,4 +478,14 @@ javaScript (Script _ ss) = stmtList ss
 
 instance PP BuiltinOp where
   pp = text . show
+
+instance PP SyntaxKind where
+  pp FuncDeclKind    = text "FuncDeclKind"
+  pp MethDeclKind    = text "MethDeclKind"
+  pp FieldDeclKind   = text "FieldDeclKind"
+  pp CtorDeclKind    = text "CtorDeclKind"
+  pp VarDeclKind     = text "VarDeclKind"
+  pp ClassDeclKind   = text "ClassDeclKind"
+  pp ModuleDeclKind  = text "ModuleDeclKind"
+  pp EnumDeclKind    = text "EnumDeclKind"
 

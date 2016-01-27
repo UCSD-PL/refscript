@@ -27243,6 +27243,9 @@ var ts;
                 if (!annotations.some(function (a) { return a instanceof ts.VariableDeclarationAnnotation; })) {
                     var assignability = ts.Assignability.WriteLocal;
                     var type = "";
+                    if (variableStatement.modifiers && variableStatement.modifiers.some(function (modifier) { return modifier.kind === ts.SyntaxKind.ExportKeyword; })) {
+                        type = typeStr;
+                    }
                     if (ts.isInAmbientContext(declaration)) {
                         assignability = (ts.isInAmbientContext(declaration)) ? ts.Assignability.Ambient : ts.Assignability.WriteLocal;
                         type = typeStr;

@@ -53,13 +53,3 @@ instance (F.Reftable r, PP r) => PP (AnnInfo r) where
 instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann _ x ys) = text "Annot: " <+> pp x <+> pp ys
 
-instance PP SyntaxKind where
-  pp FuncDeclKind     = text "FuncDeclKind"
-  pp MethDeclKind     = text "MethDeclKind"
-  pp FieldDeclKind    = text "FieldDeclKind"
-  pp CtorDeclKind     = text "CtorDeclKind"
-  pp VarDeclKind      = text "VarDeclKind"
-  pp ClassDeclKind    = text "ClassDeclKind"
-  pp ModuleDeclKind   = text "ModuleDeclKind"
-  pp EnumDeclKind     = text "EnumDeclKind"
-

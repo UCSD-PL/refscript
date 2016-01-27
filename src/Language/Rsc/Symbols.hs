@@ -13,7 +13,7 @@ module Language.Rsc.Symbols (
     SymInfoQ (..), SymInfo
 
   -- * Symbol list
-  , SymList, symbols, symbols'
+  , SymList (..), symbols, symbols'
 
   -- * Symbol environment
   , SymEnv, symEnv, symEnv'
@@ -95,15 +95,15 @@ instance F.Reftable r => SubstitutableQ q r (SymInfoQ q r) where
 -- | List of Symbols in block
 --------------------------------------------------------------------------------
 
-type SymList r = [(Id SrcSpan, SyntaxKind, SymInfo r)]
+newtype SymList r = SL { s_list :: [(Id SrcSpan, SyntaxKind, SymInfo r)] }
 
 -- TODO: Add modules as well?
 --------------------------------------------------------------------------------
 symbols :: [Statement (AnnR r)] -> SymList r
 --------------------------------------------------------------------------------
-symbols s = [ (fSrc <$> n, k, SI loc a i t) | (n,l,k,a,i) <- hoistBindings s
-                                              , fact        <- fFact l
-                                              , (loc, t)    <- annToType fact ]
+symbols s = SL [ (fSrc <$> n, k, SI loc a i t) | (n,l,k,a,i) <- hoistBindings s
+                                               , fact        <- fFact l
+                                               , (loc, t)    <- annToType fact ]
   where
     annToType (ClassAnn   l (TS _ b _)) = [(l, TClass b)]       -- Class
     annToType (SigAnn     l t         ) = [(l, t)]              -- Function
@@ -136,6 +136,7 @@ symEnv' = envMap snd
         . concatMap f
         . M.toList
         . foldl merge M.empty
+        . s_list
   where
     merge ms (x, k, v) = M.insertWith (++) (F.symbol x) [(k,v)] ms
 

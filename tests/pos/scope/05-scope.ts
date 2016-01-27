@@ -1,6 +1,6 @@
 
 module M {
-    export let a = 1;
+    let a = 1;
     export let b = 2;
     b = 3;
     function foo() {
@@ -17,3 +17,5 @@ module N {
         M.b = M.b + 2;
     }
 }
+
+M.b = 1;

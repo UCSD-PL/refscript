@@ -245,7 +245,7 @@ expandType _ cha (TClass (BGen n ts))
     fltStat (TM _ m c k _ _) = TM mempty m c k Nothing Nothing
 
 expandType _ cha (TMod n)
-  = (\m -> TObj tIM m fTop) <$> typeMembers
+  = (\m -> TObj tUQ m fTop) <$> typeMembers
                              .  fmap toFieldInfo
                              .  m_variables
                             <$> resolveModule cha n

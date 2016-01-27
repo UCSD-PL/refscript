@@ -227,14 +227,16 @@ tcStmt γ (ExprStmt l (AssignExpr l1 OpAssign (LVar lx x) e))
 tcStmt γ@(envCHA -> c) (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do  (e1'', te1) <- tcExpr γ e1' Nothing
         case (ltracePP l te1 $ getMutability c te1, e1) of
-          (Just m, _        ) | isSubtype l γ m tMU ->
+          (Just m, _        )
+            | isSubtype l γ m tMU || isUQ m ->
               case getProp l γ f te1 of
                 Left e        -> tcError e
                 Right (map snd -> fs) ->
                     do  (e2', _) <- foldM (tcSetPropMut γ l f te1) (e2, tBot) fs
                         return (mkAsgnExp e1'' e2', Just γ)
 
-          (Just m, ThisRef _) | isSubtype l γ m tAF ->
+          (Just m, ThisRef _)
+            | isSubtype l γ m tAF ->
               case getProp l γ f te1 of
                 Left e        -> tcError e
                 Right (map snd -> fs) ->

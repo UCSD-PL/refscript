@@ -120,13 +120,13 @@ data TypeMembersQ q r = TM { i_mems  :: F.SEnv (TypeMemberQ q r)      -- Instanc
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data TypeMemberQ q r  = FI                                            -- Field Members
-                           { f_opt :: Optionality                     -- Optional
-                           , f_asg :: FieldAsgn                       -- Assignability
-                           , f_ty  :: RTypeQ q r                      -- Type
+                           { f_opt :: Optionality                       -- Optional
+                           , f_asg :: FieldAsgn                         -- Assignability
+                           , f_ty  :: RTypeQ q r                        -- Type
                            }
                       | MI                                            -- Method Members
-                           { m_opt :: Optionality                     -- Optional
-                           , m_ty  :: [(MutabilityQ q r, RTypeQ q r)] -- [(Mutability, Type)]
+                           { m_opt :: Optionality                       -- Optional
+                           , m_ty  :: [(MutabilityQ q r, RTypeQ q r)]   -- [(Mutability, Type)]
                            }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
@@ -197,7 +197,6 @@ type OverloadSig r    = ([BTVar r], [Bind r], RType r)
 type IOverloadSig r   = (IntCallSite, OverloadSig r)
 
 
-
 --------------------------------------------------------------------------------
 -- | Assignability
 --------------------------------------------------------------------------------
@@ -230,6 +229,8 @@ instance Monoid Assignability where
   mempty = ErrorAssignability
   mappend a1 a2 | a1 == a2  = a1
                 | otherwise = ErrorAssignability
+
+
 
 
 --------------------------------------------------------------------------------

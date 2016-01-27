@@ -27244,6 +27244,7 @@ var ts;
                     var assignability = ts.Assignability.WriteLocal;
                     var type = "";
                     if (variableStatement.modifiers && variableStatement.modifiers.some(function (modifier) { return modifier.kind === ts.SyntaxKind.ExportKeyword; })) {
+                        assignability = ts.Assignability.WriteGlobal;
                         type = typeStr;
                     }
                     if (ts.isInAmbientContext(declaration)) {

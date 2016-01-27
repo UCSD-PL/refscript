@@ -83,7 +83,7 @@ getProp l γ f t@(TClass _)
 getProp _ γ f t@(TMod m)
   | Just m' <- resolveModuleInEnv γ m
   , Just v' <- envFindTy f (m_variables m')
-  = Right [(t, FI Req Final $ v_type v')]
+  = Right [(t, symToField v')]
 
 getProp l _ f t = Left (errorGenericLookup l f t)
 
@@ -106,8 +106,6 @@ getPropPrim _ _ _ _ = error "getPropPrim should only be applied to TApp"
 
 -- | `extractCtor γ t` extracts a contructor signature from a type @t@
 --
--- TODO: Is fixRet necessary?
---
 --------------------------------------------------------------------------------
 extractCtor :: (PPRD r, CheckingEnvironment r g) => g r -> RType r -> Maybe (RType r)
 --------------------------------------------------------------------------------
@@ -119,11 +117,6 @@ extractCtor γ t = go t
     go (TObj _ ms _)       = tm_ctor ms
     go _                   = Nothing
 
--- fixRet x vs = fmap (mkAnd . (mkAll vs . mkFun . fixOut vs <$>)) . bkFuns
---   where fixOut vs (a,b,_) = (a,b,retT x vs)
-
--- retT x vs  = TRef (Gen x (tVar <$> vs)) fTop
--- defCtor x vs = mkAll vs $ TFun Nothing [] (retT x vs) fTop
 
 --------------------------------------------------------------------------------
 extractCall :: (CheckingEnvironment r g, PPRD r) => g r -> RType r -> [IOverloadSig r]

@@ -12,6 +12,9 @@ module Language.Rsc.Symbols (
   -- * Symbols
     SymInfoQ (..), SymInfo
 
+  -- * Conversions
+  , symToField
+
   -- * Symbol list
   , SymList (..), symbols, symbols'
 
@@ -57,6 +60,10 @@ data SymInfoQ q r = SI { v_loc  :: Locality
                        deriving (Data, Typeable, Functor)
 
 type SymInfo r    = SymInfoQ AK r
+
+
+symToField (SI _ WriteGlobal _ t) = FI Req Assignable t
+symToField (SI _ _           _ t) = FI Req Final      t
 
 
 -- | @argBind@ returns a dummy type binding `arguments :: T `

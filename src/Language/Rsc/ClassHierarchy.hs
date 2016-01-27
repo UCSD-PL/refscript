@@ -246,11 +246,10 @@ expandType _ cha (TClass (BGen n ts))
 
 expandType _ cha (TMod n)
   = (\m -> TObj tUQ m fTop) <$> typeMembers
-                             .  fmap toFieldInfo
+                             .  fmap (symToField . val)
                              .  m_variables
                             <$> resolveModule cha n
   where
-    toFieldInfo (val -> SI _ _ _ t) = FI Req Final t
 
 -- Common cases end here. The rest are only valid if non-coercive
 expandType NonCoercive _ _ = Nothing
@@ -263,6 +262,8 @@ expandType _ cha (TPrim TBoolean _)
   = (\m -> TObj tIM m fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha booleanInterface)
 
 expandType _ _ t  = Just t
+
+
 
 -- | `weaken γ A B T..`: Given a relative type name @A@  distinguishes two
 -- cases:

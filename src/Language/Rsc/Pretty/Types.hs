@@ -94,7 +94,7 @@ ppElt x (MI o mts) = vcat (map (\(m,t) -> text "@" <> pp m <+> pp x <> pp o <> p
 instance PP FieldAsgn where
   pp Assignable = pp "@Assignable"
   pp Final      = pp "@Final"
-  pp _          = empty
+  pp Inherited  = pp "@Inherited"
 
 instance PP Optionality where
   pp Opt = text "?"

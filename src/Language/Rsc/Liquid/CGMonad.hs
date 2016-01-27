@@ -758,15 +758,29 @@ trueRefType    = mapReftM true
 splitC :: SubC -> CGM [FixSubC]
 --------------------------------------------------------------------------------
 
+-- | S-Var-R
+--
+splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
+  | α1 == α2
+  = bsplitC g i t1 t2
+  | otherwise
+  = splitIncompatC g i t1
+
+-- | S-Var-L
+--
+splitC (Sub g i t1@(TVar _ _) t2)
+  | Just t1' <- envFindBoundOpt g t1
+  = splitC (Sub g i t1' t2)
+
 -- | S-Mut
 --
 splitC (Sub g i t1 t2)
   | mutRelated t1, mutRelated t2
   = return []
   | mutRelated t1
-  = error "Only `splitC` mutability types with eachother."
+  = cgError $ bugSplitC i t1 t2
   | mutRelated t2
-  = error "Only `splitC` mutability types with eachother."
+  = cgError $ bugSplitC i t1 t2
 
 -- | S-Fun
 --
@@ -802,14 +816,6 @@ splitC (Sub g i (TAll α1 t1) (TAll α2 t2))
   where
     θ   = fromList [(btvToTV α2, btVar α1 :: RefType)]
     t2' = apply θ t2
-
--- | S-Var
---
-splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
-  | α1 == α2
-  = bsplitC g i t1 t2
-  | otherwise
-  = splitIncompatC g i t1
 
 -- | S-Union-L
 --

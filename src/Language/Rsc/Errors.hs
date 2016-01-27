@@ -227,7 +227,10 @@ unimplementedReservedSyms l   = mkErr l $ printf "Please avoid using 'func' and 
 errorAsgnInRef l x t a        = mkErr l $ printf "Only readonly variables can be used in refinements. In type '%s' symbol '%s' is %s." (ppshow t) (ppshow x) (ppshow a)
 errorContextual l e t         = mkErr l $ printf "Contextual error occured when checking expression '%s' under type '%s'." (ppshow e) (ppshow t)
 bugDeadCast l                 = mkErr l $ "Dead-cast with no error associated."
-unimplSplitUnion l t1 t2      = mkErr l $ printf "Cannot generate constraints for the subtyping of '%s' and '%s'." (ppshow t1) (ppshow t2)
+unimplSplitC l t1 t2          = mkErr l $ show $ text "[Unimplemented] Cannot generate constraints for the subtyping of" $+$
+                                                 nest 2 (pp t1) $+$ text "and" $+$ nest 2 (pp t2)
+bugSplitC l t1 t2             = mkErr l $ show $ text "[BUG] Cannot generate constraints for the subtyping of" $+$
+                                                 nest 2 (pp t1) $+$ text "and" $+$ nest 2 (pp t2)
 
 ---------------------------------------------------------------------------
 -- | Pervasive (typechecking TC and Liquid)

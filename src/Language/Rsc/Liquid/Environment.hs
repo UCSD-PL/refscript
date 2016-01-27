@@ -25,6 +25,7 @@ import           Language.Rsc.Symbols
 import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
+import           Text.PrettyPrint.HughesPJ
 
 -------------------------------------------------------------------------------------
 -- | Constraint Generation Environment
@@ -100,7 +101,10 @@ checkSyms :: (IsLocated l, EnvKey a) => l -> String -> CGEnv -> [a] -> a -> RefT
 checkSyms l m g ok x t = efoldRType h f F.emptySEnv [] t
   where
     h _        = ()
-    f γ t' s   = s ++ catMaybes (fmap (chk γ t') (F.syms (noKVars $ rTypeReft t')))
+    f γ t' s   = let rt   = rTypeReft t'   in
+                 let noKv = noKVars   rt   in
+                 let ss   = F.syms    noKv in
+                 s ++ catMaybes (fmap (chk γ t') ss)
 
     chk γ t' s | s `elem` biReserved
                = Just $ unimplementedReservedSyms l
@@ -124,11 +128,16 @@ checkSyms l m g ok x t = efoldRType h f F.emptySEnv [] t
                = Just $ errorUnboundSyms l (F.symbol x) t s m
 
     biReserved = map F.symbol ["func", "obj"]
-    -- TODO: Check for this
     biExtra    = map F.symbol ["bvor", "bvand", "builtin_BINumArgs", "offset", "this"]
     x_sym      = F.symbol x
     ok_syms    = map F.symbol ok
     validAsgn  = [RdOnly, Ambient, WriteLocal]
+
+    -- errMsg     = show $ pp "type" $+$ nest 4 (pp t') $+$
+    --                                   pp "rt"   $+$ nest 4 (pp rt) $+$
+    --                                   pp "noKV" $+$ nest 4 (pp noKv) $+$
+    --                                   pp "syms" $+$ nest 4 (pp s) $+$
+    --                                   pp "errors"
 
 
 -------------------------------------------------------------------------------

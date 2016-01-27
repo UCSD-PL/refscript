@@ -807,7 +807,7 @@ tcCall γ e@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3) _
          _ -> fatal (impossible (srcPos l) "tcCall AssignExpr") (e, tBot)
 
 -- | `new e(e1,...,en)`
-tcCall γ c@(NewExpr l e es) (Just s)
+tcCall γ c@(NewExpr l e es) _
   = do (e',t) <- tcExpr γ e Nothing
        case extractCtor γ t of
          Just ct ->
@@ -815,8 +815,8 @@ tcCall γ c@(NewExpr l e es) (Just s)
                return (NewExpr l e' es', t')
          _ -> fatal (errorConstrMissing (srcPos l) t) (c, tBot)
 
-tcCall γ c@(NewExpr l e es) Nothing
-  = tcError $ errorNewExprCtxType l c
+-- tcCall γ c@(NewExpr l e es) Nothing
+--   = tcError $ errorNewExprCtxType l c
 
 -- | e.f
 --

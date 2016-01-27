@@ -327,12 +327,15 @@ envAddGroup :: IsLocated l => l -> String -> [F.Symbol] -> CGEnv
             -> (F.Symbol, [(F.Symbol, CGEnvEntry)]) -> CGM CGEnv
 --------------------------------------------------------------------------------
 envAddGroup l msg ks g (x, xts)
-  = do  mapM_ cgError $ concat $ zipWith (checkSyms l msg g ks) xs ts
-        es    <- L.zipWith4 SI ls as is <$> zipWithM inv is ts
-        ids   <- toIBindEnv . catMaybes <$> zipWithM (addFixpointBind g) xs es
-        return $ g { cge_names = envAdds (zip xs es) $ cge_names g
-                   , cge_fenv  = F.insertSEnv x ids  $ cge_fenv  g }
+  = do  _           <- mapM_ cgError errors
+        es          <- L.zipWith4 SI ls as is <$> zipWithM inv is ts
+
+        ids         <- toIBindEnv . catMaybes <$> zipWithM (addFixpointBind g) xs es
+
+        return       $ g { cge_names = envAdds (zip xs es) $ cge_names g
+                         , cge_fenv  = F.insertSEnv x ids  $ cge_fenv  g }
   where
+    errors           = concat (zipWith (checkSyms l msg g ks) xs ts)
     (xs,ls,as,is,ts) = L.unzip5 [(x,loc,a,i,t) | (x, SI loc a i t) <- xts ]
     inv Initialized  = addInvariant g
     inv _            = return

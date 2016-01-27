@@ -222,7 +222,10 @@ errorForbiddenSyms l t xs     = mkErr l $ show $ text "Symbol(s):" <+>
                                                  text "so should not be appearing in the refinement of type" $+$
                                                  pp t
 
-errorUnboundSyms l x t s m    = mkErr l $ printf "Symbol '%s', appearing in type '%s' of '%s' is unbound [ERROR_CODE: %s]." (ppshow s) (ppshow t) (ppshow x) (ppshow m)
+errorUnboundSyms l x t s m    = mkErr l $ show $ text "Symbol" <+> ticks (pp s) <+> text "appearing in type" $+$
+                                                 nest 2 (pp t) $+$ text "of" <+> ticks (pp x) <+>
+                                                 text "is unbound [ERROR_CODE:" <+> pp m <+> text "]."
+
 unimplementedReservedSyms l   = mkErr l $ printf "Please avoid using 'func' and 'obj' as symbols in refinements."
 errorAsgnInRef l x t a        = mkErr l $ printf "Only readonly variables can be used in refinements. In type '%s' symbol '%s' is %s." (ppshow t) (ppshow x) (ppshow a)
 errorContextual l e t         = mkErr l $ printf "Contextual error occured when checking expression '%s' under type '%s'." (ppshow e) (ppshow t)

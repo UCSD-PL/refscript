@@ -262,7 +262,7 @@ toplevel :: (r -> r) -> RTypeQ q r -> RTypeQ q r
 ----------------------------------------------------------------------------------------
 toplevel f (TPrim c r  ) = TPrim c (f r)
 toplevel f (TVar v r   ) = TVar v (f r)
-toplevel f (TOr ts r   ) = TOr ts (f r)
+toplevel f (TOr ts r   ) = TOr (map (toplevel f) ts) (f r)
 toplevel f (TAnd ts    ) = TAnd (map (second (toplevel f)) ts)
 toplevel f (TRef n r   ) = TRef n (f r)
 toplevel f (TObj m ms r) = TObj m ms (f r)

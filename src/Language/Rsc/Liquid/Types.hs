@@ -212,11 +212,11 @@ singleton t x = toplevel (const (F.uexprReft x)) t
 --------------------------------------------------------------------------------
 noKVars :: F.Reft -> F.Reft
 --------------------------------------------------------------------------------
-noKVars (F.Reft (x, p))     = F.Reft (x, dropKs p)
+noKVars (F.Reft (x, p)) = F.Reft (x, dropKs p)
   where
-    dropKs                  = F.pAnd . filter (not . isK) . F.conjuncts
-    isK (F.PKVar {})        = True
-    isK _                   = False
+    dropKs              = F.pAnd . filter (not . isK) . F.conjuncts
+    isK (F.PKVar {})    = True
+    isK _               = False
 
 
 --------------------------------------------------------------------------------

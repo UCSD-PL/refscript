@@ -170,7 +170,7 @@ tcCallable :: (Unif r, IsLocated l, PP l)
            -> TCM r [Statement (AnnTc r)]
 --------------------------------------------------------------------------------
 tcCallable γ l f xs body fty
-  = do  let γ' = initCallableEnv l γ f fty xs body
+  = do  γ'    <- pure (initCallableEnv l γ f fty xs body)
         body' <- addReturnStmt l γ' body
         tcFunBody γ' l body'
 
@@ -181,11 +181,13 @@ addReturnStmt l γ body
   = return body
 
 tcFunBody γ l body
-  = tcStmts γ body >>= \case
-      (b, Just _) |  tcEnvFindReturn γ /= tVoid
-                  -> fatal (errorMissingReturn (srcPos l)) b
-      (b, _     ) |  otherwise
-                  -> return b
+  = do  z <- tcStmts γ body
+        case z of
+          (b, Just _) | rt /= tVoid -> fatal er b
+          (b, _     ) | otherwise   -> return b
+  where
+    er = errorMissingReturn (srcPos l)
+    rt = tcEnvFindReturn γ
 
 --------------------------------------------------------------------------------
 tcSeq :: (TCEnv r -> a -> TCM r (a, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([a], TCEnvO r)
@@ -509,15 +511,22 @@ tcEnvAddo γ x (Just t) = Just (tcEnvAdds [(x, t)] γ)
 
 --------------------------------------------------------------------------------
 -- tcExprW  :: Unif r => TCEnv r -> ExprSSAR r ->                    TCM r (ExprSSAR r, Maybe (RType r))
-tcExprWD :: Unif r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
 --------------------------------------------------------------------------------
 tcExprW γ e
   = do  t <- tcWrap (tcExpr γ e Nothing)
         tcEW γ e t
 
-tcExprWD γ e t = (tcWrap $ tcExpr γ e t) >>= tcEW γ e >>= \case
-                   (e', Just t) -> return (e', t)
-                   (e', _     ) -> return (e', tNull)
+-- | `tcExprWD γ e t` checks expression @e@ under environment @γ@ (with an
+--   optional contextual type @t@ potentially wrapping it in a cast.
+--------------------------------------------------------------------------------
+tcExprWD :: Unif r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
+--------------------------------------------------------------------------------
+tcExprWD γ e t
+  = do  eet <- tcWrap (tcExpr γ e t)
+        et  <- tcEW γ e eet
+        case et of
+          (e', Just t) -> return (e', t)
+          (e', _     ) -> return (e', tNull)
 
 tcNormalCallW γ l o es t
   = (tcWrap $ tcNormalCall γ l o (es `zip` nths) t) >>= \case
@@ -530,21 +539,26 @@ tcNormalCallWCtx γ l o es t
       Left err -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) [err]) (fst <$> es)
 
 tcRetW γ l (Just e)
-  | VarRef lv x <- e
-  , Just t <- tcEnvFindTy x γ
-  , isUMRef t
-  = tcRetW (newEnv t) l (Just (CallExpr l (VarRef l fn) [e'])) >>= \case
-      -- e' won't be cast
-      (ReturnStmt _ (Just (CallExpr _ _ [e''])), eo)
-          -> return (ReturnStmt l (Just e''),eo)
-      _   -> die $ errorUqMutSubtyping (srcPos l) e t retTy
+  | VarRef lv x <- e, Just t <- tcEnvFindTy x γ, isUMRef t
+
+  = do  re  <- pure $ Just $ CallExpr l (VarRef l fn) [e']
+        tw  <- tcRetW (newEnv t) l re
+        case tw of
+          -- e' won't be cast
+          (ReturnStmt _ (Just (CallExpr _ _ [e''])), eo)
+              -> return (ReturnStmt l (Just e''), eo)
+
+          _   -> die $ errorUqMutSubtyping (srcPos l) e t rt
 
   | otherwise
-  = (tcWrap $ tcNormalCall γ l "return" [(e, Just retTy)] (returnTy retTy True)) >>= \case
-       Right ([e'], _) -> (,Nothing) . ReturnStmt l . Just <$> return e'
-       Left err        -> (,Nothing) . ReturnStmt l . Just <$> deadcastM (tce_ctx γ) [err] e
+  = do  c     <- tcWrap (tcNormalCall γ l "return" [(e, Just rt)] ft)
+        case c of
+          Right ([e'], _) -> return (ReturnStmt l (Just e'), Nothing)
+          Left err        -> do de <- deadcastM (tce_ctx γ) [err] e
+                                return (ReturnStmt l (Just de), Nothing)
   where
-    retTy     = tcEnvFindReturn γ
+    rt        = tcEnvFindReturn γ
+    ft        = returnTy rt True
 
     newEnv t  = tcEnvAdd fn (SI Local Ambient Initialized $ finalizeTy t) γ
     fn        = Id l "__finalize__"
@@ -617,8 +631,8 @@ tcExpr γ ex@(CondExpr l e e1 e2) (Just t)
        ([e'], z)    <- tcNormalCallW γ l BITruthy [e] opTy
        case z of
          Just _  ->
-            do  (e1', t1) <- tcExpr γ e1 (Just t)
-                (e2', t2) <- tcExpr γ e2 (Just t)
+            do  (e1', t1) <- tcExprWD γ e1 (Just t)
+                (e2', t2) <- tcExprWD γ e2 (Just t)
                 e1''      <- castM γ e1 t1 t
                 e2''      <- castM γ e2 t2 t
                 return     $ (CondExpr l e' e1'' e2'', t)
@@ -680,10 +694,10 @@ tcExpr γ (Cast_ l e) to
   = case [ t_ | TypeCast ξ t_ <- fFact l, tce_ctx γ == ξ ] of
       [ ] -> do (e', t)    <- tcExpr γ e to
                 case e' of
-                  Cast_ {} -> die $ bugNestedCasts (srcPos l) e
+                  Cast_ {} -> die (bugNestedCasts (srcPos l) e)
                   _        -> (,t) . (`Cast_` e') <$> freshenAnn l
 
-      [t] -> return (Cast_ l e, ofType t)
+      [t] -> pure (Cast_ l e, ofType t)
 
       _   -> die $ bugNestedCasts (srcPos l) e
 

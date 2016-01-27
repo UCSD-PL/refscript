@@ -429,7 +429,7 @@ ppLogicalORExpression hasIn e = case e of
 -- 11.12
 ppConditionalExpression :: Bool -> Expression a -> Doc
 ppConditionalExpression hasIn e = case e of
-  CondExpr _ c et ee -> ppLogicalORExpression hasIn c <+> text "?" <+>
+  CondExpr _ c et ee -> parens (ppLogicalORExpression hasIn c) <+> text "?" <+>
                         ppAssignmentExpression hasIn et <+> colon <+>
                         ppAssignmentExpression hasIn ee
   _ -> ppLogicalORExpression hasIn e
@@ -456,7 +456,7 @@ ppUserCastExpression hasIn e = case e of
 -- PV Adding new levels for Cast_
 ppCastExpression :: Bool -> Expression a -> Doc
 ppCastExpression hasIn e = case e of
-  Cast_ _ e -> text "Cast" <> (parens $ ppExpression False e)
+  Cast_ _ e -> text "RscCast" <> (parens $ ppExpression False e)
   _         -> ppListExpression hasIn e
 
 

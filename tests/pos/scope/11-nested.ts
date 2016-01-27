@@ -12,6 +12,5 @@ class ABC<M extends ReadOnly> {
 }
 
 let a: ABC<Immutable> = new ABC();
-// let a = new ABC();
 
 assert(a.addThree(w) === 4);

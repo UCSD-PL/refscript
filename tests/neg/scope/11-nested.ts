@@ -1,17 +1,3 @@
-//
-// /*  foo :: () => { number | v = 5 } */
-// export function foo() {
-//     let u = 1;
-//     /* addThree :: (u: number) => { number | v = u + 3 } */
-//     function addThree(u: number) {
-//         return u + 1;
-//     }
-//     return addThree(u);
-// }
-//
-// foo();
-//
-
 
 /*@  foo :: () => { number | v = 5 } */
 export function foo() {

@@ -186,13 +186,9 @@ subtypeObj l γ t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
 
 subtypeObj l γ t1@(TRef (Gen x1 (m1:t1s)) r1) t2@(TRef (Gen x2 (m2:t2s)) r2)
   --
-  -- * Unique references can be used as any kind.
   --
-  -- * Since there's no aliasing we can treat them as Immutable for
-  --   the purpose of subtyping
-  --
-  | isUQ m1
-  = subtypeObj l γ (TRef (Gen x1 (tIM:t1s)) r1) (TRef (Gen x2 (tIM:t2s)) r2)
+  -- | isUQ m1
+  -- = subtypeObj l γ (TRef (Gen x1 (tIM:t1s)) r1) (TRef (Gen x2 (tIM:t2s)) r2)
   --
   -- * Incompatible mutabilities
   --

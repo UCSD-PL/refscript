@@ -603,21 +603,23 @@ tcExpr γ e@(ThisRef l) _
       Nothing -> fatal (errorUnboundId (fSrc l) "this") (e, tBot)
 
 tcExpr γ e@(VarRef l x) _
+  -- | `undefined`
   | F.symbol x == F.symbol "undefined"
   = return (e, tUndef)
 
+  -- | `arguments`
   | F.symbol x == F.symbol "arguments"
   = tcExpr γ (VarRef l (Id (getAnnotation x) ("arguments_" ++ show (envFnId γ)))) to
 
+  -- | Unique reference exception
   | Just t <- to, not $ null [ () | BypassUnique <- fFact l ]
   = return (e,t)
 
-  | Just t <- to, isCastId x  -- Avoid TC added casts
+  -- | Ignore the `cast` variable
+  | Just t <- to, isCastId x
   = return (e,t)
 
-  | Just t <- to, isUMRef t
-  = tcError (errorAssignsFields (fSrc l) x t)
-
+  -- | Regural bound variable
   | Just t <- to
   = return (e,t)
 
@@ -705,14 +707,6 @@ tcExpr γ (Cast_ l e) to
 tcExpr γ e@(DotRef _ _ _) s
   = tcCall γ e s
 
--- -- | e1["s"]
--- tcExpr γ (BracketRef l1 e1 (StringLit l2 s)) to
---   = tcExpr γ (DotRef l1 e1 (Id l2 s)) to
---
--- -- | e1[1]
--- tcExpr γ (BracketRef l1 e1 (IntLit l2 i)) to
---   = tcExpr γ (DotRef l1 e1 (Id l2 $ show i)) to
---
 -- | e1[e2]
 tcExpr γ e@(BracketRef _ _ _) s
   = tcCall γ e s

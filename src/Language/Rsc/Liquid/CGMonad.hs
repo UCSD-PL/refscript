@@ -637,7 +637,7 @@ mkLiquidError l g t1 t2 = mkErr l $ show
               $ text "Liquid Type Error" $+$
                 nest 2
                 (
-                  text "In Environment:"  $+$ nest 4 (pp γ ) $+$
+                  -- text "In Environment:"  $+$ nest 4 (pp γ ) $+$
                   text "With guards:"     $+$ nest 4 (vcat $ map pp gr) $+$
                   text "Left hand side:"  $+$ nest 4 (pp τ1) $+$
                   text "Right hand side:" $+$ nest 4 (pp τ2)
@@ -852,11 +852,12 @@ splitC (Sub g c s t@(TOr ts _))
 
 -- | S-Ref
 --
---  TODO: restore co/contra-variance
+--
+--    TODO: Find variance for type arguments
 --
 splitC (Sub g i t1@(TRef n1@(Gen x1 (m1:t1s)) r1) t2@(TRef n2@(Gen x2 (m2:t2s)) r2))
   --
-  -- * Trivial case (do not even descend)
+  -- * Trivial case (do not descend)
   --
   | F.isFalse (F.simplify r1)
   = return []

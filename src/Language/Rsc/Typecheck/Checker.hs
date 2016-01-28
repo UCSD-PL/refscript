@@ -230,7 +230,7 @@ tcStmt γ@(envCHA -> c) (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do  (e1'', te1) <- tcExpr γ e1' Nothing
         case (getMutability c te1, e1) of
           (Just m, _        )
-            | isSubtype l γ m tMU || isUQ m ->
+            | isSubtype γ m tMU || isSubtype γ m tUQ ->
               case getProp l γ f te1 of
                 Left e        -> tcError e
                 Right (map snd -> fs) ->
@@ -238,7 +238,7 @@ tcStmt γ@(envCHA -> c) (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
                         return (mkAsgnExp e1'' e2', Just γ)
 
           (Just m, ThisRef _)
-            | isSubtype l γ m tAF ->
+            | isSubtype γ m tAF ->
               case getProp l γ f te1 of
                 Left e        -> tcError e
                 Right (map snd -> fs) ->
@@ -487,14 +487,14 @@ tcAsgn l γ x e
     xSym = F.symbol x
 
 
-tcSetPropMut γ l f t0 (e, t') (FI _ _ a t)
-  | a == Final
+tcSetPropMut γ l f t0 (e, t') (FI _ _ m t)
+  | isSubtype γ m tIM
   = fatal (errorFinalField l f t0) (e, t')
   | otherwise
   = tcExprT l BISetProp γ e t
 
-tcSetPropImm γ l f t0 (e, t') (FI _ _ a t)
-  | a == Final
+tcSetPropImm γ l f t0 (e, t') (FI _ _ m t)
+  | isSubtype γ m tIM
   = fatal (errorImmutableRefAsgn l f t0) (e, t')
   | otherwise
   = tcExprT l BISetProp γ e t
@@ -662,24 +662,28 @@ tcExpr γ e@(CallExpr _ _ _) s
 tcExpr γ e@(ArrayLit l es) to
   = arrayLitTy l γ e to (length es) >>= \case
       Left ee    -> fatal ee (e, tBot)
-      Right opTy -> first (ArrayLit l) <$> tcNormalCall γ l BIArrayLit (es `zip` nths) opTy
+      Right opTy -> first (ArrayLit l) <$> tcNormalCall γ l BIArrayLit (zip es nths) opTy
 
 -- | { f1: e1, ..., fn: tn }
 tcExpr γ ex@(ObjectLit l pes) to
-  = do  (pes', tys) <- unzip <$> mapM tce ets
-        return (ObjectLit l pes', TObj (typeMembersFromList tys) fTop)
+  = first (ObjectLit l . zip ps) <$> tcNormalCall γ l BIObjectLit (zip es cts) ft
   where
-    ctxtys      | Just t <- to
-                = i_mems $ typeMembersOfType (envCHA γ) t
-                | otherwise
-                = mempty
-    ets         = [ (p, e, F.lookupSEnv (F.symbol p) ctxtys) | (p, e) <- pes ]
+    (cts, ft) = objLitTy l γ ps to
+    (ps , es) = unzip pes
 
-    tce (p,e,x) | Just (FI f o a t)   <- x
-                = (***) (p,) (FI (F.symbol p) o a)       <$> tcExpr γ e (Just t)
-                | otherwise
-                -- Default optionality and assignability for field
-                = (***) (p,) (FI (F.symbol p) Req Final) <$> tcExpr γ e Nothing
+--   = do  (pes', tys) <- unzip <$> mapM tce ets
+--         return (ObjectLit l pes', TObj (typeMembersFromList tys) fTop)
+--   where
+--
+--     tce (p,e,x) | Just (FI f o a t) <- x
+--                 = (***) (p,) (FI f o a) <$> tcExpr γ e (Just t)
+--                 | otherwise
+--                 -- Default optionality and assignability for field
+--                 = (***) (p,) (FI (F.symbol p) Req tIM) <$> tcExpr γ e Nothing
+--
+--     ets         = [ (p, e, F.lookupSEnv (F.symbol p) ctxtys) | (p, e) <- pes ]
+--
+--     ctxtys      = maybe mempty (i_mems . typeMembersOfType (envCHA γ)) to
 
 -- | <T>e
 tcExpr γ ex@(Cast l e) _
@@ -899,7 +903,7 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es) _
     call tR _ (FI _ _   _ _ ) = fatal (errorCallOptional l f tR) (es, tBot)
 
     call tR mR (MI _ Req mts)
-      = case [ t | (m, t) <- mts, isSubtype l γ mR m ] of
+      = case [ t | (m, t) <- mts, isSubtype γ mR m ] of
         [] -> fatal (errorMethMutIncomp l em mts mR) (es, tBot)
         ts -> tcNormalCall γ l em (es `zip` nths) (mkAnd ts)
 
@@ -996,9 +1000,9 @@ tcCallCaseTry γ l fn ts ((i,ft):fts)
       θ              <- unifyTypesM (srcPos l) γ ts1 its1
       (ts2, its2)    <- pure $ apply θ (ts1, its1)
       (ts', cs)      <- pure $ unzip [(t, c) | (t, BTV _ _ (Just c)) <- zip ts2 βs]
-      case not (and (zipWith (isSubtype l γ) ts' cs)) of
+      case not (and (zipWith (isSubtype γ) ts' cs)) of
         True -> return Nothing
-        _    -> case and (zipWith (isSubtype l γ) ts2 its2) of
+        _    -> case and (zipWith (isSubtype γ) ts2 its2) of
                   True -> return $ Just θ
                   _    -> return Nothing
     )
@@ -1163,7 +1167,7 @@ unifyPhiTypes l γ x t1 t2 θ
             | otherwise    = Left $ errorEnvJoin (srcPos l) x (toType t1) (toType t2)
 
     substE      = unifys (srcPos l) γ θ [t1] [t2]
-    equiv a b   = isSubtype l γ a b && isSubtype l γ b a
+    equiv a b   = isSubtype γ a b && isSubtype γ b a
     maybeNull   = any isTNull . bkUnion
     maybeUndef  = any isTNull . bkUnion
 

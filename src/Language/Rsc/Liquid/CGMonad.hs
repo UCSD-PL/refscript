@@ -33,7 +33,7 @@ module Language.Rsc.Liquid.CGMonad (
   , Freshable (..)
 
   -- * Environment API
-  , cgEnvAddFresh
+  , cgEnvAddFresh, cgEnvAddFreshWithInit
   , cgEnvAdds
 
   , resolveTypeM
@@ -296,15 +296,23 @@ cgSafeEnvFindTyM x (envNames -> γ)
   = cgError $ bugEnvFindTy (srcPos x) x
 
 --------------------------------------------------------------------------------
-cgEnvAddFresh :: IsLocated l => String -> l -> RefType -> CGEnv -> CGM (Id AnnLq, CGEnv)
+cgEnvAddFreshWithInit
+  :: IsLocated l
+  => Initialization -> String -> l -> RefType -> CGEnv -> CGM (Id AnnLq, CGEnv)
 --------------------------------------------------------------------------------
-cgEnvAddFresh msg l t g
+cgEnvAddFreshWithInit i msg l t g
   = do x  <- freshId l
        g' <- cgEnvAdds l ("cgEnvAddFresh: " ++ msg) [v x] g
        addAnnot l x t
        return (x, g')
   where
-    v x = SI (F.symbol x) Local RdOnly Initialized t
+    v x = SI (F.symbol x) Local RdOnly i t
+
+--------------------------------------------------------------------------------
+cgEnvAddFresh
+  :: IsLocated l => String -> l -> RefType -> CGEnv -> CGM (Id AnnLq, CGEnv)
+--------------------------------------------------------------------------------
+cgEnvAddFresh = cgEnvAddFreshWithInit Initialized
 
 freshId a = Id <$> freshenAnn a <*> fresh
 
@@ -323,7 +331,9 @@ cgEnvAdds l msg xts g = foldM (envAddGroup l msg ks) g es
     ks = F.symbol    <$> xts
 
 --------------------------------------------------------------------------------
-envAddGroup :: IsLocated l => l -> String -> [F.Symbol] -> CGEnv -> [CGEnvEntry] -> CGM CGEnv
+envAddGroup
+  :: IsLocated l
+  => l -> String -> [F.Symbol] -> CGEnv -> [CGEnvEntry] -> CGM CGEnv
 --------------------------------------------------------------------------------
 envAddGroup l msg ks g xts
   = do  -- Flag any errors
@@ -332,12 +342,10 @@ envAddGroup l msg ks g xts
         -- TODO: should the invariants be added here?
         es          <- L.zipWith5 SI xs ls as is <$> zipWithM inv is ts
 
-        --
-        ids         <- {-toIBindEnv . -}catMaybes <$> mapM (addFixpointBind g) es
+        ids         <- catMaybes <$> mapM (addFixpointBind g) es
 
         return       $ g { cge_names = envAdds (zip xs es)   $ cge_names g
                          , cge_fenv  = F.insertsIBindEnv ids $ cge_fenv  g }
-                         -- , cge_fenv  = F.insertSEnv x ids  $ cge_fenv  g }
   where
     errors           = concat (zipWith (checkSyms l msg g ks) xs ts)
     (xs,ls,as,is,ts) = L.unzip5 [(x,loc,a,i,t) | SI x loc a i t <- xts ]
@@ -367,7 +375,8 @@ objFields g e@(SI x loc a _ t)
   where
     xts | Just (TObj ms _) <- expandType Coercive (envCHA g) t
         , fs <- F.toListSEnv (i_mems ms)
-        = [ mkSI f o ft | (_, FI f o Final ft) <- fs ]
+        = [ mkSI f o ft | (_, FI f o m ft) <- fs
+                        , isSubtype g m tIM ]
         | otherwise
         = []
 
@@ -376,7 +385,7 @@ objFields g e@(SI x loc a _ t)
     mkSI f Req tf = SI (mkQualSym x f) loc a InitUnknown $ ty tf f
 
     -- v = offset(x,"f")
-    ty t f = substThis x t `eSingleton` mkOffset x f
+    ty t f = substThis x t `eSingleton` mkOffsetSym x f
 
 --------------------------------------------------------------------------------
 addFixpointBind :: CGEnv -> CGEnvEntry -> CGM (Maybe F.BindId)
@@ -614,7 +623,8 @@ freshenCGEnvM g@(CGE { cge_names = nms, cge_cha = CHA gr n m })
     go (k, v                    ) = (k,) <$> freshenVI g (srcPos k) v
 
 --------------------------------------------------------------------------------
-freshenModuleDefM :: CGEnv -> (AbsPath, ModuleDef F.Reft) -> CGM (AbsPath, ModuleDef F.Reft)
+freshenModuleDefM
+  :: CGEnv -> (AbsPath, ModuleDef F.Reft) -> CGM (AbsPath, ModuleDef F.Reft)
 --------------------------------------------------------------------------------
 freshenModuleDefM g (a, m)
   = do  vars  <- envFromList <$> mapM goV (envToList $ m_variables m)
@@ -883,7 +893,7 @@ splitC (Sub g i t1@(TRef n1@(Gen x1 (m1:t1s)) r1) t2@(TRef n2@(Gen x2 (m2:t2s)) 
   --
   -- * Incompatible mutabilities
   --
-  | not (isSubtype (srcPos i) g m1 m2)
+  | not (isSubtype g m1 m2)
   = splitIncompatC g i t1
   --
   -- * Both immutable, same name: Co-variant subtyping
@@ -979,10 +989,10 @@ splitTM g x c (TM p1 sp1 c1 k1 s1 n1) (TM p2 sp2 c2 k2 s2 n2)
 --------------------------------------------------------------------------------
 splitElt :: CGEnv -> Cinfo -> (t, (TypeMember F.Reft, TypeMember F.Reft)) -> CGM [FixSubC]
 --------------------------------------------------------------------------------
-splitElt g i (_, (FI _ _ p1 t1, FI _ _ p2 t2))
-  | isFinal p2 = splitC (Sub g i t1 t2)
-  | otherwise  = (++) <$> splitC (Sub g i t1 t2)
-                      <*> splitC (Sub g i t2 t1)
+splitElt g i (_, (FI _ _ m1 t1, FI _ _ m2 t2))
+  | isSubtype g m1 tIM = splitC (Sub g i t1 t2)
+  | otherwise          = (++) <$> splitC (Sub g i t1 t2)
+                              <*> splitC (Sub g i t2 t1)
 
 splitElt g i (_, (m, m'))
   = cgError $ unsupportedSplitElt (srcPos i) m m'
@@ -1170,7 +1180,8 @@ unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
 unqualifyThis g t = F.subst $ F.mkSubst fieldSu
   where
     fieldSu | Just (TObj fs _) <- expandType Coercive (envCHA g) t
-            = [ subPair f | (f, FI _ _ Final _) <- F.toListSEnv $ i_mems fs ]
+            = [ subPair f | (f, FI _ _ m _) <- F.toListSEnv (i_mems fs)
+                          , isSubtype g m tIM ]
             | otherwise
             = []
     this      = F.symbol $ builtinOpId BIThis
@@ -1178,12 +1189,12 @@ unqualifyThis g t = F.subst $ F.mkSubst fieldSu
     subPair f = (qFld this f, F.expr f)
 
 -------------------------------------------------------------------------------
-narrowType :: (IsLocated l) => l -> CGEnv -> RefType-> Type -> RefType
+narrowType :: CGEnv -> RefType-> Type -> RefType
 -------------------------------------------------------------------------------
-narrowType l g t1@(TOr t1s r) t2
-  = tOrR (L.filter (\t1 -> isSubtype l g t1 (ofType t2)) t1s) r
+narrowType g t1@(TOr t1s r) t2
+  = tOrR (L.filter (\t1 -> isSubtype g t1 (ofType t2)) t1s) r
 
-narrowType _ _ t1 _ = t1
+narrowType _ t1 _ = t1
 
 
 --------------------------------------------------------------------------------
@@ -1195,7 +1206,7 @@ sameTag :: CGEnv -> RefType -> RefType -> Bool
 --------------------------------------------------------------------------------
 sameTag _ (TPrim c1 _) (TPrim c2 _) = c1 == c2
 sameTag _ (TVar  v1 _) (TVar  v2 _) = v1 == v2
-sameTag g t1@TRef{}    t2@TRef{}    = isSubtype dummySpan g t1 t2 || isSubtype dummySpan g t2 t1
+sameTag g t1@TRef{}    t2@TRef{}    = isSubtype g t1 t2 || isSubtype g t2 t1
 sameTag _ TObj{}       TObj{}       = True
 sameTag _ TObj{}       TRef{}       = True
 sameTag _ TRef{}       TObj{}       = True

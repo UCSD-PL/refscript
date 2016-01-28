@@ -210,9 +210,9 @@ expandType _ cha (TRef (Gen n []) _)
   where
     ms  = typeMembersFromList . concatMap mkField . envToList . e_mapping
     -- TODO
-    mkField (k, IntLit _ i) = [FI (F.symbol k) Req Final (tNum `strengthen` exprReft i)]
+    mkField (k, IntLit _ i) = [FI (F.symbol k) Req tIM (tNum `strengthen` exprReft i)]
     mkField (k, HexLit _ s) | Just e <- bitVectorValue s
-                            = [FI (F.symbol k) Req Final (tBV32 `strengthen` e)]
+                            = [FI (F.symbol k) Req tIM (tBV32 `strengthen` e)]
     mkField _               = []
 
 expandType _ _ t@(TRef _ _) | mutRelated t = Nothing
@@ -364,7 +364,7 @@ immFields :: (ExprReftable Int r, PPR r)
           => ClassHierarchy r -> RType r -> [(F.Symbol, RType r)]
 --------------------------------------------------------------------------------
 immFields cha t | Just (TObj es _) <- expandType Coercive cha t
-                = [ (x, t) | (x, FI _ _ Final t) <- F.toListSEnv $ i_mems es ]
+                = [ (x, t) | (x, FI _ _ tIM t) <- F.toListSEnv $ i_mems es ]
                 | otherwise
                 = []
 

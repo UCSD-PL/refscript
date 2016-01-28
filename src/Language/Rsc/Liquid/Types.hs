@@ -42,7 +42,7 @@ module Language.Rsc.Liquid.Types (
   -- , unqualifyThis
   , qualifySymbol
   , mkQualSym
-  , mkOffset
+  , mkOffsetSym
 
   ) where
 
@@ -388,9 +388,9 @@ mkQualSym :: (F.Symbolic x, F.Symbolic f) => x -> f -> F.Symbol
 mkQualSym x f = F.symbol x `qualifySymbol` F.symbol f
 
 -------------------------------------------------------------------------------
--- mkOffset :: (F.Symbolic f, F.Expression x) => x -> f -> F.Expr
+mkOffsetSym :: (F.Symbolic f, F.Expression x) => x -> f -> F.Expr
 -------------------------------------------------------------------------------
-mkOffset x f = F.EApp offsetLocSym [F.expr x, F.expr $ symbolText $ F.symbol f]
+mkOffsetSym x f = F.EApp offsetLocSym [F.expr x, F.expr $ symbolText $ F.symbol f]
 
 
 

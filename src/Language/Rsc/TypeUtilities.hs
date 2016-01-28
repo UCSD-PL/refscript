@@ -13,15 +13,15 @@
 
 module Language.Rsc.TypeUtilities (
 
-    mkDotRefFunTy
-  , idTy, idTys
+    idTy, idTys
   , castTy
   , arrayLitTy
-  -- , objLitTy
+  , objLitTy
   , mkCondExprTy
 
   ) where
 
+import           Data.List                     (unzip4)
 import qualified Language.Fixpoint.Types       as F
 import           Language.Fixpoint.Types.Names (symbolString)
 import           Language.Rsc.AST
@@ -35,34 +35,7 @@ import           Language.Rsc.Pretty
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 
-
--- | Dot ref
---
----------------------------------------------------------------------------------
-mkDotRefFunTy ::
-  (CheckingEnvironment r t, PP r, ExprReftable F.Expr r, F.Symbolic f, F.Reftable r, Monad m) =>
-  t r -> f -> RType r -> MutabilityR r -> FieldAsgn -> RType r -> m (RType r)
----------------------------------------------------------------------------------
-mkDotRefFunTy g f tRcvr mRcvr a tf
-  -- Array
-  | isArrayType tRcvr
-  , F.symbol "length" == F.symbol f
-  = globalLengthType g
-
-  | isIM mRcvr
-  , a /= Assignable
-  = return $ mkFun ([], [B x tRcvr], fmap F.top tf `eSingleton` mkOffset x f)
-
-  | a == Final
-  = return $ mkFun ([], [B x tRcvr], fmap F.top tf `eSingleton` mkOffset x f)
-
-  -- TODO: Case: TEnum
-
-  | otherwise
-  = return $ mkFun ([], [B x tRcvr], substThis x tf)
-  where
-    x = F.symbol "x"
-
+type PPRE r = (ExprReftable F.Expr r, ExprReftable Int r, PPR r)
 
 -- | setProp<A, M extends Mutable>(o: { f[M]: A }, x: A) => A
 --
@@ -151,19 +124,48 @@ mkArrTy l g n
     bs x_ t_ = [ B (tox x_ i) t_ | i <- [1..n] ]
     tox x    = F.symbol . ((symbolString x) ++) . show
 
+--------------------------------------------------------------------------------
+objLitTy :: (PPRE r, IsLocated l, CheckingEnvironment r t)
+         => l -> t r -> [Prop l] -> Maybe (RType r) -> ([Maybe (RType r)], RType r)
+--------------------------------------------------------------------------------
+objLitTy l g ps to = (ct, mkFun (concat bbs, bs, TObj (typeMembersFromList et) fTop))
+  where
+    (ct, bbs, bs, et) = unzip4 (map propToBind ps)
+    propToBind p      = propParts l (F.symbol p) (F.lookupSEnv (F.symbol p) ctxTys)
+    ctxTys            = maybe mempty (i_mems . typeMembersOfType (envCHA g)) to
 
--- --------------------------------------------------------------------------------------------
--- objLitTy         :: (F.Reftable r, IsLocated a) => a -> [Prop a] -> RType r
--- --------------------------------------------------------------------------------------------
--- objLitTy l ps     = mkFun (avs, bs, rt)
---   where
---     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
---     rt            = TObj tIM tms fTop
---     tms           = typeMembersFromList [ (s, FI Req Inherited a) | (s, a) <- zip ss ats ]
---     (avs, ats)    = unzip $ map (freshBTV l aSym Nothing) [1..length ps]  -- field type vars
---     ss            = [F.symbol p | p <- ps]
---     mSym          = F.symbol "M"
---     aSym          = F.symbol "A"
+--------------------------------------------------------------------------------
+propParts
+  :: (PPRE r, IsLocated l)
+  => l -> F.Symbol -> Maybe (TypeMember r)
+  -> (Maybe (RType r), [BTVar r], Bind r, TypeMember r)
+  --  ^^^^^^^^^^^^^^^
+  --  Contextual type
+  --
+--------------------------------------------------------------------------------
+propParts l p (Just (FI _ o m t)) = (Just t, [abtv], b, ot)
+  where
+    loc   = srcPos l
+    aSym  = F.symbol "A" `F.suffixSymbol` p     -- TVar symbol
+    at    = TV  aSym loc
+    abtv  = BTV aSym loc Nothing
+    b     = B p ty
+    ot    = FI p o m ty
+    ty    = TVar at fTop
+
+propParts l p Nothing = (Nothing, [abtv, pbtv], b, ot)
+  where
+    loc   = srcPos l
+    aSym  = F.symbol "A" `F.suffixSymbol` p
+    pSym  = F.symbol "M" `F.suffixSymbol` p
+    at    = TV  aSym loc
+    abtv  = BTV aSym loc Nothing
+    pt    = TV  pSym loc
+    pbtv  = BTV pSym loc Nothing
+    pty   = TVar pt fTop
+    b     = B p ty
+    ot    = FI p Req pty ty
+    ty    = TVar at fTop
 
 
 mkCondExprTy l g t

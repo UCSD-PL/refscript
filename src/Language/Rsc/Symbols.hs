@@ -66,8 +66,8 @@ instance F.Symbolic (SymInfoQ q r) where
   symbol = v_name
 
 
-symToField (SI n _ WriteGlobal _ t) = FI n Req Assignable t
-symToField (SI n _ _           _ t) = FI n Req Final      t
+symToField (SI n _ WriteGlobal _ t) = FI n Req tMU t
+symToField (SI n _ _           _ t) = FI n Req tIM t
 
 
 -- | @argBind@ returns a dummy type binding `arguments :: T `
@@ -93,7 +93,7 @@ immObjectLitTy ps ts | length ps == length ts
                      | otherwise
                      = error "Mismatched args for immObjectLit"
   where
-    elts = typeMembersFromList [ FI (sym p) Req Final t | (p,t) <- pts ]
+    elts = typeMembersFromList [ FI (sym p) Req tIM t | (p,t) <- pts ]
     pts  = safeZip "immObjectLitTy" ps ts
     sym  = F.symbol
 

@@ -88,11 +88,6 @@ instance PPR r => PP (TypeMemberQ q r) where
   pp (FI s o m t) = pp m <+> pp s <> pp o <> colon <+> pp t
   pp (MI s o mts) = vcat (map (\(m,t) -> pp m <+> pp s <> pp o <> pp t) mts)
 
-instance PP FieldAsgn where
-  pp Assignable = pp "@Assignable"
-  pp Final      = pp "@Final"
-  pp Inherited  = pp "@Inherited"
-
 instance PP Optionality where
   pp Opt = text "?"
   pp Req = empty

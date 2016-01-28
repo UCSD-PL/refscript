@@ -540,8 +540,10 @@ consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
     ret   = thisT `strengthen` F.reft (F.vv Nothing) (F.pAnd $ bnd <$> out)
     xts   = sortBy c_sym [ B x t' | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms)
                                   , let t' = unqualifyThis g0 thisT t ]
-    out   = [ f | (f, FI _ _ Final _) <- F.toListSEnv (i_mems ms) ]
-    bnd f = F.PAtom F.Eq (mkOffset v_sym $ symbolString f) (F.eVar f)
+    out   = [ f | (f, FI _ _ m _) <- F.toListSEnv (i_mems ms)
+                ,  isSubtype g0 m tIM
+            ]
+    bnd f = F.PAtom F.Eq (mkOffsetSym v_sym $ symbolString f) (F.eVar f)
     v_sym = F.symbol $ F.vv Nothing
     c_sym = on compare b_sym
 
@@ -654,7 +656,7 @@ consExpr g (Cast_ l e) s
       CType s  -> mseq (consExpr g e (Just $ ofType s)) $ \(x, g') -> do
                     t   <- cgSafeEnvFindTyM x g'
                     _   <- subType l Nothing g t (ofType s)
-                    t'  <- pure (narrowType l g t s)
+                    t'  <- pure (narrowType g t s)
                     Just <$> cgEnvAddFresh "cast_" l t' g
       -- Dead-cast: Do not attempt to check the enclosed expression
       CDead [] -> subType l (Just (errorDeadCast l)) g tBool (tBot tBool) >> return Nothing
@@ -776,25 +778,21 @@ consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
         Right (unzip -> (_, fs)) ->
             case getMutability (envCHA g) tRcvr of
               Just mRcvr -> callOne g' xRcvr tRcvr mRcvr fs
-              Nothing -> cgError (bugGetMutability l tRcvr)
+              Nothing    -> cgError (bugGetMutability l tRcvr)
         Left er -> cgError er
   where
-    callOne g_ _ tRcvr _ [FI _ o _ ft]
-      | o == Req
+    callOne g_ _ tRcvr _ [FI _ Req _ ft]
       = consCall g_ l em (es `zip` nths) ft
-      | otherwise
+
+    callOne _  _ tRcvr _ [FI _ _   _ _ ]
       = cgError (errorCallOptional l f tRcvr)
 
-    callOne g_ xRcvr tRcvr mRcvr [MI _ o mts]
-      | o == Req
-      = let ft = mkAnd [ ft_ | (m, ft_) <- mts, isSubtype l g_ mRcvr m ]
+    callOne g_ xRcvr tRcvr mRcvr [MI _ Req mts]
+      = let ft = mkAnd [ ft_ | (m, ft_) <- mts, isSubtype g_ mRcvr m ]
                & substThis xRcvr in
         consCall g_ l em (es `zip` nths) ft
-      | otherwise
-      = cgError (errorCallOptional l f tRcvr)
 
-    callOne _ _ _ _ _
-      = error "Call to multuple possible bindings not supported"
+    callOne _ _ tRcvr _ _ = cgError (errorCallOptional l f tRcvr)
 
     isVariadicCall f_ = F.symbol f_ == F.symbol "call"
 
@@ -810,21 +808,36 @@ consExpr g (CallExpr l e es) _
 --   Returns type: { v: _ | v = x.f }, if e => x and `f` is an immutable field
 --                 { v: _ | _       }, otherwise
 --
-consExpr g ef@(DotRef l e f) _
-  = mseq (consExpr g e Nothing) $ \(x, g') -> do
-      tRcvr <- cgSafeEnvFindTyM x g'
-      case getProp l g' f tRcvr of
-        Right [(t, FI _ o a tf)] ->
-            case getMutability (envCHA g) tRcvr of
-              Just mRcvr ->
-                  do  funTy <- mkDotRefFunTy g f tRcvr mRcvr a tf
-                      traceTypePP l (ppshow ef) $ consCall g' l ef [(VarRef (getAnnotation e) x, Nothing)] funTy
-              Nothing -> cgError $ bugGetMutability l tRcvr
+consExpr g0 ef@(DotRef l e f) _
+  = mseq (consExpr g0 e Nothing) $ \(x, g1) -> do
+      cgSafeEnvFindTyM x g1 >>= checkAccess g1 x . getProp l g1 f
 
-        Right tfs -> cgError $ unsupportedUnionAccess l tRcvr f
-        Left e -> cgError e
+  where
+    -- The receiver will be cast already to the type for which the
+    -- property acces succeeds.
+    --
+    -- Array accesses have already been translated to method calls to
+    -- __getLength.
+    --
+    checkAccess g x (Right tf) = Just <$> addWithOpt (opt tf) (fieldsTy g x tf) g
+    checkAccess _ _ (Left e)   = cgError e
+
+    -- The accessed type
+    fieldsTy g x tf   = tOr [ doField g x o m t | (_, FI _ o m t) <- tf ]
+
+    doField g x o m t | isSubtype g m tIM = immFieldTy g x t
+                      | otherwise         = otherFieldTy g x t
+
+    immFieldTy   g x t = fmap F.top t `eSingleton` mkOffsetSym x f
+    otherFieldTy g x t = substThis x t
+
+    addWithOpt Opt = cgEnvAddFreshWithInit InitUnknown "DotRef" l
+    addWithOpt Req = cgEnvAddFreshWithInit InitUnknown "DotRef" l
+
+    opt tf = mconcat [ o | (_, FI _ o _ _) <- tf ]
 
 -- | e1[e2]
+--
 consExpr g e@(BracketRef l e1 e2) _
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
       opTy <- cgSafeEnvFindTyM x1 g' >>= \case
@@ -836,33 +849,41 @@ consExpr g e@(BracketRef l e1 e2) _
     vr  = VarRef $ getAnnotation e1
 
 -- | e1[e2] = e3
+--
 consExpr g (AssignExpr l OpAssign (LBracket _ e1 e2) e3) _
   = do  opTy <- cgSafeEnvFindTyM (builtinOpId BIBracketAssign) g
         consCall g l BIBracketAssign ([e1,e2,e3] `zip` nths) opTy
 
 -- | [e1,...,en]
+--
 consExpr g e@(ArrayLit l es) to
   = arrayLitTy l g e to (length es) >>= \case
       Left ee    -> cgError ee
-      Right opTy -> consCall g l BIArrayLit (es `zip` nths) opTy
+      Right opTy -> consCall g l BIArrayLit (zip es nths) opTy
 
 -- | { f1: e1, ..., fn: en }
+--
 consExpr g e@(ObjectLit l pes) to
-  = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      ts    <- mapM (\x -> (`singleton` x) <$> cgSafeEnvFindTyM x g') xes
-      tms   <- pure (typeMembersFromList (zipWith fs ps ts))
-      t'    <- pure (TObj tms fTop)
-      Just <$> cgEnvAddFresh "17" l t' g'
+  = consCall g l BIObjectLit (zip es cts) ft
   where
-    ctx     | Just t <- to = i_mems $ typeMembersOfType (envCHA g) t
-            | otherwise    = mempty
-    ps      = map (F.symbol . fst) pes
-    ets     = [(e, fmap f_ty $ F.symbol p `F.lookupSEnv` ctx) | (p, e) <- pes]
-    fs p t  = FI p Req Inherited t
-    ss      = F.symbol
+    (cts, ft) = objLitTy l g ps to
+    (ps , es) = unzip pes
 
+--   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
+--       ts    <- mapM (\x -> (`singleton` x) <$> cgSafeEnvFindTyM x g') xes
+--       tms   <- pure (typeMembersFromList (zipWith fs ps ts))
+--       t'    <- pure (TObj tms fTop)
+--       Just <$> cgEnvAddFresh "17" l t' g'
+--   where
+--     ctx     | Just t <- to = i_mems $ typeMembersOfType (envCHA g) t
+--             | otherwise    = mempty
+--     ps      = map (F.symbol . fst) pes
+--     ets     = [(e, fmap f_ty $ F.symbol p `F.lookupSEnv` ctx) | (p, e) <- pes]
+--     fs p t  = FI p Req tMU t
+--     ss      = F.symbol
 
 -- | new C(e, ...)
+--
 consExpr g (NewExpr l e es) _
   = mseq (consExpr g e Nothing) $ \(x,g') -> do
       t <- cgSafeEnvFindTyM x g'
@@ -871,6 +892,7 @@ consExpr g (NewExpr l e es) _
         Nothing -> cgError $ errorConstrMissing (srcPos l) t
 
 -- | super
+--
 consExpr g (SuperRef l) _
   | Just thisT  <- cge_this g
   , Just tSuper <- getSuperType (envCHA g) thisT

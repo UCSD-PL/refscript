@@ -35,8 +35,7 @@ module Language.Rsc.Typecheck.Types (
 
   -- * Mutability primitives
   , tMU, tUQ, tIM, tAF, tRO, trMU, trIM, trAF, trRO
-  , isRO, isMU, isIM, isUQ, isAF, isUMRef, mutRelated, mutRelatedBVar, mutToFieldAsgn
-  , isFinal
+  , isRO, isMU, isIM, isUQ, isAF, isUMRef, mutRelated, mutRelatedBVar
 
   -- * Primitive Types
 
@@ -129,12 +128,6 @@ mutRelated t = isMU t || isIM t || isUQ t || isRO t
 
 mutRelatedBVar (BTV _ _ (Just m)) = mutRelated m
 mutRelatedBVar _                  = False
-
-mutToFieldAsgn m | isUQ m    = Assignable
-                 | isMU m    = Assignable
-                 | otherwise = Final
-
-isFinal = (== Final)
 
 
 ---------------------------------------------------------------------

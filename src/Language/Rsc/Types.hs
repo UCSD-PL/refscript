@@ -120,7 +120,7 @@ data TypeMembersQ q r = TM { i_mems  :: F.SEnv (TypeMemberQ q r)      -- Instanc
 data TypeMemberQ q r  = FI                                            -- Field Members
                            { f_name :: F.Symbol                         -- Name
                            , f_opt  :: Optionality                      -- Optional
-                           , f_asg  :: FieldAsgn                        -- Assignability
+                           , f_asg  :: MutabilityQ q r                  -- Assignability
                            , f_ty   :: RTypeQ q r                       -- Type
                            }
                       | MI                                            -- Method Members
@@ -134,13 +134,6 @@ instance F.Symbolic (TypeMemberQ q r) where
   symbol (FI n _ _ _ ) = n
   symbol (MI n _ _   ) = n
 
-
--- | Field assignability:
---
---   * Object literal types are only intended to have the first two kinds
---
-data FieldAsgn        = Assignable | Final | Inherited
-                        deriving (Data, Typeable, Eq)
 
 type MutabilityQ q r  = RTypeQ q r
 type MutabilityR r    = MutabilityQ AK r

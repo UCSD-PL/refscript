@@ -98,7 +98,7 @@ instance Free t => Free (F.SEnv t) where
   free                      = free . map snd . F.toListSEnv
 
 instance Free (TypeMember r) where
-  free (FI _ _ _ t)           = free t
+  free (FI _ _ m t)           = free [m, t]
   free (MI _ _ mts)           = free $ map snd mts
 
 instance Free a => Free [a] where
@@ -178,7 +178,7 @@ instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   apply _ a                    = a
 
 instance F.Reftable r => SubstitutableQ q r (TypeMemberQ q r) where
-  apply θ (FI s ms m t)       = FI s ms m (apply θ t)
+  apply θ (FI s ms m t)       = FI s ms (apply θ m) (apply θ t)
   apply θ (MI s o mts)        = MI s o (mapSnd (apply θ) <$> mts)
 
 instance SubstitutableQ q r a => SubstitutableQ q r (Maybe a) where

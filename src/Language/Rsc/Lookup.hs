@@ -8,7 +8,7 @@
 
 module Language.Rsc.Lookup (
     getProp
-  , getFieldAssignability
+  , getFieldMutability
   , extractCall
   , extractCtor
   ) where
@@ -67,11 +67,11 @@ getProp l γ f t@(TRef (Gen n []) _)
   , Just io <- envFindTy f (e_mapping e)
   = case io of
       IntLit _ i ->
-                    Right [(t, FI undefined Req Final (tNum `strengthen` exprReft i))]
+                    Right [(t, FI undefined Req tIM (tNum `strengthen` exprReft i))]
       -- XXX : is 32-bit going to be enough ???
       -- XXX: Invalid BV values will be dropped
       HexLit _ s -> case bitVectorValue s of
-                      Just v -> Right [(t, FI undefined Req Final (tBV32 `strengthen` v))]
+                      Just v -> Right [(t, FI undefined Req tIM (tBV32 `strengthen` v))]
                       _      -> Left (errorEnumLookup l f t)
       _          -> Left (errorEnumLookup l f t)
 
@@ -143,9 +143,9 @@ accessMember l γ static m t
   = Right [mem]
   -- In the case of string indexing, build up an optional and assignable field
   | Just (TObj es _) <- expandType Coercive (envCHA γ) t
-  , Just tIdx               <- tm_sidx es
+  , Just tIdx        <- tm_sidx es
   , validFieldName m
-  = Right [FI (F.symbol m) Opt Assignable tIdx]
+  = Right [FI (F.symbol m) Opt tMU tIdx]
   | otherwise
   = Left $ errorMemLookup l m t
   where
@@ -184,11 +184,11 @@ getPropUnion l γ f ts =
     tfs -> Right (concat tfs)
 
 --------------------------------------------------------------------------------
-getFieldAssignability ::
+getFieldMutability ::
   (ExprReftable Int r, PPR r) =>
-  ClassHierarchy r -> RType r -> F.Symbol -> Maybe FieldAsgn
+  ClassHierarchy r -> RType r -> F.Symbol -> Maybe (MutabilityR r)
 --------------------------------------------------------------------------------
-getFieldAssignability cha t f
+getFieldMutability cha t f
   | Just (TObj ms _i) <- expandType Coercive cha t
   , Just (FI _ _ m _) <- F.lookupSEnv f (i_mems ms)
   = Just m

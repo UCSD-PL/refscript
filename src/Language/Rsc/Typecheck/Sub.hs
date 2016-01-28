@@ -46,25 +46,25 @@ type FE g r = (CheckingEnvironment r g, Functor g)
 type PPRE r = (ExprReftable Int r, PPR r)
 
 --------------------------------------------------------------------------------
-isSubtype     :: (PPRE r, FE g r, IsLocated l) => l -> g r -> RType r -> RType r -> Bool
-isConvertible :: (PPRE r, FE g r, IsLocated l) => l -> g r -> RType r -> RType r -> Bool
+isSubtype     :: (PPRE r, FE g r) => g r -> RType r -> RType r -> Bool
+isConvertible :: (PPRE r, FE g r) => g r -> RType r -> RType r -> Bool
 --------------------------------------------------------------------------------
-isSubtype l γ t1 t2 = subtype l γ t1 t2 `elem` [EqT, SubT]
+isSubtype γ t1 t2 = subtype dummySpan γ t1 t2 `elem` [EqT, SubT]
 
-isConvertible l γ t1 t2
-  | isSubtype l γ t1 t2
+isConvertible γ t1 t2
+  | isSubtype γ t1 t2
   = True
 
-isConvertible l γ (TOr t1s _) t2
-  | any (\t1 -> isSubtype l γ t1 t2) t1s
+isConvertible γ (TOr t1s _) t2
+  | any (\t1 -> isSubtype γ t1 t2) t1s
   = True
 
-isConvertible l γ t1@(TRef _ _) t2@(TRef _ _)
+isConvertible γ t1@(TRef _ _) t2@(TRef _ _)
   | not (mutRelated t1), not (mutRelated t2)
-  , isSubtype l γ t1 t2
+  , isSubtype γ t1 t2
   = True
 
-isConvertible _ _ _ _
+isConvertible _ _ _
   = False
 
 
@@ -110,13 +110,13 @@ convert l g t1 t2
     SubT      -> ConvOK -- ConvWith (toType t2)
     SubErr es -> castable l g es t1 t2
 
-castable l γ _ (TOr t1s _) t2
-  | any (\t1 -> isSubtype l γ t1 t2) t1s
+castable _ γ _ (TOr t1s _) t2
+  | any (\t1 -> isSubtype γ t1 t2) t1s
   = ConvWith (toType t2)
 
 -- XXX: Only non generic casting allowed at the moment
 castable l γ _ t1@(TRef (Gen _ [_]) _) t2@(TRef (Gen _ [_]) _)
-  | not (mutRelated t1), not (mutRelated t2), isSubtype l γ t1 t2
+  | not (mutRelated t1), not (mutRelated t2), isSubtype γ t1 t2
   = ConvWith (toType t2)
 
 castable _ _ es _ _ = ConvFail es
@@ -140,12 +140,12 @@ subtype l γ (TPrim c1 _) (TPrim c2 _)
   | c2 == TTop = SubT
 
 -- | Unions
-subtype l γ (TOr ts1 _) t2
-  | all (\t1 -> isSubtype l γ t1 t2) ts1
+subtype _ γ (TOr ts1 _) t2
+  | all (\t1 -> isSubtype γ t1 t2) ts1
   = SubT
 
-subtype l γ t1 (TOr ts2 _)
-  | any (\t2 -> isSubtype l γ t1 t2) ts2
+subtype _ γ t1 (TOr ts2 _)
+  | any (\t2 -> isSubtype γ t1 t2) ts2
   = SubT
 
 -- | Objects
@@ -190,7 +190,7 @@ subtypeObj l γ t1@(TRef (Gen x1 (m1:t1s)) r1) t2@(TRef (Gen x2 (m2:t2s)) r2)
   --
   -- * Incompatible mutabilities
   --
-  | not (isSubtype l γ m1 m2)
+  | not (isSubtype γ m1 m2)
   = SubErr [errorIncompMutTy l t1 t2]
   --
   -- * Both immutable, same name, non arrays: co-variant subtyping on arguments
@@ -220,8 +220,8 @@ subtypeObj l γ t1@(TRef (Gen x1 (m1:t1s)) r1) t2@(TRef (Gen x2 (m2:t2s)) r2)
 
 subtypeObj l γ t1@(TClass (BGen c1 ts1)) t2@(TClass (BGen c2 ts2))
   | c1 == c2
-  , and $ uncurry (isSubtype l γ)        <$> ts
-  , and $ uncurry (isSubtype l γ) . swap <$> ts
+  , and $ uncurry (isSubtype γ)        <$> ts
+  , and $ uncurry (isSubtype γ) . swap <$> ts
   = EqT
   | otherwise
   = SubErr [errorTClassSubtype l t1 t2]
@@ -284,13 +284,13 @@ compareMem l γ (f, (FI _ o1 m1 t1, FI _ o2 m2 t2))
   | m1 /= m2
   = SubErr [errorIncompMutElt (srcPos l) f m1 m2]
 
-  -- Co-Variance (unassignable fields)
-  | m1 == Final
-  = subtype l γ t1 t2
-
-  -- Co-& Contra-Variance (assignable fields)
-  | m1 == Assignable
+  -- Co-& Contra-Variance (mutable fields)
+  | isSubtype γ m1 tMU
   = subtype l γ t1 t2 <> subtype l γ t2 t1
+
+  -- Co-Variance (immutable (through this reference) fields)
+  | otherwise
+  = subtype l γ t1 t2
 
 compareMem l _ (_, (m1, m2))
   = SubErr [ unsupportedMethodComp (srcPos l) m1 m2 ]
@@ -325,7 +325,7 @@ subtypeFun l γ t1@(TFun b1s o1 _) t2@(TFun b2s o2 _)
     args2     = map b_type b2s
 
 subtypeFun l γ t1@(TAnd _) t2@(TAnd t2s)
-  | and $ isSubtype l γ t1 <$> map snd t2s
+  | and $ isSubtype γ t1 <$> map snd t2s
   = SubT
   | otherwise
   = SubErr [errorFuncSubtype l t1 t2]
@@ -336,7 +336,7 @@ subtypeFun l γ t1@(TAnd t1s) t2
   | otherwise
   = SubErr [errorFuncSubtype l t1 t2]
   where
-    f t1 = isSubtype l γ t1 t2
+    f t1 = isSubtype γ t1 t2
 
 subtypeFun l _ t1 t2 = SubErr [unsupportedConvFun l t1 t2]
 

@@ -401,7 +401,7 @@ propBindP c  = sepEndBy memberP semi
            <|> try (unc Meth <$> methP c)
            <|> try (    Call <$> callP c)
 
-data EltKind = Prop Symbol StaticKind Optionality FieldAsgn RRType
+data EltKind = Prop Symbol StaticKind Optionality RMutability RRType
              | Meth Symbol StaticKind Optionality RMutability RRType
              | Call RRType
              | Ctor RRType
@@ -462,7 +462,7 @@ indexP = xyP id colon sn
 --
 propP c
   = do  s     <- option InstanceK (reserved "static" *> return StaticK)
-        a     <- withinSpacesP fieldAsgnP
+        a     <- withinSpacesP (fieldAsgnP c)
         x     <- symbol <$> withinSpacesP binderP
         o     <- option Req (withinSpacesP (char '?') *> return Opt)
         _     <- colon
@@ -501,9 +501,10 @@ methMutabilityP =  try (reserved "@Mutable"       >> return trMU)
                <|> try (reserved "@AssignsFields" >> return trAF)
                <|>     (                             return trRO)       -- default
 
-fieldAsgnP      =  try (reserved "@Assignable"    >> return Assignable)
-               <|> try (reserved "@Final"         >> return Final     )
-               <|>     (                             return Inherited ) -- default
+fieldAsgnP c    =  try (reserved "@Assignable"    >> return trMU)
+               <|> try (reserved "@Final"         >> return trIM)
+               <|> try (char '@'                  >> dummyP (tVarP c))
+               <|>     (                             return trMU) -- default
 
 dummyP ::  Parser (F.Reft -> b) -> Parser b
 dummyP fm = fm `ap` topP

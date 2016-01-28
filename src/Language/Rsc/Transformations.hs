@@ -96,7 +96,7 @@ instance Transformable BTVarQ where
   trans f αs xs (BTV x l c) = BTV x l $ trans f αs xs <$> c
 
 instance Transformable TypeMemberQ where
-  trans f αs xs (FI n o a t') = FI n o a (trans f αs xs t')
+  trans f αs xs (FI n o a t') = FI n o (trans f αs xs a) (trans f αs xs t')
   trans f αs xs (MI n o mts)  = MI n o (mapSnd (trans f αs xs) <$> mts)
 
 instance Transformable ModuleDefQ where
@@ -206,7 +206,7 @@ instance NameTransformable BTVarQ where
   ntrans f g (BTV x l c) = BTV x l <$> T.mapM (ntrans f g) c
 
 instance NameTransformable TypeMemberQ where
-  ntrans f g (FI x o a t) = FI x o a <$> ntrans f g t
+  ntrans f g (FI x o m t) = FI x o <$> ntrans f g m <*> ntrans f g t
   ntrans f g (MI x o mts) = MI x o <$> mapM (mapPairM (ntrans f g) (ntrans f g)) mts
 
 ntransFmap ::  (F.Reftable r, Applicative m, Monad m, T.Traversable t)
@@ -297,7 +297,7 @@ emapReftTM f γ (TM m sm c k s n)
        (emapReft f γ <$> s)
        (emapReft f γ <$> n)
 
-emapReftElt f γ (FI x m a t) = FI x m a (emapReft f γ t)
+emapReftElt f γ (FI x m a t) = FI x m (emapReft f γ a) (emapReft f γ t)
 emapReftElt f γ (MI x m mts) = MI x m (mapPair (emapReft f γ) <$> mts)
 
 --------------------------------------------------------------------------------
@@ -329,8 +329,8 @@ mapTypeMembers f (TM m sm c k s n)
        <*> T.mapM (mapReftM f) s
        <*> T.mapM (mapReftM f) n
 
-mapReftElt f (FI x m a t) = FI x m a <$> mapReftM f t
-mapReftElt f (MI x m mts) = MI x m   <$> mapM (mapPairM (mapReftM f) (mapReftM f)) mts
+mapReftElt f (FI x m a t) = FI x m <$> mapReftM f a <*> mapReftM f t
+mapReftElt f (MI x m mts) = MI x m <$> mapM (mapPairM (mapReftM f) (mapReftM f)) mts
 
 --------------------------------------------------------------------------------
 mapTypeMembersM :: (Applicative m, Monad m)
@@ -344,8 +344,8 @@ mapTypeMembersM f (TM m sm c k s n)
        <*> T.mapM f s
        <*> T.mapM f n
   where
-    memMapM (FI x o a t) = FI x o a <$> f t
-    memMapM (MI x o mts) = MI x o   <$> mapM (mapSndM f) mts
+    memMapM (FI x o a t) = FI x o <$> f a <*> f t
+    memMapM (MI x o mts) = MI x o <$> mapM (mapSndM f) mts
 
 
 --------------------------------------------------------------------------------

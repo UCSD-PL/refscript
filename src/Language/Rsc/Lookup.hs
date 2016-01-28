@@ -32,6 +32,7 @@ import           Language.Rsc.Types
 
 -- import           Debug.Trace
 
+type PPRE r = (ExprReftable Int r, PPR r)
 
 -- | Excluded fields from string index lookup
 --
@@ -55,7 +56,7 @@ getProp l γ f t@(TPrim _ _) = getPropPrim l γ f t
 getProp l γ f (TOr ts _) = getPropUnion l γ f ts
 
 -- | TODO: Chain up to 'Object'
-getProp l γ f t@(TObj _ _ _)
+getProp l γ f t@(TObj _ _)
   = fmap (map (t,)) (accessMember l γ InstanceK f t)
 
 -- | Enumeration
@@ -63,14 +64,14 @@ getProp l γ f t@(TObj _ _ _)
 --        E.g. A_B_C_1 ...
 getProp l γ f t@(TRef (Gen n []) _)
   | Just e  <- resolveEnumInEnv γ n
-  , Just io <- envFindTy f $ e_mapping e
+  , Just io <- envFindTy f (e_mapping e)
   = case io of
       IntLit _ i ->
-                    Right [(t, FI Req Final (tNum `strengthen` exprReft i))]
+                    Right [(t, FI undefined Req Final (tNum `strengthen` exprReft i))]
       -- XXX : is 32-bit going to be enough ???
       -- XXX: Invalid BV values will be dropped
       HexLit _ s -> case bitVectorValue s of
-                      Just v -> Right [(t, FI Req Final (tBV32 `strengthen` v))]
+                      Just v -> Right [(t, FI undefined Req Final (tBV32 `strengthen` v))]
                       _      -> Left (errorEnumLookup l f t)
       _          -> Left (errorEnumLookup l f t)
 
@@ -114,7 +115,7 @@ extractCtor γ t = go t
     go (TClass (BGen x _)) | Just (TD _ ms) <- resolveTypeInEnv γ x
                            = tm_ctor ms
     go (TRef _ _)          = expandType Coercive (envCHA γ) t >>= go
-    go (TObj _ ms _)       = tm_ctor ms
+    go (TObj ms _)         = tm_ctor ms
     go _                   = Nothing
 
 
@@ -128,24 +129,23 @@ extractCall γ             = zip [0..] . go []
     go αs   (TAll α t)    = go (αs ++ [α]) t
     go αs t@(TRef _ _)    | Just t' <- expandType Coercive (envCHA γ) t
                           = go αs t'
-    go αs   (TObj _ ms _) | Just t <- tm_call ms
+    go αs   (TObj ms _)   | Just t <- tm_call ms
                           = go αs t
     go _  _               = []
 
 --------------------------------------------------------------------------------
-accessMember ::
-  (CEnv r t, PP r, PP f, ExprReftable Int r, IsLocated l, F.Symbolic f, F.Reftable r) =>
-  l -> t r -> StaticKind -> f -> RType r -> Either Error [TypeMember r]
+accessMember :: (CEnv r t, PPRE r, PP f, IsLocated l, F.Symbolic f)
+             => l -> t r -> StaticKind -> f -> RType r -> Either Error [TypeMember r]
 --------------------------------------------------------------------------------
 accessMember l γ static m t
-  | Just (TObj _ es _) <- expandType Coercive (envCHA γ) t
+  | Just (TObj es _) <- expandType Coercive (envCHA γ) t
   , Just mem <- F.lookupSEnv (F.symbol m) (mems es)
   = Right [mem]
   -- In the case of string indexing, build up an optional and assignable field
-  | Just (TObj _ es _) <- expandType Coercive (envCHA γ) t
+  | Just (TObj es _) <- expandType Coercive (envCHA γ) t
   , Just tIdx               <- tm_sidx es
   , validFieldName m
-  = Right [FI Opt Assignable tIdx]
+  = Right [FI (F.symbol m) Opt Assignable tIdx]
   | otherwise
   = Left $ errorMemLookup l m t
   where
@@ -164,7 +164,7 @@ lookupAmbientType ::
 --------------------------------------------------------------------------------
 lookupAmbientType l γ f amb
   | Just (TD _ ms) <- resolveTypeInEnv γ nm
-  = accessMember l γ InstanceK f (TObj tIM ms fTop)
+  = accessMember l γ InstanceK f (TObj ms fTop)
   | otherwise
   = Left (errorAmbientLookup l f (F.symbol amb))
   where
@@ -189,8 +189,8 @@ getFieldAssignability ::
   ClassHierarchy r -> RType r -> F.Symbol -> Maybe FieldAsgn
 --------------------------------------------------------------------------------
 getFieldAssignability cha t f
-  | Just (TObj _ ms _) <- expandType Coercive cha t
-  , Just (FI _ m _   ) <- F.lookupSEnv f (i_mems ms)
+  | Just (TObj ms _i) <- expandType Coercive cha t
+  , Just (FI _ _ m _) <- F.lookupSEnv f (i_mems ms)
   = Just m
   | otherwise
   = Nothing

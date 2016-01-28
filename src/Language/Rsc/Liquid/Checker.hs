@@ -225,7 +225,7 @@ initGlobalEnv pgm@(Rsc { code = Src ss }) cha = freshenCGEnvM g
     bnds  = mempty
     ctx   = emptyContext
     pth   = mkAbsPath []
-    fenv  = F.emptySEnv
+    fenv  = F.emptyIBindEnv
     grd   = []
     cst   = consts pgm
     mut   = Nothing
@@ -276,7 +276,8 @@ initCallableEnv l g f fty xs s
     nms    = toFgn (envNames g)
            & mappend (symEnv s)
            & envAdds tyBs
-           & envAddReturn f (SI Local ReturnVar Initialized t)
+           & envAddReturn f (SI rSym Local ReturnVar Initialized t)
+    rSym   = F.symbol "return"
     bnds   = envAdds [(v,tv) | BTV v _ (Just tv) <- bs] $ cge_bounds g
     ctx    = pushContext i (cge_ctx g)
     pth    = cge_path g
@@ -287,9 +288,10 @@ initCallableEnv l g f fty xs s
     mut    = cge_mut g
     thisT  = cge_this g
 
-    tyBs   = [(Loc (srcPos l) α, SI Local Ambient Initialized $ tVar α) | α <- αs]
-    params = [(x, SI Local WriteLocal Initialized t_) | (x, t_) <- safeZip "initCallableEnv" xs ts ]
-    arg    = single (argId (srcPos l) (fId l), mkArgumentsSI l ts)
+    tyBs   = [(Loc (srcPos l) α, SI (F.symbol α) Local Ambient Initialized $ tVar α) | α <- αs]
+    params = [ SI (F.symbol x) Local WriteLocal Initialized t_ |
+               (x, t_) <- safeZip "initCallableEnv" xs ts ]
+    arg    = [ mkArgumentsSI l ts ]
     ts     = map b_type xts
     αs     = map btvToTV bs
     (i, (bs,xts,t)) = fty
@@ -307,8 +309,8 @@ consFun _ (FunctionStmt _ _ _ Nothing)
   = return ()
 consFun g (FunctionStmt l f xs (Just body))
   = case envFindTy f (cge_names g) of
-      Just (SI _ _ _ t) -> cgFunTys l f xs t >>= mapM_ (consCallable l g f xs body)
-      Nothing   -> cgError $ errorMissingSpec (srcPos l) f
+      Just (SI _ _ _ _ t) -> cgFunTys l f xs t >>= mapM_ (consCallable l g f xs body)
+      Nothing             -> cgError $ errorMissingSpec (srcPos l) f
 
 consFun _ s
   = die $ bug (srcPos s) "consFun called not with FunctionStmt"
@@ -352,7 +354,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
         Right (ftys . map snd -> ts) -> fmap snd <$> consExprTs l g BISetProp e2 ts
         Left e -> cgError e
   where
-      ftys fs = [ t | FI _ _ t <- fs ]
+      ftys fs = [ t | FI _ _ _ t <- fs ]
 
 -- e
 consStmt g (ExprStmt _ e)
@@ -399,7 +401,7 @@ consStmt g (ReturnStmt l (Just e))
   | VarRef lv x <- e
   , Just t <- cgEnvFindTy x g
   , isUMRef t
-  = do  g' <- cgEnvAdds l "Return" [(fn, SI Local Ambient Initialized $ finalizeTy t)] g
+  = do  g' <- cgEnvAdds l "Return" [SI sfn Local Ambient Initialized (finalizeTy t)] g
         consStmt g' (ReturnStmt l (Just (CallExpr l (VarRef lv fn) [e])))
   -- Normal case
   | otherwise
@@ -408,6 +410,7 @@ consStmt g (ReturnStmt l (Just e))
   where
     retTy = cgEnvFindReturn g
     fn    = Id l "__finalize__"
+    sfn   = F.symbol fn
 
 -- throw e
 consStmt g (ThrowStmt _ e)
@@ -461,41 +464,41 @@ consVarDecl g (VarDecl l x (Just e))
       Nothing ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds l "consVarDecl" [(x, SI Local WriteLocal Initialized eT)] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [SI (F.symbol x) Local WriteLocal Initialized eT] gy
 
       -- Local (with type annotation)
-      Just (SI lc  WriteLocal _ t) -> do
+      Just (SI n lc  WriteLocal _ t) -> do
         fta       <- freshenType WriteGlobal g l t
         mseq (consExpr g e $ Just t) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
           _       <- subType l Nothing gy eT fta
           _       <- subType l Nothing gy fta t
-          Just   <$> cgEnvAdds l "consVarDecl" [(x, SI lc WriteLocal Initialized fta)] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc WriteLocal Initialized fta] gy
 
       -- | Global
-      Just (SI lc WriteGlobal _ t) -> do
+      Just (SI n lc WriteGlobal _ t) -> do
         fta       <- freshenType WriteGlobal g l t
         mseq (consExpr g e $ Just fta) $ \(y, gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
           _       <- subType l Nothing gy eT fta
           _       <- subType l Nothing gy fta t
-          Just   <$> cgEnvAdds l "consVarDecl" [(x, SI lc WriteGlobal Initialized fta)] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc WriteGlobal Initialized fta] gy
 
       -- | ReadOnly
-      Just (SI lc RdOnly _ t) -> do
+      Just (SI n lc RdOnly _ t) -> do
         fta       <- freshenType WriteGlobal g l t
         mseq (consExpr g e (Just t)) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
           _       <- subType l Nothing gy eT fta
           _       <- subType l Nothing gy fta t
-          Just   <$> cgEnvAdds l "consVarDecl" [(x, SI lc RdOnly Initialized fta)] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc RdOnly Initialized fta] gy
 
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 
 consVarDecl g (VarDecl l x Nothing)
   = case envFindTy x (cge_names g) of
-      Just (SI lc Ambient _ t) ->
-          Just <$> cgEnvAdds l "consVarDecl" [(x, SI lc Ambient Initialized t)] g
+      Just (SI n lc Ambient _ t) ->
+          Just <$> cgEnvAdds l "consVarDecl" [SI n lc Ambient Initialized t] g
       _ ->   -- The rest should have fallen under the 'undefined' initialization case
           error "LQ: consVarDecl this shouldn't happen"
 
@@ -529,14 +532,15 @@ consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
     thisT = TRef (Gen nm (map btVar bs)) fTop
     ctor  = builtinOpId BICtor
     cExit = builtinOpId BICtorExit
+    sExit = F.symbol cExit
 
     -- substOffsetThis exitTy ???
-    exitP = [(cExit, SI Local Ambient Initialized $ mkFun (bs, xts, ret))]
+    exitP = [SI sExit Local Ambient Initialized $ mkFun (bs, xts, ret)]
 
     ret   = thisT `strengthen` F.reft (F.vv Nothing) (F.pAnd $ bnd <$> out)
-    xts   = sortBy c_sym [ B x t' | (x, FI _ _ t) <- F.toListSEnv (i_mems ms)
+    xts   = sortBy c_sym [ B x t' | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms)
                                   , let t' = unqualifyThis g0 thisT t ]
-    out   = [ f | (f, FI _ Final _) <- F.toListSEnv (i_mems ms) ]
+    out   = [ f | (f, FI _ _ Final _) <- F.toListSEnv (i_mems ms) ]
     bnd f = F.PAtom F.Eq (mkOffset v_sym $ symbolString f) (F.eVar f)
     v_sym = F.symbol $ F.vv Nothing
     c_sym = on compare b_sym
@@ -546,7 +550,7 @@ consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
 -- | Static field
 --
 consClassElt g (TD sig ms) (MemberVarDecl l True x (Just e))
-  | Just (FI _ _ t) <- F.lookupSEnv (F.symbol x) (s_mems ms)
+  | Just (FI _ _ _ t) <- F.lookupSEnv (F.symbol x) (s_mems ms)
   = void $ consCall g l "field init" [(e, Just t)] (mkInitFldTy t)
   | otherwise
   = cgError $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
@@ -565,7 +569,7 @@ consClassElt _ _ (MemberVarDecl l False x _)
 -- | Static method
 --
 consClassElt g (TD sig ms) (MemberMethDecl l True x xs body)
-  | Just (MI _ mts) <- F.lookupSEnv (F.symbol x) (s_mems ms)
+  | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) (s_mems ms)
   = do  let t = mkAnd $ map snd mts
         its <- cgFunTys l x xs t
         mapM_ (consCallable l g x xs body) its
@@ -579,7 +583,7 @@ consClassElt g (TD sig ms) (MemberMethDecl l True x xs body)
 --   TODO: Also might not need 'cge_this'
 --
 consClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
-  | Just (MI _ mts) <- F.lookupSEnv (F.symbol x) (i_mems ms)
+  | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) (i_mems ms)
   = do  let (ms', ts) = unzip mts
         its          <- cgFunTys l x xs $ mkAnd ts
         let mts'      = zip ms' its
@@ -598,7 +602,7 @@ consClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
     BGen nm bs  = bgen
     tThis       = TRef (Gen nm (map btVar bs)) fTop
     idThis      = Id l "this"
-    eThis       = (idThis, SI Local RdOnly Initialized tThis)
+    eThis       = SI thisSym Local RdOnly Initialized tThis
 
 --------------------------------------------------------------------------------
 consAsgn :: AnnLq -> CGEnv -> Id AnnLq -> Expression AnnLq -> CGM (Maybe CGEnv)
@@ -606,20 +610,20 @@ consAsgn :: AnnLq -> CGEnv -> Id AnnLq -> Expression AnnLq -> CGM (Maybe CGEnv)
 consAsgn l g x e =
   case envFindTyWithAsgn x g of
     -- This is the first time we initialize this variable
-    Just (SI lc WriteGlobal Uninitialized t) ->
+    Just (SI n lc WriteGlobal Uninitialized t) ->
       do  t' <- freshenType WriteGlobal g l t
           mseq (consExprT l g "assign" e t') $ \(_, g') -> do
-            g'' <- cgEnvAdds l "consAsgn-0" [(x, SI lc WriteGlobal Initialized t')] g'
+            g'' <- cgEnvAdds l "consAsgn-0" [SI n lc WriteGlobal Initialized t'] g'
             return $ Just g''
 
-    Just (SI _ WriteGlobal _ t) -> mseq (consExprT l g "assign" e t) $ \(_, g') ->
+    Just (SI _ _ WriteGlobal _ t) -> mseq (consExprT l g "assign" e t) $ \(_, g') ->
                                      return $ Just g'
-    Just (SI lc a i t) -> mseq (consExprT l g "assign" e t) $ \(x', g') -> do
-                             t_     <- cgSafeEnvFindTyM x' g'
-                             Just  <$> cgEnvAdds l "consAsgn-1" [(x, SI lc a i t_)] g'
+    Just (SI n lc a i t) -> mseq (consExprT l g "assign" e t) $ \(x', g') -> do
+                              t_     <- cgSafeEnvFindTyM x' g'
+                              Just  <$> cgEnvAdds l "consAsgn-1" [SI n lc a i t_] g'
     Nothing -> mseq (consExpr g e Nothing) $ \(x', g') -> do
                  t      <- cgSafeEnvFindTyM x' g'
-                 Just  <$> cgEnvAdds l "consAsgn-1" [(x, SI Local WriteLocal Initialized t)] g'
+                 Just  <$> cgEnvAdds l "consAsgn-1" [SI (F.symbol x) Local WriteLocal Initialized t] g'
 
 
 -- --------------------------------------------------------------------------------
@@ -697,10 +701,10 @@ consExpr g e@(VarRef l x) s
   | F.symbol x == F.symbol "undefined"
   = Just <$> cgEnvAddFresh "0" l tUndef g
 
-  | Just (SI _ WriteGlobal _ t) <- tInfo
+  | Just (SI _ _ WriteGlobal _ t) <- tInfo
   = Just <$> cgEnvAddFresh "0" l t g
 
-  | Just (SI _ a _ t) <- tInfo
+  | Just (SI _ _ a _ t) <- tInfo
   = do  addAnnot (srcPos l) x t
         Just <$> cgEnvAddFresh "cons VarRef" l t g
 
@@ -775,13 +779,13 @@ consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
               Nothing -> cgError (bugGetMutability l tRcvr)
         Left er -> cgError er
   where
-    callOne g_ _ tRcvr _ [FI o _ ft]
+    callOne g_ _ tRcvr _ [FI _ o _ ft]
       | o == Req
       = consCall g_ l em (es `zip` nths) ft
       | otherwise
       = cgError (errorCallOptional l f tRcvr)
 
-    callOne g_ xRcvr tRcvr mRcvr [MI o mts]
+    callOne g_ xRcvr tRcvr mRcvr [MI _ o mts]
       | o == Req
       = let ft = mkAnd [ ft_ | (m, ft_) <- mts, isSubtype l g_ mRcvr m ]
                & substThis xRcvr in
@@ -810,11 +814,11 @@ consExpr g ef@(DotRef l e f) _
   = mseq (consExpr g e Nothing) $ \(x, g') -> do
       tRcvr <- cgSafeEnvFindTyM x g'
       case getProp l g' f tRcvr of
-        Right [(t, FI o a tf)] ->
+        Right [(t, FI _ o a tf)] ->
             case getMutability (envCHA g) tRcvr of
               Just mRcvr ->
                   do  funTy <- mkDotRefFunTy g f tRcvr mRcvr a tf
-                      consCall g' l ef [(VarRef (getAnnotation e) x, Nothing)] funTy
+                      traceTypePP l (ppshow ef) $ consCall g' l ef [(VarRef (getAnnotation e) x, Nothing)] funTy
               Nothing -> cgError $ bugGetMutability l tRcvr
 
         Right tfs -> cgError $ unsupportedUnionAccess l tRcvr f
@@ -845,14 +849,16 @@ consExpr g e@(ArrayLit l es) to
 -- | { f1: e1, ..., fn: en }
 consExpr g e@(ObjectLit l pes) to
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      ts <- mapM (\x -> (`singleton` x) <$> cgSafeEnvFindTyM x g') xes
-      Just <$> cgEnvAddFresh "17" l (TObj tUQ (typeMembersFromList (zip ps (fs ts))) fTop) g'
+      ts    <- mapM (\x -> (`singleton` x) <$> cgSafeEnvFindTyM x g') xes
+      tms   <- pure (typeMembersFromList (zipWith fs ps ts))
+      t'    <- pure (TObj tms fTop)
+      Just <$> cgEnvAddFresh "17" l t' g'
   where
     ctx     | Just t <- to = i_mems $ typeMembersOfType (envCHA g) t
             | otherwise    = mempty
     ps      = map (F.symbol . fst) pes
     ets     = [(e, fmap f_ty $ F.symbol p `F.lookupSEnv` ctx) | (p, e) <- pes]
-    fs      = map $ FI Req Inherited
+    fs p t  = FI p Req Inherited t
     ss      = F.symbol
 
 
@@ -1048,8 +1054,8 @@ envJoin' l g g1 g2
   = do  --
         -- LOCALS: as usual
         --
-        g1'       <- cgEnvAdds l "envJoin-0" (zip xls l1s) g1
-        g2'       <- cgEnvAdds l "envJoin-1" (zip xls l2s) g2
+        g1'       <- cgEnvAdds l "envJoin-0" l1s g1
+        g2'       <- cgEnvAdds l "envJoin-1" l2s g2
         --
         -- t1s and t2s should have the same raw type, otherwise they wouldn't
         -- pass TC (we don't need to pad / fix them before joining).
@@ -1057,7 +1063,7 @@ envJoin' l g g1 g2
         -- up that one.
         -- TODO: Add a raw type check on t1 and t2
         --
-        (g',ls)   <- freshTyPhis' l g xls $ (\(SI loc a i t) -> SI loc a i $ toType t) <$> l1s
+        (g',ls)   <- freshTyPhis' l g xls $ (\(SI x loc a i t) -> SI x loc a i (toType t)) <$> l1s
         l1s'      <- mapM (`cgSafeEnvFindTyM` g1') xls
         l2s'      <- mapM (`cgSafeEnvFindTyM` g2') xls
         _         <- zipWithM_ (subType l Nothing g1') l1s' ls
@@ -1066,7 +1072,7 @@ envJoin' l g g1 g2
         -- GLOBALS:
         --
         let (xgs, gl1s, _) = unzip3 $ globals (zip3 xs t1s t2s)
-        (g'',gls) <- freshTyPhis' l g' xgs $ (\(SI loc a i t) -> SI loc a i $ toType t) <$> gl1s
+        (g'',gls) <- freshTyPhis' l g' xgs $ (\(SI x loc a i t) -> SI x loc a i (toType t)) <$> gl1s
         gl1s'     <- mapM (`cgSafeEnvFindTyM` g1') xgs
         gl2s'     <- mapM (`cgSafeEnvFindTyM` g2') xgs
         _         <- zipWithM_ (subType l Nothing g1') gl1s' gls
@@ -1092,11 +1098,11 @@ getPhiTypes _ g1 g2 x =
     (_      , _      ) -> Nothing
 
 
-locals  ts = [(x,s1,s2) | (x, s1@(SI Local WriteLocal _ _),
-                              s2@(SI Local WriteLocal _ _)) <- ts ]
+locals  ts = [(x,s1,s2) | (x, s1@(SI _ Local WriteLocal _ _),
+                              s2@(SI _ Local WriteLocal _ _)) <- ts ]
 
-globals ts = [(x,s1,s2) | (x, s1@(SI Local WriteGlobal Initialized _),
-                              s2@(SI Local WriteGlobal Initialized _)) <- ts ]
+globals ts = [(x,s1,s2) | (x, s1@(SI _ Local WriteGlobal Initialized _),
+                              s2@(SI _ Local WriteGlobal Initialized _)) <- ts ]
 
 -- partial ts = [(x,s2)    | (x, s2@(_, WriteGlobal, Uninitialized)) <- ts]
 --           ++ [(x,s1)    | (x, s1@(_, WriteGlobal, Uninitialized)) <- ts]

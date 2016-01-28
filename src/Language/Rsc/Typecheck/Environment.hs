@@ -127,10 +127,11 @@ initCallableEnv l γ f fty xs s
   where
     nms   = toFgn (envNames γ)
           & mappend (symEnv s)
-          & envAddReturn f (SI Local ReturnVar Initialized t)
+          & envAddReturn f (SI rSym Local ReturnVar Initialized t)
 
-    tyBs  = [(Loc (srcPos l) α, SI Local Ambient Initialized $ tVar α) | α <- αs]
-    varBs = [(x, SI Local WriteLocal Initialized t) | (x, t) <- safeZip "initCallableEnv" xs ts]
+    rSym  = F.symbol "return"
+    tyBs  = [(Loc (srcPos l) α, SI (F.symbol α) Local Ambient Initialized $ tVar α) | α <- αs]
+    varBs = [(x, SI (F.symbol x) Local WriteLocal Initialized t) | (x, t) <- safeZip "initCallableEnv" xs ts]
     arg   = single (argId (srcPos l) (fId l), mkArgumentsSI l ts)
     bnds  = envAdds [(s,t) | BTV s _ (Just t) <- bs] $ envBounds γ
     ctx   = pushContext i (envCtx γ)
@@ -182,14 +183,14 @@ initClassCtorEnv (TS _ (BGen nm bs) _) γ
       }
   &  tcEnvAdd ctorExit ctorExitVI
   where
-    ctorExitVI = SI Local Ambient Initialized exitTy
+    ctorExitVI = SI (F.symbol "exit") Local Ambient Initialized exitTy
     ctorExit = builtinOpId BICtorExit
     -- XXX: * Keep the right order of fields
     --      * Make the return object immutable to avoid contra-variance
     --        checks at the return from the constructor.
     exitTy   = mkFun (bs, xts, tThis)
-    xts      | Just (TObj _ ms _) <- expandType Coercive (envCHA γ) tThis
-             = sortBy c_sym [ B x t | (x, FI _ _ t) <- F.toListSEnv $ i_mems ms ]
+    xts      | Just (TObj ms _) <- expandType Coercive (envCHA γ) tThis
+             = sortBy c_sym [ B x t | (x, FI _ _ _ t) <- F.toListSEnv $ i_mems ms ]
              | otherwise
              = []
     c_sym    = on compare b_sym
@@ -217,8 +218,8 @@ tcEnvFindTyWithAgsn x γ | Just t <- envFindTy x $ tce_names γ
                         | otherwise
                         = Nothing
   where
-    adjustInit s@(SI _ _ Initialized _) = s
-    adjustInit (SI loc a _ t) = SI loc a Uninitialized $ orUndef t
+    adjustInit s@(SI _ _ _ Initialized _) = s
+    adjustInit (SI n loc a _ t) = SI n loc a Uninitialized $ orUndef t
 
 -- This is a variant of the above that doesn't add the ' + undefined' for
 -- non-initialized variables.

@@ -30,7 +30,7 @@ import           Text.PrettyPrint.HughesPJ
 
 
 instance PPR r => PP (SymInfo r) where
-  pp (SI l a i t) = brackets (intersperse comma [pp l, pp a, pp i]) <+> pp t
+  pp (SI n _ a _ t) = parens (pp a) <+> pp n <> colon <+> pp t
 
 instance PPR r => PP (SymList r) where
   pp = vcat . map pp . s_list

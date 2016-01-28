@@ -300,11 +300,11 @@ cgEnvAddFresh :: IsLocated l => String -> l -> RefType -> CGEnv -> CGM (Id AnnLq
 --------------------------------------------------------------------------------
 cgEnvAddFresh msg l t g
   = do x  <- freshId l
-       g' <- cgEnvAdds l ("cgEnvAddFresh: " ++ msg) [(x, v)] g
+       g' <- cgEnvAdds l ("cgEnvAddFresh: " ++ msg) [v x] g
        addAnnot l x t
        return (x, g')
   where
-    v = SI Local RdOnly Initialized t
+    v x = SI (F.symbol x) Local RdOnly Initialized t
 
 freshId a = Id <$> freshenAnn a <*> fresh
 
@@ -315,30 +315,36 @@ freshenAnn l
        return $ FA n (srcPos l) []
 
 --------------------------------------------------------------------------------
-cgEnvAdds :: (IsLocated l, EnvKey x) => l -> String -> [(x, CGEnvEntry)] -> CGEnv -> CGM CGEnv
+cgEnvAdds :: IsLocated l => l -> String -> [CGEnvEntry] -> CGEnv -> CGM CGEnv
 --------------------------------------------------------------------------------
 cgEnvAdds l msg xts g = foldM (envAddGroup l msg ks) g es
   where
     es = objFields g <$> xts
-    ks = F.symbol . fst <$> xts
+    ks = F.symbol    <$> xts
 
 --------------------------------------------------------------------------------
-envAddGroup :: IsLocated l => l -> String -> [F.Symbol] -> CGEnv
-            -> (F.Symbol, [(F.Symbol, CGEnvEntry)]) -> CGM CGEnv
+envAddGroup :: IsLocated l => l -> String -> [F.Symbol] -> CGEnv -> [CGEnvEntry] -> CGM CGEnv
 --------------------------------------------------------------------------------
-envAddGroup l msg ks g (x, xts)
-  = do  _           <- mapM_ cgError errors
-        es          <- L.zipWith4 SI ls as is <$> zipWithM inv is ts
+envAddGroup l msg ks g xts
+  = do  -- Flag any errors
+        _           <- mapM_ cgError errors
 
-        ids         <- toIBindEnv . catMaybes <$> zipWithM (addFixpointBind g) xs es
+        -- TODO: should the invariants be added here?
+        es          <- L.zipWith5 SI xs ls as is <$> zipWithM inv is ts
 
-        return       $ g { cge_names = envAdds (zip xs es) $ cge_names g
-                         , cge_fenv  = F.insertSEnv x ids  $ cge_fenv  g }
+        --
+        ids         <- {-toIBindEnv . -}catMaybes <$> mapM (addFixpointBind g) es
+
+        return       $ g { cge_names = envAdds (zip xs es)   $ cge_names g
+                         , cge_fenv  = F.insertsIBindEnv ids $ cge_fenv  g }
+                         -- , cge_fenv  = F.insertSEnv x ids  $ cge_fenv  g }
   where
     errors           = concat (zipWith (checkSyms l msg g ks) xs ts)
-    (xs,ls,as,is,ts) = L.unzip5 [(x,loc,a,i,t) | (x, SI loc a i t) <- xts ]
+    (xs,ls,as,is,ts) = L.unzip5 [(x,loc,a,i,t) | SI x loc a i t <- xts ]
+
     inv Initialized  = addInvariant g
     inv _            = return
+
     toIBindEnv       = (`F.insertsIBindEnv` F.emptyIBindEnv)
 
 -------------------------------------------------------------------------------
@@ -353,36 +359,36 @@ resolveTypeM l γ x
 
 -- | Bindings for IMMUTABLE fields
 --------------------------------------------------------------------------------
-objFields :: EnvKey x => CGEnv -> (x, CGEnvEntry) -> (F.Symbol, [(F.Symbol,CGEnvEntry)])
+objFields :: CGEnv -> CGEnvEntry -> [CGEnvEntry]
 --------------------------------------------------------------------------------
-objFields g (x, e@(SI loc a _ t))
-              | a `elem` [WriteGlobal,ReturnVar] = (x_sym, [(x_sym,e)])
-              | otherwise = (x_sym, (x_sym,e):xts)
+objFields g e@(SI x loc a _ t)
+  | a `elem` [ WriteGlobal, ReturnVar ] = [e]
+  | otherwise                           = e:xts
   where
-    x_sym     = F.symbol x
-    xts       = [(mkQualSym x f, vi f o ft) | (f, FI o Final ft) <- fs ]
+    xts | Just (TObj ms _) <- expandType Coercive (envCHA g) t
+        , fs <- F.toListSEnv (i_mems ms)
+        = [ mkSI f o ft | (_, FI f o Final ft) <- fs ]
+        | otherwise
+        = []
 
     -- This should remain as is: x.f bindings are not going to change
-    vi f Opt tf = SI loc a Initialized $ orUndef $ ty tf f
-    vi f Req tf = SI loc a Initialized $           ty tf f
+    mkSI f Opt tf = SI (mkQualSym x f) loc a Initialized $ ty tf f
+    mkSI f Req tf = SI (mkQualSym x f) loc a InitUnknown $ ty tf f
+
     -- v = offset(x,"f")
     ty t f = substThis x t `eSingleton` mkOffset x f
 
-    fs | Just (TObj _ ms _) <- expandType Coercive (envCHA g) t
-       = F.toListSEnv (i_mems ms)
-       | otherwise = []
-
 --------------------------------------------------------------------------------
-addFixpointBind :: EnvKey x => CGEnv -> x -> CGEnvEntry -> CGM (Maybe F.BindId)
+addFixpointBind :: CGEnv -> CGEnvEntry -> CGM (Maybe F.BindId)
 --------------------------------------------------------------------------------
 -- No binding for globals or RetVal: shouldn't appear in refinements
-addFixpointBind _ _ (SI _ WriteGlobal _ _) = return Nothing
-addFixpointBind _ _ (SI _ ReturnVar _ _) = return Nothing
-addFixpointBind g x (SI _ _ _ t)
+addFixpointBind _ (SI _ _ WriteGlobal _ _) = return Nothing
+addFixpointBind _ (SI _ _ ReturnVar   _ _) = return Nothing
+addFixpointBind g (SI x _ _           _ t)
   = do  bs           <- cg_binds <$> get
         t'           <- addInvariant g t
         let r         = rTypeSortedReft t'
-            (i, bs')  = F.insertBindEnv (F.symbol x) r bs
+            (i, bs')  = F.insertBindEnv x r bs
         modify        $ \st -> st { cg_binds = bs' }
         return        $ Just i
 
@@ -500,20 +506,20 @@ freshTyFun g l t
 --------------------------------------------------------------------------------
 freshenVI :: IsLocated l => CGEnv -> l -> SymInfo F.Reft -> CGM (SymInfo F.Reft)
 --------------------------------------------------------------------------------
-freshenVI _ _ v@(SI _ Ambient _ _)
+freshenVI _ _ v@(SI _ _ Ambient _ _)
   = return v
-freshenVI _ _ v@(SI Exported _ _ _)
+freshenVI _ _ v@(SI _ Exported _ _ _)
   = return v
-freshenVI g l v@(SI loc a@WriteGlobal i t)
+freshenVI g l v@(SI x loc a@WriteGlobal i t)
   | isTrivialRefType t
-  = freshTy "freshenVI" (toType t) >>= (SI loc a i <$>) . wellFormed l g
+  = freshTy "freshenVI" (toType t) >>= (SI x loc a i <$>) . wellFormed l g
   | otherwise
   = return v
-freshenVI g l v@(SI loc a i t)
+freshenVI g l v@(SI x loc a i t)
   | not (isTFun t)
   = return v
   | isTrivialRefType t
-  = freshTy "freshenVI" (toType t) >>= (SI loc a i <$>) . wellFormed l g
+  = freshTy "freshenVI" (toType t) >>= (SI x loc a i <$>) . wellFormed l g
   | otherwise
   = return v
 
@@ -559,9 +565,11 @@ freshTyPhis :: AnnLq -> CGEnv -> [Id AnnLq] -> [Type] -> CGM (CGEnv, [RefType])
 --------------------------------------------------------------------------------
 freshTyPhis l g xs τs
   = do ts <- mapM (freshTy "freshTyPhis") τs
-       g' <- cgEnvAdds l "freshTyPhis" (zip xs (SI Local WriteLocal Initialized <$> ts)) g
+       g' <- cgEnvAdds l "freshTyPhis" (zipWith si xs ts) g
        _  <- mapM (wellFormed l g') ts
        return (g', ts)
+  where
+    si x t = SI (F.symbol x) Local WriteLocal Initialized t
 
 
 -- | Instantiate Fresh Type (at Phi-site)
@@ -570,11 +578,11 @@ freshTyPhis' :: AnnLq -> CGEnv -> [Id AnnLq] -> [SymInfo ()] -> CGM (CGEnv, [Ref
 --------------------------------------------------------------------------------
 freshTyPhis' l g xs es
   = do  ts' <- mapM (freshTy "freshTyPhis") ts
-        g'  <- cgEnvAdds l "freshTyPhis" (zip xs (L.zipWith4 SI ls as is ts')) g
+        g'  <- cgEnvAdds l "freshTyPhis" (L.zipWith5 SI xs ls as is ts') g
         _   <- mapM (wellFormed l g') ts'
         return (g', ts')
   where
-    (ls,as,is,ts) = L.unzip4 [ (l,a,i,t) | SI l a i t <- es ]
+    (xs,ls,as,is,ts) = L.unzip5 [ (F.symbol x,l,a,i,t) | SI x l a i t <- es ]
 
 -- | Instantiate Fresh Type at conditional expression
 --------------------------------------------------------------------------------
@@ -602,8 +610,8 @@ freshenCGEnvM g@(CGE { cge_names = nms, cge_cha = CHA gr n m })
         return $ g { cge_names = nms'
                    , cge_cha   = cha' }
   where
-    go (x, SI loc a i v@TVar{}) = return (x, SI loc a i v)
-    go (x, v) = (x,) <$> freshenVI g (srcPos x) v
+    go (k, SI x loc a i v@TVar{}) = return (k, SI x loc a i v)
+    go (k, v                    ) = (k,) <$> freshenVI g (srcPos k) v
 
 --------------------------------------------------------------------------------
 freshenModuleDefM :: CGEnv -> (AbsPath, ModuleDef F.Reft) -> CGM (AbsPath, ModuleDef F.Reft)
@@ -664,10 +672,10 @@ instance F.Subable a => F.Subable (Env a) where
   syms x   = concat [ F.syms (F.symbol x) ++ F.syms t | (x, t) <- envToList x ]
 
 instance (PP r, F.Reftable r, F.Subable r) => F.Subable (SymInfo r) where
-  substa f (SI l a i t) = SI l a i $ F.substa f t
-  substf f (SI l a i t) = SI l a i $ F.substf f t
-  subst su (SI l a i t) = SI l a i $ F.subst su t
-  syms     (SI l a i t) = F.syms t
+  substa f (SI x l a i t) = SI x l a i $ F.substa f t
+  substf f (SI x l a i t) = SI x l a i $ F.substf f t
+  subst su (SI x l a i t) = SI x l a i $ F.subst su t
+  syms     (SI x l a i t) = F.syms t
 
 
 -- errorLiquid l g t1 t2         = mkErr k $ printf "Liquid Type Error" where k = srcPos l
@@ -923,13 +931,13 @@ splitC (Sub g i t1@(TPrim c1 _) t2@(TPrim c2 r2))
 --
 --    TODO: case for Unique
 --
-splitC (Sub g i@(Ci _ l) t1@(TObj m1 ms1 r1) t2@(TObj m2 ms2 _))
+splitC (Sub g i@(Ci _ l) t1@(TObj ms1 r1) t2@(TObj ms2 _))
   | F.isFalse (F.simplify r1)
   = return []
   | otherwise
   = do  cs     <- bsplitC g i t1 t2
         (x,g') <- cgEnvAddFresh "" l t1 g
-        cs'    <- splitTM g' (F.symbol x) i (m1, ms1) (m2, ms2)
+        cs'    <- splitTM g' (F.symbol x) i ms1 ms2
         return $ cs ++ cs'
 
 splitC (Sub g i t1 t2)
@@ -953,11 +961,10 @@ mkBot t = t `strengthen` F.bot (rTypeR t)
 -- TODO: add symbol x in env
 --------------------------------------------------------------------------------
 splitTM :: CGEnv -> F.Symbol -> Cinfo
-        -> (Mutability, TypeMembers F.Reft) -> (Mutability, TypeMembers F.Reft)
-        -> CGM [FixSubC]
+        -> (TypeMembers F.Reft) -> (TypeMembers F.Reft) -> CGM [FixSubC]
 --------------------------------------------------------------------------------
-splitTM g x c (m1, TM p1 sp1 c1 k1 s1 n1) (m2, TM p2 sp2 c2 k2 s2 n2)
-  = concatMapM (splitElt g c m1 m2 ) (ms ++ sms) +++
+splitTM g x c (TM p1 sp1 c1 k1 s1 n1) (TM p2 sp2 c2 k2 s2 n2)
+  = concatMapM (splitElt g c) (ms ++ sms) +++
     concatMapM splitT (cs ++ ks ++ ss ++ ns)
   where
     (+++) = liftM2 (++)
@@ -970,16 +977,14 @@ splitTM g x c (m1, TM p1 sp1 c1 k1 s1 n1) (m2, TM p2 sp2 c2 k2 s2 n2)
     splitT (t1,t2) = splitC (Sub g c t1 t2)
 
 --------------------------------------------------------------------------------
-splitElt :: CGEnv -> Cinfo -> Mutability -> Mutability
-         -> (t, (TypeMember F.Reft, TypeMember F.Reft)) -> CGM [FixSubC]
+splitElt :: CGEnv -> Cinfo -> (t, (TypeMember F.Reft, TypeMember F.Reft)) -> CGM [FixSubC]
 --------------------------------------------------------------------------------
-splitElt g i m1 _ (_, (FI _ p1 t1, FI _ p2 t2))
-  | isUQ    m1 = splitC (Sub g i t1 t2)
+splitElt g i (_, (FI _ _ p1 t1, FI _ _ p2 t2))
   | isFinal p2 = splitC (Sub g i t1 t2)
   | otherwise  = (++) <$> splitC (Sub g i t1 t2)
                       <*> splitC (Sub g i t2 t1)
 
-splitElt g i _ _ (_, (m, m'))
+splitElt g i (_, (m, m'))
   = cgError $ unsupportedSplitElt (srcPos i) m m'
 
 
@@ -1007,8 +1012,9 @@ bsplitC' g ci t1 t2
   | otherwise
   = []
   where
-    bs             = foldl F.unionIBindEnv F.emptyIBindEnv
-                   $ snd <$> F.toListSEnv (cge_fenv g)
+    bs             = cge_fenv g
+                   --   foldl F.unionIBindEnv F.emptyIBindEnv
+                   -- $ snd <$> F.toListSEnv (cge_fenv g)
     p              = F.pAnd $ cge_guards g
     (r1,r2)        = (rTypeSortedReft t1, rTypeSortedReft t2)
     typeofReft t   = F.reft (vv t) $ F.pAnd [ typeofExpr (F.symbol "function") t
@@ -1073,7 +1079,7 @@ splitW (W g i t@(TOr ts r))
        ws'   <- concatMapM splitW [W g i t | t <- ts]
        return $ ws ++ ws'
 
-splitW (W g i t@(TObj _ ms _))
+splitW (W g i t@(TObj ms _))
   = do let bws = bsplitW g t i
        -- TODO: add field bindings in g?
        ws     <- concatMapM splitW [ W g i t' | t' <- typesOfTM ms ]
@@ -1104,17 +1110,15 @@ bsplitW g t i
   = []
   where
     r' = rTypeSortedReft t
-    bs = foldl F.unionIBindEnv F.emptyIBindEnv
-       $ snd <$> F.toListSEnv (cge_fenv g)
+    bs = cge_fenv g
+          -- foldl F.unionIBindEnv F.emptyIBindEnv $ snd <$> F.toListSEnv (cge_fenv g)
 
 
 
-envTyAdds msg l xts g
-  = cgEnvAdds l (msg ++ " - envTyAdds " ++ ppshow (srcPos l))
-      [(symbolId l x, SI Local WriteLocal Initialized t) | B x t <- xts] g
-    where
-      symbolId l x = Id l $ symbolString $ F.symbol x
-
+envTyAdds msg l xts g = cgEnvAdds l msg' sis g
+  where
+    sis  = [ SI x Local WriteLocal Initialized t | B x t <- xts ]
+    msg' = msg ++ " - envTyAdds " ++ ppshow (srcPos l)
 
 
 --------------------------------------------------------------------------------
@@ -1165,8 +1169,8 @@ unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
 --------------------------------------------------------------------------------
 unqualifyThis g t = F.subst $ F.mkSubst fieldSu
   where
-    fieldSu | Just (TObj _ fs _) <- expandType Coercive (envCHA g) t
-            = [ subPair f | (f, FI _ Final _) <- F.toListSEnv $ i_mems fs ]
+    fieldSu | Just (TObj fs _) <- expandType Coercive (envCHA g) t
+            = [ subPair f | (f, FI _ _ Final _) <- F.toListSEnv $ i_mems fs ]
             | otherwise
             = []
     this      = F.symbol $ builtinOpId BIThis

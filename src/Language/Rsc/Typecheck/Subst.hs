@@ -79,7 +79,7 @@ instance Free (RType r) where
   free (TOr ts _)           = free ts
   free (TAnd ts)            = free $ snd <$> ts
   free (TRef n _)           = free n
-  free (TObj m es _)        = free m `mappend` free es
+  free (TObj es _)          = free es
   free (TClass t)           = free t
   free (TMod _)             = S.empty
   free (TAll α t)           = S.delete (btvToTV α) $ free t
@@ -98,8 +98,8 @@ instance Free t => Free (F.SEnv t) where
   free                      = free . map snd . F.toListSEnv
 
 instance Free (TypeMember r) where
-  free (FI _ _ t)           = free t
-  free (MI _ mts)           = free $ map snd mts
+  free (FI _ _ _ t)           = free t
+  free (MI _ _ mts)           = free $ map snd mts
 
 instance Free a => Free [a] where
   free                      = S.unions . map free
@@ -178,8 +178,8 @@ instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   apply _ a                    = a
 
 instance F.Reftable r => SubstitutableQ q r (TypeMemberQ q r) where
-  apply θ (FI ms m t)       = FI ms m (apply θ t)
-  apply θ (MI o mts)        = MI o (mapSnd (apply θ) <$> mts)
+  apply θ (FI s ms m t)       = FI s ms m (apply θ t)
+  apply θ (MI s o mts)        = MI s o (mapSnd (apply θ) <$> mts)
 
 instance SubstitutableQ q r a => SubstitutableQ q r (Maybe a) where
   apply θ (Just a)          = Just $ apply θ a
@@ -251,7 +251,7 @@ appTy (Su m) t@(TVar α r)    = (HM.lookupDefault t α m) `strengthen` r
 appTy θ        (TOr ts r)    = TOr (apply θ ts) r
 appTy θ        (TAnd ts)     = TAnd (mapSnd (apply θ) <$> ts)
 appTy θ        (TRef n r)    = TRef (apply θ n) r
-appTy θ        (TObj m es r) = TObj (apply θ m) (apply θ es) r
+appTy θ        (TObj es r)   = TObj (apply θ es) r
 appTy θ        (TClass t)    = TClass (apply θ t)
 appTy _        (TMod n)      = TMod n
 appTy (Su m)   (TAll α t)    = TAll α $ apply (Su $ HM.delete (btvToTV α) m) t
@@ -271,8 +271,8 @@ instance (F.Reftable r) => Eq (TypeMembers r) where
     m == m' && sm == sm' && c == c' && k == k' && s == s' && n == n'
 
 instance (F.Reftable r) => Eq (TypeMember r) where
-  FI k t1 t2 == FI k' t1' t2' = k == k' && t1 == t1' && t2 == t2'
-  MI k mts   == MI k' mts'    = k == k' && mts == mts'
+  FI n o a t == FI n' o' a' t' = n == n' && o == o' && a == a' && t == t'
+  MI m k mt  == MI m' k' mt'   = m == m' && k == k' && mt == mt'
 
 instance (F.Reftable r) => Eq (Bind r) where
   B x t == B x' t' = x == x' && t == t'
@@ -289,7 +289,7 @@ instance (F.Reftable r) => Eq (RType r) where
   TOr ts _     == TOr ts' _     = ts == ts'
   TAnd ts      == TAnd ts'      = ts == ts'
   TRef g _     == TRef g' _     = g == g'
-  TObj m ms _  == TObj m' ms' _ = m == m && ms == ms'
+  TObj ms _    == TObj ms' _    = ms == ms'
   TClass g     == TClass g'     = g == g'
   TMod n       == TMod n'       = n == n'
   TAll v@(BTV _ b _) t == TAll v'@(BTV _ b' _) t'

@@ -88,10 +88,9 @@ unify l γ θ (TClass (BGen n1 b1s)) (TClass (BGen n2 b2s))
 -- "Object"-ify types that can be expanded to an object literal type
 unify l γ θ t1 t2
   | all maybeTObj [t1,t2]
-  , Just (TObj m1 ms1 _) <- expandType NonCoercive (envCHA γ) t1
-  , Just (TObj m2 ms2 _) <- expandType NonCoercive (envCHA γ) t2
-  = do  θ1 <- unify l γ θ m1 m2
-        unifyMembers l γ θ1 ms1 ms2
+  , Just (TObj ms1 _) <- expandType NonCoercive (envCHA γ) t1
+  , Just (TObj ms2 _) <- expandType NonCoercive (envCHA γ) t2
+  = unifyMembers l γ θ ms1 ms2
 
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ
@@ -135,7 +134,7 @@ unifyUnions l γ θ t1 t2
     match (TPrim p1 _)          (TPrim p2 _)        = p1 == p2
     match (TVar v1 _)           (TVar v2 _)         = v1 == v2
     match (TRef (Gen n1 _) _)   (TRef (Gen n2 _) _) = n1 == n2
-    match (TObj _ _ _ )         (TObj _ _ _)        = True
+    match (TObj _ _ )           (TObj _ _)          = True
     match (TClass b1)           (TClass b2)         = b1 == b2
     match (TMod m1)             (TMod m2)           = m1 == m2
     match (TFun _ _ _)          (TFun _ _ _)        = True
@@ -156,8 +155,8 @@ unifyMembers l γ θ (TM m1 _ c1 k1 s1 n1) (TM m2 _ c2 k2 s2 n2)
   where
     (m1s , m2s) = unzip $ concatMap merge $ F.toListSEnv $ F.intersectWithSEnv (,) m1 m2
 
-    merge (_, (FI _ _ t, FI _ _ t')) = [(t, t')]
-    merge (_, (MI _ mts, MI _ mts')) = map snd mts `zip` map snd mts'
+    merge (_, (FI _ _ _ t, FI _ _ _ t')) = [(t, t')]
+    merge (_, (MI _ _ mts, MI _ _ mts')) = map snd mts `zip` map snd mts'
     merge _ = []
     fromBoth (Just a1, Just a2)  = [(a1,a2)]
     fromBoth _                   = []

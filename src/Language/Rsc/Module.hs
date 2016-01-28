@@ -117,7 +117,7 @@ moduleEnv (Rsc { code = Src stmts }) =
     vStmt _ (VarDeclStmt _ vds)
       = [ ( ss x
           , VarDeclKind
-          , SI loc a Uninitialized t
+          , SI (sym x) loc a Uninitialized t
           )
           | VarDecl l x _ <- vds
           , VarAnn loc a (Just t) <- fFact l
@@ -125,14 +125,14 @@ moduleEnv (Rsc { code = Src stmts }) =
     vStmt _ (FunctionStmt l x _ _)
       = [ ( ss x
           , FuncDeclKind
-          , SI loc Ambient Initialized t
+          , SI (sym x) loc Ambient Initialized t
           )
           | SigAnn loc t <- fFact l
         ]
     vStmt _ (ClassStmt l x _)
       = [ ( ss x
           , ClassDeclKind
-          , SI loc Ambient Initialized (TClass b)
+          , SI (sym x) loc Ambient Initialized (TClass b)
           )
           | ClassAnn loc (TS _ b _) <- fFact l
         ]
@@ -140,12 +140,12 @@ moduleEnv (Rsc { code = Src stmts }) =
     vStmt p (ModuleStmt l x _)
       = [ ( ss x
           , ModuleDeclKind
-          , SI Local Ambient Initialized (TMod (pathInPath l p x)))
+          , SI (sym x) Local Ambient Initialized (TMod (pathInPath l p x)))
         ]
     vStmt p (EnumStmt _ x _)
       = [ ( ss x
           , EnumDeclKind
-          , SI Local Ambient Initialized (TRef (Gen (QN p $ F.symbol x) []) fTop))
+          , SI (sym x) Local Ambient Initialized (TRef (Gen (QN p $ F.symbol x) []) fTop))
         ]
     vStmt _ _ = []
 
@@ -165,7 +165,8 @@ moduleEnv (Rsc { code = Src stmts }) =
     eStmt _                  = []
     sEnumElt (EnumElt _ s e) = (F.symbol s, void e)
 
-    ss                       = fmap fSrc
+    ss  = fmap fSrc
+    sym = F.symbol
 
 --------------------------------------------------------------------------------
 toDeclaration :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)

@@ -167,7 +167,7 @@ rTypeSort (TPrim c _)         = rTypeSortPrim c
 rTypeSort (TOr ts _)          = F.fAppTC (rawStringFTycon unionName ) []
 rTypeSort (TAnd ts)           = F.fAppTC (rawStringFTycon intersName) []
 rTypeSort (TRef (Gen n ts) _) = F.fAppTC (rawSymbolFTycon (F.symbol n)) (rTypeSort <$> ts)
-rTypeSort (TObj _ _ _ )       = F.fAppTC (rawStringFTycon objectName) []
+rTypeSort (TObj _ _ )         = F.fAppTC (rawStringFTycon objectName) []
 rTypeSort (TClass _)          = F.fAppTC (rawStringFTycon className ) []
 rTypeSort (TMod _)            = F.fAppTC (rawStringFTycon moduleName) []
 rTypeSort t                   = error $ render $ text "BUG: Unsupported in rTypeSort"
@@ -200,7 +200,7 @@ stripRTypeBase (TPrim _ r)  = Just r
 stripRTypeBase (TRef _ r)   = Just r
 stripRTypeBase (TVar _ r)   = Just r
 stripRTypeBase (TFun _ _ r) = Just r
-stripRTypeBase (TObj _ _ r) = Just r
+stripRTypeBase (TObj _ r)   = Just r
 stripRTypeBase (TOr _ r)    = Just r
 stripRTypeBase _            = Nothing
 
@@ -385,7 +385,7 @@ wrapParens x  = "(" `mappend` x `mappend` ")"
 -------------------------------------------------------------------------------
 mkQualSym :: (F.Symbolic x, F.Symbolic f) => x -> f -> F.Symbol
 -------------------------------------------------------------------------------
-mkQualSym    x f = qualifySymbol (F.symbol x) (F.symbol f)
+mkQualSym x f = F.symbol x `qualifySymbol` F.symbol f
 
 -------------------------------------------------------------------------------
 -- mkOffset :: (F.Symbolic f, F.Expression x) => x -> f -> F.Expr

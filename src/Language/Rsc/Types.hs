@@ -70,9 +70,7 @@ data RTypeQ q r =
   --
   -- Object
   --
-  --  The mutability modifier is meant to be internal (default: Immutable)
-  --
-  | TObj (MutabilityQ q r) (TypeMembersQ q r) r
+  | TObj (TypeMembersQ q r) r
   --
   -- Class / Enum
   --
@@ -120,16 +118,27 @@ data TypeMembersQ q r = TM { i_mems  :: F.SEnv (TypeMemberQ q r)      -- Instanc
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data TypeMemberQ q r  = FI                                            -- Field Members
-                           { f_opt :: Optionality                       -- Optional
-                           , f_asg :: FieldAsgn                         -- Assignability
-                           , f_ty  :: RTypeQ q r                        -- Type
+                           { f_name :: F.Symbol                         -- Name
+                           , f_opt  :: Optionality                      -- Optional
+                           , f_asg  :: FieldAsgn                        -- Assignability
+                           , f_ty   :: RTypeQ q r                       -- Type
                            }
                       | MI                                            -- Method Members
-                           { m_opt :: Optionality                       -- Optional
-                           , m_ty  :: [(MutabilityQ q r, RTypeQ q r)]   -- [(Mutability, Type)]
+                           { m_name :: F.Symbol                          -- Name
+                           , m_opt  :: Optionality                       -- Optional
+                           , m_ty   :: [(MutabilityQ q r, RTypeQ q r)]   -- [(Mutability, Type)]
                            }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
+instance F.Symbolic (TypeMemberQ q r) where
+  symbol (FI n _ _ _ ) = n
+  symbol (MI n _ _   ) = n
+
+
+-- | Field assignability:
+--
+--   * Object literal types are only intended to have the first two kinds
+--
 data FieldAsgn        = Assignable | Final | Inherited
                         deriving (Data, Typeable, Eq)
 
@@ -246,6 +255,10 @@ data Initialization =
   -- Variable uninitialized (undefined)
   --
   | Uninitialized
+  --
+  -- Unknown status
+  --
+  | InitUnknown
   deriving (Show, Eq, Data, Typeable)
 
 
@@ -330,9 +343,10 @@ instance Monoid (TypeMembersQ q r) where
       Nothing `orElse` y = y
 
 instance Monoid Initialization where
-  mempty                              = Uninitialized
-  Initialized `mappend` Initialized   = Initialized
-  _           `mappend` _             = Uninitialized
+  mempty                                = InitUnknown
+  Initialized   `mappend` Initialized   = Initialized
+  Uninitialized `mappend` Uninitialized = Uninitialized
+  _             `mappend` _             = InitUnknown
 
 
 --------------------------------------------------------------------------------

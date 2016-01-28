@@ -329,14 +329,9 @@ boundTypeP c
 argBind :: RRType -> BindQ RK F.Reft
 argBind t = B (rTypeValueVar t) t
 
-tObjP c = TObj (ambientMutability c) <$> typeBodyP c
-
-ambientMutability c
-  | Just b <- pctx_mut c = TVar (btvToTV b) fTop
-  | otherwise            = trIM
-
-tRefP   c = TRef     <$> tGenP c
-tGenP   c = Gen      <$> qnameP <*> bareTyArgsP c
+tObjP c = TObj <$> typeBodyP c
+tRefP c = TRef <$> tGenP c
+tGenP c = Gen  <$> qnameP <*> bareTyArgsP c
 
 bareTyArgsP c
   =  try (brackets argsP)
@@ -423,12 +418,12 @@ eltKindsToTypeMembers eks = mkTypeMembers
     (catMaybes (map ek2si eks))
     (catMaybes (map ek2ni eks))
   where
-    ek2itm (Prop f InstanceK o m t) = Just (f, FI o m t)
-    ek2itm (Meth n InstanceK o m t) = Just (n, MI o [(m,t)])
+    ek2itm (Prop f InstanceK o m t) = Just (f, FI f o m t)
+    ek2itm (Meth n InstanceK o m t) = Just (n, MI n o [(m,t)])
     ek2itm _                        = Nothing
 
-    ek2stm (Prop f StaticK   o m t) = Just (f, FI o m t)
-    ek2stm (Meth n StaticK   o m t) = Just (n, MI o [(m,t)])
+    ek2stm (Prop f StaticK   o m t) = Just (f, FI f o m t)
+    ek2stm (Meth n StaticK   o m t) = Just (n, MI n o [(m,t)])
     ek2stm _                        = Nothing
 
     ek2cl (Call t)                  = Just t

@@ -63,8 +63,8 @@ scrapeQuals qs = (qs ++) . qualifiers . mkUq . foldStmts tbv [] . filter nonLibF
     gos _ _                      = []
 
     goe _ (Constructor l _ _)        = [(x, t) | CtorAnn  t <- fFact l, let x = Id l "ctor" ]
-    goe _ (MemberVarDecl l _ x _)    = [(x, t) | MemberAnn (T.FI _ _ t) <- fFact l ]
-    goe _ (MemberMethDecl l _ x _ _) = [(x, t) | MemberAnn (T.MI _ mts) <- fFact l, (_, t) <- mts ]
+    goe _ (MemberVarDecl l _ x _)    = [(x, t) | MemberAnn (T.FI _ _ _ t) <- fFact l ]
+    goe _ (MemberMethDecl l _ x _ _) = [(x, t) | MemberAnn (T.MI _ _ mts) <- fFact l, (_, t) <- mts ]
 
 nonLibFile :: IsLocated a => Statement a -> Bool
 nonLibFile = not . isSuffixOf ".d.ts" . srcSpanFile

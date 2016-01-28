@@ -171,7 +171,7 @@ typeMembersOfType :: (ExprReftable Int r, PPR r) => ClassHierarchy r -> RType r 
 typeMemersOfTDecl :: PPR r => ClassHierarchy r -> TypeDecl r -> TypeMembers r
 --------------------------------------------------------------------------------
 typeMembersOfType cha t
-  | Just (TObj _ ms _) <- expandType Coercive cha t
+  | Just (TObj ms _) <- expandType Coercive cha t
   = ms
   | otherwise
   = mempty
@@ -200,28 +200,30 @@ data CoercionKind = Coercive | NonCoercive
 expandType :: (ExprReftable Int r, PPR r)
            => CoercionKind -> ClassHierarchy r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
-expandType _ _ t@(TObj _ _ _) = Just t
+expandType _ _ t@(TObj _ _) = Just t
 
 -- | Enumeration
 --
 expandType _ cha (TRef (Gen n []) _)
   | Just e <- resolveEnum cha n
-  = Just $ TObj tIM (ms e) fTop
+  = Just $ TObj (ms e) fTop
   where
     ms  = typeMembersFromList . concatMap mkField . envToList . e_mapping
     -- TODO
-    mkField (k, IntLit _ i) = [(k, FI Req Final (tNum `strengthen` exprReft i))]
+    mkField (k, IntLit _ i) = [FI (F.symbol k) Req Final (tNum `strengthen` exprReft i)]
     mkField (k, HexLit _ s) | Just e <- bitVectorValue s
-                            = [(k, FI Req Final (tBV32 `strengthen` e))]
+                            = [FI (F.symbol k) Req Final (tBV32 `strengthen` e)]
     mkField _               = []
 
 expandType _ _ t@(TRef _ _) | mutRelated t = Nothing
 
 -- | Type Reference
 --
+--  TODO: revisit !!!
+--
 expandType _ cha t@(TRef (Gen n ts@(mut:_)) r)
-  | isClassType cha t = (\m -> TObj mut m r) . fltInst <$> ms
-  | otherwise         = (\m -> TObj mut m r)           <$> ms
+  | isClassType cha t = (\m -> TObj m r) . fltInst <$> ms
+  | otherwise         = (\m -> TObj m r)           <$> ms
   where
     ms      =  expandWithSubst cha
            <$> resolveType cha n
@@ -231,21 +233,21 @@ expandType _ cha t@(TRef (Gen n ts@(mut:_)) r)
 -- | Ambient type: String, Number, etc.
 --
 expandType _ cha t@(TRef (Gen n []) r)
-  | isClassType cha t = (\m -> TObj tIM m r) . fltInst <$> ms
-  | otherwise         = (\m -> TObj tIM m r)           <$> ms
+  | isClassType cha t = (\m -> TObj m r) . fltInst <$> ms
+  | otherwise         = (\m -> TObj m r)           <$> ms
   where
     ms = typeMemersOfTDecl cha <$> resolveType cha n
     fltInst (TM m _ _ _ s n) = TM m mempty Nothing Nothing s n
 
 expandType _ cha (TClass (BGen n ts))
-  = (\m -> TObj tIM m fTop) . fltStat <$> ms
+  = (\m -> TObj m fTop) . fltStat <$> ms
   where
     ms  = expandWithSubst cha <$> resolveType cha n <*> return ts'
     ts' = [ tVar $ TV x s | BTV x s _ <- ts ] -- these shouldn't matter anyway
     fltStat (TM _ m c k _ _) = TM mempty m c k Nothing Nothing
 
 expandType _ cha (TMod n)
-  = (\m -> TObj tUQ m fTop) <$> typeMembers
+  = (\m -> TObj m fTop) <$> typeMembers
                              .  fmap (symToField . val)
                              .  m_variables
                             <$> resolveModule cha n
@@ -255,11 +257,11 @@ expandType _ cha (TMod n)
 expandType NonCoercive _ _ = Nothing
 
 expandType _ cha (TPrim TNumber _)
-  = (\m -> TObj tIM m fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha numberInterface)
+  = (\m -> TObj m fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha numberInterface)
 expandType _ cha (TPrim TString _)
-  = (\m -> TObj tIM m fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha stringInterface)
+  = (\m -> TObj m fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha stringInterface)
 expandType _ cha (TPrim TBoolean _)
-  = (\m -> TObj tIM m fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha booleanInterface)
+  = (\m -> TObj m fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha booleanInterface)
 
 expandType _ _ t  = Just t
 
@@ -354,15 +356,15 @@ boundKeys :: (ExprReftable Int r, PPR r)
 --------------------------------------------------------------------------------
 boundKeys cha t@(TRef _ _) | Just t <- expandType Coercive cha t = boundKeys cha t
                            | otherwise                         = []
-boundKeys _ (TObj _ es _)  = fst <$> F.toListSEnv (i_mems es)
+boundKeys _ (TObj es _)    = fst <$> F.toListSEnv (i_mems es)
 boundKeys _ _              = []
 
 --------------------------------------------------------------------------------
 immFields :: (ExprReftable Int r, PPR r)
           => ClassHierarchy r -> RType r -> [(F.Symbol, RType r)]
 --------------------------------------------------------------------------------
-immFields cha t | Just (TObj _ es _) <- expandType Coercive cha t
-                = [ (x, t) | (x, FI _ Final t) <- F.toListSEnv $ i_mems es ]
+immFields cha t | Just (TObj es _) <- expandType Coercive cha t
+                = [ (x, t) | (x, FI _ _ Final t) <- F.toListSEnv $ i_mems es ]
                 | otherwise
                 = []
 
@@ -390,8 +392,12 @@ getSuperType cha (TRef (Gen nm ts) _)
 getMutability :: (PP r, ExprReftable Int r, F.Reftable r)
               => ClassHierarchy r -> RType r -> Maybe (MutabilityQ AK r)
 --------------------------------------------------------------------------------
-getMutability cha t | Just (TObj m _ _) <- expandType Coercive cha t
-                    = Just m
-                    | otherwise
-                    = Nothing
+getMutability _ (TRef (Gen _ (m:_)) _) = Just m
+getMutability _ _ = Nothing
+
+
+-- getMutability cha t | Just (TObj m _ _) <- expandType Coercive cha t
+--                     = Just m
+--                     | otherwise
+--                     = Nothing
 

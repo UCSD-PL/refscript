@@ -145,7 +145,7 @@ phiVarsAnnot l = concat [xs | PhiVar xs <- fFact l]
 scrapeVarDecl :: VarDecl (AnnSSA r) -> [(Locality, SyntaxKind, Assignability, Maybe (RType r))]
 ----------------------------------------------------------------------------------
 scrapeVarDecl (VarDecl l _ _)
-  = [ (loc, VarDeclKind, a, t)                | VarAnn loc a t       <- fFact l ]
- ++ [ (Local, FieldDeclKind, Ambient, Just t) | MemberAnn (FI _ _ t) <- fFact l ]
+  = [ (loc, VarDeclKind, a, t)                | VarAnn loc a t         <- fFact l ]
+ ++ [ (Local, FieldDeclKind, Ambient, Just t) | MemberAnn (FI _ _ _ t) <- fFact l ]
  -- PV: Assignability & Locality values are default for the field case
 

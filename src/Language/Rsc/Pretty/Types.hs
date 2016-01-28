@@ -57,7 +57,7 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
                      :      [text "+"   <+> pp t | t <- tail ts]
   pp (TAnd ts)       = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TRef t r)      = F.ppTy r (pp t)
-  pp (TObj _ ms r)   = F.ppTy r $ braces $ pp ms
+  pp (TObj ms r)     = F.ppTy r $ braces $ pp ms
   pp (TClass t)      = text "class" <+> pp t
   pp (TMod t)        = text "module" <+> pp t
   pp t@(TAll _ _)    = ppArgs angles comma αs <> pp t' where (αs, t') = bkAll t
@@ -73,8 +73,8 @@ instance (F.Reftable r, PP r) => PP (TypeMembersQ q r) where
       ppSIdx sidx $+$
       ppNIdx nidx
 
-ppMem  = sep . map (\(x, f) ->                 ppElt x f <> semi) . F.toListSEnv
-ppSMem = sep . map (\(x, f) -> pp "static" <+> ppElt x f <> semi) . F.toListSEnv
+ppMem  = sep . map (\(x, f) ->                 pp f <> semi) . F.toListSEnv
+ppSMem = sep . map (\(x, f) -> pp "static" <+> pp f <> semi) . F.toListSEnv
 
 ppCall optT | Just t <- optT = pp t              <> semi | otherwise = empty
 ppCtor optT | Just t <- optT = pp "new" <+> pp t <> semi | otherwise = empty
@@ -85,11 +85,8 @@ ppNIdx (Just t) = pp "[x: number]:" <+> pp t <> semi
 ppNIdx _        = empty
 
 instance PPR r => PP (TypeMemberQ q r) where
-  pp (FI o _ t) = pp o <> colon <+> pp t
-  pp (MI o mts) = pp o <> vcat (map (\(m,t) -> brackets (pp m) <> pp t) mts)
-
-ppElt x (FI o m t) = pp m <+> pp x <> pp o <> colon <+> pp t
-ppElt x (MI o mts) = vcat (map (\(m,t) -> text "@" <> pp m <+> pp x <> pp o <> pp t) mts)
+  pp (FI s o m t) = pp m <+> pp s <> pp o <> colon <+> pp t
+  pp (MI s o mts) = vcat (map (\(m,t) -> pp m <+> pp s <> pp o <> pp t) mts)
 
 instance PP FieldAsgn where
   pp Assignable = pp "@Assignable"

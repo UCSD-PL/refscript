@@ -37,7 +37,7 @@ data CGEnvR r = CGE {
   , cge_ctx    :: !IContext
   , cge_path   :: !AbsPath
   , cge_cha    :: !(ClassHierarchy r)
-  , cge_fenv   :: !(F.SEnv F.IBindEnv)          -- Fixpoint bindings - XXX: Why not in monad? Remove?
+  , cge_fenv   :: !({-F.SEnv-} F.IBindEnv)          -- Fixpoint bindings - XXX: Why not in monad? Remove?
   , cge_guards :: ![F.Pred]                     -- Branch target conditions
   , cge_consts :: !(Env (RType r))              -- Constants
   , cge_mut    :: !(Maybe (MutabilityR r))      -- Method mutability
@@ -69,8 +69,8 @@ envFindTyWithAsgn :: (EnvKey x, F.Expression x) => x -> CGEnv -> Maybe CGEnvEntr
 ---------------------------------------------------------------------------------------
 envFindTyWithAsgn x (envNames -> γ) = fmap singleton (envFindTy x γ)
   where
-    singleton v@(SI _ WriteGlobal Initialized   _) = v
-    singleton v@(SI _ WriteGlobal Uninitialized t) = v { v_type = orUndef t }
+    singleton v@(SI _ _ WriteGlobal Initialized   _) = v
+    singleton v@(SI _ _ WriteGlobal Uninitialized t) = v { v_type = orUndef t }
     singleton v = v { v_type = eSingleton (v_type v) x }
 
 ---------------------------------------------------------------------------------------
@@ -120,7 +120,7 @@ checkSyms l m g ok x t = efoldRType h f F.emptySEnv [] t
                = Nothing
                | s `elem` biExtra
                = Nothing
-               | Just (SI _ a _ _) <- chkEnvFindTy' s g
+               | Just (SI _ _ a _ _) <- chkEnvFindTy' s g
                = if a `elem` validAsgn
                    then Nothing
                    else Just $ errorAsgnInRef l s t a

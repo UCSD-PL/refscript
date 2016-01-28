@@ -96,15 +96,15 @@ instance Transformable BTVarQ where
   trans f αs xs (BTV x l c) = BTV x l $ trans f αs xs <$> c
 
 instance Transformable TypeMemberQ where
-  trans f αs xs (FI o a t') = FI o a (trans f αs xs t')
-  trans f αs xs (MI o mts) = MI o (mapSnd (trans f αs xs) <$> mts)
+  trans f αs xs (FI n o a t') = FI n o a (trans f αs xs t')
+  trans f αs xs (MI n o mts)  = MI n o (mapSnd (trans f αs xs) <$> mts)
 
 instance Transformable ModuleDefQ where
   trans f αs xs (ModuleDef v t e p)
     = ModuleDef (envMap (trans f αs xs) v) (envMap (trans f αs xs) t) e p
 
 instance Transformable SymInfoQ where
-  trans f αs xs (SI l a i t) = SI l a i $ trans f αs xs t
+  trans f αs xs (SI x l a i t) = SI x l a i $ trans f αs xs t
 
 instance Transformable FAnnQ where
   trans f αs xs (FA i s ys) = FA i s $ trans f αs xs <$> ys
@@ -148,8 +148,7 @@ transRType f               = go
     go αs xs (TOr ts r)    = f αs xs $ TOr ts' r     where ts' = go αs xs <$> ts
     go αs xs (TAnd ts)     = f αs xs $ TAnd ts'      where ts' = mapSnd (go αs xs) <$> ts
     go αs xs (TRef n r)    = f αs xs $ TRef n' r     where n'  = trans f αs xs n
-    go αs xs (TObj m ms r) = f αs xs $ TObj m' ms' r where m'  = trans f αs xs m
-                                                           ms' = trans f αs xs ms
+    go αs xs (TObj ms r)   = f αs xs $ TObj ms' r    where ms' = trans f αs xs ms
     go αs xs (TClass n)    = f αs xs $ TClass n'     where n'  = trans f αs xs n
     go αs xs (TMod m)      = f αs xs $ TMod m
     go αs xs (TAll a t)    = f αs xs $ TAll a t'     where t'  = go αs' xs t
@@ -207,8 +206,8 @@ instance NameTransformable BTVarQ where
   ntrans f g (BTV x l c) = BTV x l <$> T.mapM (ntrans f g) c
 
 instance NameTransformable TypeMemberQ where
-  ntrans f g (FI o a t) = FI o a <$> ntrans f g t
-  ntrans f g (MI o mts) = MI o <$> mapM (mapPairM (ntrans f g) (ntrans f g)) mts
+  ntrans f g (FI x o a t) = FI x o a <$> ntrans f g t
+  ntrans f g (MI x o mts) = MI x o <$> mapM (mapPairM (ntrans f g) (ntrans f g)) mts
 
 ntransFmap ::  (F.Reftable r, Applicative m, Monad m, T.Traversable t)
            => (QN p -> m (QN q)) -> (QP p -> m (QP q)) -> t (FAnnQ p r) -> m (t (FAnnQ q r))
@@ -249,10 +248,8 @@ ntransRType f g t    = go t
     go (TAnd ts)     = TAnd <$> ts'       where ts' = mapM (mapSndM go) ts
     go (TRef n r)    = TRef <$> n'
                             <*> pure r    where n'  = ntrans f g n
-    go (TObj m ms r) = TObj <$> m'
-                            <*> ms'
-                            <*> pure r    where m'  = ntrans f g m
-                                                ms' = ntrans f g ms
+    go (TObj ms r)   = TObj <$> ms'
+                            <*> pure r    where ms' = ntrans f g ms
     go (TClass n)    = TClass <$> n'      where n'  = ntrans f g n
     go (TMod p)      = TMod   <$> p'      where p'  = g p
     go (TAll a t)    = TAll   <$> a'
@@ -281,7 +278,7 @@ emapReft f γ (TAll α t)     = TAll (emapReftBTV f γ α) (emapReft f γ t)
 emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts)
                                    (emapReft f γ' t) (f γ r)
                               where γ' = (b_sym <$> xts) ++ γ
-emapReft f γ (TObj m xts r) = TObj (emapReft f γ m) (emapReftTM f γ xts) (f γ r)
+emapReft f γ (TObj xts r)   = TObj (emapReftTM f γ xts) (f γ r)
 emapReft f γ (TClass n)     = TClass (emapReftBGen f γ n)
 emapReft _ _ (TMod m)       = TMod m
 emapReft f γ (TOr ts r)     = TOr (emapReft f γ <$> ts) (f γ r)
@@ -300,8 +297,8 @@ emapReftTM f γ (TM m sm c k s n)
        (emapReft f γ <$> s)
        (emapReft f γ <$> n)
 
-emapReftElt f γ (FI m a t) = FI m a (emapReft f γ t)
-emapReftElt f γ (MI m mts) = MI m (mapPair (emapReft f γ) <$> mts)
+emapReftElt f γ (FI x m a t) = FI x m a (emapReft f γ t)
+emapReftElt f γ (MI x m mts) = MI x m (mapPair (emapReft f γ) <$> mts)
 
 --------------------------------------------------------------------------------
 mapReftM :: (F.Reftable r, PP r, Applicative m, Monad m)
@@ -314,7 +311,7 @@ mapReftM f (TFun xts t r)  = TFun    <$> mapM (mapReftBindM f) xts <*> mapReftM 
 mapReftM f (TAll α t)      = TAll    <$> mapReftBTV f α <*> mapReftM f t
 mapReftM f (TAnd ts)       = TAnd    <$> mapM (mapSndM (mapReftM f)) ts
 mapReftM f (TOr ts r)      = TOr     <$> mapM (mapReftM f) ts <*> f r
-mapReftM f (TObj m xts r)  = TObj    <$> mapReftM f m <*> mapTypeMembers f xts <*> f r
+mapReftM f (TObj xts r)    = TObj    <$> mapTypeMembers f xts <*> f r
 mapReftM f (TClass n)      = TClass  <$> mapReftBGenM f n
 mapReftM _ (TMod a)        = TMod    <$> pure a
 mapReftM _ t               = error $ "Not supported in mapReftM: " ++ ppshow t
@@ -332,8 +329,8 @@ mapTypeMembers f (TM m sm c k s n)
        <*> T.mapM (mapReftM f) s
        <*> T.mapM (mapReftM f) n
 
-mapReftElt f (FI m a t) = FI m a <$> mapReftM f t
-mapReftElt f (MI m mts) = MI m   <$> mapM (mapPairM (mapReftM f) (mapReftM f)) mts
+mapReftElt f (FI x m a t) = FI x m a <$> mapReftM f t
+mapReftElt f (MI x m mts) = MI x m   <$> mapM (mapPairM (mapReftM f) (mapReftM f)) mts
 
 --------------------------------------------------------------------------------
 mapTypeMembersM :: (Applicative m, Monad m)
@@ -347,8 +344,8 @@ mapTypeMembersM f (TM m sm c k s n)
        <*> T.mapM f s
        <*> T.mapM f n
   where
-    memMapM (FI o a t) = FI o a <$> f t
-    memMapM (MI o mts) = MI o   <$> mapM (mapSndM f) mts
+    memMapM (FI x o a t) = FI x o a <$> f t
+    memMapM (MI x o mts) = MI x o   <$> mapM (mapSndM f) mts
 
 
 --------------------------------------------------------------------------------

@@ -265,7 +265,7 @@ toplevel f (TVar v r   ) = TVar v (f r)
 toplevel f (TOr ts r   ) = TOr (map (toplevel f) ts) (f r)
 toplevel f (TAnd ts    ) = TAnd (map (second (toplevel f)) ts)
 toplevel f (TRef n r   ) = TRef n (f r)
-toplevel f (TObj m ms r) = TObj m ms (f r)
+toplevel f (TObj ms r  ) = TObj ms (f r)
 toplevel _ (TClass n   ) = TClass n
 toplevel _ (TMod n     ) = TMod n
 toplevel f (TAll b t   ) = TAll b (toplevel f t)
@@ -306,18 +306,18 @@ isBV32    = isPrim TBV32
 isTVar   t | TVar _ _ <- t = True | otherwise = False
 isTUnion t | TOr  _ _ <- t = True | otherwise = False
 
-maybeTObj (TRef _ _)   = True
-maybeTObj (TObj _ _ _) = True
-maybeTObj (TClass _)   = True
-maybeTObj (TMod _ )    = True
-maybeTObj (TAll _ t)   = maybeTObj t
-maybeTObj (TOr ts _)   = any maybeTObj ts
-maybeTObj _            = False
+maybeTObj (TRef _ _) = True
+maybeTObj (TObj _ _) = True
+maybeTObj (TClass _) = True
+maybeTObj (TMod _ )  = True
+maybeTObj (TAll _ t) = maybeTObj t
+maybeTObj (TOr ts _) = any maybeTObj ts
+maybeTObj _          = False
 
-isTFun (TFun _ _ _)    = True
-isTFun (TAnd ts)       = all isTFun $ snd <$> ts
-isTFun (TAll _ t)      = isTFun t
-isTFun _               = False
+isTFun (TFun _ _ _)  = True
+isTFun (TAnd ts)     = all isTFun $ snd <$> ts
+isTFun (TAll _ t)    = isTFun t
+isTFun _             = False
 
 isArrayType t | TRef (Gen x _) _ <- t
               = F.symbol x == F.symbol "Array"
@@ -349,7 +349,7 @@ rTypeR' (TVar _ r)   = Just r
 rTypeR' (TOr _ r)    = Just r
 rTypeR' (TFun _ _ r) = Just r
 rTypeR' (TRef _ r)   = Just r
-rTypeR' (TObj _ _ r) = Just r
+rTypeR' (TObj _ r)   = Just r
 rTypeR' (TClass _)   = Just fTop
 rTypeR' (TMod _)     = Just fTop
 rTypeR' (TAnd _ )    = Nothing
@@ -441,9 +441,9 @@ mkTypeMembers lms lsms lcs lct lsi lni = TM ms sms call ctor sidx nidx
     sidx | [] <- lsi = Nothing | otherwise = Just (mkAnd lsi)
     nidx | [] <- lni = Nothing | otherwise = Just (mkAnd lni)
 
-    step g (x, MI o mts) | Just (MI o' mts') <- F.lookupSEnv x g
-                         = F.insertSEnv x (MI (o `mappend` o') (mts' ++ mts)) g
-    step g (x, f)        = F.insertSEnv x f g
+    step g (x, MI n o mts) | Just (MI _ o' mts') <- F.lookupSEnv x g
+                           = F.insertSEnv x (MI n (o `mappend` o') (mts' ++ mts)) g
+    step g (x, f)          = F.insertSEnv x f g
 
 --------------------------------------------------------------------------------------------
 typeMembers :: F.SEnv (TypeMemberQ q r) -> TypeMembersQ q r
@@ -451,9 +451,9 @@ typeMembers :: F.SEnv (TypeMemberQ q r) -> TypeMembersQ q r
 typeMembers f = TM f mempty Nothing Nothing Nothing Nothing
 
 --------------------------------------------------------------------------------------------
-typeMembersFromList :: F.Symbolic s => [(s, TypeMember r)] -> TypeMembers r
+typeMembersFromList :: [TypeMember r] -> TypeMembers r
 --------------------------------------------------------------------------------------------
-typeMembersFromList f = TM (F.fromListSEnv $ mapFst F.symbol <$> f)
+typeMembersFromList f = TM (F.fromListSEnv (map (\f_ -> (F.symbol f_, f_)) f))
                            mempty Nothing Nothing Nothing Nothing
 
 --------------------------------------------------------------------------------------------
@@ -464,8 +464,8 @@ typesOfTM (TM m sm c k s n) =
   concatMap typesOfMem (map snd $ F.toListSEnv sm) ++
   concatMap maybeToList [c, k, s, n]
 
-typesOfMem (FI _ _ t) = [t]
-typesOfMem (MI _ mts) = map snd mts
+typesOfMem (FI _ _ _ t) = [t]
+typesOfMem (MI _ _ mts) = map snd mts
 
 --------------------------------------------------------------------------------
 returnTy :: F.Reftable r => RType r -> Bool -> RType r

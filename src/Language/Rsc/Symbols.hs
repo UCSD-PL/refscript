@@ -52,7 +52,8 @@ import           Text.PrettyPrint.HughesPJ
 -- | Symbol information
 --------------------------------------------------------------------------------
 
-data SymInfoQ q r = SI { v_loc  :: Locality
+data SymInfoQ q r = SI { v_name :: F.Symbol
+                       , v_loc  :: Locality
                        , v_asgn :: Assignability
                        , v_init :: Initialization
                        , v_type :: RTypeQ q r
@@ -61,9 +62,12 @@ data SymInfoQ q r = SI { v_loc  :: Locality
 
 type SymInfo r    = SymInfoQ AK r
 
+instance F.Symbolic (SymInfoQ q r) where
+  symbol = v_name
 
-symToField (SI _ WriteGlobal _ t) = FI Req Assignable t
-symToField (SI _ _           _ t) = FI Req Final      t
+
+symToField (SI n _ WriteGlobal _ t) = FI n Req Assignable t
+symToField (SI n _ _           _ t) = FI n Req Final      t
 
 
 -- | @argBind@ returns a dummy type binding `arguments :: T `
@@ -71,7 +75,7 @@ symToField (SI _ _           _ t) = FI Req Final      t
 --------------------------------------------------------------------------------
 mkArgumentsSI :: (F.Reftable r, IsLocated l) => l -> [RType r] -> SymInfo r
 --------------------------------------------------------------------------------
-mkArgumentsSI l ts = SI Local RdOnly Initialized
+mkArgumentsSI l ts = SI argSym Local RdOnly Initialized
                    $ immObjectLitTy [pLen] [tLen]
   where
     ts'            = take k ts
@@ -85,17 +89,18 @@ mkArgumentsSI l ts = SI Local RdOnly Initialized
 immObjectLitTy :: F.Reftable r => [Prop l] -> [RType r] -> RType r
 --------------------------------------------------------------------------------
 immObjectLitTy ps ts | length ps == length ts
-                     = TObj tIM elts fTop
+                     = TObj elts fTop
                      | otherwise
                      = error "Mismatched args for immObjectLit"
   where
-    elts = typeMembersFromList [ ( F.symbol p, FI Req Final t )
-                                 | (p,t) <- safeZip "immObjectLitTy" ps ts ]
+    elts = typeMembersFromList [ FI (sym p) Req Final t | (p,t) <- pts ]
+    pts  = safeZip "immObjectLitTy" ps ts
+    sym  = F.symbol
 
 -- | Instances
 
 instance F.Reftable r => SubstitutableQ q r (SymInfoQ q r) where
-  apply θ (SI l a i t)      = SI l a i $ apply θ t
+  apply θ (SI n l a i t) = SI n l a i $ apply θ t
 
 
 --------------------------------------------------------------------------------
@@ -108,9 +113,10 @@ newtype SymList r = SL { s_list :: [(Id SrcSpan, SyntaxKind, SymInfo r)] }
 --------------------------------------------------------------------------------
 symbols :: [Statement (AnnR r)] -> SymList r
 --------------------------------------------------------------------------------
-symbols s = SL [ (fSrc <$> n, k, SI loc a i t) | (n,l,k,a,i) <- hoistBindings s
-                                               , fact        <- fFact l
-                                               , (loc, t)    <- annToType fact ]
+symbols s = SL [ (fSrc <$> n, k, SI (F.symbol n) loc a i t)
+                 | (n,l,k,a,i) <- hoistBindings s
+                 , fact        <- fFact l
+                 , (loc, t)    <- annToType fact ]
   where
     annToType (ClassAnn   l (TS _ b _)) = [(l, TClass b)]       -- Class
     annToType (SigAnn     l t         ) = [(l, t)]              -- Function
@@ -158,8 +164,8 @@ mergeSymInfo :: F.Reftable r => F.Symbol -> (SyntaxKind, SymInfo r)
                                          -> (SyntaxKind, SymInfo r)
                                          -> (SyntaxKind, SymInfo r)
 --------------------------------------------------------------------------------
-mergeSymInfo x (k1, SI l1 a1 i1 t1) (k2, SI l2 a2 i2 t2)
-  | l1 == l2, k1 == k2, a1 == a2, i1 == i2
-  = (k1, SI l1 a1 i1 (t1 `mappend` t2))
+mergeSymInfo x (k1, SI m1 l1 a1 i1 t1) (k2, SI m2 l2 a2 i2 t2)
+  | m1 == m2, l1 == l2, k1 == k2, a1 == a2, i1 == i2
+  = (k1, SI m1 l1 a1 i1 (t1 `mappend` t2))
 mergeSymInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
 

@@ -13,7 +13,7 @@
 module Language.Rsc.Typecheck.Checker (verifyFile, typeCheck) where
 
 import           Control.Applicative                (pure, (<$>), (<*>))
-import           Control.Arrow                      (first, (***))
+import           Control.Arrow                      (first, second, (***))
 import           Control.Monad
 import           Data.Function                      (on)
 import           Data.Generics
@@ -296,11 +296,12 @@ tcStmt γ (WhileStmt l c b)
       (c', Just t)  ->
           do  _ <- unifyTypeM (srcPos l) γ t tBool
               phiTys   <- mapM (safeEnvFindTy l γ) phis
-              (b', γl) <- tcStmt (tcEnvAdds (zip xs (SI Local WriteLocal Initialized <$> phiTys)) γ) b
+              (b', γl) <- tcStmt (tcEnvAdds (map xsi (zip xs phiTys)) γ) b
               tcWA γ dummyExpr (envLoopJoin l γ γl) >>= \case
                 Left e     -> return (ExprStmt  l e    , γl)
                 Right γout -> return (WhileStmt l c' b', γout)
   where
+    xsi (x,t)     = (x, SI (F.symbol x) Local WriteLocal Initialized t)
     dummyExpr     = StringLit l "DUMMY_LOOP_REPLACEMENT"
     xs            = [ mkNextId x | x <- phis ]
     phis          = phiVarsAnnot l
@@ -357,31 +358,32 @@ tcVarDecl γ v@(VarDecl l x (Just e))
       -- Local (no type annotation)
       Nothing ->
         do  (e', to) <- tcExprW γ e
-            return $ (VarDecl l x (Just e'), tcEnvAddo γ x $ SI Local WriteLocal Initialized <$> to)
+            return $ (VarDecl l x (Just e'),
+                      tcEnvAddo γ x $ SI (F.symbol x) Local WriteLocal Initialized <$> to)
 
       -- Local (with type annotation)
-      Just (SI lc WriteLocal _ t) ->
-        do  (e', t') <- tcExprT l "VarDecl" γ e t
-            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (SI lc WriteLocal Initialized t') γ)
+      Just (SI y lc WriteLocal _ t) ->
+        do  (e', t') <- ltracePP l ("TC " ++ ppshow e) <$> tcExprT l "VarDecl" γ e t
+            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (SI y lc WriteLocal Initialized t') γ)
 
       -- Global
-      Just (SI _ WriteGlobal _ _) ->
+      Just (SI _ _ WriteGlobal _ _) ->
         -- PV: the global variable should be in scope already,
         --     since it is being hoisted to the beginning of the
         --     scope.
         first (VarDecl l x . Just) <$> tcAsgn l γ x e
 
       -- ReadOnly
-      Just (SI lc RdOnly _ t) ->
+      Just (SI y lc RdOnly _ t) ->
         do  ([e'], Just t') <- tcNormalCallWCtx γ l "VarDecl-RO" [(e, Just t)] (idTy t)
-            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (SI lc RdOnly Initialized t') γ)
+            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (SI y lc RdOnly Initialized t') γ)
 
       c -> fatal (unimplemented l "tcVarDecl" ("case: " ++ ppshow c)) (v, Just γ)
 
 tcVarDecl γ v@(VarDecl l x Nothing)
   = case envFindTy x (tce_names γ) of
-      Just (SI lc Ambient _ t) ->
-          return $ (v, Just $ tcEnvAdds [(x, SI lc Ambient Initialized t)] γ)
+      Just (SI y lc Ambient _ t) ->
+          return $ (v, Just $ tcEnvAdds [(x, SI y lc Ambient Initialized t)] γ)
       _ -> fatal (bug l "TC-tcVarDecl: this shouldn't happen") (v, Just γ)
 
 
@@ -403,9 +405,9 @@ tcClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
 
     thisT = TRef (Gen nm (map btVar bs)) fTop
     cExit = builtinOpId BICtorExit
-    viExit = SI Local Ambient Initialized $ mkFun (bs, xts, ret)
+    viExit = SI (F.symbol cExit) Local Ambient Initialized $ mkFun (bs, xts, ret)
     ret   = thisT
-    xts   = sortBy c_sym [ B x t' | (x, FI _ _ t) <- F.toListSEnv (i_mems ms)
+    xts   = sortBy c_sym [ B x t' | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms)
                                   , let t' = t ] -- unqualifyThis g0 thisT t ]
     -- out   = [ f | (f, FI _ Final _) <- F.toListSEnv (i_mems ms) ]
     -- v_sym = F.symbol $ F.vv Nothing
@@ -414,7 +416,7 @@ tcClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
 
 -- | Static field
 tcClassElt γ (TD sig ms) c@(MemberVarDecl l True x (Just e))
-  | Just (FI _ _ t) <- F.lookupSEnv (F.symbol x) $ i_mems ms
+  | Just (FI _ _ _ t) <- F.lookupSEnv (F.symbol x) $ i_mems ms
   = do  ([e'],_) <- tcNormalCall γ l "field init" [(e, Just t)] $ mkInitFldTy t
         return $ MemberVarDecl l True x $ Just e'
   | otherwise
@@ -432,7 +434,7 @@ tcClassElt _ _ (MemberVarDecl l False x _)
 -- | Static method: The classes type parameters should not be included in the
 -- environment
 tcClassElt γ (TD sig ms) c@(MemberMethDecl l True x xs body)
-  | Just (MI _ mts) <- F.lookupSEnv (F.symbol x) $ s_mems ms
+  | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) $ s_mems ms
   = do  let t = mkAnd $ map snd mts
         its <- tcFunTys l x xs t
         body' <- foldM (tcCallable γ l x xs) body its
@@ -448,7 +450,7 @@ tcClassElt γ (TD sig ms) c@(MemberMethDecl l True x xs body)
 --   TODO: Also might not need 'tce_this'
 --
 tcClassElt γ (TD sig ms) c@(MemberMethDecl l False x xs bd)
-  | Just (MI _ mts) <- F.lookupSEnv (F.symbol x) (i_mems ms)
+  | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) (i_mems ms)
   = do  let (ms', ts) = unzip mts
         its          <- tcFunTys l x xs $ mkAnd ts
         let mts'      = zip ms' its
@@ -465,7 +467,7 @@ tcClassElt γ (TD sig ms) c@(MemberMethDecl l False x xs bd)
     BGen nm bs  = bgen
     tThis       = TRef (Gen nm (map btVar bs)) fTop
     idThis      = Id l "this"
-    eThis       = (idThis, SI Local RdOnly Initialized tThis)
+    eThis       = (idThis, SI thisSym Local RdOnly Initialized tThis)
 
 
 
@@ -474,22 +476,24 @@ tcAsgn :: Unif r
        => AnnTc r -> TCEnv r -> Id (AnnTc r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 --------------------------------------------------------------------------------
 tcAsgn l γ x e
-  | Just (SI _ a _ t) <- tcEnvFindTyForAsgn x γ
+  | Just (SI _ _ a _ t) <- tcEnvFindTyForAsgn x γ
   = do  eitherET  <- tcWrap (tcExprT l "assign" γ e t)
         (e', to)  <- tcEW γ e eitherET
-        return     $ (e', tcEnvAddo γ x $ SI Local a Initialized <$> to)
+        return     $ (e', tcEnvAddo γ x $ SI xSym Local a Initialized <$> to)
   | otherwise
   = do (e', to)   <- tcExprW γ e
-       return      $ (e', tcEnvAddo γ x $ SI Local WriteLocal Initialized <$> to)
+       return      $ (e', tcEnvAddo γ x $ SI xSym Local WriteLocal Initialized <$> to)
+  where
+    xSym = F.symbol x
 
 
-tcSetPropMut γ l f t0 (e, t') (FI _ a t)
+tcSetPropMut γ l f t0 (e, t') (FI _ _ a t)
   | a == Final
   = fatal (errorFinalField l f t0) (e, t')
   | otherwise
   = tcExprT l BISetProp γ e t
 
-tcSetPropImm γ l f t0 (e, t') (FI _ a t)
+tcSetPropImm γ l f t0 (e, t') (FI _ _ a t)
   | a == Final
   = fatal (errorImmutableRefAsgn l f t0) (e, t')
   | otherwise
@@ -560,7 +564,8 @@ tcRetW γ l (Just e)
     rt        = tcEnvFindReturn γ
     ft        = returnTy rt True
 
-    newEnv t  = tcEnvAdd fn (SI Local Ambient Initialized $ finalizeTy t) γ
+    newEnv t  = tcEnvAdd fn (SI sfn Local Ambient Initialized $ finalizeTy t) γ
+    sfn       = F.symbol fn
     fn        = Id l "__finalize__"
     e'        = fmap (\a -> a { fFact = BypassUnique : fFact a }) e
 
@@ -662,7 +667,7 @@ tcExpr γ e@(ArrayLit l es) to
 -- | { f1: e1, ..., fn: tn }
 tcExpr γ ex@(ObjectLit l pes) to
   = do  (pes', tys) <- unzip <$> mapM tce ets
-        return (ObjectLit l pes', TObj tIM (typeMembersFromList tys) fTop)
+        return (ObjectLit l pes', TObj (typeMembersFromList tys) fTop)
   where
     ctxtys      | Just t <- to
                 = i_mems $ typeMembersOfType (envCHA γ) t
@@ -670,11 +675,11 @@ tcExpr γ ex@(ObjectLit l pes) to
                 = mempty
     ets         = [ (p, e, F.lookupSEnv (F.symbol p) ctxtys) | (p, e) <- pes ]
 
-    tce (p,e,x) | Just (FI o a t)   <- x
-                = (***) (p,) ((F.symbol p,) . (FI o a))       <$> tcExpr γ e (Just t)
+    tce (p,e,x) | Just (FI f o a t)   <- x
+                = (***) (p,) (FI (F.symbol p) o a)       <$> tcExpr γ e (Just t)
                 | otherwise
                 -- Default optionality and assignability for field
-                = (***) (p,) ((F.symbol p,) . (FI Req Final)) <$> tcExpr γ e Nothing
+                = (***) (p,) (FI (F.symbol p) Req Final) <$> tcExpr γ e Nothing
 
 -- | <T>e
 tcExpr γ ex@(Cast l e) _
@@ -852,8 +857,8 @@ tcCall γ ef@(DotRef l e f) _
     isArrayType (TOr _ _) = True
     isArrayType _ = False
 
-    isOptional tfs = Opt `elem` [ o | (_, FI o _ _) <- tfs ]
-    typesOf    tfs = [ t | (_, FI _ _ t) <- tfs]
+    isOptional tfs = Opt `elem` [ o | (_, FI _ o _ _) <- tfs ]
+    typesOf    tfs = [ t | (_, FI _ _ _ t) <- tfs]
     rcvrTy         = tOr . map fst
 
 -- | `super(e1,...,en)`
@@ -890,10 +895,10 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es) _
     checkWithMut (Just _ ) _  _   = error "TODO checkWithMut add error here"
     checkWithMut Nothing   te _   = fatal (bugGetMutability l te) (es, tBot)
 
-    call tR _ (FI Req _ ft) = tcNormalCall γ l em (es `zip` nths) ft
-    call tR _ (FI _   _ _ ) = fatal (errorCallOptional l f tR) (es, tBot)
+    call tR _ (FI _ Req _ ft) = tcNormalCall γ l em (es `zip` nths) ft
+    call tR _ (FI _ _   _ _ ) = fatal (errorCallOptional l f tR) (es, tBot)
 
-    call tR mR (MI Req mts)
+    call tR mR (MI _ Req mts)
       = case [ t | (m, t) <- mts, isSubtype l γ mR m ] of
         [] -> fatal (errorMethMutIncomp l em mts mR) (es, tBot)
         ts -> tcNormalCall γ l em (es `zip` nths) (mkAnd ts)
@@ -1051,7 +1056,7 @@ envJoin l γ (Just γ1) (Just γ2) =
 
 envJoinStep l γ1 γ2 next (γ, st01, st02) xt =
   case xt of
-    (v, ta@(SI _ WriteLocal _ t)) ->
+    (v, ta@(SI _ _ WriteLocal _ t)) ->
       case find ((v ==) . snd3) next of
         Just (_,va, vb) -> do
           st1     <- mkVdStmt l γ1 va vb t          -- FIRST BRANCH
@@ -1083,7 +1088,7 @@ envLoopJoin :: Unif r => AnnTc r -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
 envLoopJoin _ γ Nothing   = return $ Just γ
 envLoopJoin l γ (Just γl) =
   do  xts      <- toXts <$> mapM (getLoopNextPhiType l γ γl) xs
-      _        <- mapM_ mkPhiAnn $ (\(x, SI _ _ _ t) -> (x, t)) <$> xts
+      _        <- mapM_ mkPhiAnn (second v_type <$> xts)
       Just . tcEnvAdds xts . (`substNames` γ) <$> getSubst
   where
       xs              = phiVarsAnnot l
@@ -1100,10 +1105,10 @@ getPhiType :: Unif r => AnnTc r -> TCEnv r -> TCEnv r -> Var r -> TCM r (Maybe (
 --------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (tcEnvFindTyForAsgn x γ1, tcEnvFindTyForAsgn x γ2) of
-    (Just (SI l1 a1 i1 t1), Just (SI _ _ i2 t2)) ->
+    (Just (SI x1 l1 a1 i1 t1), Just (SI _ _ _ i2 t2)) ->
         do  θ     <- getSubst
             t     <- unifyPhiTypes l γ1 x t1 t2 θ
-            return $ Just $ SI l1 a1 (i1 `mappend` i2) t
+            return $ Just $ SI x1 l1 a1 (i1 `mappend` i2) t
     (_, _) -> return Nothing
     -- bindings that are not in both environments are discarded
 
@@ -1112,10 +1117,10 @@ getLoopNextPhiType :: Unif r => AnnTc r -> TCEnv r -> TCEnv r -> Var r -> TCM r 
 --------------------------------------------------------------------------------
 getLoopNextPhiType l γ γl x =
   case (tcEnvFindTyForAsgn x γ, tcEnvFindTyForAsgn (mkNextId x) γl) of
-    (Just (SI l1 a1 i1 t1), Just (SI _ _ i2 t2)) ->
+    (Just (SI x1 l1 a1 i1 t1), Just (SI _ _ _ i2 t2)) ->
         do  θ <- getSubst
             t <- unifyPhiTypes l γ x t1 t2 θ
-            return $ Just $ SI l1 a1 (i1 `mappend` i2) t
+            return $ Just $ SI x1 l1 a1 (i1 `mappend` i2) t
     _ -> return Nothing
     -- bindings that are not in both environments are discarded
 

@@ -119,8 +119,8 @@ parseRawSpec ctx = go
     go (InterfaceRawSpec           (_ , _)) = InterfaceSpec           <$> interfaceP
     go (ClassRawSpec               (_ , _)) = ClassSpec               <$> classDeclP
     go (ModuleRawSpec              (_ , _)) = ModuleSpec              <$> moduleDeclP
-    go (FieldRawSpec               (_ , _)) = FieldSpec               <$> (propP ctx >>= \(_,_,o,m,t) -> return (FI o m t))
-    go (MethodRawSpec              (_ , _)) = MethodSpec              <$> (methP ctx >>= \(_,_,o,m,t) -> return (MI o [(m, t)]))
+    go (FieldRawSpec               (_ , _)) = FieldSpec               <$> (propP ctx >>= \(x,_,o,m,t) -> return (FI x o m t))
+    go (MethodRawSpec              (_ , _)) = MethodSpec              <$> (methP ctx >>= \(x,_,o,m,t) -> return (MI x o [(m, t)]))
     go (ConstructorRawSpec         (_ , _)) = ConstructorSpec         <$> ctorP ctx
     go (CastRawSpec                (ss, _)) = CastSpec ss             <$> typeP1 ctx
     go (MeasureRawSpec             (ss, _)) = MeasureSpec             <$> patch2 ss <$> idBindP2 ctx

@@ -489,9 +489,10 @@ consVarDecl g (VarDecl l x (Just e))
         fta       <- freshenType WriteGlobal g l t
         mseq (consExpr g e (Just t)) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
+          -- _       <- subType l Nothing gy eT t
           _       <- subType l Nothing gy eT fta
           _       <- subType l Nothing gy fta t
-          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc RdOnly Initialized fta] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc RdOnly Initialized eT] gy
 
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 
@@ -768,33 +769,31 @@ consExpr g (CallExpr l (SuperRef _) _) _
 
 -- | e.m(es)
 consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
-  | isVariadicCall f
-  = cgError (unimplemented l "Variadic" ex)
+  | isVariadicCall f = cgError (unimplemented l "Variadic" ex)
+  | otherwise        = checkNonVariadic
 
-  | otherwise
-  = mseq (consExpr g e Nothing) $ \(xRcvr, g') -> do
-      tRcvr <- cgSafeEnvFindTyM xRcvr g'
-      case getProp l g f tRcvr of
-        Right (unzip -> (_, fs)) ->
-            case getMutability (envCHA g) tRcvr of
-              Just mRcvr -> callOne g' xRcvr tRcvr mRcvr fs
-              Nothing    -> cgError (bugGetMutability l tRcvr)
-        Left er -> cgError er
   where
-    callOne g_ _ tRcvr _ [FI _ Req _ ft]
-      = consCall g_ l em (es `zip` nths) ft
-
-    callOne _  _ tRcvr _ [FI _ _   _ _ ]
-      = cgError (errorCallOptional l f tRcvr)
-
-    callOne g_ xRcvr tRcvr mRcvr [MI _ Req mts]
-      = let ft = mkAnd [ ft_ | (m, ft_) <- mts, isSubtype g_ mRcvr m ]
-               & substThis xRcvr in
-        consCall g_ l em (es `zip` nths) ft
-
-    callOne _ _ tRcvr _ _ = cgError (errorCallOptional l f tRcvr)
-
+    -- Variadic check
     isVariadicCall f_ = F.symbol f_ == F.symbol "call"
+
+    checkNonVariadic =
+      mseq (consExpr g e Nothing) $ \(xR, g') ->
+        cgSafeEnvFindTyM xR g' >>= checkWithProp xR g' . getProp l g' f
+
+    -- Only support single members at the moment
+    checkWithProp xR g_ (Right [(tR, m)]) = checkTM xR g_ tR m
+    checkWithProp _  _  (Left er)         = cgError er
+
+    -- Check a single type member
+    checkTM _  g_ tR (FI _ Req _ ft) = consCall g_ l em (es `zip` nths) ft
+    checkTM _  g_ tR (FI f _ _ _)    = cgError (errorOptFunUnsup l f e)
+    checkTM xR g_ tR (MI _ Req mts)  =
+      case getMutability (envCHA g_) tR of
+        Just mR ->
+            case [ ft_ | (m, ft_) <- mts, isSubtype g_ mR m ] of
+              [] -> cgError $ errorMethMutIncomp l em mts mR
+              ts -> consCall g_ l em (es `zip` nths) (substThis xR (mkAnd ts))
+        Nothing -> cgError $ errorNoMutAvailable l e tR
 
 -- | e(es)
 --
@@ -868,19 +867,6 @@ consExpr g e@(ObjectLit l pes) to
   where
     (cts, ft) = objLitTy l g ps to
     (ps , es) = unzip pes
-
---   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
---       ts    <- mapM (\x -> (`singleton` x) <$> cgSafeEnvFindTyM x g') xes
---       tms   <- pure (typeMembersFromList (zipWith fs ps ts))
---       t'    <- pure (TObj tms fTop)
---       Just <$> cgEnvAddFresh "17" l t' g'
---   where
---     ctx     | Just t <- to = i_mems $ typeMembersOfType (envCHA g) t
---             | otherwise    = mempty
---     ps      = map (F.symbol . fst) pes
---     ets     = [(e, fmap f_ty $ F.symbol p `F.lookupSEnv` ctx) | (p, e) <- pes]
---     fs p t  = FI p Req tMU t
---     ss      = F.symbol
 
 -- | new C(e, ...)
 --

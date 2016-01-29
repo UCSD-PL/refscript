@@ -152,9 +152,13 @@ errorCallNotSup l fn ft es ts = mkErr l $ show $ text "Cannot call"       <+> ti
                                                  nest 2 (vcat $ map (\(e,t) -> pp e <+> dcolon <+> pp t)
                                                         (safeZip "errorCallNotSup" es ts))
 
+errorOptFunUnsup l f e        = mkErr l $ show $ text "Cannot call optional member" <+> ticks (pp f) <+> text "of expression" $+$ nest 2 (pp e)
+
 errorMethMutIncomp l fn mts m = mkErr l $ show $ text "Cannot call"       <+> ticks (pp fn)                 <+>
                                                  text "with signature:"   $+$ nest 2 (vcat (map pp mts))    $+$
                                                  text "on" <+> pp m <+> text "receiver."
+
+errorNoMutAvailable l e t     = mkErr l $ show $ text "Cannot retrieve mutability annotation from" <+> ticks (pp e) <+> text "of type" $+$ nest 2 (pp t)
 
 errorCallNotFound l e f       = mkErr l $ printf "Cannot find callable property '%s' of type '%s'." (ppshow f) (ppshow e)
 errorCallMatch l fn ts        = mkErr l $ printf "Could not match call to '%s' to a particular signature. Argument(s) with types '%s' are invalid." (ppshow fn) (ppshow ts)

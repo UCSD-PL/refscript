@@ -267,7 +267,7 @@ subtypeMems l γ (t1, p1) (t2, p2)
 
   where
     diff21 = toListSEnv $ p2 `differenceSEnv` p1
-    common = ltracePP l "COmmon" $ toListSEnv $ intersectWithSEnv (,) p1 p2
+    common = toListSEnv $ intersectWithSEnv (,) p1 p2
 
 --------------------------------------------------------------------------------
 compareMem :: (FE g r, PPRE r, IsLocated a, PP f)

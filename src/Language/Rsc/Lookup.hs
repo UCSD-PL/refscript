@@ -41,11 +41,12 @@ excludedFieldSymbols = F.symbol <$> [ "hasOwnProperty", "prototype", "__proto__"
 type PPRD r   = (ExprReftable Int r, PP r, F.Reftable r)
 type CEnv r t = (CheckingEnvironment () t, CheckingEnvironment r t , Functor t)
 
--- | `getProp γ b x s t` performs the access `x.f`, where `x: t` and returns:
+-- | `getProp γ b x s t` performs the access `x.f`, where `x: t` and returns a
+--   list of:
 --
---   (a) the subtype of @t@ for which the access of field @f@ is successful, and
+--   (a) the part of @t@ for which the access of field @f@ is successful, and
 --
---   (b) possible accessed members (mutliple for union types)
+--   (b) the accessed member
 --
 --------------------------------------------------------------------------------
 getProp :: (CEnv r t, PPRD r, PP f, IsLocated l, F.Symbolic f)

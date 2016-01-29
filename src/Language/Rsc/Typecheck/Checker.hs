@@ -363,7 +363,7 @@ tcVarDecl γ v@(VarDecl l x (Just e))
 
       -- Local (with type annotation)
       Just (SI y lc WriteLocal _ t) ->
-        do  (e', t') <- ltracePP l ("TC " ++ ppshow e) <$> tcExprT l "VarDecl" γ e t
+        do  (e', t') <- tcExprT l "VarDecl" γ e t
             return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (SI y lc WriteLocal Initialized t') γ)
 
       -- Global
@@ -886,28 +886,28 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es) _
                    >>= checkWithRcvr
 
     -- Check receiver
-    checkWithRcvr (Right (_, te)) = checkEltCall (getProp l γ f te) te
+    checkWithRcvr (Right (_, te)) = checkWithProp (getProp l γ f te)
     checkWithRcvr (Left er      ) = fatal er (ex, tBot)
 
-    checkEltCall (Right (unzip -> (ts, fs))) te
-      = do  (e', _  )       <- tcExprT l1 em γ e (tOr ts)
-            (es', t')       <- checkWithMut (getMutability (envCHA γ) te) te fs
-            return           $ (CallExpr l (DotRef l1 e' f) es', t')
-    checkEltCall (Left er) _ = tcError er
+    -- Check all corresponding type members `tms`
+    checkWithProp (Right tms@(unzip -> (ts, ms)))
+      = do  (e', _   ) <- tcExprT l1 em γ e (tOr ts)
+            (es', ts') <- foldM (\(es_, ts) (tR, m) ->
+                            second (:ts) <$> checkTypeMember es_ tR m) (es, []) tms
+            return      $ (CallExpr l (DotRef l1 e' f) es', tOr ts')
+    checkWithProp (Left er) = tcError er
 
-    checkWithMut (Just mR) te [m] = call te mR m
-    checkWithMut (Just _ ) _  _   = error "TODO checkWithMut add error here"
-    checkWithMut Nothing   te _   = fatal (bugGetMutability l te) (es, tBot)
+    -- Check a single type member
+    checkTypeMember es_ tR (FI _ Req _ ft) = tcNormalCall γ l em (es_ `zip` nths) ft
+    checkTypeMember _   tR (FI f _   _ _ ) = tcError $ errorOptFunUnsup l f e
+    checkTypeMember es_ tR (MI _ Req mts)  =
+      case getMutability (envCHA γ) tR of
+        Just mR ->
+            case [ t | (m, t) <- mts, isSubtype γ mR m ] of
+              [] -> tcError $ errorMethMutIncomp l em mts mR
+              ts -> tcNormalCall γ l em (es_ `zip` nths) (mkAnd ts)
 
-    call tR _ (FI _ Req _ ft) = tcNormalCall γ l em (es `zip` nths) ft
-    call tR _ (FI _ _   _ _ ) = fatal (errorCallOptional l f tR) (es, tBot)
-
-    call tR mR (MI _ Req mts)
-      = case [ t | (m, t) <- mts, isSubtype γ mR m ] of
-        [] -> fatal (errorMethMutIncomp l em mts mR) (es, tBot)
-        ts -> tcNormalCall γ l em (es `zip` nths) (mkAnd ts)
-
-    call tR _ _ = fatal (errorCallOptional l f tR) (es, tBot)
+        Nothing -> tcError $ errorNoMutAvailable l e tR
 
 -- | `e(es)`
 tcCall γ (CallExpr l e es) _

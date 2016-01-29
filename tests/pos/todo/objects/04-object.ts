@@ -1,7 +1,3 @@
-/*@ bar :: () => { }  */
-function bar() {
-	var z = { bogzert: 100 };
-	return z;
+export function bar(): {} {
+	return  { bogzert: 100 };
 }
-
-bar();

@@ -40,7 +40,7 @@ import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Text.PrettyPrint.HughesPJ      (vcat, (<+>))
+import           Text.PrettyPrint.HughesPJ      (text, vcat, ($+$), (<+>))
 
 type FE g r = (CheckingEnvironment r g, Functor g)
 type PPRE r = (ExprReftable Int r, PPR r)
@@ -79,20 +79,20 @@ instance PP ConversionResult where
   pp (ConvFail es) = pp "ConvFail" <+> vcat (map pp es)
 
 
-data SubtypingResult  = EqT | SubT | SubErr [Error] deriving (Eq, Ord, Show)
+data SubtypingResult  = EqT | SubT | NoSub [Error] deriving (Eq, Ord, Show)
 
 instance PP SubtypingResult where
-  pp EqT  = pp "equal types"
-  pp SubT = pp "subtypes"
-  pp _    = pp "error in subtyping"
+  pp EqT       = pp "equal types"
+  pp SubT      = pp "subtypes"
+  pp (NoSub _) = pp "no subtypes"
 
 instance Monoid SubtypingResult where
-  mempty                          = EqT
-  mappend (SubErr e1) (SubErr e2) = SubErr $ e1 ++ e2
-  mappend _           (SubErr e2) = SubErr e2
-  mappend (SubErr e1) _           = SubErr e1
-  mappend EqT         EqT         = EqT
-  mappend _           _           = SubT
+  mempty                        = EqT
+  mappend (NoSub e1) (NoSub e2) = NoSub $ e1 ++ e2
+  mappend _          (NoSub e2) = NoSub e2
+  mappend (NoSub e1) _          = NoSub e1
+  mappend EqT        EqT        = EqT
+  mappend _          _          = SubT
 
 -- | convert: an "optimistic" version of subtyping that allows:
 --
@@ -108,7 +108,7 @@ convert l g t1 t2
   = case subtype l g t1 t2 of
     EqT       -> ConvOK
     SubT      -> ConvOK -- ConvWith (toType t2)
-    SubErr es -> castable l g es t1 t2
+    NoSub es -> castable l g es t1 t2
 
 castable _ γ _ (TOr t1s _) t2
   | any (\t1 -> isSubtype γ t1 t2) t1s
@@ -158,7 +158,7 @@ subtype l γ t1 t2
 
 -- | Rest (Fail)
 subtype l _ t1 t2
-  = SubErr [errorUncaughtSub l t1 t2]
+  = NoSub [errorUncaughtSub l t1 t2]
 
 --------------------------------------------------------------------------------
 subtypeObj :: (PPRE r, FE g r, IsLocated l) => l -> g r -> RType r -> RType r -> SubtypingResult
@@ -168,7 +168,7 @@ subtypeObj :: (PPRE r, FE g r, IsLocated l) => l -> g r -> RType r -> RType r ->
 --
 subtypeObj l γ t1 t2
   | not (isClassType (envCHA γ) t1) && isClassType (envCHA γ) t2
-  = SubErr [errorObjectType l t1 t2]
+  = NoSub [errorObjectType l t1 t2]
 
 subtypeObj l γ t1@(TObj e1s _) t2@(TObj e2s _)
   = subtypeObjMembers l γ (t1, e1s) (t2, e2s)
@@ -180,7 +180,7 @@ subtypeObj l γ t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
   | mutRelated t1, mutRelated t2, isAncestor (envCHA γ) x2 x1
   = SubT
   | mutRelated t1, mutRelated t2
-  = SubErr [errorIncompMutTy l t1 t2]
+  = NoSub [errorIncompMutTy l t1 t2]
 
 subtypeObj l γ t1@(TRef (Gen x1 (m1:t1s)) r1) t2@(TRef (Gen x2 (m2:t2s)) r2)
   --
@@ -191,7 +191,7 @@ subtypeObj l γ t1@(TRef (Gen x1 (m1:t1s)) r1) t2@(TRef (Gen x2 (m2:t2s)) r2)
   -- * Incompatible mutabilities
   --
   | not (isSubtype γ m1 m2)
-  = SubErr [errorIncompMutTy l t1 t2]
+  = NoSub [errorIncompMutTy l t1 t2]
   --
   -- * Both immutable, same name, non arrays: co-variant subtyping on arguments
   --
@@ -216,7 +216,7 @@ subtypeObj l γ t1@(TRef (Gen x1 (m1:t1s)) r1) t2@(TRef (Gen x2 (m2:t2s)) r2)
   = mconcat $ SubT : zipWith (subtype l γ) (m1':t1s') (m2:t2s)
 
   | otherwise
-  = SubErr [errorIncompatTypes (srcPos l) x1 x2]
+  = NoSub [errorIncompatTypes (srcPos l) x1 x2]
 
 subtypeObj l γ t1@(TClass (BGen c1 ts1)) t2@(TClass (BGen c2 ts2))
   | c1 == c2
@@ -224,22 +224,22 @@ subtypeObj l γ t1@(TClass (BGen c1 ts1)) t2@(TClass (BGen c2 ts2))
   , and $ uncurry (isSubtype γ) . swap <$> ts
   = EqT
   | otherwise
-  = SubErr [errorTClassSubtype l t1 t2]
+  = NoSub [errorTClassSubtype l t1 t2]
   where
     ts = [ (t1, t2) | (Just t1, Just t2) <- zip (btv_constr <$> ts1) (btv_constr <$> ts2) ]
 
 subtypeObj l _ (TMod m1) (TMod m2)
   | m1 == m2  = EqT
-  | otherwise = SubErr [errorTModule l m1 m2]
+  | otherwise = NoSub [errorTModule l m1 m2]
 --
 -- * Fall back to structural subtyping
 --
 subtypeObj l γ t1 t2 =
   case (expandType NonCoercive (envCHA γ) t1, expandType NonCoercive (envCHA γ) t2) of
     (Just ft1, Just ft2) -> subtypeObj l γ ft1 ft2
-    (Nothing , Nothing ) -> SubErr [errorUnresolvedTypes l t1 t2]
-    (Nothing , _       ) -> SubErr [errorNonObjectType l t1]
-    (_       , Nothing ) -> SubErr [errorNonObjectType l t2]
+    (Nothing , Nothing ) -> NoSub [errorUnresolvedTypes l t1 t2]
+    (Nothing , _       ) -> NoSub [errorNonObjectType l t1]
+    (_       , Nothing ) -> NoSub [errorNonObjectType l t2]
 
 
 subtypeObjMembers l γ (t1, TM m1 _ c1 k1 s1 n1) (t2, TM m2 _ c2 k2 s2 n2)
@@ -259,7 +259,7 @@ subtypeMems :: (IsLocated a, PPRE r, FE g r)
 subtypeMems l γ (t1, p1) (t2, p2)
   -- Props from p2 are missing from p1 - fail width
   | not (null diff21)
-  = SubErr [ errorObjSubtype l t1 t2 (map fst diff21) ]
+  = NoSub [ errorObjSubtype l t1 t2 (map fst diff21) ]
 
   -- Descend into property subtyping
   | otherwise
@@ -278,11 +278,11 @@ compareMem :: (FE g r, PPRE r, IsLocated a, PP f)
 compareMem l γ (f, (FI _ o1 m1 t1, FI _ o2 m2 t2))
   -- Different optionality modifier
   | o1 /= o2
-  = SubErr [ errorIncompatOptional (srcPos l) f ]
+  = NoSub [ errorIncompatOptional (srcPos l) f ]
 
   -- Incompatible field assignabilities
   | m1 /= m2
-  = SubErr [errorIncompMutElt (srcPos l) f m1 m2]
+  = NoSub [errorIncompMutElt (srcPos l) f m1 m2]
 
   -- Co-& Contra-Variance (mutable fields)
   | isSubtype γ m1 tMU
@@ -293,12 +293,12 @@ compareMem l γ (f, (FI _ o1 m1 t1, FI _ o2 m2 t2))
   = subtype l γ t1 t2
 
 compareMem l _ (_, (m1, m2))
-  = SubErr [ unsupportedMethodComp (srcPos l) m1 m2 ]
+  = NoSub [ unsupportedMethodComp (srcPos l) m1 m2 ]
 
 
 compareMaybe l γ f _ _ (Just c1) _ (Just c2) = f l γ c1 c2
 compareMaybe _ _ _ _ _ Nothing   _ Nothing   = SubT
-compareMaybe l _ _ e _ t1        _ t2        = SubErr [e (srcPos l) t1 t2]
+compareMaybe l _ _ e _ t1        _ t2        = NoSub [e (srcPos l) t1 t2]
 
 subtypeCalls l γ = compareMaybe l γ subtypeFun errorIncompCallSigs
 subtypeCtors l γ = compareMaybe l γ subtype    errorIncompCtorSigs
@@ -320,7 +320,7 @@ subtypeFun l γ t1@(TFun b1s o1 _) t2@(TFun b2s o2 _)
               : zipWith (subtype l γ) args2 args1
   where
     lengthSub | length b1s == length b2s = EqT
-              | otherwise                = SubErr [errorFunArgMismatch l t1 t2]
+              | otherwise                = NoSub [errorFunArgMismatch l t1 t2]
     args1     = map b_type b1s
     args2     = map b_type b2s
 
@@ -328,15 +328,15 @@ subtypeFun l γ t1@(TAnd _) t2@(TAnd t2s)
   | and $ isSubtype γ t1 <$> map snd t2s
   = SubT
   | otherwise
-  = SubErr [errorFuncSubtype l t1 t2]
+  = NoSub [errorFuncSubtype l t1 t2]
 
 subtypeFun l γ t1@(TAnd t1s) t2
   | or $ f <$> map snd t1s
   = SubT
   | otherwise
-  = SubErr [errorFuncSubtype l t1 t2]
+  = NoSub [errorFuncSubtype l t1 t2]
   where
     f t1 = isSubtype γ t1 t2
 
-subtypeFun l _ t1 t2 = SubErr [unsupportedConvFun l t1 t2]
+subtypeFun l _ t1 t2 = NoSub [unsupportedConvFun l t1 t2]
 

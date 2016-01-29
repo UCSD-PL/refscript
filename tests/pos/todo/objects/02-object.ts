@@ -1,11 +1,8 @@
-/*@ qualif PLusOne(v:number, w: number)     : v = w + 1                            */
+/*@ qualif PLusOne(v: int, w: int): v = w + 1 */
 
 /*@ gobj :: { a: number; b: string  ; oo: { n : number } } */
-var gobj  = { a: 5     , b: "String", oo: { n: 6 }       };
+let gobj  = { a: 5     , b: "String", oo: { n: 6 }       };
 
-/*@ foo :: ({ number | 0 < 1 } ) => { n:number } */
-function foo (n:number):Object {
+export function foo (n:number): { n: number } {
   return gobj.oo;
 }
-
-

@@ -83,7 +83,6 @@ import           Language.Rsc.Constraints
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
--- import           Language.Rsc.Liquid.Environment
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc               (concatMapM, mapPair, single)

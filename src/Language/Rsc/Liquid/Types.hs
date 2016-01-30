@@ -230,6 +230,18 @@ instance (PPR r, F.Subable r) => F.Subable (RTypeQ q r) where
   subst su    = emapReft (F.subst  . F.substExcept su) []
   subst1 t su = emapReft (\xs r -> F.subst1Except xs r su) [] t
 
+instance (PPR r, F.Subable r) => F.Subable (TypeMemberQ q r) where
+  syms     (FI s o m t)    = F.syms m ++ F.syms t
+  syms     (MI s o mts)    = F.syms mts
+  substa f (FI s o m t)    = FI s o (F.substa f m  ) (F.substa f t)
+  substa f (MI s o mts)    = MI s o (F.substa f mts)
+  substf f (FI s o m t)    = FI s o (F.substf f m  ) (F.substf f t)
+  substf f (MI s o mts)    = MI s o (F.substf f mts)
+  subst su (FI s o m t)    = FI s o (F.subst su m) (F.subst su t)
+  subst su (MI s o mts)    = MI s o (F.subst su mts)
+  subst1   (FI s o m t) su = FI s o (F.subst1 m su) (F.subst1 t su)
+  subst1   (MI s o mts) su = MI s o (F.subst1 mts su)
+
 
 --------------------------------------------------------------------------------
 isTrivialRefType :: RefType -> Bool

@@ -158,7 +158,7 @@ subtype l γ t1 t2
 
 -- | Rest (Fail)
 subtype l _ t1 t2
-  = NoSub [errorUncaughtSub l t1 t2]
+  = NoSub [ errorSubtype l t1 t2 ]
 
 --------------------------------------------------------------------------------
 subtypeObj :: (PPRE r, FE g r, IsLocated l) => l -> g r -> RType r -> RType r -> SubtypingResult

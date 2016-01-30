@@ -5,6 +5,6 @@ function foo(x: number): number[] {
 }
 
 /*@ bar :: (y:number) => IArray<{ number | v = y }>  */
-function bar(y: number): number[] {
+export function bar(y: number): number[] {
     return foo(y);
 }

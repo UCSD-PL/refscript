@@ -7,6 +7,6 @@ function indirectIndex(x: number[], b: number[], i: number) : number {
 
 /*@ writeIndex :: (x: IArray<number>, i: idx<x>, v : number) => void */
 function writeIndex(x : number[], i : number, v: number) : void {
-    // x[i] = v;        // Not supported 
+    // x[i] = v;        // Not supported
     return;
 }

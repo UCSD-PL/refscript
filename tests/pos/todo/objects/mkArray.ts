@@ -1,10 +1,13 @@
+/*@ qualif Eq5(v: int): v > 0 */
 
-/*@ mkArray :: (number) => #Array[#Mutable, { number | 0 <= v} ] */
-function mkArray(n: number): number[] {
-	var i = 0;
-	var a = [];
-	while (i < n){
-		a.push(i);
+/*@ mkArray :: (n: number) => MArray<posint> */
+export function mkArray(n: number): MArray<number> {
+	let i = 1;
+	/*@ a :: MArray<posint> */
+	let a: MArray<number> = [];
+	while (i < n) {
+		a.push(i--);
+		// assert(false);
 	}
 	return a;
 }

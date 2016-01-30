@@ -465,7 +465,7 @@ consVarDecl g (VarDecl l x (Just e))
       Nothing ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds l "consVarDecl" [SI (F.symbol x) Local WriteLocal Initialized $ ltracePP l ("Local VarDecl no annot " ++ ppshow x) eT] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [SI (F.symbol x) Local WriteLocal Initialized eT] gy
 
       -- Local (with type annotation)
       Just (SI n lc  WriteLocal _ t) -> do
@@ -850,7 +850,7 @@ consExpr g e@(ArrayLit l es) to
 -- | { f1: e1, ..., fn: en }
 --
 consExpr g e@(ObjectLit l pes) to
-  = traceTypePP l e $ consCall g l BIObjectLit (zip es cts) ft
+  = consCall g l BIObjectLit (zip es cts) ft
   where
     (cts, ft) = objLitTy l g ps to
     (ps , es) = unzip pes
@@ -907,7 +907,7 @@ consCall :: PP a => CGEnv -> AnnLq -> a -> [(Expression AnnLq, Maybe RefType)]
 --------------------------------------------------------------------------------
 consCall g l fn ets ft@(validOverloads g l -> fts)
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      ts <- ltracePP l ("call to " ++ ppshow fn) <$> mapM (`cgSafeEnvFindTyM` g') xes
+      ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
         ft : _ -> consCheckArgs l g' fn ft ts xes
         _      -> cgError $ errorNoMatchCallee (srcPos l) fn ts ft

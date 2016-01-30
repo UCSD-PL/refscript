@@ -130,20 +130,27 @@ errorIncompMutElt l f m m'    = mkErr l $ printf "Incompatible assignability mod
 errorOptionalElt l p t t'     = mkErr l $ printf "Unmatching optionality values for property '%s' in types '%s' and '%s'." (ppshow p) (ppshow t) (ppshow t')
 errorIncompatOptional l f     = mkErr l $ printf "Property '%s' has incompatible optionality modifiers." (ppshow f)
 errorConstrMissing l t        = mkErr l $ printf "Could not find constructor for type '%s'." (ppshow t)
-errorSubtype l t t'           = mkErr l $ printf "Type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
 errorTClassSubtype l s s'     = mkErr l $ printf "Type 'typeof %s' is not a subtype of 'typeof %s'" (ppshow s) (ppshow s')
 errorTEnumSubtype l s s'      = mkErr l $ printf "Type 'enum %s' is not a subtype of 'enum %s'." (ppshow s) (ppshow s')
 errorTModule l s s'           = mkErr l $ printf "Modules '%s' and '%s' are incompatible." (ppshow s) (ppshow s')
 errorUnionSubtype l t t'      = mkErr l $ printf "Union type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
-errorObjSubtype l t t' fs     = mkErr l $ printf "Object type '%s' is not a subtype of '%s'. The latter is missing fields: %s." (ppshow t) (ppshow t')
-                                                  (show $ intersperse comma $ map pp fs)
-errorFuncSubtype l t t'       = mkErr l $ printf "Function type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
 
-errorUncaughtSub l t t'       = mkErr l $ show $ text "Subtyping between types" $+$
-                                                 nest 2 (pp t) $+$
-                                                 text "and" $+$
-                                                 nest 2 (pp t') $+$
-                                                 text "is unhandled."
+errorObjSubtype l t t' fs     = mkErr l $ show $ text "Object type" $+$
+                                                 nest 2 (pp t)              $+$
+                                                 text "is not a subtype of" $+$
+                                                 nest 2 (pp t')             $+$
+                                                 text "The latter is missing field(s):" <+>
+                                                 intersperse comma (map pp fs)
+
+errorFuncSubtype l t t'       = mkErr l $ show $ text "Function type"       $+$
+                                                 nest 2 (pp t)              $+$
+                                                 text "is not a subtype of" $+$
+                                                 nest 2 (pp t')
+
+errorSubtype l t t'           = mkErr l $ show $ text "Type"                $+$
+                                                 nest 2 (pp t)              $+$
+                                                 text "is not a subtype of" $+$
+                                                 nest 2 (pp t')
 
 -- Typechecking
 errorCallNotSup l fn ft es ts = mkErr l $ show $ text "Cannot call"       <+> ticks (pp fn)                 <+>

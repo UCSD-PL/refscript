@@ -80,6 +80,13 @@ declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
 /*@ builtin_PrefixLNot :: <A>(x: A) => {v:boolean | Prop v <=> not (Prop x) } */
 declare function builtin_PrefixLNot<A>(x: A): boolean;
 
+/*@ builtin_OpLAnd ::<B>(x: undefined, y:B) => undefined */
+/*@ builtin_OpLAnd ::<B>(x: null, y:B) => null */
+/*@ builtin_OpLAnd ::<A>(x:A, y:A) => { v:A | if Prop x then v = y else v = x } */
+/*@ builtin_OpLAnd ::<A,B>(x:A, y:B) => { v:top | (Prop(v) <=> (Prop(x) && Prop(y))) } */
+declare function builtin_OpLAnd(x: any, y: any): any;
+
+
 // /*@ builtin_PrefixBNot ::
 //     (x: number) => {v:number | v = 0 - (x + 1) }
 //  */

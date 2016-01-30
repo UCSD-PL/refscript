@@ -232,7 +232,7 @@ splitC (Sub g i@(Ci _ l) t1@(TObj ms1 r1) t2@(TObj ms2 _))
   | F.isFalse (F.simplify r1)
   = return []
   | otherwise
-  = do  cs     <- bsplitC g i (ltracePP i "LHS" t1) (ltracePP i "RHS" t2)
+  = do  cs     <- bsplitC g i t1 t2
         (x,g') <- cgEnvAddFresh "" l t1 g
         cs'    <- splitTM g' (F.symbol x) i ms1 ms2
         return $ cs ++ cs'

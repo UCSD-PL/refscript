@@ -460,12 +460,12 @@ consVarDecl g (VarDecl _ x (Just e@FuncExpr{}))
   = (snd <$>) <$> consExpr g e (v_type <$> envFindTy x (cge_names g))
 
 consVarDecl g (VarDecl l x (Just e))
-  = case ltracePP l x $ envFindTy x (cge_names g) of
+  = case envFindTy x (cge_names g) of
       -- Local (no type annotation)
       Nothing ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds l "consVarDecl" [SI (F.symbol x) Local WriteLocal Initialized eT] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [SI (F.symbol x) Local WriteLocal Initialized $ ltracePP l ("Local VarDecl no annot " ++ ppshow x) eT] gy
 
       -- Local (with type annotation)
       Just (SI n lc  WriteLocal _ t) -> do
@@ -493,7 +493,7 @@ consVarDecl g (VarDecl l x (Just e))
           -- _       <- subType l Nothing gy eT t
           _       <- subType l Nothing gy eT fta
           _       <- subType l Nothing gy fta t
-          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc RdOnly Initialized eT] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc RdOnly Initialized fta] gy
 
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 
@@ -813,7 +813,8 @@ consExpr g0 ef@(DotRef l e f) _
     doField g x o m t | isSubtype g m tIM = immFieldTy g x t
                       | otherwise         = otherFieldTy g x t
 
-    immFieldTy   g x t = fmap F.top t `eSingleton` mkOffsetSym x f
+    -- XXX: Don't fTop here cause it breaks functions
+    immFieldTy   g x t = t `eSingleton` mkOffsetSym x f
     otherFieldTy g x t = substThis x t
 
     addWithOpt Opt = cgEnvAddFreshWithInit InitUnknown "DotRef" l
@@ -849,7 +850,7 @@ consExpr g e@(ArrayLit l es) to
 -- | { f1: e1, ..., fn: en }
 --
 consExpr g e@(ObjectLit l pes) to
-  = consCall g l BIObjectLit (zip es cts) ft
+  = traceTypePP l e $ consCall g l BIObjectLit (zip es cts) ft
   where
     (cts, ft) = objLitTy l g ps to
     (ps , es) = unzip pes
@@ -906,7 +907,7 @@ consCall :: PP a => CGEnv -> AnnLq -> a -> [(Expression AnnLq, Maybe RefType)]
 --------------------------------------------------------------------------------
 consCall g l fn ets ft@(validOverloads g l -> fts)
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      ts <- mapM (`cgSafeEnvFindTyM` g') xes
+      ts <- ltracePP l ("call to " ++ ppshow fn) <$> mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
         ft : _ -> consCheckArgs l g' fn ft ts xes
         _      -> cgError $ errorNoMatchCallee (srcPos l) fn ts ft

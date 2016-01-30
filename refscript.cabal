@@ -78,7 +78,8 @@ Executable rsc
                   , Language.Rsc.Liquid.Alias
                   , Language.Rsc.Liquid.CGMonad
                   , Language.Rsc.Liquid.Checker
-                  , Language.Rsc.Liquid.Constraint
+                  , Language.Rsc.Liquid.Constraints
+                  , Language.Rsc.Constraints
                   , Language.Rsc.Liquid.Environment
                   , Language.Rsc.Liquid.Qualifiers
                   , Language.Rsc.Liquid.Types

@@ -31,12 +31,13 @@ import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.CmdLine
+import           Language.Rsc.Constraints
 import           Language.Rsc.Core.EitherIO
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.CGMonad
-import           Language.Rsc.Liquid.Constraint
+import           Language.Rsc.Liquid.Constraints
 import           Language.Rsc.Liquid.Environment
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
@@ -459,7 +460,7 @@ consVarDecl g (VarDecl _ x (Just e@FuncExpr{}))
   = (snd <$>) <$> consExpr g e (v_type <$> envFindTy x (cge_names g))
 
 consVarDecl g (VarDecl l x (Just e))
-  = case envFindTy x (cge_names g) of
+  = case ltracePP l x $ envFindTy x (cge_names g) of
       -- Local (no type annotation)
       Nothing ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
@@ -627,21 +628,6 @@ consAsgn l g x e =
     Nothing -> mseq (consExpr g e Nothing) $ \(x', g') -> do
                  t      <- cgSafeEnvFindTyM x' g'
                  Just  <$> cgEnvAdds l "consAsgn-1" [SI (F.symbol x) Local WriteLocal Initialized t] g'
-
-
--- --------------------------------------------------------------------------------
--- withContextual :: PP a => AnnLq -> a -> Maybe RefType -> CGM (Maybe (Id AnnLq, CGEnv))
---                                                       -> CGM (Maybe (Id AnnLq, CGEnv))
--- --------------------------------------------------------------------------------
--- withContextual l e (Just s) act = act >>= go
---   where
---     go (Just (x, g)) = do t <- cgSafeEnvFindTyM x g
---                           subType l errMsg g t s
---                           return (Just (x, g))
---     go Nothing       = return Nothing
---     errMsg           = errorContextual l e s
--- withContextual _ _ _ act = act
-
 
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh,

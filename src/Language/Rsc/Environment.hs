@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TupleSections         #-}
@@ -10,6 +11,10 @@ module Language.Rsc.Environment (
 
   -- * Environments
     CheckingEnvironment (..)
+  , CGEnvR (..), CGEnv, CGEnvEntry
+
+
+  -- * Operations
   , chkEnvFindTy, chkEnvFindTy'
   , safeEnvFindTy
   , envFindBound, envFindBoundOpt
@@ -88,6 +93,42 @@ class CheckingEnvironment r t where
   --
   envFnId   :: t r -> Int
 
+
+-------------------------------------------------------------------------------------
+-- | Constraint Generation Environment
+-------------------------------------------------------------------------------------
+
+data CGEnvR r = CGE {
+    cge_names  :: !(Env (SymInfo r))
+  , cge_bounds :: !(Env (RType r))
+  , cge_ctx    :: !IContext
+  , cge_path   :: !AbsPath
+  , cge_cha    :: !(ClassHierarchy r)
+  , cge_fenv   :: !({-F.SEnv-} F.IBindEnv)          -- Fixpoint bindings - XXX: Why not in monad? Remove?
+  , cge_guards :: ![F.Pred]                     -- Branch target conditions
+  , cge_consts :: !(Env (RType r))              -- Constants
+  , cge_mut    :: !(Maybe (MutabilityR r))      -- Method mutability
+  , cge_this   :: !(Maybe (RType r))            -- Method mutability
+  , cge_fnid   :: !Int                          -- Enclosing fun's id
+  } deriving (Functor)
+
+instance CheckingEnvironment r CGEnvR where
+  envNames  = cge_names
+  envBounds = cge_bounds
+  envCHA    = cge_cha
+  envPath   = cge_path
+  envCtx    = cge_ctx
+  envMut    = cge_mut
+  envThis   = cge_this
+  envFnId   = cge_fnid
+
+type CGEnv      = CGEnvR F.Reft
+type CGEnvEntry = SymInfo F.Reft
+
+
+-------------------------------------------------------------------------------
+-- | Operations
+-------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
 chkEnvFindTy' :: (CheckingEnvironment r t, Symbolic a) => a -> t r -> Maybe (SymInfo r)

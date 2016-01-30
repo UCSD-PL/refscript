@@ -46,6 +46,7 @@ module Language.Rsc.Typecheck.Types (
   , isTPrim, isTAny, isTTop, isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
   , isTNull, isTVoid, isTFun, isArrayType, isTBot
 
+
   --   # Operations
   , orNull
 
@@ -334,6 +335,8 @@ eqV :: RType r -> RType r -> Bool
 TVar (TV s1 _) _ `eqV` TVar (TV s2 _) _ = s1 == s2
 _                `eqV` _                = False
 
+
+
 ----------------------------------------------------------------------------------
 rTypeR' :: F.Reftable r => RType r -> Maybe r
 ----------------------------------------------------------------------------------
@@ -391,6 +394,9 @@ tUndef  = tPrim TUndefined
 tAny    = tPrim TAny
 tNull   = tPrim TNull
 tErr    = tVoid
+
+
+
 
 
 ---------------------------------------------------------------------------------

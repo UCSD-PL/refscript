@@ -6,6 +6,7 @@ interface Array<M extends ReadOnly, T> {
     /*@            __getLength(): number */
     __getLength(): number;
 
+    /*@ @Mutable push(x: T): number */
     push(x: T): number;
     // push<N>(...items: Array<T>): number;
 

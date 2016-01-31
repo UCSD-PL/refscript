@@ -357,7 +357,7 @@ tcVarDecl γ v@(VarDecl l x (Just e))
   = case envFindTy x (tce_names γ) of
       -- Local (no type annotation)
       Nothing ->
-        do  (e', to) <- ltracePP l x <$> tcExprW γ e
+        do  (e', to) <- tcExprW γ e
             return $ (VarDecl l x (Just e'),
                       tcEnvAddo γ x $ SI (F.symbol x) Local WriteLocal Initialized <$> to)
 
@@ -906,9 +906,9 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es) _
     checkTypeMember es_ tR (FI _ Req _ ft) = tcNormalCall γ l em (es_ `zip` nths) ft
     checkTypeMember _   tR (FI f _   _ _ ) = tcError $ errorOptFunUnsup l f e
     checkTypeMember es_ tR (MI _ Req mts)  =
-      case ltracePP l "Mut" $ getMutability (envCHA γ) tR of
+      case getMutability (envCHA γ) tR of
         Just mR ->
-            case [ t | (m, t) <- mts, ltracePP l (ppshow mR ++ " <: " ++ ppshow m) $ isSubtype γ mR m ] of
+            case [ t | (m, t) <- mts, isSubtype γ mR m ] of
               [] -> tcError $ errorMethMutIncomp l em mts mR
               ts -> tcNormalCall γ l em (es_ `zip` nths) (mkAnd ts)
 

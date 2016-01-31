@@ -32,7 +32,7 @@ ltracePP l s x =
          printf "%s" (ppshow x)) x
 
 instance PP Error where
-  pp e = pp (errLoc e) <+> pp (errMsg e)
+  pp e = pp (errLoc e) $+$ pp (errMsg e)
 
 convertError tgt e  = errortext $ msg <+> pp e
   where

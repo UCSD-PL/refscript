@@ -183,18 +183,24 @@ applySolution  = fmap . fmap . tx
 -- | Debug info
 --
 dumpJS f cha s p = writeFile (extFileName Result (dropExtension f ++ s)) $ show
-                 $  pp p
-                $+$ pp cha
-                $+$ ppCasts p
+                 $ pp p
+               $+$ pp cha
+               $+$ ppCasts p
 
 ppCasts (Rsc { code = Src fs })
   | isEmpty castDoc = empty
-  | otherwise       = nest 2 castDoc
+  | otherwise       = text ""
+                  $+$ pp (take 80 (repeat '='))
+                  $+$ text "Casts"
+                  $+$ pp (take 80 (repeat '-'))
+                  $+$ nest 2 castDoc
+                  $+$ pp (take 80 (repeat '='))
   where
-    castDoc = fcat $ map ppEntry entries
-    ppEntry = \(_, c) -> pp c
-    entries = [ (srcPos a, t) | a <- concatMap FO.toList fs
-                              , TypeCast _ t <- fFact a ]
+    castDoc = vcat $ map ppEntry entries
+    ppEntry = \(_, c) -> c
+    as      = concatMap FO.toList fs
+    entries = [(srcPos a, pp "TYPE-CAST" <+> pp t) | a <- as, TypeCast _ t <- fFact a]
+           ++ [(srcPos a, pp "DEAD-CAST" <+> vcat (map pp e)) | a <- as, DeadCast _ e <- fFact a ]
 
 --------------------------------------------------------------------------------
 generateConstraints :: Config -> FilePath -> RefScript -> ClassHierarchy F.Reft -> CGInfo
@@ -270,7 +276,8 @@ initCallableEnv :: (PP x, IsLocated x)
 initCallableEnv l g f fty xs s
   = do  g1 <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-0") params g0
         g2 <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-1") arg g1
-        freshenCGEnvM g2
+        -- g' <- freshenCGEnvM g2
+        return g2
   where
     g0     = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
              -- No FP binding for these
@@ -310,8 +317,9 @@ consFun _ (FunctionStmt _ _ _ Nothing)
   = return ()
 consFun g (FunctionStmt l f xs (Just body))
   = case envFindTy f (cge_names g) of
-      Just (SI _ _ _ _ t) -> cgFunTys l f xs t >>= mapM_ (consCallable l g f xs body)
-      Nothing             -> cgError $ errorMissingSpec (srcPos l) f
+      Just s  -> cgFunTys l f xs (v_type s)
+             >>= mapM_ (consCallable l g f xs body)
+      Nothing -> cgError $ errorMissingSpec (srcPos l) f
 
 consFun _ s
   = die $ bug (srcPos s) "consFun called not with FunctionStmt"
@@ -932,7 +940,7 @@ consCheckArgs l g fn ft ts xes
   = do  (rhs, rt) <- instantiateFTy l g fn xes ft
         lhs       <- zipWithM  (instantiateTy l g fn) [1..] ts
         _         <- zipWithM_ (subType l Nothing g) lhs rhs
-        Just      <$> cgEnvAddFresh "5" l rt g
+        Just     <$> cgEnvAddFresh "5" l rt g
 
 --------------------------------------------------------------------------------
 instantiateTy :: PP a => AnnLq -> CGEnv -> a -> Int -> RefType -> CGM RefType

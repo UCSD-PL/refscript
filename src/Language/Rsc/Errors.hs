@@ -81,6 +81,7 @@ errorIllFormedType l t        = mkErr l $ printf "Type '%s' is ill-formed" (ppsh
 ---------------------------------------------------------------------------
 -- | SSA
 ---------------------------------------------------------------------------
+errorReadOnlyUninit l x       = mkErr l $ printf "Cannot declare uninitialized readonly variable `%s`." (ppshow x)
 errorWriteImmutable l m x     = mkErr l $ printf "Cannot assign to %s-variable '%s'. " (ppshow m) (ppshow x)
                                        ++ printf "Add a type annotation to indicate it is globally writable."
 errorSSAUnboundId l x         = mkErr l $ printf "SSA: Identifier '%s' unbound" (ppshow x)

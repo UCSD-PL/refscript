@@ -126,7 +126,7 @@ solveConstraints cfg f cgi
     fpConf      = def { C.real        = real cfg
                       , C.ueqAllSorts = C.UAS True
                       , C.srcFile     = f
-                      -- , C.save        = True
+                      , C.save        = True
                       }
 
 -- NOT VALID WITH NEW L-F -- solveConstraints cfg f cgi
@@ -830,11 +830,12 @@ consExpr g0 ef@(DotRef l e f) _
 
 -- | e1[e2]
 --
+--    TODO: TEnum
+--
 consExpr g e@(BracketRef l e1 e2) _
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
-      opTy <- cgSafeEnvFindTyM x1 g' >>= \case
-                -- TEnum _ -> cgError $ unimplemented (srcPos l) msg e
-                _       -> cgSafeEnvFindTyM (builtinOpId BIBracketRef) g'
+      -- t1    <- ltracePP l "t1" <$> cgSafeEnvFindTyM x1 g'
+      opTy  <- cgSafeEnvFindTyM (builtinOpId BIBracketRef) g'
       consCall g' l BIBracketRef ([vr x1, e2] `zip` nths) opTy
   where
     msg = "Support for dynamic access of enumerations"

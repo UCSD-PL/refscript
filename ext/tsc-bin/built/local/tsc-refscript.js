@@ -2459,7 +2459,8 @@ var ts;
         refscript_Does_not_supported_function_expressions_as_field_initializers: { code: 10046, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Does not supported function expressions as field initializers." },
         refscript_Only_supports_block_scoped_variables_let_or_const: { code: 10047, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Only supports block-scoped variables (let or const)." },
         refscript_Unsupported_postfix_operator_0: { code: 10048, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Unsupported postfix operator '{0}'." },
-        refscript_Unsupported_for_loop_initialization_expression_0: { code: 10049, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Unsupported for loop initialization expression '{0}'." }
+        refscript_Unsupported_for_loop_initialization_expression_0: { code: 10049, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Unsupported for loop initialization expression '{0}'." },
+        refscript_Only_support_single_variable_initialization_at_ForIn_statement: { code: 10050, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Only support single variable initialization at ForIn statement." }
     };
 })(ts || (ts = {}));
 /// <reference path="core.ts"/>
@@ -27020,6 +27021,8 @@ var ts;
                         return emptyStatementToRsStmt(state, node);
                     case ts.SyntaxKind.ForStatement:
                         return forStatementToRsStmt(state, node);
+                    case ts.SyntaxKind.ForInStatement:
+                        return forinStatementToRsStmt(state, node);
                 }
                 state.error(node, ts.Diagnostics.refscript_0_SyntaxKind_1_not_supported_yet, "nodeToRsStmt", ts.SyntaxKind[node.kind]);
             }
@@ -27440,6 +27443,23 @@ var ts;
                     init = new ts.RsNoInit(nodeToSrcSpan(node), []);
                 }
                 return new ts.RsForStmt(nodeToSrcSpan(node), [], init, (node.condition) ? new ts.RsJust(nodeToRsExp(state, node.condition)) : new ts.RsNothing(), (node.incrementor) ? new ts.RsJust(nodeToRsExp(state, node.incrementor)) : new ts.RsNothing(), nodeToRsStmt(state, node.statement));
+            }
+            function forinStatementToRsStmt(state, node) {
+                function getForinVar() {
+                    if (node.initializer.kind === ts.SyntaxKind.VariableDeclarationList) {
+                        var vds = node.initializer.declarations;
+                        if (vds.length === 1) {
+                            var declaration = vds[0];
+                            var id = nodeToRsId(state, declaration.name);
+                            return new ts.RsForInVar(id);
+                        }
+                    }
+                    throw new Error(ts.Diagnostics.refscript_Only_support_single_variable_initialization_at_ForIn_statement.key);
+                }
+                var init = getForinVar();
+                var exp = nodeToRsExp(state, node.expression);
+                var body = nodeToRsStmt(state, node.statement);
+                return new ts.RsForInStmt(nodeToSrcSpan(node), [], init, exp, body);
             }
             function constructorDeclarationToRsClassElts(state, node) {
                 var isAmbient = !!(node.flags & 2);

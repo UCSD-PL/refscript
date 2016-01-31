@@ -287,7 +287,7 @@ mkLiquidError l g t1 t2 = mkErr l $ show
               $ text "Liquid Type Error" $+$
                 nest 2
                 (
-                  text "In Environment:"  $+$ nest 4 (pp γ ) $+$
+                  -- text "In Environment:"  $+$ nest 4 (pp γ ) $+$
                   text "With guards:"     $+$ nest 4 (vcat $ map pp gr) $+$
                   text "Left hand side:"  $+$ nest 4 (pp τ1) $+$
                   text "Right hand side:" $+$ nest 4 (pp τ2)

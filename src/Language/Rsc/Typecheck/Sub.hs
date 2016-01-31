@@ -308,7 +308,8 @@ compareMem l _ (_, (m1, m2))
 
 
 compareMaybe l γ f _ _ (Just c1) _ (Just c2) = f l γ c1 c2
-compareMaybe _ _ _ _ _ Nothing   _ Nothing   = SubT
+compareMaybe _ _ _ _ _ Nothing   _ Nothing   = EqT
+compareMaybe _ _ _ _ _ _         _ Nothing   = SubT
 compareMaybe l _ _ e _ t1        _ t2        = NoSub [e (srcPos l) t1 t2]
 
 subtypeCalls l γ = compareMaybe l γ subtypeFun errorIncompCallSigs

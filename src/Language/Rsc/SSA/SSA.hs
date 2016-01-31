@@ -882,6 +882,8 @@ ssaVarDecl g (VarDecl l x (Just e)) = do
 ssaVarDecl g v@(VarDecl l x Nothing)
   | Ambient `elem` map thd4 (scrapeVarDecl v)     -- declare var a;
   = return ([], VarDecl l x Nothing)
+  | RdOnly `elem` map thd4 (scrapeVarDecl v)
+  = ssaError $ errorReadOnlyUninit l x
   | otherwise
   = ([],) <$> (VarDecl l <$> updSsaEnv g l x
                          <*> justM (VarRef <$> fr_ l <*> freshenIdSSA undefinedId))

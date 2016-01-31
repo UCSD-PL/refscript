@@ -13,7 +13,7 @@ function extend(src, dest) {
   return dest;
 }
 
-var options = {};
+let options = {};
 
 var this_options = extend({
     canvasHeight: 100,

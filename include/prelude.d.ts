@@ -2,8 +2,9 @@
 /*@ builtin_BIBracketRef :: <A>(x: UArray<A> , n: idx<x>)  => A */
 /*@ builtin_BIBracketRef :: <A>(x: IArray<A> , n: idx<x>)  => A */
 /*@ builtin_BIBracketRef :: <A>(x: MArray<A> , n: number)  => A + undefined */
-/*@ builtin_BIBracketRef :: <A>({[y: string]: A }, string) => A + undefined */
-declare function builtin_BIBracketRef<A>(a: A[], n: number): A;
+/*@ builtin_BIBracketRef :: <A>(o: {[y: string]: A }, x: string)
+    => { A + undefined | (hasProperty o x) <=> (Prop v) } */
+declare function builtin_BIBracketRef(a: any, n: any): any;
 
 // TODO : add case for A<AssignsFields> or A<Unique>
 
@@ -80,6 +81,13 @@ declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
 /*@ builtin_PrefixLNot :: <A>(x: A) => {v:boolean | Prop v <=> not (Prop x) } */
 declare function builtin_PrefixLNot<A>(x: A): boolean;
 
+/*@ builtin_OpLAnd ::<B>(x: undefined, y:B) => undefined */
+/*@ builtin_OpLAnd ::<B>(x: null, y:B) => null */
+/*@ builtin_OpLAnd ::<A>(x:A, y:A) => { v:A | if (Prop x) then (v = y) else (v = x) } */
+/*@ builtin_OpLAnd ::<A,B>(x:A, y:B) => { v:top | (Prop(v) <=> (Prop(x) && Prop(y))) } */
+declare function builtin_OpLAnd(x: any, y: any): any;
+
+
 // /*@ builtin_PrefixBNot ::
 //     (x: number) => {v:number | v = 0 - (x + 1) }
 //  */
@@ -118,12 +126,20 @@ declare function builtin_BITruthy<A>(x: A): boolean;
 /*@ builtin_BIFalsy  :: <A>(x:A) => { v:boolean | Prop v <=> not (Prop x) } */
 declare function builtin_BIFalsy<A>(x: A): boolean;
 
+
+/*@ builtin_BIForInKeys :: <A>(a: IArray<A>) => IArray<idx<a>> */
+/*@ builtin_BIForInKeys ::    (o: { }      ) => IArray<{ string | (hasProperty o v) && (enumProp o v) }> */
+declare function builtin_BIForInKeys(obj: Object): string[];
+
+
+
+// INVARIANTS
+
 /*@ invariant {v: undefined | [(ttag(v) = "undefined"); not (Prop v) ]} */
 /*@ invariant {v: null      | [(ttag(v) = "object"   ); not (Prop v) ]} */
 /*@ invariant {v: boolean   | [(ttag(v) = "boolean"  )]} */
 /*@ invariant {v: string    | [(ttag(v) = "string"   ); (Prop(v) <=> v /= "" )]} */
 /*@ invariant {v: number    | [(ttag(v) = "number"   ); (Prop(v) <=> v /= 0  )]}	*/
-
 
 // GENERAL PURPOSE AUXILIARY DEFINITIONS
 
@@ -196,24 +212,15 @@ declare type negint = number;
 /*@ qualif Tag  (v: Str , x: a  ): v = ttag x   */
 /*@ qualif Len  (v: int , x: a  ): v < len x    */
 
-/**
- * 	hasProperty: this property is true if the first string argument is a
- * 	property of the object referenced in the second, INCLUDING prototype traversal.
- *
- *  hasDirectProperty: this property is true if the first string argument is a
- *  properyty of the object referenced in the second, NOT INCLUDING prototype
- *  traversal.
- */
-
-/*@ measure hasProperty         :: <A>  (string, A) => bool     */
-/*@ measure hasDirectProperty   :: <A>  (string, A) => bool     */
-/*@ measure enumProp            :: <A>  (string, A) => bool     */
-/*@ measure ttag                :: <A>  (A) => string           */
-/*@ measure Prop                :: <A>  (A) => bool             */
-/*@ measure extends_class       :: <A>  (A,string) => bool      */
-/*@ measure extends_interface   :: <A>  (A,string) => bool      */
-/*@ measure offset              :: <A,B>(x:A, y:string) => B    */
-/*@ measure len                 :: <M,A>(Array<M,A>) => number  */
+/*@ measure hasProperty         :: <A>  (x: A, p: string) => bool */
+/*@ measure hasDirectProperty   :: <A>  (x: A, p: string) => bool */
+/*@ measure enumProp            :: <A>  (x: A, p: string) => bool */
+/*@ measure ttag                :: <A>  (x: A) => string          */
+/*@ measure Prop                :: <A>  (x: A) => bool            */
+/*@ measure extends_class       :: <A>  (x: A, c: string) => bool */
+/*@ measure extends_interface   :: <A>  (x: A, i: string) => bool */
+/*@ measure offset              :: <A,B>(x: A, y: string) => B    */
+/*@ measure len                 :: <M,A>(x: Array<M,A>) => number */
 
 /*@ undefined :: undefined */
 declare let undefined;

@@ -1003,8 +1003,8 @@ tcCallCaseTry γ l fn ts ((i,ft):fts)
       (βs, its1, _)  <- instantiateFTy l (tce_ctx γ) fn ft
       ts1            <- zipWithM (instantiateTy l $ tce_ctx γ) [1..] ts
       θ              <- unifyTypesM (srcPos l) γ ts1 its1
-      (ts2, its2)    <- pure $ apply θ (ts1, its1)
-      (ts', cs)      <- pure $ unzip [(t, c) | (t, BTV _ _ (Just c)) <- zip ts2 βs]
+      (ts2, its2)    <- pure (apply θ (ts1, its1))
+      (ts', cs)      <- pure (unzip [(t, c) | (t, BTV _ _ (Just c)) <- zip ts2 βs])
       case not (and (zipWith (isSubtype γ) ts' cs)) of
         True -> return Nothing
         _    -> case and (zipWith (isSubtype γ) ts2 its2) of

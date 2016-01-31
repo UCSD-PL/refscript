@@ -1,19 +1,10 @@
 
-/**
- * 	hasProperty: this property is true if the first string argument is a
- * 	property of the object referenced in the second, INCLUDING prototype traversal.
- *
- *  hasDirectProperty: this property is true if the first string argument is a
- *  properyty of the object referenced in the second, NOT INCLUDING prototype
- *  traversal.
- */
-
-/*@ measure hasProperty         :: <A>  (string, A) => bool     */
-/*@ measure hasDirectProperty   :: <A>  (string, A) => bool     */
-/*@ measure enumProp            :: <A>  (string, A) => bool     */
-/*@ measure ttag                :: <A>  (A) => string           */
-/*@ measure Prop                :: <A>  (A) => bool             */
-/*@ measure extends_class       :: <A>  (A,string) => bool      */
-/*@ measure extends_interface   :: <A>  (A,string) => bool      */
-/*@ measure offset              :: <A,B>(x:A, y:string) => B    */
-/*@ measure len                 :: <M,A>(Array<M,A>) => number  */
+/*@ measure hasProperty         :: <A>  (x: A, p: string) => bool */
+/*@ measure hasDirectProperty   :: <A>  (x: A, p: string) => bool */
+/*@ measure enumProp            :: <A>  (x: A, p: string) => bool */
+/*@ measure ttag                :: <A>  (x: A) => string          */
+/*@ measure Prop                :: <A>  (x: A) => bool            */
+/*@ measure extends_class       :: <A>  (x: A, c: string) => bool */
+/*@ measure extends_interface   :: <A>  (x: A, i: string) => bool */
+/*@ measure offset              :: <A,B>(x: A, y: string) => B    */
+/*@ measure len                 :: <M,A>(x: Array<M,A>) => number */

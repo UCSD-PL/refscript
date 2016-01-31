@@ -1,20 +1,14 @@
 /*@ qualif PLusOne(v:number, w: number): v = w + 1 */
 /*@ qualif Eq5(v:number): v = 5                    */
 
-function inc(n) {
-  return n + 1;
-}
+function inc(n: number) { return n + 1; }
 
 /*@ readonly */
-var gobj = {
-  a: 5,
-  b: "String",
-  f: inc
-};
+let gobj = { a: 5, b: "String", f: inc };
 
 /*@ foo :: () => { number | v = 6 } */
 function foo () {
   gobj.a = 120;
-  var ff = gobj.f;
+  let ff = gobj.f;
   return ff(gobj.a);
 }

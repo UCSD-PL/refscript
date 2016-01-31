@@ -7,8 +7,8 @@
 function inc1(n: number) { return n + 1; }
 function inc2(n: number) { return n + 2; }
 
-/*@ readonly x :: # */
-var x = { f: inc1 };
+/*@ readonly */
+let x = { f: inc1 };
 
 function foo() :number {
   return (x.f)(5);
@@ -17,4 +17,3 @@ function foo() :number {
 x.f = inc2;
 
 assert(foo() === 7);
-

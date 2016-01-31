@@ -71,7 +71,7 @@ unify l γ θ (TFun t1s o1 _) (TFun t2s o2 _)
 unify l γ θ (TRef (Gen x1 t1s) _) (TRef (Gen x2 t2s) _)
   | x1 == x2
   = unifys l γ θ t1s t2s
-  | isAncestor (envCHA γ) x1 x2 || isAncestor (envCHA γ) x2 x1
+  | isAncestorOf (envCHA γ) x1 x2 || isAncestorOf (envCHA γ) x2 x1
   = case (weaken (envCHA γ) (Gen x1 t1s) x2, weaken (envCHA γ) (Gen x2 t2s) x1) of
       -- Adjusting `t1` to reach `t2` moving upward in the type hierarchy (Upcast)
       (Just (Gen _ t1s'), _) -> unifys l γ θ t1s' t2s

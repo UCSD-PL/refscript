@@ -12,8 +12,8 @@ interface Array<M extends ReadOnly, T> {
     /*@ @Mutable pop(): T */
     pop(): T;
 
-    /*@ @Immutable concat   (item: IArray<T> ): { Array<Unique,T> | len v = len this + len item } */
-    /*@            concat<M>(item: Array<M,T>): Array<Unique,T> */
+    /*@ @Immutable concat   (item: IArray<T> ): { UArray<T> | len v = len this + len item } */
+    /*@            concat<M>(item: Array<M,T>):   UArray<T> */
     concat(item: T[]): T[];
     // concat<U extends T[]>(...items: U[]): T[];
     // concat(...items: T[]): T[];
@@ -36,8 +36,8 @@ interface Array<M extends ReadOnly, T> {
     // some(callbackfn: (value: T, index: number, array: T[]) => boolean, thisArg?: any): boolean;
     // forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void;
 
-    /*@ map<U,N>(callbackfn: (value: T) => U): Array<N,U> */
-    /*@ map<U,N>(callbackfn: (value: T, index: number) => U): Array<N,U> */
+    /*@ map<U>(callbackfn: (value: T) => U): UArray<U> */
+    /*@ map<U>(callbackfn: (value: T, index: number) => U): UArray<U> */
     map<U>(callbackfn: (value: T, index: number, array: T[]) => U, thisArg?: any): U[];
 
     /*@ filter (callbackfn: (v: T) => boolean): Array<Unique,T> */

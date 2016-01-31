@@ -204,7 +204,7 @@ subtypeObj l γ c t1@(TObj e1s _) t2@(TObj e2s _)
 subtypeObj l γ c t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
   | mutRelated t1, mutRelated t2
   =      if x1 == x2                    then EqT
-    else if isAncestor (envCHA γ) x1 x2 then SubT
+    else if isAncestorOf (envCHA γ) x1 x2 then SubT
     else if allow_unique c              then EqT
     else NoSub [ errorIncompMutTy l t1 t2 ]
 

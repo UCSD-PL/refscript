@@ -16,7 +16,7 @@ module Language.Rsc.ClassHierarchy (
     , mkCHA
 
     -- * Queries
-    , isClassType, isEnumType, isAncestor, ancestors
+    , isClassType, isEnumType, isAncestorOf, ancestors
     , nonStaticFields, inheritedNonStaticFields
     , classAncestors, interfaceAncestors
     , getImmediateSuperclass, getSuperType
@@ -345,10 +345,12 @@ classAncestors      = ancestors ClassTDK
 interfaceAncestors  = ancestors InterfaceTDK
 allAncestors γ s    = classAncestors γ s ++ interfaceAncestors γ s
 
+
+-- | A `isAncestorOf` B <==> class B extends A ... (or transitively)
 --------------------------------------------------------------------------------
-isAncestor :: ClassHierarchy t -> AbsName -> AbsName -> Bool
+isAncestorOf :: ClassHierarchy t -> AbsName -> AbsName -> Bool
 --------------------------------------------------------------------------------
-isAncestor cha sup sub = sup `elem` allAncestors cha sub
+isAncestorOf cha a b = a `elem` allAncestors cha a
 
 --------------------------------------------------------------------------------
 boundKeys :: (ExprReftable Int r, PPR r)

@@ -72,12 +72,12 @@ unify l γ θ (TRef (Gen x1 t1s) _) (TRef (Gen x2 t2s) _)
   | x1 == x2
   = unifys l γ θ t1s t2s
   | isAncestorOf (envCHA γ) x1 x2 || isAncestorOf (envCHA γ) x2 x1
-  = case (weaken (envCHA γ) (Gen x1 t1s) x2, weaken (envCHA γ) (Gen x2 t2s) x1) of
-      -- Adjusting `t1` to reach `t2` moving upward in the type hierarchy (Upcast)
-      (Just (Gen _ t1s'), _) -> unifys l γ θ t1s' t2s
-      -- Adjusting `t2` to reach `t1` moving upward in the type hierarchy (DownCast)
-      (_, Just (Gen _ t2s')) -> unifys l γ θ t1s t2s'
-      (_, _) -> Left $ bugWeakenAncestors (srcPos l) x1 x2
+  = case weaken (envCHA γ) (Gen x1 t1s) x2 of
+      Just (Gen _ t1s') -> unifys l γ θ t1s' t2s        -- Upcast
+      Nothing           ->
+          case weaken (envCHA γ) (Gen x2 t2s) x1 of
+            Just (Gen _ t2s') -> unifys l γ θ t1s t2s'  -- DownCast
+            Nothing           -> return θ
 
 unify l γ θ (TClass (BGen n1 b1s)) (TClass (BGen n2 b2s))
   | n1 == n2

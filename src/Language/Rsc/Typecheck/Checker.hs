@@ -543,35 +543,40 @@ tcNormalCallWCtx γ l o es t
       Left err -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) [err]) (fst <$> es)
 
 tcRetW γ l (Just e)
-  | VarRef lv x <- e, Just t <- tcEnvFindTy x γ, isUMRef t
-
-  = do  re  <- pure $ Just $ CallExpr l (VarRef l fn) [e']
-        tw  <- tcRetW (newEnv t) l re
-        case tw of
-          -- e' won't be cast
-          (ReturnStmt _ (Just (CallExpr _ _ [e''])), eo)
-              -> return (ReturnStmt l (Just e''), eo)
-
-          _   -> die $ errorUqMutSubtyping (srcPos l) e t rt
-
-  | otherwise
-  = do  c     <- tcWrap (tcNormalCall γ l "return" [(e, Just rt)] ft)
-        case c of
-          Right ([e'], _) -> return (ReturnStmt l (Just e'), Nothing)
-          Left err        -> do de <- deadcastM (tce_ctx γ) [err] e
-                                return (ReturnStmt l (Just de), Nothing)
+  = do  (e', t)   <- tcExpr γ e (Just rt)
+        θ         <- unifyTypeM (srcPos l) γ t rt
+        (t', rt') <- pure (apply θ t, apply θ rt)
+        e''       <- castMC γ e' subCfg t' rt'
+        return     $ (ReturnStmt l (Just e''), Nothing)
   where
+    -- Allow automatic casting of Unique permissions
+    subCfg    = allowUqConf
     rt        = tcEnvFindReturn γ
-    ft        = returnTy rt True
 
-    newEnv t  = tcEnvAdd fn (SI sfn Local Ambient Initialized $ finalizeTy t) γ
-    sfn       = F.symbol fn
-    fn        = Id l "__finalize__"
-    e'        = fmap (\a -> a { fFact = BypassUnique : fFact a }) e
+--   | VarRef lv x <- e, Just t <- tcEnvFindTy x γ, isUMRef t
+--   = do  re  <- pure (Just (CallExpr l (VarRef l fn) [e']))
+--         tw  <- tcRetW (newEnv t) l re
+--         case tw of
+--           -- e' won't be cast
+--           (ReturnStmt _ (Just (CallExpr _ _ [e''])), eo)
+--               -> return (ReturnStmt l (Just e''), eo)
+--           _   -> die $ errorUqMutSubtyping (srcPos l) e t rt
+--   | otherwise
+--   = do  c     <- tcWrap (tcNormalCall γ l "return" [(e, Just rt)] ft)
+--         case c of
+--           Right ([e'], _) -> return (ReturnStmt l (Just e'), Nothing)
+--           Left err        -> do de <- deadcastM (tce_ctx γ) [err] e
+--                                 return (ReturnStmt l (Just de), Nothing)
+--   where
+--     ft        = returnTy rt True
+--
+--     newEnv t  = tcEnvAdd fn (SI sfn Local Ambient Initialized $ finalizeTy t) γ
+--     sfn       = F.symbol fn
+--     fn        = Id l "__finalize__"
+--     e'        = fmap (\a -> a { fFact = BypassUnique : fFact a }) e
 
 tcRetW γ l Nothing
-  = do (_, _) <- tcNormalCall γ l "return" [] $ returnTy (tcEnvFindReturn γ) False
-       return  $ (ReturnStmt l Nothing, Nothing)
+  = return (ReturnStmt l Nothing, Nothing)
 
 --------------------------------------------------------------------------------
 -- tcEW :: Unif r => TCEnv r -> ExprSSAR r -> Either Error ((ExprSSAR r), b)

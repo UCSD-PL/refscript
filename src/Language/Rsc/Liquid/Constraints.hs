@@ -160,58 +160,34 @@ splitC (Sub g c s t@(TOr ts _))
 
 -- | S-Ref
 --
---
 --    TODO: Find variance for type arguments
 --
-splitC (Sub g i t1@(TRef n1@(Gen x1 (m1:t1s)) r1) t2@(TRef n2@(Gen x2 (m2:t2s)) r2))
-  --
-  -- * Trivial case (do not descend)
+splitC (Sub g i t1@(TRef n1@(Gen x1 (_ :t1s)) r1)
+                t2@(TRef n2@(Gen x2 (m2:t2s)) r2))
+
+  -- Trivial case (do not descend)
   --
   | F.isFalse (F.simplify r1)
   = return []
-  --
-  -- * Unique references can be used as any kind.
-  --
-  -- * Since there's no aliasing we can treat them as Immutable for
-  --   the purpose of subtyping
-  --
-  | isUQ m1
-  = splitC (Sub g i (TRef (Gen x1 (tIM:t1s)) r1) (TRef (Gen x2 (tIM:t2s)) r2))
-  --
-  -- * Incompatible mutabilities
-  --
-  | not (isSubtype g m1 m2)
-  = splitIncompatC g i t1
-  --
-  -- * Both immutable, same name: Co-variant subtyping
-  --
-  | x1 == x2
-  , isIM m2
-  = do  cs    <- bsplitC g i t1 t2
-        cs'   <- concatMapM splitC $ safeZipWith "splitc-4" (Sub g i) t1s t2s
-        return $ cs ++ cs'
-  --
-  -- * Non-immutable, same name: invariance
-  --
-  --  TODO: For arrays do the same trick as with objects and UQ
-  --
-  | x1 == x2
-  , not (F.isFalse r2)
-  = do  cs    <- bsplitC g i t1 t2
-        cs'   <- concatMapM splitC $ safeZipWith "splitc-5" (Sub g i) t1s t2s
-        cs''  <- concatMapM splitC $ safeZipWith "splitc-6" (Sub g i) t2s t1s
-        return $ cs ++ cs' ++ cs''
 
+  -- Same name
+  --
   | x1 == x2
-  = bsplitC g i t1 t2
+  = if isSubtype g m2 tMU then
+      do  cs    <- bsplitC g i t1 t2
+          cs'   <- concatMapM splitC $ safeZipWith "splitc-5" (Sub g i) t1s t2s
+          cs''  <- concatMapM splitC $ safeZipWith "splitc-6" (Sub g i) t2s t1s
+          return $ cs ++ cs' ++ cs''
+    else
+      do  cs    <- bsplitC g i t1 t2
+          cs'   <- concatMapM splitC $ safeZipWith "splitc-4" (Sub g i) t1s t2s
+          return $ cs ++ cs'
 
-  | Just n1@(Gen x1' _) <- weaken (envCHA g) n1 x2    -- UPCAST
+  -- Upcast
+  --
+  | Just n1'@(Gen x1' _) <- weaken (envCHA g) n1 x2
   , x1' == x2 -- sanity check
-  = splitC (Sub g i (TRef n1 r1) t2)
-
-  | Just n2@(Gen x2' _) <- weaken (envCHA g) n2 x1    -- DOWNCAST
-  , x2' == x1 -- sanity check
-  = splitC (Sub g i t1 (TRef n2 r2))
+  = splitC (Sub g i (TRef n1' r1) t2)
 
   | otherwise
   = splitIncompatC g i t1
@@ -225,8 +201,6 @@ splitC (Sub g i t1@(TPrim c1 _) t2@(TPrim c2 r2))
   | otherwise = splitIncompatC g i t1
 
 -- | S-Obj
---
---    TODO: case for Unique
 --
 splitC (Sub g i@(Ci _ l) t1@(TObj ms1 r1) t2@(TObj ms2 _))
   | F.isFalse (F.simplify r1)
@@ -295,7 +269,6 @@ conjoinPred p r    = r {F.sr_reft = F.Reft (v, F.pAnd [pr, p]) }
     F.Reft (v, pr) = F.sr_reft r
 
 
-
 --------------------------------------------------------------------------------
 bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 --------------------------------------------------------------------------------
@@ -311,8 +284,6 @@ bsplitC' g ci t1 t2
   = []
   where
     bs             = cge_fenv g
-                   --   foldl F.unionIBindEnv F.emptyIBindEnv
-                   -- $ snd <$> F.toListSEnv (cge_fenv g)
     p              = F.pAnd $ cge_guards g
     (r1,r2)        = (rTypeSortedReft t1, rTypeSortedReft t2)
     typeofReft t   = F.reft (vv t) $ F.pAnd [ typeofExpr (F.symbol "function") t
@@ -320,25 +291,6 @@ bsplitC' g ci t1 t2
     typeofExpr s t = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
                                   (F.expr $ F.symbolText s)
     vv             = rTypeValueVar
-
-
--- OLD CODE -- bsplitC' g ci t1 t2
--- OLD CODE --   | F.isFunctionSortedReft r1 && F.isNonTrivial r2
--- OLD CODE --   -- = F.subC (cge_fenv g) F.PTrue (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
--- OLD CODE --   = F.subC bs p (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
--- OLD CODE --   | F.isNonTrivial r2
--- OLD CODE --   = F.subC bs p r1 r2 Nothing [] ci
--- OLD CODE --   | otherwise
--- OLD CODE --   = []
--- OLD CODE --   where
--- OLD CODE --     bs             = foldl F.unionIBindEnv F.emptyIBindEnv $ snd <$> F.toListSEnv (cge_fenv g)
--- OLD CODE --     p              = F.pAnd $ cge_guards g
--- OLD CODE --     (r1,r2)        = (rTypeSortedReft t1,  rTypeSortedReft t2)
--- OLD CODE --     typeofReft t   = F.reft (vv t) $ F.pAnd [ typeofExpr (F.symbol "function") t
--- OLD CODE --                                             , F.eProp $ vv t ]
--- OLD CODE --     typeofExpr s t = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
--- OLD CODE --                                   (F.expr $ F.symbolSafeText s)
--- OLD CODE --     vv             = rTypeValueVar
 
 
 --------------------------------------------------------------------------------

@@ -42,7 +42,7 @@ module Language.Rsc.Typecheck.TCMonad (
   , checkTypes
 
   -- * Casts
-  , castM, deadcastM, freshCastId, isCastId
+  , castM, castMC, deadcastM, freshCastId, isCastId
 
   -- * Verbosity / Options
   , whenLoud', whenLoud, whenQuiet', whenQuiet, getOpts, getAstCount
@@ -368,13 +368,17 @@ typecastM ξ e t  = addAnn i fact >> wrapCast loc fact e
 -- | For the expression @e@, check the subtyping relation between the type @t1@
 --   (the actual type for @e@) and @t2@ (the target type) and insert the cast.
 --------------------------------------------------------------------------------
-castM :: Unif r => TCEnv r -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
+castMC :: Unif r
+      => TCEnv r -> Expression (AnnSSA r) -> SubConf
+      -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-castM γ e t1 t2
-  = case convert (srcPos e) γ t1 t2 of
+castMC γ e c t1 t2
+  = case convert (srcPos e) γ c t1 t2 of
       ConvOK      -> return e
       ConvWith t  -> typecastM (tce_ctx γ) e (toType t2)
       ConvFail es -> deadcastM (tce_ctx γ) es e
+
+castM γ e = castMC γ e initSubConf
 
 -- | Run the monad `a` in the current state. This action will not alter the state.
 --------------------------------------------------------------------------------

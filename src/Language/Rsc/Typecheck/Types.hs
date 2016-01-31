@@ -60,7 +60,8 @@ module Language.Rsc.Typecheck.Types (
   , infixOpId, prefixOpId, builtinOpId, finalizeTy
 
   -- * Builtin: Binders
-  , mkId, argId, argIdInit, returnTy
+  , mkId, argId, argIdInit
+  -- , returnTy
 
   -- * BitVector
   , bitVectorValue
@@ -466,11 +467,11 @@ typesOfTM (TM m sm c k s n) =
 typesOfMem (FI _ _ _ t) = [t]
 typesOfMem (MI _ _ mts) = map snd mts
 
---------------------------------------------------------------------------------
-returnTy :: F.Reftable r => RType r -> Bool -> RType r
---------------------------------------------------------------------------------
-returnTy t True  = mkFun ([], [B (F.symbol "r") t], tVoid)
-returnTy _ False = mkFun ([], [], tVoid)
+-- --------------------------------------------------------------------------------
+-- returnTy :: F.Reftable r => RType r -> Bool -> RType r
+-- --------------------------------------------------------------------------------
+-- returnTy t True  = mkFun ([], [B (F.symbol "r") t], tVoid)
+-- returnTy _ False = mkFun ([], [], tVoid)
 
 --------------------------------------------------------------------------------
 finalizeTy :: (F.Reftable r, ExprReftable F.Symbol r) => RType r -> RType r

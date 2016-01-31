@@ -80,14 +80,12 @@ instance PP t => PP (I.IntMap t) where
   pp m = vcat (pp <$> I.toList m)
 
 instance (PP t) => PP (F.SEnv t) where
-  pp m = -- pp (take 80 (repeat '-')) $+$
-         vcat (
+  pp m = vcat (
            map (\(x,t) -> pp x $$ nest 20 (dcolon <> text " " <> pp t)) $
            sortBy (on compare (show . fst)) $
            filter (not . isPrefixOf "builtin_" . ppshow . fst) $   -- TOGGLE
            F.toListSEnv m
          )
-      -- $+$ pp (take 80 (repeat '-'))
 
 
 ---------------------------------------------------------------------

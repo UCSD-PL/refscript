@@ -393,25 +393,31 @@ consStmt g (VarDeclStmt _ ds)
 
 -- return
 consStmt g (ReturnStmt l Nothing)
-  = do _ <- subType l Nothing g tVoid (cgEnvFindReturn g)
-       return Nothing
+  = subType l Nothing g tVoid (cgEnvFindReturn g) >> return Nothing
 
 -- return e
 consStmt g (ReturnStmt l (Just e))
-  -- Special case for UniqueMutable
-  | VarRef lv x <- e
-  , Just t <- cgEnvFindTy x g
-  , isUMRef t
-  = do  g' <- cgEnvAdds l "Return" [SI sfn Local Ambient Initialized (finalizeTy t)] g
-        consStmt g' (ReturnStmt l (Just (CallExpr l (VarRef lv fn) [e])))
-  -- Normal case
-  | otherwise
-  = do  _ <- consCall g l "return" [(e, Just retTy)] $ returnTy retTy True
-        return Nothing
+  = mseq (consExpr g e (Just rt)) $ \(y,gy) -> do
+      eT  <- cgSafeEnvFindTyM y gy
+      _   <- subType l Nothing gy eT rt
+      return Nothing
   where
-    retTy = cgEnvFindReturn g
-    fn    = Id l "__finalize__"
-    sfn   = F.symbol fn
+    rt = cgEnvFindReturn g
+
+--   -- Special case for UniqueMutable
+--   | VarRef lv x <- e
+--   , Just t <- cgEnvFindTy x g
+--   , isUMRef t
+--   = do  g' <- cgEnvAdds l "Return" [SI sfn Local Ambient Initialized (finalizeTy t)] g
+--         consStmt g' (ReturnStmt l (Just (CallExpr l (VarRef lv fn) [e])))
+--   -- Normal case
+--   | otherwise
+--   = do  _ <- consCall g l "return" [(e, Just retTy)] $ returnTy retTy True
+--         return Nothing
+--   where
+--     retTy = cgEnvFindReturn g
+--     fn    = Id l "__finalize__"
+--     sfn   = F.symbol fn
 
 -- throw e
 consStmt g (ThrowStmt _ e)
@@ -860,8 +866,8 @@ consExpr g e@(ObjectLit l pes) to
 consExpr g (NewExpr l e es) _
   = mseq (consExpr g e Nothing) $ \(x,g') -> do
       t <- cgSafeEnvFindTyM x g'
-      case extractCtor g t of
-        Just ct -> consCall g l "constructor" (es `zip` nths) ct
+      case extractCtor g' t of
+        Just ct -> consCall g' l "constructor" (es `zip` nths) ct
         Nothing -> cgError $ errorConstrMissing (srcPos l) t
 
 -- | super

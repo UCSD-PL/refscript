@@ -266,7 +266,10 @@ errorConflateTypeMembers l es = mkErr l $ printf "Cannot conflate type members '
 errorCallSuperOnNonClass l x  = mkErr l $ printf "Cannot call 'super' on non class type '%s'." (ppshow x)
 errorAssignsFields l x t      = mkErr l $ printf "Variable '%s' with type '%s' can only be assigned fields or returned." (ppshow x) (ppshow t)
 errorFinalField l f t         = mkErr l $ printf "Cannot assign final field '%s' of type '%s'." (ppshow f) (ppshow t)
-errorImmutableRefAsgn l f t   = mkErr l $ printf "Cannot assign field '%s' through non-mutable reference of type '%s' [Hint: try making field '%s' assignable]." (ppshow f) (ppshow t) (ppshow f)
+errorImmutableRefAsgn l f t   = mkErr l $ show $ text "Cannot assign field" <+> ticks (pp f) <+>
+                                                 text "through non-mutable reference of type" $+$
+                                                 nest 2 (pp t) $+$
+                                                 text "[Hint: try making field" <+> ticks (pp f) <+> text "assignable]."
 errorCallOptional l m t       = mkErr l $ printf "Cannot call optional field '%s' of type '%s'." (ppshow m) (ppshow t)
 
 errorUnionMergePrims l t a b  = mkErr l $ printf "In type '%s', cannot merge primitive types '%s' and '%s'." (ppshow t) (ppshow a) (ppshow b)

@@ -455,7 +455,7 @@ consVarDecl g (VarDecl _ x (Just e@FuncExpr{}))
   = (snd <$>) <$> consExpr g e (v_type <$> envFindTy x (cge_names g))
 
 consVarDecl g v@(VarDecl l x (Just e))
-  = case ltracePP l "Annot" $ envFindTy x (cge_names g) of
+  = case envFindTy x (cge_names g) of
       -- Local (no type annotation)
       Nothing ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
@@ -466,7 +466,7 @@ consVarDecl g v@(VarDecl l x (Just e))
       Just (SI n lc  WriteLocal _ t) -> do
         fta       <- freshenType WriteGlobal g l t
         mseq (consExpr g e $ Just t) $ \(y,gy) -> do
-          eT      <- ltracePP l v <$> cgSafeEnvFindTyM y gy
+          eT      <- cgSafeEnvFindTyM y gy
           _       <- subType l Nothing gy eT fta
           _       <- subType l Nothing gy fta t
           Just   <$> cgEnvAdds l "consVarDecl" [SI n lc WriteLocal Initialized fta] gy

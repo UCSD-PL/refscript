@@ -2,7 +2,7 @@
 
 /*@ type TT = {
     @Final f: { number | v > 1 };
-    @Final g: boolean;
+           g: boolean;
 } */
 type TT = { f: number; g: boolean };
 

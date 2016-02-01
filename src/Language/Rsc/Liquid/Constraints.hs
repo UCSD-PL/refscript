@@ -263,7 +263,7 @@ splitElt g i (_, (m, m'))
 subCTag :: [Int]
 subCTag = [1]
 
-conjoinPred :: F.Pred -> F.SortedReft -> F.SortedReft
+conjoinPred :: F.Expr -> F.SortedReft -> F.SortedReft
 conjoinPred p r    = r {F.sr_reft = F.Reft (v, F.pAnd [pr, p]) }
   where
     F.Reft (v, pr) = F.sr_reft r
@@ -374,4 +374,3 @@ narrowType g t1@(TOr t1s r) t2
   = tOrR (L.filter (\t1 -> isSubtype g t1 (ofType t2)) t1s) r
 
 narrowType _ t1 _ = t1
-

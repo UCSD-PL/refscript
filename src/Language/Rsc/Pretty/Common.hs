@@ -114,7 +114,7 @@ instance PP (QP l) where
 -- instance (Ord a, F.Fixpoint a) => PP (F.FixResult a) where
 --   pp = F.resultDoc
 
-instance PP F.Pred where
+instance PP F.Expr where
   pp = pprint
 
 instance PP a => PP (Located a) where
@@ -149,4 +149,3 @@ inComments p
 
 ticks :: Doc -> Doc
 ticks p = text "`" <> p <> text "`"
-

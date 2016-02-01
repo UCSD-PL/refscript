@@ -104,8 +104,8 @@ data CGEnvR r = CGE {
   , cge_ctx    :: !IContext
   , cge_path   :: !AbsPath
   , cge_cha    :: !(ClassHierarchy r)
-  , cge_fenv   :: !({-F.SEnv-} F.IBindEnv)          -- Fixpoint bindings - XXX: Why not in monad? Remove?
-  , cge_guards :: ![F.Pred]                     -- Branch target conditions
+  , cge_fenv   :: !F.IBindEnv                   -- Fixpoint bindings - XXX: Why not in monad? Remove?
+  , cge_guards :: ![F.Expr]                     -- Branch target conditions
   , cge_consts :: !(Env (RType r))              -- Constants
   , cge_mut    :: !(Maybe (MutabilityR r))      -- Method mutability
   , cge_this   :: !(Maybe (RType r))            -- Method mutability
@@ -177,4 +177,3 @@ safeEnvFindTy l γ x | Just t <- chkEnvFindTy x γ = return t
                     | otherwise = die $ bugEnvFindTy (srcPos l) (F.symbol x)
 
 globalLengthType γ = safeEnvFindTy (def::SrcSpan) γ "builtin_getLength"
-

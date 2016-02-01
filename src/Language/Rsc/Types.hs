@@ -382,7 +382,7 @@ data Alias a s t = Alias {
   } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
 type TAlias t    = Alias TVar F.Symbol t
-type PAlias      = Alias ()   F.Symbol F.Pred
+type PAlias      = Alias ()   F.Symbol F.Expr
 type TAliasEnv t = Env (TAlias t)
 type PAliasEnv   = Env PAlias
 

@@ -375,7 +375,7 @@ instance Freshable String where
 -- OLD CODE -- instance Freshable [F.Refa] where
 -- OLD CODE --   fresh = single <$> fresh
 
-instance Freshable F.Pred where
+instance Freshable F.Expr where
   fresh  = kv <$> fresh
     where
       kv = (`F.PKVar` mempty) . F.intKvar

@@ -96,11 +96,11 @@ instance F.Predicate  (Expression a) where
   prop (BoolLit _ True)            = F.PTrue
   prop (BoolLit _ False)           = F.PFalse
   prop (PrefixExpr _ PrefixLNot e) = F.PNot (F.prop e)
-  prop e@(InfixExpr _ _ _ _ )      = eProp e
-  prop e                           = convertError "F.Pred" e
+  prop e@(InfixExpr {})            = eProp e
+  prop e                           = convertError "F.prop" e
 
 --------------------------------------------------------------------------------
-eProp :: Expression a -> F.Pred
+eProp :: Expression a -> F.Expr
 --------------------------------------------------------------------------------
 eProp (InfixExpr _ OpLT   e1 e2)       = F.PAtom F.Lt (F.expr e1) (F.expr e2)
 eProp (InfixExpr _ OpLEq  e1 e2)       = F.PAtom F.Le (F.expr e1) (F.expr e2)
@@ -270,29 +270,28 @@ rawStringFTycon = F.symbolFTycon
 -- | Helpers for extracting specifications from @Rsc@ @Statement@
 --------------------------------------------------------------------------------
 
-getInvariant :: Statement a -> F.Pred
-
+getInvariant :: Statement a -> F.Expr
 getInvariant = getSpec getInv . flattenStmt
 
-getAssume    :: Statement a -> Maybe F.Pred
+getAssume    :: Statement a -> Maybe F.Expr
 getAssume    = getStatementPred "assume"
 
-getAssert    :: Statement a -> Maybe F.Pred
+getAssert    :: Statement a -> Maybe F.Expr
 getAssert    = getStatementPred "assert"
 
 getRequires  = getStatementPred "requires"
 getEnsures   = getStatementPred "ensures"
 getInv       = getStatementPred "invariant"
 
-getStatementPred :: String -> Statement a -> Maybe F.Pred
+getStatementPred :: String -> Statement a -> Maybe F.Expr
 getStatementPred name (ExprStmt _ (CallExpr _ (VarRef _ (Id _ f)) [p]))
   | name == f
   = Just $ F.prop p
 getStatementPred _ _
   = Nothing
 
-getSpec   :: (Statement a -> Maybe F.Pred) -> [Statement a] -> F.Pred
-getSpec g = mconcat . catMaybes . map g
+getSpec   :: (Statement a -> Maybe F.Expr) -> [Statement a] -> F.Expr
+getSpec g = mconcat . mapMaybe g
 
 getFunctionIds :: Statement a -> [Id a]
 getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
@@ -409,4 +408,3 @@ mkOffsetSym x f = F.EApp offsetLocSym [F.expr x, F.expr $ symbolText $ F.symbol 
 rawSymbolFTycon :: F.Symbol -> F.FTycon
 rawSymbolFTycon = F.symbolFTycon
                 . F.locAt "RSC.Types.rawStringFTycon"
-

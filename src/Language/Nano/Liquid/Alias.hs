@@ -65,17 +65,10 @@ expandPAliasEnv pe = solve pe support expandPAlias
   where
     support        = filter (`envMem` pe) . getPApps . al_body
 
--- OLD syb getPApps       :: F.Pred -> [F.Symbol]
--- OLD syb getPApps p     = everything (++) ([] `mkQ` fromP) p
--- OLD syb   where
--- OLD syb     fromP (F.PBexp (F.EApp f _))
--- OLD syb                = [F.val f]
--- OLD syb     fromP _    = []
-
-getPApps :: F.Pred -> [F.Symbol]
+getPApps :: F.Expr -> [F.Symbol]
 getPApps = V.fold pAppVis () []
   where
-    pAppVis = V.defaultVisitor { V.accPred = pA }
+    pAppVis                     = V.defaultVisitor { V.accPred = pA }
     pA _ (F.PBexp (F.EApp f _)) = [F.val f]
     pA _ _                      = []
 

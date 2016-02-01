@@ -80,14 +80,14 @@ splitC (Sub g i t1@(TVar _ _) t2)
   | Just t1' <- envFindBoundOpt g t1
   = splitC (Sub g i t1' t2)
 
--- | S-Mut
+-- | S-Mut (Ignore if the target type is mutability related)
 --
 splitC (Sub g i t1 t2)
-  | mutRelated t1, mutRelated t2
+  | mutRelated t2
+  = return []
+  | Just t2' <- envFindBoundOpt g t2, mutRelated t2'
   = return []
   | mutRelated t1
-  = cgError $ bugSplitC i t1 t2
-  | mutRelated t2
   = cgError $ bugSplitC i t1 t2
 
 -- | S-Fun

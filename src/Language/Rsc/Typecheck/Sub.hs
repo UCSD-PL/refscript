@@ -302,25 +302,25 @@ subtypeMems l γ (t1, p1) (t2, p2)
 
   -- Descend into property subtyping
   | otherwise
-  = mconcat $ map (compareMem l γ) common
+  = mconcat $ map (subtypeMem l γ) common
 
   where
     diff21 = toListSEnv $ p2 `differenceSEnv` p1
     common = toListSEnv $ intersectWithSEnv (,) p1 p2
 
 --------------------------------------------------------------------------------
-compareMem :: (FE g r, PPRE r, IsLocated a, PP f)
+subtypeMem :: (FE g r, PPRE r, IsLocated a, PP f)
            => a -> g r
            -> (f, (TypeMemberQ AK r, TypeMemberQ AK r))
            -> SubtypingResult
 --------------------------------------------------------------------------------
-compareMem l γ (f, (FI _ o1 m1 t1, FI _ o2 m2 t2))
+subtypeMem l γ (f, (FI _ o1 m1 t1, FI _ o2 m2 t2))
   -- Different optionality modifier
   | o1 /= o2
   = NoSub [ errorIncompatOptional (srcPos l) f ]
 
   -- Incompatible field assignabilities
-  | m1 /= m2
+  | not (isSubtype γ m1 m2)
   = NoSub [errorIncompMutElt (srcPos l) f m1 m2]
 
   -- Co-& Contra-Variance (mutable fields)
@@ -331,7 +331,7 @@ compareMem l γ (f, (FI _ o1 m1 t1, FI _ o2 m2 t2))
   | otherwise
   = subtype' l γ t1 t2
 
-compareMem l _ (_, (m1, m2))
+subtypeMem l _ (_, (m1, m2))
   = NoSub [ unsupportedMethodComp (srcPos l) m1 m2 ]
 
 

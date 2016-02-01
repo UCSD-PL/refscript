@@ -155,8 +155,8 @@ unifyMembers l γ θ (TM m1 _ c1 k1 s1 n1) (TM m2 _ c2 k2 s2 n2)
   where
     (m1s , m2s) = unzip $ concatMap merge $ F.toListSEnv $ F.intersectWithSEnv (,) m1 m2
 
-    merge (_, (FI _ _ _ t, FI _ _ _ t')) = [(t, t')]
-    merge (_, (MI _ _ mts, MI _ _ mts')) = map snd mts `zip` map snd mts'
+    merge (_, (FI _ _ m t, FI _ _ m' t')) = [(m, m'), (t, t')]
+    merge (_, (MI _ _ mts, MI _ _ mts' )) = map snd mts `zip` map snd mts'
     merge _ = []
     fromBoth (Just a1, Just a2)  = [(a1,a2)]
     fromBoth _                   = []

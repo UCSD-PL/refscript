@@ -1,8 +1,9 @@
-# GHC 7.10
-resolver: nightly-2015-09-24
+# GHC 7.10.2
+# resolver: nightly-2015-09-24
 
-# GHC 7.8
-# resolver: lts-2.22
+# GHC 7.10.3
+resolver: nightly-2016-01-06
+
 
 packages:
 - ./liquid-fixpoint

@@ -200,34 +200,58 @@ subtypeObj l γ _ t1 t2
 subtypeObj l γ c t1@(TObj e1s _) t2@(TObj e2s _)
   = subtypeObjMembers l γ (t1, e1s) (t2, e2s)
 
--- | Mutability types
+-- | Mutability subtyping
+--
 subtypeObj l γ c t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
-  | mutRelated t1, mutRelated t2
-  =      if x1 == x2                      then EqT
-    else if isAncestorOf (envCHA γ) x1 x2 then SubT
-    else if allow_unique c                then EqT
-    else NoSub [ errorIncompMutTy l t1 t2 ]
+  | not (mutRelated t1) = NoSub [errorMutUnknown l t1]
+  | not (mutRelated t2) = NoSub [errorMutUnknown l t2]
+  | allow_unique c      = withMutEnabled
+  | otherwise           = withMutDisabled
+  where
+    withMutEnabled  | x1 == x2  = EqT
+                    | x1 <: x2  = SubT
+                    | isUQ t1   = EqT   -- Allow the `Unique` coercion
+                    | otherwise = NoSub [errorUniqueAsgn l]
 
+    withMutDisabled | isUQ t1   = NoSub [errorUniqueAsgn l]
+                    | isUQ t2   = NoSub [errorUniqueAsgn l]
+                    | x1 == x2  = EqT
+                    | x1 <: x2  = SubT
+                    | otherwise = NoSub [errorIncompMutTy l t1 t2]
+
+    a <: b = isAncestorOf (envCHA γ) b a
+
+subtypeObj l _ _ t1@(TRef (Gen _ []) _) _
+  = NoSub [bugMutPartInvalid l t1]
+
+subtypeObj l _ _ _ t2@(TRef (Gen _ []) _)
+  = NoSub [bugMutPartInvalid l t2]
+
+-- | Type Reference subtyping
 subtypeObj l γ c t1@(TRef g1@(Gen x1 (m1:t1s)) r1)
                  t2@(TRef    (Gen x2 (m2:t2s)) r2)
+  = case subtypeObj l γ c m1 m2 of
+      EqT     -> checkBaseType
+      SubT    -> checkBaseType
+      NoSub e -> NoSub e
+  where
+    checkBaseType
+      | x1 == x2
+      = checkTypArgs
+      | Just (Gen _ (_:t1s')) <- weaken (envCHA γ) g1 x2
+      = mconcat $ SubT : zipWith (subtype' l γ) t1s' t2s
+      | otherwise
+      = NoSub [errorIncompatTypes (srcPos l) x1 x2]
 
-  | not (isSubtypeC γ c m1 m2)
-  = NoSub [errorIncompMutTy l t1 t2]
+    checkTypArgs
+      | isSubtype γ m2 tIM
+      = mconcat $ zipWith (subtype' l γ) t1s t2s
+      | otherwise
+      = mconcat $ zipWith (subtype' l γ) t1s t2s
+               ++ zipWith (subtype' l γ) t2s t1s
 
-  | x1 == x2
-  = if isSubtype γ m2 tIM then
-      mconcat $ zipWith (subtype' l γ) t1s t2s
-    else
-      mconcat $  zipWith (subtype' l γ) t1s t2s
-              ++ zipWith (subtype' l γ) t2s t1s
-
-  -- Upcast
-  | Just (Gen _ (_:t1s')) <- weaken (envCHA γ) g1 x2
-  = mconcat $ SubT : zipWith (subtype' l γ) t1s' t2s
-
-  | otherwise
-  = NoSub [errorIncompatTypes (srcPos l) x1 x2]
-
+-- | Class type subtyping
+--
 subtypeObj l γ _ t1@(TClass (BGen c1 ts1)) t2@(TClass (BGen c2 ts2))
   | c1 == c2
   , and $ uncurry (isSubtype γ)        <$> ts
@@ -240,11 +264,13 @@ subtypeObj l γ _ t1@(TClass (BGen c1 ts1)) t2@(TClass (BGen c2 ts2))
     bs1 = btv_constr <$> ts1
     bs2 = btv_constr <$> ts2
 
+-- | Module subtyping
 subtypeObj l _ _ (TMod m1) (TMod m2)
   | m1 == m2  = EqT
   | otherwise = NoSub [errorTModule l m1 m2]
 
--- Fall back to structural subtyping
+-- Structural subtyping (fall-back)
+--
 subtypeObj l γ c t1 t2 =
   case (expandType NonCoercive (envCHA γ) t1, expandType NonCoercive (envCHA γ) t2) of
     (Just ft1, Just ft2) -> subtypeObj l γ c ft1 ft2
@@ -253,6 +279,8 @@ subtypeObj l γ c t1 t2 =
     (_       , Nothing ) -> NoSub [errorNonObjectType l t2]
 
 
+-- | Subtyping type members
+--
 subtypeObjMembers l γ (t1, TM m1 _ c1 k1 s1 n1) (t2, TM m2 _ c2 k2 s2 n2)
   = subtypeMems  l γ (t1, m1) (t2, m2) <>
     subtypeCalls l γ t1 c1 t2 c2 <>

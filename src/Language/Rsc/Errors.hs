@@ -119,6 +119,10 @@ errorIncompatInvFields l a b  = mkErr l $ printf "Incompatible invariant fields 
 errorNonObjectType l t        = mkErr l $ printf "Type '%s' cannot be treated as an object type." (ppshow t)
 
 errorIncompMutTy l t t'       = mkErr l $ show $ sep [text "Types:", nest 2 (pp t), text "and", nest 2 (pp t'), text "have incompatible mutabilities."]
+errorUniqueAsgn l             = mkErr l $ show $ sep [text "Cannot handle unique types in this context."]
+errorMutUnknown l t           = mkErr l $ show $ sep [text "Unknown mutability modifier:", nest 2 (pp t)]
+bugMutPartInvalid l t         = mkErr l $ show $ sep [text "[BUG] Invalid mutability part of types:", nest 2 (pp t)]
+errorMutInvalid l t t'        = mkErr l $ show $ sep [text "Invalid mutability type(s):", nest 2 (pp t), text "or", nest 2 (pp t)]
 
 errorIncompMethMut l m        = mkErr l $ printf "Mutability modifiers of method '%s' are incompatible." (ppshow m)
 errorIncompCallSigs l t t'    = mkErr l $ printf "Types '%s' and '%s' have incompatible call signatures." (ppshow t) (ppshow t')

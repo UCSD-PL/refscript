@@ -533,12 +533,12 @@ tcExprWD γ e t
           (e', _     ) -> return (e', tNull)
 
 tcNormalCallW γ l o es t
-  = (tcWrap $ tcNormalCall γ l o (es `zip` nths) t) >>= \case
+  = tcWrap (tcNormalCall γ l o (es `zip` nths) t) >>= \case
       Right (es', t') -> return (es', Just t')
       Left e -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) [e]) es
 
 tcNormalCallWCtx γ l o es t
-  = (tcWrap $ tcNormalCall γ l o es t) >>= \case
+  = tcWrap (tcNormalCall γ l o es t) >>= \case
       Right (es', t') -> return (es', Just t')
       Left err -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) [err]) (fst <$> es)
 
@@ -546,34 +546,10 @@ tcRetW γ l (Just e)
   = do  (e', t)   <- tcExpr γ e (Just rt)
         θ         <- unifyTypeM (srcPos l) γ t rt
         (t', rt') <- pure (apply θ t, apply θ rt)
-        e''       <- castMC γ e' subCfg t' rt'
+        e''       <- castMC γ e' allowUqConf t' rt'
         return     $ (ReturnStmt l (Just e''), Nothing)
   where
-    -- Allow automatic casting of Unique permissions
-    subCfg    = allowUqConf
     rt        = tcEnvFindReturn γ
-
---   | VarRef lv x <- e, Just t <- tcEnvFindTy x γ, isUMRef t
---   = do  re  <- pure (Just (CallExpr l (VarRef l fn) [e']))
---         tw  <- tcRetW (newEnv t) l re
---         case tw of
---           -- e' won't be cast
---           (ReturnStmt _ (Just (CallExpr _ _ [e''])), eo)
---               -> return (ReturnStmt l (Just e''), eo)
---           _   -> die $ errorUqMutSubtyping (srcPos l) e t rt
---   | otherwise
---   = do  c     <- tcWrap (tcNormalCall γ l "return" [(e, Just rt)] ft)
---         case c of
---           Right ([e'], _) -> return (ReturnStmt l (Just e'), Nothing)
---           Left err        -> do de <- deadcastM (tce_ctx γ) [err] e
---                                 return (ReturnStmt l (Just de), Nothing)
---   where
---     ft        = returnTy rt True
---
---     newEnv t  = tcEnvAdd fn (SI sfn Local Ambient Initialized $ finalizeTy t) γ
---     sfn       = F.symbol fn
---     fn        = Id l "__finalize__"
---     e'        = fmap (\a -> a { fFact = BypassUnique : fFact a }) e
 
 tcRetW γ l Nothing
   = return (ReturnStmt l Nothing, Nothing)
@@ -821,16 +797,13 @@ tcCall γ e@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3) _
          _ -> fatal (impossible (srcPos l) "tcCall AssignExpr") (e, tBot)
 
 -- | `new e(e1,...,en)`
-tcCall γ c@(NewExpr l e es) _
+tcCall γ c@(NewExpr l e es) s
   = do (e',t) <- tcExpr γ e Nothing
        case extractCtor γ t of
-         Just ct ->
-            do (es', t') <- tcNormalCall γ l "new" (es `zip` nths) ct
-               return (NewExpr l e' es', t')
-         _ -> fatal (errorConstrMissing (srcPos l) t) (c, tBot)
-
--- tcCall γ c@(NewExpr l e es) Nothing
---   = tcError $ errorNewExprCtxType l c
+         Just ct -> do  (es', tNew) <- tcNormalCall γ l "new" (es `zip` nths) ct
+                        tNew'       <- pure (adjustCtxMut tNew s)
+                        return (NewExpr l e' es', tNew')
+         _       -> fatal (errorConstrMissing (srcPos l) t) (c, tBot)
 
 -- | e.f
 --
@@ -939,7 +912,7 @@ tcNormalCall γ l fn etos ft0
                 addSubst l θ
                 (es, ts) <- pure (unzip ets)
                 tcWrap (tcCallCase γ l fn es ts ft) >>= \case
-                  Right ets' -> return ets'
+                  Right ets' -> return $ ets'
                   Left  er  -> (,tNull) <$> T.mapM (deadcastM (tce_ctx γ) [er] . fst) ets
          Nothing -> tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) (unzip ets)
 

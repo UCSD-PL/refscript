@@ -188,19 +188,15 @@ dumpJS f cha s p = writeFile (extFileName Result (dropExtension f ++ s)) $ show
                $+$ ppCasts p
 
 ppCasts (Rsc { code = Src fs })
-  | isEmpty castDoc = empty
-  | otherwise       = text ""
-                  $+$ pp (take 80 (repeat '='))
-                  $+$ text "Casts"
-                  $+$ pp (take 80 (repeat '-'))
-                  $+$ nest 2 castDoc
-                  $+$ pp (take 80 (repeat '='))
+  = pp (take 80 (repeat '=')) $+$
+    text "Casts"              $+$
+    pp (take 80 (repeat '-')) $+$
+    vcat es                   $+$
+    pp (take 80 (repeat '='))
   where
-    castDoc = vcat $ map ppEntry entries
-    ppEntry = \(_, c) -> c
-    as      = concatMap FO.toList fs
-    entries = [(srcPos a, pp "TYPE-CAST" <+> pp t) | a <- as, TypeCast _ t <- fFact a]
-           ++ [(srcPos a, pp "DEAD-CAST" <+> vcat (map pp e)) | a <- as, DeadCast _ e <- fFact a ]
+    as  = concatMap FO.toList fs
+    es  = [pp "TYPE-CAST" $+$ pp t | a <- as, TypeCast _ t <- fFact a]
+       ++ [pp "DEAD-CAST" $+$ vcat (map pp e) | a <- as, DeadCast _ e <- fFact a ]
 
 --------------------------------------------------------------------------------
 generateConstraints :: Config -> FilePath -> RefScript -> ClassHierarchy F.Reft -> CGInfo
@@ -411,21 +407,6 @@ consStmt g (ReturnStmt l (Just e))
       return Nothing
   where
     rt = cgEnvFindReturn g
-
---   -- Special case for UniqueMutable
---   | VarRef lv x <- e
---   , Just t <- cgEnvFindTy x g
---   , isUMRef t
---   = do  g' <- cgEnvAdds l "Return" [SI sfn Local Ambient Initialized (finalizeTy t)] g
---         consStmt g' (ReturnStmt l (Just (CallExpr l (VarRef lv fn) [e])))
---   -- Normal case
---   | otherwise
---   = do  _ <- consCall g l "return" [(e, Just retTy)] $ returnTy retTy True
---         return Nothing
---   where
---     retTy = cgEnvFindReturn g
---     fn    = Id l "__finalize__"
---     sfn   = F.symbol fn
 
 -- throw e
 consStmt g (ThrowStmt _ e)
@@ -872,11 +853,14 @@ consExpr g e@(ObjectLit l pes) to
 
 -- | new C(e, ...)
 --
-consExpr g (NewExpr l e es) _
-  = mseq (consExpr g e Nothing) $ \(x,g') -> do
-      t <- cgSafeEnvFindTyM x g'
-      case extractCtor g' t of
-        Just ct -> consCall g' l "constructor" (es `zip` nths) ct
+consExpr g (NewExpr l e es) s
+  = mseq (consExpr g e Nothing) $ \(x,g1) -> do
+      t <- cgSafeEnvFindTyM x g1
+      case extractCtor g1 t of
+        Just ct -> mseq (consCall g1 l "ctor" (es `zip` nths) ct) $ \(x, g2) -> do
+                      tNew    <- cgSafeEnvFindTyM x g2
+                      tNew'   <- pure (adjustCtxMut tNew s)
+                      Just   <$> cgEnvAddFresh "18" l tNew' g2
         Nothing -> cgError $ errorConstrMissing (srcPos l) t
 
 -- | super

@@ -315,8 +315,8 @@ interface Array<M extends ReadOnly, T> {
     /*@ @Mutable pop(): T */
     pop(): T;
 
-    /*@ @Immutable concat   (item: IArray<T> ): { UArray<T> | len v = len this + len item } */
-    /*@            concat<M>(item: Array<M,T>):   UArray<T> */
+    /*@ @Immutable concat     (item: IArray<T> ): { IArray<T> | len v = len this + len item } */
+    /*@            concat<M,N>(item: Array<M,T>):   Array<N,T> */
     concat(item: T[]): T[];
     // concat<U extends T[]>(...items: U[]): T[];
     // concat(...items: T[]): T[];

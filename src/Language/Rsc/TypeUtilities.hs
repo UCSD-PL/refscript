@@ -18,6 +18,7 @@ module Language.Rsc.TypeUtilities (
   , arrayLitTy
   , objLitTy
   , mkCondExprTy
+  , adjustCtxMut
 
   ) where
 
@@ -175,4 +176,14 @@ mkCondExprTy l g t
             return $ mkAll [c, BTV α la (Just t), BTV β lb (Just t)]
                            (TFun [B c_ tc_, B a_ ta_, B b_ tb_] (t `strengthen` rTypeR rt) r')
           _ -> error "[BUG] mkCondExprTy"
+
+--------------------------------------------------------------------------------
+adjustCtxMut :: RTypeQ q r -> Maybe (RTypeQ q r) -> RTypeQ q r
+--------------------------------------------------------------------------------
+adjustCtxMut t so | TRef (Gen n (m:ts)) r        <- t
+                  , isUQ m
+                  , Just (TRef (Gen _ (m':_)) _) <- so
+                  = TRef (Gen n (m':ts)) r
+                  | otherwise
+                  = t
 

@@ -270,10 +270,10 @@ initCallableEnv :: (PP x, IsLocated x)
                 -> CGM CGEnv
 --------------------------------------------------------------------------------
 initCallableEnv l g f fty xs s
-  = do  g1 <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-0") params g0
-        g2 <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-1") arg g1
-        -- g' <- freshenCGEnvM g2
-        return g2
+  = do  g1 <- freshenCGEnvM g0
+        g2 <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-0") params g1
+        g3 <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-1") arg g2
+        return g3
   where
     g0     = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
              -- No FP binding for these

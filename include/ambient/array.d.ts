@@ -41,9 +41,9 @@ interface Array<M extends ReadOnly, T> {
     /*@ map<U>(callbackfn: (value: T, index: number) => U): UArray<U> */
     map<U>(callbackfn: (value: T, index: number, array: T[]) => U, thisArg?: any): U[];
 
-    /*@ filter (callbackfn: (v: T) => boolean): Array<Unique,T> */
-    /*@ filter (callbackfn: (v: T, i: number) => boolean): Array<Unique, T> */
-    /*@ filter (callbackfn: (v: T, i: number, a: IArray<T>) => boolean): Array<Unique, T> */
+    /*@ filter (callbackfn: (v: T) => boolean): UArray<T> */
+    /*@ filter (callbackfn: (v: T, i: number) => boolean): UArray<T> */
+    /*@ filter (callbackfn: (v: T, i: number, a: IArray<T>) => boolean): UArray<T> */
     filter(callbackfn: (value: T, index: number, array: T[]) => boolean, thisArg?: any): T[];
 
     // reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;

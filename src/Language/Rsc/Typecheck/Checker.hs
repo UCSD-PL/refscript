@@ -643,7 +643,7 @@ tcExpr γ e@(CallExpr _ _ _) s
 tcExpr γ e@(ArrayLit l es) to
   = arrayLitTy l γ e to (length es) >>= \case
       Left ee    -> fatal ee (e, tBot)
-      Right opTy -> first (ArrayLit l) <$> ltracePP l to <$> tcNormalCall γ l BIArrayLit (zip es nths) opTy
+      Right opTy -> first (ArrayLit l) <$> tcNormalCall γ l BIArrayLit (zip es nths) opTy
 
 -- | { f1: e1, ..., fn: tn }
 tcExpr γ ex@(ObjectLit l pes) to
@@ -892,6 +892,7 @@ tcCall γ (CallExpr l e es) _
   = do (e', ft0) <- tcExpr γ e Nothing
        (es', t)  <- tcNormalCall γ l e (es `zip` nths) ft0
        return $ (CallExpr l e' es', t)
+  where
 
 tcCall _ e _
   = fatal (unimplemented (srcPos e) "tcCall" e) (e, tBot)
@@ -972,21 +973,21 @@ tcCallCaseTry _ _ _ _ []
   = return Nothing
 
 tcCallCaseTry γ l fn ts ((i,ft):fts)
-  = runFailM (do
+  = runFailM go >>= \case Right (Just θ') -> return $ Just (i, θ', ft)
+                          _               -> tcCallCaseTry γ l fn ts fts
+  where
+    go = do
       (βs, its1, _)  <- instantiateFTy l (tce_ctx γ) fn ft
       ts1            <- zipWithM (instantiateTy l $ tce_ctx γ) [1..] ts
       θ              <- unifyTypesM (srcPos l) γ ts1 its1
       (ts2, its2)    <- pure (apply θ (ts1, its1))
       (ts', cs)      <- pure (unzip [(t, c) | (t, BTV _ _ (Just c)) <- zip ts2 βs])
-      case not (and (zipWith (isSubtype γ) ts' cs)) of
-        True -> return Nothing
-        _    -> case and (zipWith (isSubtype γ) ts2 its2) of
-                  True -> return $ Just θ
-                  _    -> return Nothing
-    )
-    >>= \case
-          Right (Just θ') -> return $ Just (i, θ', ft)
-          _               -> tcCallCaseTry γ l fn ts fts
+      if ts' <:: cs && ts2 <:: its2 then
+          return $ Just θ
+      else
+          return Nothing
+
+    ts1 <:: ts2 = and (zipWith (isSubtype γ) ts1 ts2)
 
 --------------------------------------------------------------------------------
 tcCallCase :: (PP a, Unif r)

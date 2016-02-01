@@ -350,7 +350,7 @@ allAncestors γ s    = classAncestors γ s ++ interfaceAncestors γ s
 --------------------------------------------------------------------------------
 isAncestorOf :: ClassHierarchy t -> AbsName -> AbsName -> Bool
 --------------------------------------------------------------------------------
-isAncestorOf cha a b = b `elem` allAncestors cha a
+isAncestorOf cha a b = a `elem` allAncestors cha b
 
 --------------------------------------------------------------------------------
 boundKeys :: (ExprReftable Int r, PPR r)

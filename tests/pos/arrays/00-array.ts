@@ -6,8 +6,8 @@ export function foo(a: IArray<number>) {
     return 0;
 }
 
-foo([]);
-foo([1]);
-foo([1, 2]);
-foo([1, 2, 3]);
-foo([1, 2, 3, 4]);
+foo(<IArray<number>>[]);
+foo(<IArray<number>>[1]);
+foo(<IArray<number>>[1, 2]);
+foo(<IArray<number>>[1, 2, 3]);
+foo(<IArray<number>>[1, 2, 3, 4]);

@@ -78,4 +78,3 @@ instance ToJSON RawSpec
 
 instance ToJSON SourcePos where
   toJSON sp = toJSON (sourceName sp, sourceLine sp, sourceColumn sp)
-

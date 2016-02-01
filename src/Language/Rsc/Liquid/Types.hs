@@ -50,7 +50,7 @@ import           Control.Applicative
 import           Data.Default
 import qualified Data.HashMap.Strict             as HM
 import qualified Data.List                       as L
-import           Data.Maybe                      (catMaybes, fromMaybe)
+import           Data.Maybe                      (catMaybes, mapMaybe, fromMaybe)
 import           Data.Monoid                     (mconcat)
 import qualified Data.Text                       as T
 import qualified Language.Fixpoint.Smt.Bitvector as BV
@@ -154,7 +154,7 @@ rTypeReft         :: F.Reftable r => RTypeQ q r -> F.Reft
 rTypeValueVar     :: F.Reftable r => RTypeQ q r -> F.Symbol
 --------------------------------------------------------------------------------
 rTypeSortedReft t = F.RR (rTypeSort t) (rTypeReft t)
-rTypeReft         = fromMaybe fTop . fmap F.toReft . stripRTypeBase
+rTypeReft         = maybe fTop F.toReft . stripRTypeBase
 rTypeValueVar t   = vv where F.Reft (vv,_) = rTypeReft t
 
 --------------------------------------------------------------------------------
@@ -162,7 +162,7 @@ rTypeSort :: F.Reftable r => RTypeQ q r -> F.Sort
 --------------------------------------------------------------------------------
 rTypeSort (TVar α _)          = F.FObj $ F.symbol α
 rTypeSort (TAll v t)          = rTypeSortForAll $ TAll v t
-rTypeSort (TFun xts t _)      = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
+rTypeSort (TFun xts t _)      = F.mkFFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TPrim c _)         = rTypeSortPrim c
 rTypeSort (TOr ts _)          = F.fAppTC (rawStringFTycon unionName ) []
 rTypeSort (TAnd ts)           = F.fAppTC (rawStringFTycon intersName) []
@@ -190,8 +190,9 @@ rTypeSortForAll t        = genSort n θ $ rTypeSort tbody
     n                    = length αs
     θ                    = HM.fromList $ zip (F.symbol <$> αs) (F.FVar <$> [0..])
 
-genSort n θ (F.FFunc _ t) = F.FFunc n (F.sortSubst θ <$> t)
-genSort n θ t             = F.FFunc n [F.sortSubst θ t]
+genSort n θ t = case F.bkFFunc t of
+                 Just (_, ts) -> F.mkFFunc n (F.sortSubst θ <$> ts)
+                 Nothing      -> F.mkFFunc n [F.sortSubst θ t]
 
 --------------------------------------------------------------------------------
 stripRTypeBase :: RTypeQ q r -> Maybe r
@@ -401,7 +402,7 @@ mkQualSym x f = F.symbol x `qualifySymbol` F.symbol f
 -------------------------------------------------------------------------------
 mkOffsetSym :: (F.Symbolic f, F.Expression x) => x -> f -> F.Expr
 -------------------------------------------------------------------------------
-mkOffsetSym x f = F.EApp offsetLocSym [F.expr x, F.expr $ symbolText $ F.symbol f]
+mkOffsetSym x f = F.mkEApp offsetLocSym [F.expr x, F.expr $ symbolText $ F.symbol f]
 
 
 

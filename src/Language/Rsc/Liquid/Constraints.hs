@@ -275,6 +275,7 @@ bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 -- NOTE: addInvariant only needed in LHS
 bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant g t1 <*> return t2
 
+bsplitC' :: CGEnv -> a -> RefType -> RefType -> [F.SubC a]
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivial r2
   = F.subC bs (conjoinPred p $ r1 {F.sr_reft = typeofReft t1}) r2 Nothing subCTag ci
@@ -285,10 +286,10 @@ bsplitC' g ci t1 t2
   where
     bs             = cge_fenv g
     p              = F.pAnd $ cge_guards g
-    (r1,r2)        = (rTypeSortedReft t1, rTypeSortedReft t2)
+    (r1, r2)       = (rTypeSortedReft t1, rTypeSortedReft t2)
     typeofReft t   = F.reft (vv t) $ F.pAnd [ typeofExpr (F.symbol "function") t
                                             , F.eProp $ vv t ]
-    typeofExpr s t = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
+    typeofExpr s t = F.PAtom F.Eq (F.mkEApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
                                   (F.expr $ F.symbolText s)
     vv             = rTypeValueVar
 

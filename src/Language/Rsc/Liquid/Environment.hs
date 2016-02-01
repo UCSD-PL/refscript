@@ -360,15 +360,15 @@ addInvariant g t
                            | otherwise          = t `strengthen` r
     typeofReft             = F.reft  (vv t) $ F.pAnd [ typeofExpr $ F.symbol "function"
                                                      , F.eProp    $ vv t                ]
-    typeofExpr s           = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
+    typeofExpr s           = F.PAtom F.Eq (F.mkEApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
                                           (F.expr $ F.symbolSafeText s)
 
     ofRef (F.Reft (s, ra))    = F.reft s <$> F.conjuncts ra
 
     -- | { f: T } --> hasProperty("f", v)
     hasProp ty             = t `strengthen` keyReft (boundKeys cha ty)
-    keyReft ks             = F.reft (vv t) $ F.pAnd (F.PBexp . hasPropExpr <$> ks)
-    hasPropExpr s          = F.EApp (F.dummyLoc (F.symbol "hasProperty"))
+    keyReft ks             = F.reft (vv t) $ F.pAnd (hasPropExpr <$> ks)
+    hasPropExpr s          = F.mkEApp (F.dummyLoc (F.symbol "hasProperty"))
                                 [F.expr (F.symbolSafeText s), F.eVar $ vv t]
 
     -- | extends class / interface
@@ -384,8 +384,8 @@ addInvariant g t
     rExtClass t cs = F.reft (vv t) (F.pAnd $ refa t "extends_class"     <$> cs)
     rExtIface t cs = F.reft (vv t) (F.pAnd $ refa t "extends_interface" <$> cs)
 
-    refa t s c     = F.PBexp $ F.EApp (sym s) [ F.expr $ rTypeValueVar t
-                                              , F.expr $ F.symbolSafeText c]
+    refa t s c     =F.mkEApp (sym s) [ F.expr $ rTypeValueVar t
+                                     , F.expr $ F.symbolSafeText c]
     vv             = rTypeValueVar
     sym s          = F.dummyLoc $ F.symbol s
 
@@ -541,4 +541,3 @@ envTyAdds msg l xts g = cgEnvAdds l msg' sis g
   where
     sis  = [ SI x Local WriteLocal Initialized t | B x t <- xts ]
     msg' = msg ++ " - envTyAdds " ++ ppshow (srcPos l)
-

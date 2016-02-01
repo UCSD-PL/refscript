@@ -409,7 +409,7 @@ replaceDotRef p@(Rsc { code = Src fs, tAlias = ta, pAlias = pa, invts = is })
     tx _ (F.EVar s)   | (x:y:zs) <- pack "." `splitOn` pack (symbolString s)
                       = foldl offset (F.eVar x) (y:zs)
     tx _ e            = e
-    offset k v        = F.EApp offsetLocSym [F.expr k, F.expr v]
+    offset k v        = F.mkEApp offsetLocSym [F.expr k, F.expr v]
 
 
 --
@@ -662,4 +662,3 @@ absolutePath ps (QP AK_ _ p) (QP RK_ _ ss) =
     suffixes (x:xs) = (x:xs) : suffixes xs
 
 toAbsoluteName (QN (QP RK_ l ss) s) = QN (QP AK_ l ss) s
-

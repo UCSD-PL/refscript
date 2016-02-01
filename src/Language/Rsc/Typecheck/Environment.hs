@@ -132,7 +132,7 @@ initCallableEnv l γ f fty xs s
     rSym  = F.symbol "return"
     tyBs  = [(Loc (srcPos l) α, SI (F.symbol α) Local Ambient Initialized $ tVar α) | α <- αs]
     varBs = [(x, SI (F.symbol x) Local WriteLocal Initialized t) | (x, t) <- safeZip "initCallableEnv" xs ts]
-    arg   = single (argId (srcPos l) (fId l), mkArgumentsSI l ts)
+    arg   = [(getArgId (srcPos l), mkArgumentsSI l ts)]
     bnds  = envAdds [(s,t) | BTV s _ (Just t) <- bs] $ envBounds γ
     ctx   = pushContext i (envCtx γ)
     pth   = envPath γ

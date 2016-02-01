@@ -227,15 +227,15 @@ tcStmt γ (ExprStmt l (AssignExpr l1 OpAssign (LVar lx x) e))
 -- e1.f = e2
 --
 tcStmt γ@(envCHA -> c) (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
-  = do  (e1'', te1) <- tcExpr γ e1' Nothing
-        case (getMutability c te1, e1) of
+  = do  (e1', te1) <- tcExpr γ e1 Nothing
+        case (getMutability c te1, e1') of
           (Just m, _        )
             | isSubtype γ m tMU || isSubtype γ m tUQ ->
               case getProp l γ f te1 of
                 Left e        -> tcError e
                 Right (map snd -> fs) ->
                     do  (e2', _) <- foldM (tcSetPropMut γ l f te1) (e2, tBot) fs
-                        return (mkAsgnExp e1'' e2', Just γ)
+                        return (mkAsgnExp e1' e2', Just γ)
 
           (Just m, ThisRef _)
             | isSubtype γ m tAF ->
@@ -243,16 +243,15 @@ tcStmt γ@(envCHA -> c) (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
                 Left e        -> tcError e
                 Right (map snd -> fs) ->
                     do  (e2', _) <- foldM (tcSetPropMut γ l f te1) (e2, tBot) fs
-                        return (mkAsgnExp e1'' e2', Just γ)
+                        return (mkAsgnExp e1' e2', Just γ)
 
           _ ->
               case getProp l γ f te1 of
                 Left e        -> tcError e
                 Right (map snd -> fs) ->
                     do  (e2', _) <- foldM (tcSetPropImm γ l f te1) (e2, tBot) fs
-                        return (mkAsgnExp e1'' e2', Just γ)
+                        return (mkAsgnExp e1' e2', Just γ)
   where
-    e1' = fmap (\a -> a { fFact = BypassUnique : fFact a }) e1
     mkAsgnExp e1_ e2_ = ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1_ f) e2_)
 
 -- e
@@ -593,13 +592,9 @@ tcExpr γ e@(VarRef l x) _
   | F.symbol x == F.symbol "undefined"
   = return (e, tUndef)
 
-  -- | `arguments`
-  | F.symbol x == F.symbol "arguments"
-  = tcExpr γ (VarRef l (Id (getAnnotation x) ("arguments_" ++ show (envFnId γ)))) to
-
-  -- | Unique reference exception
-  | Just t <- to, not $ null [ () | BypassUnique <- fFact l ]
-  = return (e,t)
+--   -- | `arguments`
+--   | F.symbol x == F.symbol "arguments"
+--   = tcExpr γ (VarRef l (Id (getAnnotation x) ("arguments_" ++ show (envFnId γ)))) to
 
   -- | Ignore the `cast` variable
   | Just t <- to, isCastId x

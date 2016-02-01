@@ -77,15 +77,15 @@ ssaStmts g ss = mapSnd flattenBlock <$> ssaSeq (ssaStmt g) ss
 
 
 -------------------------------------------------------------------------------------
-ssaFun :: (Data r, PPR r) => SsaEnv r -> AnnSSA r -> [Var r] -> [Statement (AnnSSA r)] -> SSAM r [Statement (AnnSSA r)]
+ssaFun :: (Data r, PPR r)
+       => SsaEnv r -> AnnSSA r -> [Var r] -> [Statement (AnnSSA r)]
+       -> SSAM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------------
 ssaFun g l xs body
   = do  γ0         <- getSsaVars                  -- Remember env before the function
         setSsaVars  $ mempty                      -- Reset the 'local' SSA-vars count
-        body1      <- return body   -- prefixArgInit l body
-        arg        <- argIdInit <$> freshenAnn l
-        ret        <- returnId <$> freshenAnn l
-        let g'      = initCallableSsaEnv l g arg ret xs body1
+        body1      <- pure body                   -- prefixArgInit l body
+        g'         <- initCallableSsaEnv l g xs body1
         (_, body2) <- ssaStmts g' body1
         setSsaVars  $ γ0                          -- Restore outer env
         return      $ body2
@@ -324,9 +324,7 @@ ssaStmt g (ThrowStmt l e) = do
 
 -- function f(...){ s }
 ssaStmt g (FunctionStmt l f xs (Just bd))
-  = do  arg       <- argId    <$> freshenAnn l <**> fId l
-        ret       <- returnId <$> freshenAnn l
-        let g'     = initCallableSsaEnv l g arg ret xs bd
+  = do  g'        <- initCallableSsaEnv l g xs bd
         (True,) . FunctionStmt l f xs . Just <$> ssaFun g' l xs bd
 
 ssaStmt g s@(FunctionStmt _ _ _ Nothing)
@@ -358,9 +356,8 @@ ssaStmt g c@(ClassStmt l n bd)
 
 -- module M { ... }
 ssaStmt g (ModuleStmt l n body)
-  = (True,) . ModuleStmt l n . snd <$> ssaStmts g' body
-  where
-    g' = initModuleSsaEnv l g n body
+  = do  g' <- pure (initModuleSsaEnv l g n body)
+        (True,) . ModuleStmt l n . snd <$> ssaStmts g' body
 
 -- enum { ... }
 ssaStmt g (EnumStmt l n es)
@@ -377,7 +374,7 @@ ssaAsgnStmt l1 l2 x@(Id l3 v) x' e'
 
 -- | Freshen annotation shortcut
 --
-fr_                   = freshenAnn
+fr_ = freshenAnn
 
 -------------------------------------------------------------------------------------
 ctorVisitor :: (Data r, PPR r) => SsaEnv r -> [Id (AnnSSA r)] -> VisitorM (SSAM r) () () (AnnSSA r)
@@ -477,14 +474,12 @@ ssaClassElt :: (Data r, PPR r) => SsaEnv r -> Statement (AnnSSA r)
             -> ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
 -------------------------------------------------------------------------------------
 ssaClassElt g c (Constructor l xs bd)
-  = do  arg       <- argId    <$> freshenAnn l <**> fId l
-        ret       <- returnId <$> freshenAnn l
-        pre       <- preM c
+  = do  pre       <- preM c
         fs        <- mapM symToVar fields
         bfs       <- bdM fs
         efs       <- exitM fs
-        let bd'    = pre ++ bfs ++ efs
-        let g'     = initCallableSsaEnv l g arg ret xs bd'
+        bd'       <- pure (pre ++ bfs ++ efs)
+        g'        <- initCallableSsaEnv l g xs bd'
         (_, bd'') <- ssaStmts g' bd'
         return     $ Constructor l xs bd''
   where
@@ -717,6 +712,15 @@ ssaExpr _ e@(SuperRef _)
 
 ssaExpr g   (ArrayLit l es)
   = ssaExprs g (ArrayLit l) es
+
+-- | arguemnts ==> __getArguemnts()
+--
+ssaExpr g (VarRef l x)
+  | F.symbol x == argSym
+  = do  aId   <- freshenIdSSA (getArgId l)
+        aVr   <- VarRef   <$> freshenAnn l <*> pure aId
+        cExp  <- CallExpr <$> freshenAnn l <*> pure aVr <*> pure []
+        ssaExpr g cExp
 
 ssaExpr g (VarRef l x)
   = ([],) <$> ssaVarRef g l x

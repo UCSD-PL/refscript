@@ -27,6 +27,7 @@ module Language.Rsc.Names (
   , lenId
   , argId
   , argIdInit
+  , getArgId
 
   -- * Path operations
   , extendAbsPath
@@ -47,6 +48,7 @@ module Language.Rsc.Names (
   , protoSym
   , thisSym
   , argSym
+  , getArgSym
   , thisId
   , undefinedId
 
@@ -171,7 +173,14 @@ symbolId l x = Id l $ symbolString $ F.symbol x
 returnId   :: a -> Id a
 returnId x  = Id x returnName
 lenId l     = Id l "length"
-argIdInit l = Id l $ "arguments"
+
+argName     = "arguments"
+argIdInit l = Id l argName
+
+getArgName  = "__getArguments"
+getArgId  l = Id l getArgName
+
+-- Use the following to distinguish argument vars from nested functions.
 argId l i   = Id l $ "arguments_" ++ show i
 
 
@@ -213,10 +222,11 @@ offsetLocSym    = F.dummyLoc offsetName
 undefinedId     = Id (srcPos dummySpan) "undefined"
 thisId l        = Id l "this"
 
-offsetName, thisSym, protoSym, argSym :: F.Symbol
+offsetName, thisSym, protoSym, argSym, getArgSym :: F.Symbol
 thisSym    = "this"
 protoSym   = "__proto__"
 argSym     = "arguments"
+getArgSym  = F.symbol getArgName
 offsetName = "offset"
 
 ----------------------------------------------------------------------

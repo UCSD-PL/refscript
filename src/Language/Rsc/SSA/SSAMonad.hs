@@ -29,6 +29,7 @@ module Language.Rsc.SSA.SSAMonad (
    , initSsaVar
    , updSsaEnv
    , freshenAnn
+   , freshArgId
    , freshenIdSSA
    , findSsaEnv
 
@@ -100,22 +101,31 @@ data SsaEnv r = SsaEnv {
 instance PP (SsaEnv r) where
   pp (SsaEnv asgn _ _ _) = pp asgn
 
--------------------------------------------------------------------------------------
-initGlobSsaEnv :: F.Reftable r => [Statement (AnnR r)] -> ClassHierarchy r -> SsaEnv r
--------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+initGlobSsaEnv
+  :: F.Reftable r => [Statement (AnnR r)] -> ClassHierarchy r -> SsaEnv r
+--------------------------------------------------------------------------------
 initGlobSsaEnv fs cha
   = SsaEnv (envFromListConcat (symbols' fs)) cha Nothing emptyPath
 
-initCallableSsaEnv l g arg ret xs bd = SsaEnv env cha cls path
-  where
-    env  = envMap toFgn (asgn g)
-         & mappend (envFromListConcat (symbols' bd))
-         & envAdd ret ReturnVar
-         & envAdd arg RdOnly
-         & envAdds (xs `zip` repeat WriteLocal)
-    cha  = ssaCHA g
-    cls  = curClass g
-    path = curPath g
+--------------------------------------------------------------------------------
+initCallableSsaEnv
+  :: (F.Reftable r, F.Symbolic x, IsLocated x)
+  => AnnSSA r -> SsaEnv r -> [x] -> [Statement (AnnR r)] -> SSAM r (SsaEnv r)
+--------------------------------------------------------------------------------
+initCallableSsaEnv l g xs bd
+  = do  arg  <- freshArgId l
+        ret  <- freshRetId l
+        env  <- pure $ envMap toFgn (asgn g)
+                     & mappend (envFromListConcat (symbols' bd))
+                     & envAdd ret ReturnVar
+                     & envAdd arg RdOnly
+                     & envAdds (xs `zip` repeat WriteLocal)
+        cha  <- pure $ ssaCHA g
+        cls  <- pure $ curClass g
+        path <- pure $ curPath g
+        return       $ SsaEnv env cha cls path
+
 
 toFgn WriteLocal = ForeignLocal
 toFgn a          = a
@@ -198,6 +208,16 @@ updSsaEnvLocal g a x
 freshenAnn :: IsLocated l => l -> SSAM r (AnnSSA r)
 -------------------------------------------------------------------------------------
 freshenAnn l = FA <$> tick <**> srcPos l <**> []
+
+-------------------------------------------------------------------------------------
+freshArgId :: AnnSSA r -> SSAM r (Id (AnnSSA r))
+-------------------------------------------------------------------------------------
+freshArgId l = freshenIdSSA (getArgId l)
+
+-------------------------------------------------------------------------------------
+freshRetId :: IsLocated l => l -> SSAM r (Id (AnnSSA r))
+-------------------------------------------------------------------------------------
+freshRetId l = returnId <$> freshenAnn l
 
 -------------------------------------------------------------------------------------
 tick :: SSAM r Int

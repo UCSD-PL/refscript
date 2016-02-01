@@ -60,7 +60,7 @@ module Language.Rsc.Typecheck.Types (
   , infixOpId, prefixOpId, builtinOpId, finalizeTy
 
   -- * Builtin: Binders
-  , mkId, argId, argIdInit
+  , mkId, argId
   -- , returnTy
 
   -- * BitVector

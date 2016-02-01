@@ -75,8 +75,8 @@ symToField (SI n _ _           _ t) = FI n Req tIM t
 --------------------------------------------------------------------------------
 mkArgumentsSI :: (F.Reftable r, IsLocated l) => l -> [RType r] -> SymInfo r
 --------------------------------------------------------------------------------
-mkArgumentsSI l ts = SI argSym Local RdOnly Initialized
-                   $ immObjectLitTy [pLen] [tLen]
+mkArgumentsSI l ts = SI getArgSym Local RdOnly Initialized
+                   $ TFun [] (immObjectLitTy [pLen] [tLen]) fTop
   where
     ts'            = take k ts
     ps'            = PropNum l . toInteger <$> [0 .. k-1]

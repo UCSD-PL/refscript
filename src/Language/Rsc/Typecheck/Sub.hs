@@ -230,7 +230,7 @@ subtypeObj l _ _ _ t2@(TRef (Gen _ []) _)
 -- | Type Reference subtyping
 subtypeObj l γ c t1@(TRef g1@(Gen x1 (m1:t1s)) r1)
                  t2@(TRef    (Gen x2 (m2:t2s)) r2)
-  = case subtypeObj l γ c m1 m2 of
+  = case subtype l γ c m1 m2 of
       EqT     -> checkBaseType
       SubT    -> checkBaseType
       NoSub e -> NoSub e

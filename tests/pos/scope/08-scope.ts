@@ -1,18 +1,12 @@
 module K {
-    export function foo(): void {
+    export function foo(): void { }
 
-    }
-
-    class InK<M extends ReadOnly> {
-        constructor() {
-
-        }
+    class InK<MMM extends ReadOnly> {
+        constructor() { }
     }
 
     export module L {
-        export function baz(): void {
-
-        }
+        export function baz(): void { }
 
         class InKL<M extends ReadOnly> {
             constructor() {}
@@ -20,9 +14,7 @@ module K {
 
         export module M {
             class InKLM<M extends ReadOnly> {
-                constructor() {
-
-                }
+                constructor() { }
             }
 
             export function bar(): void {
@@ -36,38 +28,26 @@ module K {
 }
 
 class InK<M extends ReadOnly> {
-    constructor() {
-
-    }
+    constructor() { }
 }
 
 module K1 {
-    export function foo(): void {
-
-    }
+    export function foo(): void { }
 
     class InK<M extends ReadOnly> {
-        constructor() {
-
-        }
+        constructor() { }
     }
 
     export module L {
-        export function baz(): void {
-
-        }
+        export function baz(): void { }
 
         class InKL<M extends ReadOnly> extends InK<M> {
-            constructor() {
-                super();
-            }
+            constructor() { super(); }
         }
 
         export module M {
             class InKLM<M extends ReadOnly> {
-                constructor() {
-
-                }
+                constructor() { }
             }
 
             export function bar(): void {

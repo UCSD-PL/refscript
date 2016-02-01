@@ -643,7 +643,7 @@ tcExpr γ e@(CallExpr _ _ _) s
 tcExpr γ e@(ArrayLit l es) to
   = arrayLitTy l γ e to (length es) >>= \case
       Left ee    -> fatal ee (e, tBot)
-      Right opTy -> first (ArrayLit l) <$> tcNormalCall γ l BIArrayLit (zip es nths) opTy
+      Right opTy -> first (ArrayLit l) <$> ltracePP l to <$> tcNormalCall γ l BIArrayLit (zip es nths) opTy
 
 -- | { f1: e1, ..., fn: tn }
 tcExpr γ ex@(ObjectLit l pes) to

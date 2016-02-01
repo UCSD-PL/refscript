@@ -79,49 +79,55 @@ castTy t = TFun [B sx t] (t `eSingleton` sx) fTop
 
 ---------------------------------------------------------------------------------
 arrayLitTy :: (Monad m, F.Reftable r, IsLocated l, PP r, PP a1, CheckingEnvironment r t)
-           => l -> t r -> a1 -> Maybe (RType r) -> Int -> m (Either F.Error (RType r))
+           => l -> t r -> a1
+           -> Maybe (RType r)
+           -> Int
+           -> m (Either F.Error (RType r))
 ---------------------------------------------------------------------------------
 arrayLitTy l g@(envCHA -> c) e (Just t0) n
-  | TRef nm _          <- t0
+  | TRef nm _          <- t0        -- Get mutability from contextual type
   , Just (Gen _ [m,t]) <- weaken c nm (mkAbsName [] arrayName)
   = if isIM m then mkImmArrTy l g t n
               else mkArrTy    l g n
   | otherwise
   = return $ Left $ errorArrayLitType l e t0
+
 arrayLitTy l g e Nothing n = mkUniqueArrTy l g n
 
--- | builtin_BIImmArrayLit :: <A>(x: A) => {v: IArray<A> | len v = builtin_BINumArgs }
+-- | mkIArray :: <A <: T>(x1: A, ... , xn: A) => {v: IArray<A> | len v = n }
 --
-mkImmArrTy l g t n
-  = do  opTy <- safeEnvFindTy l g (builtinOpId BIImmArrayLit)
-        case opTy of
-          TAll (BTV s l _) (TFun [B x_ t_] tOut r) ->
-            return $ Right $ mkAll [BTV s l (Just t)] (TFun (bs x_ t_) (rt tOut) r)
-          _ -> return undefined
+mkImmArrTy l g t n = safeEnvFindTy l g ial >>= go
   where
+    ial = builtinOpId BIImmArrayLit
+    go (TAll (BTV s l _) (TFun [B x_ t_] tOut r))
+         = return $ Right $ mkAll [BTV s l (Just t)] (TFun (bs x_ t_) (rt tOut) r)
+    go _ = return $ Left  $ bugArrayBIType l ial t
+
     bs x_ t_ = [ B (tox x_ i) t_ | i <- [1..n] ]
     rt t_    = F.subst1 t_ (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
     tox x    = F.symbol . ((symbolString x) ++) . show
 
--- | declare function builtin_BIUniqueArrayLit<A>(a: A): Array<Unique, A>
+-- | mkUArray :: <A>(a: A): Array<Unique, A>
 --
-mkUniqueArrTy l g n
-  = do  opTy <- safeEnvFindTy l g (builtinOpId BIUniqueArrayLit)
-        case opTy of
-          TAll α (TFun [B x_ t_] rt r) ->
-            return $ Right $ mkAll [α] (TFun (bs x_ t_) rt r)
+mkUniqueArrTy l g n = safeEnvFindTy l g ual >>= go
   where
+    ual = builtinOpId BIUniqueArrayLit
+    go (TAll α (TFun [B x_ t_] rt r))
+         = return $ Right $ mkAll [α] (TFun (bs x_ t_) rt r)
+    go t = return $ Left  $ bugArrayBIType l ual t
+
     bs x_ t_ = [ B (tox x_ i) t_ | i <- [1..n] ]
     tox x    = F.symbol . ((symbolString x) ++) . show
 
--- | declare function builtin_BIArrayLit<M extends ReadOnly, A>(a: A): Array<M, A>
+-- | mkArray :: <M,A>(a: A): Array<M,A>
 --
-mkArrTy l g n
-  = do  opTy <- safeEnvFindTy l g (builtinOpId BIArrayLit)
-        case opTy of
-          TAll μ (TAll α (TFun [B x_ t_] rt r)) ->
-            return $ Right $ mkAll [μ,α] (TFun (bs x_ t_) rt r)
+mkArrTy l g n = safeEnvFindTy l g al >>= go
   where
+    al = builtinOpId BIArrayLit
+    go (TAll μ (TAll α (TFun [B x_ t_] rt r)))
+        = return $ Right $ mkAll [μ,α] (TFun (bs x_ t_) rt r)
+    go t = return $ Left  $ bugArrayBIType l al t
+
     bs x_ t_ = [ B (tox x_ i) t_ | i <- [1..n] ]
     tox x    = F.symbol . ((symbolString x) ++) . show
 

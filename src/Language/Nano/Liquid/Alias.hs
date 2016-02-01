@@ -68,9 +68,17 @@ expandPAliasEnv pe = solve pe support expandPAlias
 getPApps :: F.Expr -> [F.Symbol]
 getPApps = V.fold pAppVis () []
   where
-    pAppVis                     = V.defaultVisitor { V.accPred = pA }
-    pA _ (F.PBexp (F.EApp f _)) = [F.val f]
+    -- pAppVis                     = V.defaultVisitor { V.accExpr = pA }
+    pA :: () -> F.Expr -> [F.Symbol]
+    pA _ (F.EApp (F.EVar f) _)  = [f]
     pA _ _                      = []
+    pAppVis = V.Visitor {
+      V.ctxExpr    = const -- \c _ -> c
+    , V.txExpr     = \_ x -> x
+    , V.accExpr    = pA
+    }
+
+
 
 expandPAlias      :: PAliasEnv -> PAlias -> PAlias
 expandPAlias pe a = a { al_body = expandPred pe $ al_body a }
@@ -78,9 +86,19 @@ expandPAlias pe a = a { al_body = expandPred pe $ al_body a }
 expandPred :: Data a => PAliasEnv -> a -> a
 expandPred pe = everywhere $ mkT tx
   where
-    tx p@(F.PBexp (F.EApp f es))
-              = maybe p (applyPAlias p f es) $ envFindTy f pe
-    tx p      = p
+    tx p | Just (F.EVar f, es) <- splitEApp p
+         = maybe p (applyPAlias p f es) $ envFindTy f pe
+         | otherwise
+         = p
+
+-- TODO: Move to Language.Fixpoint.Types.Refinements
+splitEApp :: F.Expr -> Maybe (F.Expr, [F.Expr])
+splitEApp e@(F.EApp _ _) = Just $ go [] e
+  where
+    go acc (F.EApp f e)  = go (e:acc) f
+    go acc e             = (e, acc)
+splitEApp _              = Nothing
+
 
 applyPAlias p f es a
   | ne == nx  = F.subst su $ al_body a

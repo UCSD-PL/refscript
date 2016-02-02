@@ -97,10 +97,12 @@ getIncludeLibs cfg = case prelude cfg of
   Just p  -> return [p]
 
 instance FromJSON (F.FixResult Error)
-instance ToJSON (F.FixResult Error)
+instance ToJSON (F.FixResult Error) where
+  toJSON = genericToJSON defaultOptions
 
 instance FromJSON Error
-instance ToJSON Error
+instance ToJSON Error where
+  toJSON = genericToJSON defaultOptions
 
 
 run verifyFile cfg

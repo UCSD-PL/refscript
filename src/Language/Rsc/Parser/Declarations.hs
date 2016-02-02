@@ -55,31 +55,46 @@ instance FromJSON UnaryAssignOp
 instance FromJSON SrcSpan
 instance FromJSON RawSpec
 
-instance ToJSON (Expression  (SrcSpan, [RawSpec]))
-instance ToJSON (Statement   (SrcSpan, [RawSpec]))
-instance ToJSON (EnumElt     (SrcSpan, [RawSpec]))
-instance ToJSON (LValue      (SrcSpan, [RawSpec]))
-instance ToJSON (JavaScript  (SrcSpan, [RawSpec]))
-instance ToJSON (ClassElt    (SrcSpan, [RawSpec]))
-instance ToJSON (CaseClause  (SrcSpan, [RawSpec]))
-instance ToJSON (CatchClause (SrcSpan, [RawSpec]))
-instance ToJSON (ForInit     (SrcSpan, [RawSpec]))
-instance ToJSON (ForInInit   (SrcSpan, [RawSpec]))
-instance ToJSON (VarDecl     (SrcSpan, [RawSpec]))
-instance ToJSON (Id          (SrcSpan, [RawSpec]))
-instance ToJSON (Prop        (SrcSpan, [RawSpec]))
-instance ToJSON (SrcSpan, [RawSpec])
-instance ToJSON InfixOp
-instance ToJSON AssignOp
-instance ToJSON PrefixOp
-instance ToJSON UnaryAssignOp
-instance ToJSON SrcSpan
-instance ToJSON RawSpec
-
--- instance ToJSON (Expression  (SrcSpan, [RawSpec])) where
---   toJSON = genericToJSON defaultOptions
-
-
+instance ToJSON (Expression  (SrcSpan, [RawSpec])) where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON (Statement   (SrcSpan, [RawSpec])) where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON (EnumElt     (SrcSpan, [RawSpec])) where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON (LValue      (SrcSpan, [RawSpec])) where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON (JavaScript  (SrcSpan, [RawSpec])) where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON (ClassElt    (SrcSpan, [RawSpec])) where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON (CaseClause  (SrcSpan, [RawSpec])) where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON (CatchClause (SrcSpan, [RawSpec])) where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON (ForInit     (SrcSpan, [RawSpec])) where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON (ForInInit   (SrcSpan, [RawSpec])) where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON (VarDecl     (SrcSpan, [RawSpec])) where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON (Id          (SrcSpan, [RawSpec])) where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON (Prop        (SrcSpan, [RawSpec])) where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON (SrcSpan, [RawSpec]) where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON InfixOp where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON AssignOp where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON PrefixOp where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON UnaryAssignOp where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON SrcSpan where
+  toJSON = genericToJSON defaultOptions
+instance ToJSON RawSpec where
+  toJSON = genericToJSON defaultOptions
 
 instance ToJSON SourcePos where
   toJSON sp = toJSON (sourceName sp, sourceLine sp, sourceColumn sp)

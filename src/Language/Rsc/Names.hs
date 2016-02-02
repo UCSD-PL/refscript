@@ -73,13 +73,9 @@ module Language.Rsc.Names (
 
   ) where
 
-import           Control.Applicative           ((<$>))
 import           Data.Data
 import           Data.Default
-import           Data.Foldable                 (Foldable ())
 import           Data.Hashable
-import qualified Data.HashSet                  as H
-import           Data.Traversable
 import           GHC.Generics                  (Generic ())
 import qualified Language.Fixpoint.Types       as F
 import           Language.Fixpoint.Types.Names (symbolString)

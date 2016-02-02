@@ -484,11 +484,11 @@ consVarDecl g v@(VarDecl l x (Just e))
       Just (SI n lc RdOnly _ t) -> do
         fta       <- freshenType WriteGlobal g l t
         mseq (consExpr g e (Just t)) $ \(y,gy) -> do
-          eT      <- cgSafeEnvFindTyM y gy
+          eT      <- ltracePP l ("Inferred " ++ ppshow e) <$> cgSafeEnvFindTyM y gy
           -- _       <- subType l Nothing gy eT t
           _       <- subType l Nothing gy eT fta
           _       <- subType l Nothing gy fta t
-          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc RdOnly Initialized fta] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc RdOnly Initialized $ ltracePP l ("Assinged " ++ ppshow e) fta] gy
 
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 
@@ -846,10 +846,18 @@ consExpr g e@(ArrayLit l es) to
 -- | { f1: e1, ..., fn: en }
 --
 consExpr g e@(ObjectLit l pes) to
-  = consCall g l BIObjectLit (zip es cts) ft
+  = mseq (consScan consExpr g ets) $ \(xes, g') -> do
+      ts      <- mapM (`cgSafeEnvFindTyM` g') xes
+      t       <- pure (TObj (tmsFromList (zipWith toFI ps ts)) fTop)
+      Just   <$> cgEnvAddFresh "ObjectLit" l t g'
   where
-    (cts, ft) = objLitTy l g ps to
-    (ps , es) = unzip pes
+    toFI p t   = FI (F.symbol p) Req tUQ t
+    ets        = map (\(p,e) -> (e, pTy p)) pes
+    pTy p      | Just f@FI{} <- lkup p = Just (f_ty f)
+               | otherwise             = Nothing
+    lkup p     = F.lookupSEnv (F.symbol p) ctxTys
+    ctxTys     = maybe mempty (i_mems . typeMembersOfType (envCHA g)) to
+    (ps , es)  = unzip pes
 
 -- | new C(e, ...)
 --

@@ -208,7 +208,7 @@ expandType _ cha (TRef (Gen n []) _)
   | Just e <- resolveEnum cha n
   = Just $ TObj (ms e) fTop
   where
-    ms  = typeMembersFromList . concatMap mkField . envToList . e_mapping
+    ms  = tmsFromList . concatMap mkField . envToList . e_mapping
     -- TODO
     mkField (k, IntLit _ i) = [FI (F.symbol k) Req tIM (tNum `strengthen` exprReft i)]
     mkField (k, HexLit _ s) | Just e <- bitVectorValue s

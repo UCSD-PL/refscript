@@ -93,7 +93,7 @@ immObjectLitTy ps ts | length ps == length ts
                      | otherwise
                      = error "Mismatched args for immObjectLit"
   where
-    elts = typeMembersFromList [ FI (sym p) Req tIM t | (p,t) <- pts ]
+    elts = tmsFromList [ FI (sym p) Req tIM t | (p,t) <- pts ]
     pts  = safeZip "immObjectLitTy" ps ts
     sym  = F.symbol
 

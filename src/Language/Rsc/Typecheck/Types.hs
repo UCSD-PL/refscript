@@ -54,7 +54,7 @@ module Language.Rsc.Typecheck.Types (
   , fTop
 
   -- * Type Definitions
-  , mkTypeMembers, typeMembers, typeMembersFromList, typesOfTM
+  , mkTypeMembers, typeMembers, tmsFromList, typesOfTM
 
   -- * Operator Types
   , infixOpId, prefixOpId, builtinOpId, finalizeTy
@@ -451,10 +451,10 @@ typeMembers :: F.SEnv (TypeMemberQ q r) -> TypeMembersQ q r
 typeMembers f = TM f mempty Nothing Nothing Nothing Nothing
 
 --------------------------------------------------------------------------------------------
-typeMembersFromList :: [TypeMember r] -> TypeMembers r
+tmsFromList :: [TypeMember r] -> TypeMembers r
 --------------------------------------------------------------------------------------------
-typeMembersFromList f = TM (F.fromListSEnv (map (\f_ -> (F.symbol f_, f_)) f))
-                           mempty Nothing Nothing Nothing Nothing
+tmsFromList f = TM (F.fromListSEnv (map (\f_ -> (F.symbol f_, f_)) f))
+                   mempty Nothing Nothing Nothing Nothing
 
 --------------------------------------------------------------------------------------------
 typesOfTM :: TypeMembers r -> [RType r]

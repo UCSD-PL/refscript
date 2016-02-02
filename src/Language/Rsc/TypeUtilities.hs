@@ -135,7 +135,7 @@ mkArrTy l g n = safeEnvFindTy l g al >>= go
 objLitTy :: (PPRE r, IsLocated l, CheckingEnvironment r t)
          => l -> t r -> [Prop l] -> Maybe (RType r) -> ([Maybe (RType r)], RType r)
 --------------------------------------------------------------------------------
-objLitTy l g ps to = (ct, mkFun (concat bbs, bs, TObj (typeMembersFromList et) fTop))
+objLitTy l g ps to = (ct, mkFun (concat bbs, bs, TObj (tmsFromList et) fTop))
   where
     (ct, bbs, bs, et) = unzip4 (map propToBind ps)
     propToBind p      = propParts l (F.symbol p) (F.lookupSEnv (F.symbol p) ctxTys)

@@ -16,6 +16,7 @@
 
 module Language.Rsc.Typecheck.Sub (
     isSubtype
+  , isSubtypeWithUq
   , isSubtypeC
   , isConvertibleC
   , convert
@@ -68,6 +69,7 @@ isConvertibleC :: (PPRE r, FE g r) => g r -> SubConf -> RType r -> RType r -> Bo
 isSubtypeC γ c t1 t2 = subtype dummySpan γ c t1 t2 `elem` [EqT, SubT]
 
 isSubtype γ = isSubtypeC γ def
+isSubtypeWithUq γ = isSubtypeC γ allowUniqueCfg
 
 isConvertibleC γ c t1 t2
   | isSubtypeC γ c t1 t2

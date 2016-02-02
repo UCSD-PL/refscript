@@ -40,21 +40,16 @@ module Language.Rsc.Core.Env (
   , qenvMap
   ) where
 
-import           Control.Applicative
 import           Control.Arrow                 (first)
 import           Data.Data
 import qualified Data.HashMap.Strict           as M
 import qualified Data.List                     as L
 import           Data.Maybe                    (isJust)
-import           Data.Monoid                   (Monoid (..))
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Types.Names       (symbolString)
-import           Language.Fixpoint.Types.PrettyPrint
 import qualified Language.Fixpoint.Types       as F
-import           Language.Rsc.AST.Syntax
+import           Language.Fixpoint.Types.Names (symbolString)
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
-import           Text.PrettyPrint.HughesPJ     hiding (first)
 
 --------------------------------------------------------------------------
 -- | Environment Definitions

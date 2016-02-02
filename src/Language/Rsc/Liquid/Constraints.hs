@@ -208,7 +208,7 @@ splitC (Sub g i@(Ci _ l) t1@(TObj ms1 r1) t2@(TObj ms2 _))
   | otherwise
   = do  cs     <- bsplitC g i t1 t2
         (x,g') <- cgEnvAddFresh "" l t1 g
-        cs'    <- splitTM g' (F.symbol x) i ms1 ms2
+        cs'    <- splitTM g' (F.symbol x) i ms1 (ltracePP i ("obj-" ++ ppshow ms1) ms2)
         return $ cs ++ cs'
 
 splitC (Sub g i t1 t2)
@@ -236,7 +236,7 @@ splitTM :: CGEnv -> F.Symbol -> Cinfo
         -> (TypeMembers F.Reft) -> (TypeMembers F.Reft) -> CGM [FixSubC]
 --------------------------------------------------------------------------------
 splitTM g x c (TM p1 sp1 c1 k1 s1 n1) (TM p2 sp2 c2 k2 s2 n2)
-  = concatMapM (splitElt g c) (ms ++ sms) +++
+  = concatMapM (splitElt g c) (tracePP "splitTM" $ ms ++ sms) +++
     concatMapM splitT (cs ++ ks ++ ss ++ ns)
   where
     (+++) = liftM2 (++)
@@ -252,7 +252,14 @@ splitTM g x c (TM p1 sp1 c1 k1 s1 n1) (TM p2 sp2 c2 k2 s2 n2)
 splitElt :: CGEnv -> Cinfo -> (t, (TypeMember F.Reft, TypeMember F.Reft)) -> CGM [FixSubC]
 --------------------------------------------------------------------------------
 splitElt g i (_, (FI _ _ m1 t1, FI _ _ m2 t2))
+  -- Co-variant subtying for immutable members
+  --
   | isSubtype g m1 tIM = splitC (Sub g i t1 t2)
+
+  -- Co-variant subtyping for unique members (unaliased)
+  --
+  | ltracePP i ("isUQ " ++ ppshow m1) $ isSubtypeWithUq g m1 tUQ = splitC (Sub g i (ltracePP i "Unique splitC" t1) t2)
+
   | otherwise          = (++) <$> splitC (Sub g i t1 t2)
                               <*> splitC (Sub g i t2 t1)
 

@@ -36,9 +36,7 @@ module Language.Rsc.AST.Syntax (
   ) where
 
 import           Data.Default
-import           Data.Foldable      (Foldable)
 import           Data.Generics      (Data, Typeable)
-import           Data.Traversable   (Traversable)
 import           GHC.Generics
 import           Language.Rsc.Names
 

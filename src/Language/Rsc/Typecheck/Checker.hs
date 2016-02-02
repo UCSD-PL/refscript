@@ -673,24 +673,19 @@ tcExpr γ e@(ArrayLit l es) to
 
 -- | { f1: e1, ..., fn: tn }
 tcExpr γ ex@(ObjectLit l pes) to
-  = first (ObjectLit l . zip ps) <$> tcNormalCallWDCtx γ l BIObjectLit (zip es cts) ft
+  = do  (es', ts) <- unzip <$> T.mapM (uncurry (tcExprWD γ)) ets
+        t         <- pure (TObj (tmsFromList (zipWith toFI ps ts)) fTop)
+        return (ObjectLit l (zip ps es'), t)
   where
-    (cts, ft) = objLitTy l γ ps to
-    (ps , es) = unzip pes
+    (cts, ft)  = objLitTy l γ ps to
+    (ps , es)  = unzip pes
 
---   = do  (pes', tys) <- unzip <$> mapM tce ets
---         return (ObjectLit l pes', TObj (typeMembersFromList tys) fTop)
---   where
---
---     tce (p,e,x) | Just (FI f o a t) <- x
---                 = (***) (p,) (FI f o a) <$> tcExpr γ e (Just t)
---                 | otherwise
---                 -- Default optionality and assignability for field
---                 = (***) (p,) (FI (F.symbol p) Req tIM) <$> tcExpr γ e Nothing
---
---     ets         = [ (p, e, F.lookupSEnv (F.symbol p) ctxtys) | (p, e) <- pes ]
---
---     ctxtys      = maybe mempty (i_mems . typeMembersOfType (envCHA γ)) to
+    toFI p t   = FI (F.symbol p) Req tUQ t
+    ets        = map (\(p,e) -> (e, pTy p)) pes
+    pTy p      | Just f@FI{} <- lkup p = Just (f_ty f)
+               | otherwise             = Nothing
+    lkup p     = F.lookupSEnv (F.symbol p) ctxTys
+    ctxTys     = maybe mempty (i_mems . typeMembersOfType (envCHA γ)) to
 
 -- | <T>e
 tcExpr γ ex@(Cast l e) _

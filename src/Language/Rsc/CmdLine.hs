@@ -1,5 +1,5 @@
-{-# LANGUAGE TupleSections      #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TupleSections      #-}
 
 module Language.Rsc.CmdLine (Config(..), config, withPragmas) where
 
@@ -93,11 +93,6 @@ withPragma c s = withArgs [val s] $ cmdArgsRun
                     cfg0 { modeValue = (modeValue cfg0) { cmdArgsValue = c } }
   where
     cfg0       = cmdArgsMode liquid
-
----------------------------------------------------------------------------------------
-parsePragma :: Located String -> IO Config
----------------------------------------------------------------------------------------
-parsePragma = withPragma config
 
 
 

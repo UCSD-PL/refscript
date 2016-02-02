@@ -348,7 +348,7 @@ tcStmt _ s
 tcVarDecl :: Unif r => TCEnv r -> VarDecl (AnnTc r) -> TCM r (VarDecl (AnnTc r), TCEnvO r)
 --------------------------------------------------------------------------------
 -- PV: Some ugly special casing for Function expressions
-tcVarDecl γ (VarDecl l x (Just e@FuncExpr{}))
+tcVarDecl γ v@(VarDecl l x (Just e@FuncExpr{}))
   = do  (e', _) <- tcExpr γ e (v_type <$> envFindTy x (tce_names γ))
         return (VarDecl l x (Just e'), Just γ)
 
@@ -370,7 +370,8 @@ tcVarDecl γ v@(VarDecl l x (Just e))
         -- PV: the global variable should be in scope already,
         --     since it is being hoisted to the beginning of the
         --     scope.
-        first (VarDecl l x . Just) <$> tcAsgn l γ x e
+        do  (e', γ') <- tcAsgn l γ x e
+            return    $ (VarDecl l x (Just e'), γ')
 
       -- ReadOnly
       Just (SI y lc RdOnly _ t) ->
@@ -567,11 +568,15 @@ tcNormalCallWDCtx γ l o es t = tcNormalCallWCtx γ l o es t >>= \case
   (es', Just t) -> return (es', t)
   (es', _     ) -> return (es', tNull)
 
+--------------------------------------------------------------------------------
+tcRetW :: Unif r => TCEnv r -> AnnSSA r -> Maybe (ExprSSAR r)
+                 -> TCM r (Statement (AnnSSA r), Maybe a)
+--------------------------------------------------------------------------------
 tcRetW γ l (Just e)
   = do  (e', t)   <- tcExpr γ e (Just rt)
         θ         <- unifyTypeM (srcPos l) γ t rt
         (t', rt') <- pure (apply θ t, apply θ rt)
-        e''       <- castMC γ e' allowUqConf t' rt'
+        e''       <- castM γ e' True t' rt'
         return     $ (ReturnStmt l (Just e''), Nothing)
   where
     rt        = tcEnvFindReturn γ
@@ -642,8 +647,8 @@ tcExpr γ ex@(CondExpr l e e1 e2) (Just t)
          Just _  ->
             do  (e1', t1) <- tcExprWD γ e1 (Just t)
                 (e2', t2) <- tcExprWD γ e2 (Just t)
-                e1''      <- castM γ e1 t1 t
-                e2''      <- castM γ e2 t2 t
+                e1''      <- castMC γ e1 t1 t
+                e2''      <- castMC γ e2 t2 t
                 return     $ (CondExpr l e' e1'' e2'', t)
          _  -> error "TODO: error tcExpr condExpr"
 
@@ -1021,7 +1026,7 @@ tcCallCase γ@(tce_ctx -> ξ) l fn es ts ft
         θβ              <- pure $ fromList [ (TV s l_, t) | BTV s l_ (Just t) <- βs ]
         θ'              <- pure $ θ `mappend` θβ
         (lhs', rhs')    <- pure $ apply θ' $ (lhs, rhs)
-        es'             <- zipWith3M (castM γ) es lhs' rhs'
+        es'             <- zipWith3M (castMC γ) es lhs' rhs'
         return           $ (es', apply θ ot)
 
 --------------------------------------------------------------------------------
@@ -1079,7 +1084,7 @@ mkVdStmt l γ va vb t1 =
       θ            <- unifyTypeM (srcPos l) γ t0 t1
       setSubst θ
       let (t0',t1') = apply θ (t0,t1)
-      c1s          <- castM γ rhs t0' t1'
+      c1s          <- castMC γ rhs t0' t1'
       vd1          <- mkVds vb c1s
       VarDeclStmt <$> freshenAnn l <*> return [vd1]
   where

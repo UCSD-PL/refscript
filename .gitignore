@@ -33,8 +33,6 @@ _build
 *.swp
 *.swo
 *.smt2
-/Paths_nano_js.hs
-
 TAGS
 tags
 a.out

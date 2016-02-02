@@ -84,6 +84,7 @@ import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Typecheck.Unify
 import           Language.Rsc.Types
 import qualified System.Console.CmdArgs.Verbosity   as V
+import           Text.PrettyPrint.HughesPJ
 
 
 --------------------------------------------------------------------------------
@@ -365,20 +366,28 @@ typecastM ξ e t  = addAnn i fact >> wrapCast loc fact e
     fact         = TypeCast ξ t
 
 
+
 -- | For the expression @e@, check the subtyping relation between the type @t1@
 --   (the actual type for @e@) and @t2@ (the target type) and insert the cast.
+
 --------------------------------------------------------------------------------
-castMC :: Unif r
-      => TCEnv r -> Expression (AnnSSA r) -> SubConf
-      -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
+castM :: Unif r => TCEnv r -> Expression (AnnSSA r) -> Consume
+                -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-castMC γ e c t1 t2
-  = case convert (srcPos e) γ c t1 t2 of
+castM γ e consume t1 t2
+  = case convert (srcPos e) γ cfg t1 t2 of
       ConvOK      -> return e
       ConvWith t  -> typecastM (tce_ctx γ) e (toType t2)
       ConvFail es -> deadcastM (tce_ctx γ) es e
+  where
+    cfg | consume   = allowUniqueCfg
+        | otherwise = disallowUniqueCfg
 
-castM γ e = castMC γ e initSubConf
+--------------------------------------------------------------------------------
+castMC :: Unif r => TCEnv r -> Expression (AnnSSA r)
+                 -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
+--------------------------------------------------------------------------------
+castMC γ e = castM γ e (consumable e)
 
 -- | Run the monad `a` in the current state. This action will not alter the state.
 --------------------------------------------------------------------------------

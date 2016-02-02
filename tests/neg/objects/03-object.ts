@@ -1,13 +1,12 @@
 
-/*@ readonly */
-let x = {
-    a: 5,
-    b: "String",
-};
+// `innerObj` will be a unique reference so should not be
+// cast to the type of `outerObj`
 
-/*@ foo :: () => { v: number | v = 4 } */
-export function foo () {
-  let y = { a: 4 }
-  y = x;
-  return y.a;
+let innerObj = { n: 6 }
+
+/*@ readonly */
+let outerObj = { a: 5, b: "String", oo: innerObj };
+
+export function foo (): { n: number } {
+    return outerObj.oo;
 }

@@ -19,7 +19,7 @@ module Language.Rsc.Typecheck.Sub (
   , isSubtypeC
   , isConvertibleC
   , convert
-  , SubConf(..), initSubConf, allowUqConf
+  , SubConf(..), allowUniqueCfg, disallowUniqueCfg
   , SubtypingResult (..)
   , ConversionResult (..)
   ) where
@@ -55,10 +55,11 @@ data SubConf = SC {
   allow_unique :: Bool          -- Allow conversion of `unique` to other permissions
 }
 
-initSubConf      = SC False
-disallowUnique c = c { allow_unique = False }
-allowUqConf      = SC True
+instance Default SubConf where
+  def = disallowUniqueCfg
 
+allowUniqueCfg    = SC True
+disallowUniqueCfg = SC False
 
 --------------------------------------------------------------------------------
 isSubtypeC     :: (PPRE r, FE g r) => g r -> SubConf -> RType r -> RType r -> Bool
@@ -66,7 +67,7 @@ isConvertibleC :: (PPRE r, FE g r) => g r -> SubConf -> RType r -> RType r -> Bo
 --------------------------------------------------------------------------------
 isSubtypeC γ c t1 t2 = subtype dummySpan γ c t1 t2 `elem` [EqT, SubT]
 
-isSubtype γ = isSubtypeC γ initSubConf
+isSubtype γ = isSubtypeC γ def
 
 isConvertibleC γ c t1 t2
   | isSubtypeC γ c t1 t2
@@ -125,8 +126,8 @@ convert
 convert l g c t1 t2
   -- = case ltracePP l (ppshow t1 ++ " <: " ++ ppshow t2) $ subtype l g t1 t2 of
   = case subtype l g c t1 t2 of
-    EqT       -> ConvOK
-    SubT      -> ConvOK -- ConvWith (toType t2)
+    EqT      -> ConvOK
+    SubT     -> ConvOK -- ConvWith (toType t2)
     NoSub es -> castable l g c es t1 t2
 
 castable _ γ c _ (TOr t1s _) t2
@@ -182,7 +183,7 @@ subtype l _ _ t1 t2
 
 
 -- | subtype with default configuration
-subtype' l g = subtype l g initSubConf
+subtype' l g = subtype l g def
 
 
 --------------------------------------------------------------------------------
@@ -198,26 +199,27 @@ subtypeObj l γ _ t1 t2
   = NoSub [errorObjectType l t1 t2]
 
 subtypeObj l γ c t1@(TObj e1s _) t2@(TObj e2s _)
-  = subtypeObjMembers l γ (t1, e1s) (t2, e2s)
+  = subtypeObjMembers l γ c (t1, e1s) (t2, e2s)
 
 -- | Mutability subtyping
 --
 subtypeObj l γ c t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
   | not (mutRelated t1) = NoSub [errorMutUnknown l t1]
   | not (mutRelated t2) = NoSub [errorMutUnknown l t2]
-  | allow_unique c      = withMutEnabled
-  | otherwise           = withMutDisabled
+  | allow_unique c      = withUqEnabled
+  | otherwise           = withUqDisabled
   where
-    withMutEnabled  | x1 == x2  = EqT
-                    | x1 <: x2  = SubT
-                    | isUQ t1   = EqT   -- Allow the `Unique` coercion
-                    | otherwise = NoSub [errorUniqueAsgn l]
+    withUqEnabled  | isUQ t1   = EqT
+                   | x1 == x2  = EqT
+                   | x1 <: x2  = SubT
+                   | isUQ t1   = EqT   -- Allow the `Unique` coercion
+                   | otherwise = NoSub [errorUniqueAsgn l]
 
-    withMutDisabled | isUQ t1   = NoSub [errorUniqueAsgn l]
-                    | isUQ t2   = NoSub [errorUniqueAsgn l]
-                    | x1 == x2  = EqT
-                    | x1 <: x2  = SubT
-                    | otherwise = NoSub [errorIncompMutTy l t1 t2]
+    withUqDisabled | isUQ t1   = NoSub [errorUniqueAsgn l]
+                   | isUQ t2   = NoSub [errorUniqueAsgn l]
+                   | x1 == x2  = EqT
+                   | x1 <: x2  = SubT
+                   | otherwise = NoSub [errorIncompMutTy l t1 t2]
 
     a <: b = isAncestorOf (envCHA γ) b a
 
@@ -281,8 +283,8 @@ subtypeObj l γ c t1 t2 =
 
 -- | Subtyping type members
 --
-subtypeObjMembers l γ (t1, TM m1 _ c1 k1 s1 n1) (t2, TM m2 _ c2 k2 s2 n2)
-  = subtypeMems  l γ (t1, m1) (t2, m2) <>
+subtypeObjMembers l γ c (t1, TM m1 _ c1 k1 s1 n1) (t2, TM m2 _ c2 k2 s2 n2)
+  = subtypeMems  l γ c (t1, m1) (t2, m2) <>
     subtypeCalls l γ t1 c1 t2 c2 <>
     subtypeCtors l γ t1 k1 t2 k2 <>
     subtypeSIdxs l γ t1 s1 t2 s2 <>
@@ -290,19 +292,19 @@ subtypeObjMembers l γ (t1, TM m1 _ c1 k1 s1 n1) (t2, TM m2 _ c2 k2 s2 n2)
 
 --------------------------------------------------------------------------------
 subtypeMems :: (IsLocated a, PPRE r, FE g r)
-            => a -> g r
+            => a -> g r -> SubConf
             -> (RType r, SEnv (TypeMember r))
             -> (RType r, SEnv (TypeMember r))
             -> SubtypingResult
 --------------------------------------------------------------------------------
-subtypeMems l γ (t1, p1) (t2, p2)
+subtypeMems l γ c (t1, p1) (t2, p2)
   -- Props from p2 are missing from p1 - fail width
   | not (null diff21)
   = NoSub [ errorObjSubtype l t1 t2 (map fst diff21) ]
 
   -- Descend into property subtyping
   | otherwise
-  = mconcat $ map (subtypeMem l γ) common
+  = mconcat $ map (subtypeMem l γ c) common
 
   where
     diff21 = toListSEnv $ p2 `differenceSEnv` p1
@@ -310,28 +312,39 @@ subtypeMems l γ (t1, p1) (t2, p2)
 
 --------------------------------------------------------------------------------
 subtypeMem :: (FE g r, PPRE r, IsLocated a, PP f)
-           => a -> g r
+           => a -> g r -> SubConf
            -> (f, (TypeMemberQ AK r, TypeMemberQ AK r))
            -> SubtypingResult
 --------------------------------------------------------------------------------
-subtypeMem l γ (f, (FI _ o1 m1 t1, FI _ o2 m2 t2))
+subtypeMem l γ c (f, (FI _ o1 m1 t1, FI _ o2 m2 t2))
+
   -- Different optionality modifier
-  | o1 /= o2
+  --
+  | (o1, o2) == (Opt, Req)
   = NoSub [ errorIncompatOptional (srcPos l) f ]
 
   -- Incompatible field assignabilities
-  | not (isSubtype γ m1 m2)
-  = NoSub [errorIncompMutElt (srcPos l) f m1 m2]
+  --
+  | NoSub e <- subtype l γ c m1 m2
+  = NoSub e
+
+  -- If the field is Unique, then just do co-variant subtyping.
+  -- This is compatible with any RHS-mutability modifier.
+  --
+  | allow_unique c, isSubtype γ m1 tUQ
+  = subtype' l γ t1 t2
 
   -- Co-& Contra-Variance (mutable fields)
+  --
   | isSubtype γ m1 tMU
   = subtype' l γ t1 t2 <> subtype' l γ t2 t1
 
-  -- Co-Variance (immutable (through this reference) fields)
+  -- Co-Variance (immutable or readonly)
+  --
   | otherwise
   = subtype' l γ t1 t2
 
-subtypeMem l _ (_, (m1, m2))
+subtypeMem l _ _ (_, (m1, m2))
   = NoSub [ unsupportedMethodComp (srcPos l) m1 m2 ]
 
 

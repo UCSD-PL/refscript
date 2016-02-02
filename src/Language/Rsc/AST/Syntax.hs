@@ -30,6 +30,9 @@ module Language.Rsc.AST.Syntax (
   , EnumElt(..)
   , BuiltinOp(..)
   , SyntaxKind (..)
+
+  , Consumable(..)
+  , Consume
   ) where
 
 import           Data.Default
@@ -293,4 +296,24 @@ data BuiltinOp = BIUndefined
 
 data SyntaxKind = FuncDeclKind | MethDeclKind | FieldDeclKind | CtorDeclKind | VarDeclKind
                 | ClassDeclKind | ModuleDeclKind | EnumDeclKind deriving ( Eq )
+
+
+-- | `consume`
+--
+
+type Consume = Bool
+
+class Consumable a where
+  consumable :: a -> Bool
+
+instance Consumable (Expression a) where
+  consumable (ObjectLit _ _ ) = True
+  consumable (ArrayLit _ _  ) = True
+  consumable (NewExpr _ _ _ ) = True
+  consumable (Cast_ _ e     ) = consumable e
+  consumable _                = False
+
+instance Consumable (Statement a) where
+  consumable (ReturnStmt _ _) = True
+  consumable _                = False
 

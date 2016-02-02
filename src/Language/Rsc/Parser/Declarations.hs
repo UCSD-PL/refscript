@@ -76,5 +76,10 @@ instance ToJSON UnaryAssignOp
 instance ToJSON SrcSpan
 instance ToJSON RawSpec
 
+-- instance ToJSON (Expression  (SrcSpan, [RawSpec])) where
+--   toJSON = genericToJSON defaultOptions
+
+
+
 instance ToJSON SourcePos where
   toJSON sp = toJSON (sourceName sp, sourceLine sp, sourceColumn sp)

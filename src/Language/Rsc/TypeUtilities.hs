@@ -142,13 +142,12 @@ objLitTy l g ps to = (ct, mkFun (concat bbs, bs, TObj (typeMembersFromList et) f
     ctxTys            = maybe mempty (i_mems . typeMembersOfType (envCHA g)) to
 
 --------------------------------------------------------------------------------
-propParts
-  :: (PPRE r, IsLocated l)
-  => l -> F.Symbol -> Maybe (TypeMember r)
-  -> (Maybe (RType r), [BTVar r], Bind r, TypeMember r)
-  --  ^^^^^^^^^^^^^^^
-  --  Contextual type
-  --
+propParts :: (PPRE r, IsLocated l)
+          => l -> F.Symbol -> Maybe (TypeMember r)
+          -> (Maybe (RType r), [BTVar r], Bind r, TypeMember r)
+          --  ^^^^^^^^^^^^^^^
+          --  Contextual type
+          --
 --------------------------------------------------------------------------------
 propParts l p (Just (FI _ o m t)) = (Just t, [abtv], b, ot)
   where
@@ -157,7 +156,8 @@ propParts l p (Just (FI _ o m t)) = (Just t, [abtv], b, ot)
     at    = TV  aSym loc
     abtv  = BTV aSym loc Nothing
     b     = B p ty
-    ot    = FI p o m ty
+    -- ot    = FI p o m ty
+    ot    = FI p o tUQ ty
     ty    = TVar at fTop
 
 propParts l p Nothing = (Nothing, [abtv, pbtv], b, ot)
@@ -169,9 +169,10 @@ propParts l p Nothing = (Nothing, [abtv, pbtv], b, ot)
     abtv  = BTV aSym loc Nothing
     pt    = TV  pSym loc
     pbtv  = BTV pSym loc Nothing
-    pty   = TVar pt fTop
+    -- pty   = TVar pt fTop
     b     = B p ty
-    ot    = FI p Req pty ty
+    -- ot    = FI p Req pty ty
+    ot    = FI p Req tUQ ty
     ty    = TVar at fTop
 
 

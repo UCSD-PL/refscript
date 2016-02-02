@@ -67,7 +67,7 @@ scrapeQuals qs = (qs ++) . qualifiers . mkUq . foldStmts tbv [] . filter nonLibF
     goe _ (MemberMethDecl l _ x _ _) = [(x, t) | MemberAnn (T.MI _ _ mts) <- fFact l, (_, t) <- mts ]
 
 nonLibFile :: IsLocated a => Statement a -> Bool
-nonLibFile = not . isSuffixOf ".d.ts" . srcSpanFile
+nonLibFile = const False -- not . isSuffixOf ".d.ts" . srcSpanFile
 
 mkUq = zipWith tx ([0..] :: [Int])
   where

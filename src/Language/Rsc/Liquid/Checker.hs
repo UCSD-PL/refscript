@@ -823,9 +823,9 @@ consExpr g0 ef@(DotRef l e f) _
 --
 consExpr g e@(BracketRef l e1 e2) _
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
-      -- t1    <- ltracePP l "t1" <$> cgSafeEnvFindTyM x1 g'
+      t1    <- cgSafeEnvFindTyM x1 g'
       opTy  <- cgSafeEnvFindTyM (builtinOpId BIBracketRef) g'
-      consCall g' l BIBracketRef ([vr x1, e2] `zip` nths) opTy
+      traceTypePP l (ppshow e1 ++ " has type " ++ ppshow t1) $ consCall g' l BIBracketRef ([vr x1, e2] `zip` nths) opTy
   where
     msg = "Support for dynamic access of enumerations"
     vr  = VarRef $ getAnnotation e1

@@ -98,12 +98,15 @@ Executable rsc
                   , Language.Rsc.Pretty.Annotations
                   , Language.Rsc.Pretty.Common
                   , Language.Rsc.Pretty.Errors
+                  , Language.Rsc.Pretty.ClassHierarchy
+                  , Language.Rsc.Pretty.Symbols
+                  , Language.Rsc.Pretty.Module
                   , Language.Rsc.Pretty.Syntax
                   , Language.Rsc.Pretty.Types
                   , Language.Rsc.Program
                   , Language.Rsc.Symbols
                   , Language.Rsc.Module
-                  , Language.Rsc.SSA.SSAMonad
+                  , Language.Rsc.SSA.SSA
                   , Language.Rsc.SSA.SSAMonad
                   , Language.Rsc.SystemUtils
                   , Language.Rsc.Transformations
@@ -167,6 +170,8 @@ Library
                     Language.Rsc.Liquid.Environment,
                     Language.Rsc.Locations,
                     Language.Rsc.Names,
+                    Language.Rsc.Module,
+                    Language.Rsc.Symbols,
                     Language.Rsc.Options,
                     Language.Rsc.Parser.Annotations,
                     Language.Rsc.Parser.Common,

@@ -1,23 +1,33 @@
 
-/*@ qualif HasP (x: a, p: Str): hasProperty x p */
-/*  qualif EnumP(x: a, p: Str): enumProp x p    */
+/*@ qualif HasP (p: Str, x: a): hasProperty x p */
+/*@ qualif EnuP (p: Str, x: a): enumProp x p */
 
-// export function values<T>(m: { [k: string]: T }): void {
-//     for (let k in m) {
-//         let a = <T>m[k];
-//     }
-// }
+/*@ hp :: <A>(obj: A, str: { string | hasProperty obj v }) => void */
+declare function hp(ob: {}, str: string): void;
 
-/*@ bracketRef :: <A>(x: IArray<A> , n: idx<x>)  => A */
-declare function bracketRef<A>(x: IArray<A>, n: number): A;
+export function values<T>(m: { [k: string]: T }): void {
+    for (let k in m) {
+        hp(m, k);
 
-declare let m: { [k: string]: number };
+        let mk = m[k];
+        assert(mk);
+        let a: T = mk
 
-/*@ ks :: { IArray<{ s: string | hasProperty m s }> | len v > 0 } */
-declare let ks: IArray<string>;
+        // TODO
+        let b = <T>m[k];
 
-/*@ readonly k :: { string | hasProperty m v } */
-let k = bracketRef(ks, 0);
-
-
-// let n = <T> (m[k]);
+    }
+}
+//
+// /*@ bracketRef :: <A>(x: IArray<A> , n: idx<x>)  => A */
+// declare function bracketRef<A>(x: IArray<A>, n: number): A;
+//
+// declare let m: { [k: string]: number };
+//
+// /*@ ks :: { IArray<{ s: string | hasProperty m s }> | len v > 0 } */
+// declare let ks: IArray<string>;
+//
+// /*@ readonly k :: { string | hasProperty m v } */
+// let k = bracketRef(ks, 0);
+//
+// // let n = <T> (m[k]);

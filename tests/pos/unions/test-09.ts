@@ -14,5 +14,5 @@ let d  = 1;
 /*@ e :: { {  } | 0 < 1 } */
 let e  = { } ;
 
-/*@ f :: { @Assignable d: number + boolean } */
+/*@ local f :: { @Assignable d: number + boolean } */
 let f  = { d: 1 };

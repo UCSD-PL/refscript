@@ -310,6 +310,7 @@ instance Consumable (Expression a) where
   consumable (ObjectLit _ _ ) = True
   consumable (ArrayLit _ _  ) = True
   consumable (NewExpr _ _ _ ) = True
+  consumable (CallExpr _ _ _) = True
   consumable (Cast_ _ e     ) = consumable e
   consumable _                = False
 

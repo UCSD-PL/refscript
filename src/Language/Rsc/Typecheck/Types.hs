@@ -20,7 +20,7 @@ module Language.Rsc.Typecheck.Types (
   , ExprReftable(..)
 
   -- * Constructing Types
-  , tOr, tOrR, mkFun, mkAll, mkAnd, mkAndOpt, mkInitFldTy, mkTCons
+  , tOr, tOrR, mkFun, mkAll, mkAnd, mkAndOpt, mkInitFldTy
 
   -- * Deconstructing Types
   , bkFun, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion
@@ -34,17 +34,19 @@ module Language.Rsc.Typecheck.Types (
   , btvToTV, tvToBTV
 
   -- * Mutability primitives
-  , tMU, tUQ, tIM, tAF, tRO, trMU, trIM, trAF, trRO
+  , tMU, tUQ, tIM, tAF, tRO, trMU, trIM, trAF, trRO, trUQ
   , isRO, isMU, isIM, isUQ, isAF, isUMRef, mutRelated, mutRelatedBVar
 
   -- * Primitive Types
 
   --   # Constructors
-  , tNum, tBV32, tBool, tString, tTop, tVoid, tErr, tVar, btVar, tUndef, tNull, tBot, tAny
+  , tNum, tBV32, tBool, tString, tTop, tVoid, tErr, tVar
+  , btVar, tUndef, tNull, tBot, tAny
 
   --   # Tests
-  , isTPrim, isTAny, isTTop, isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
-  , isTNull, isTVoid, isTFun, isArrayType, isTBot, isTNum, isBV32
+  , isTPrim, isTAny, isTTop, isTUndef, isTUnion, isTStr, isTBool
+  , isBvEnum, isTVar, maybeTObj, isTNull, isTVoid, isTFun
+  , isArrayType, isTBot, isTNum, isBV32
 
 
   --   # Operations
@@ -106,6 +108,7 @@ trMU  = mkRelMut "Mutable"
 trIM  = mkRelMut "Immutable"
 trRO  = mkRelMut "ReadOnly"
 trAF  = mkRelMut "AssignsFields"
+trUQ  = mkRelMut "Unique"
 
 typeName (Gen (QN _ s) _)  = s
 
@@ -215,8 +218,6 @@ instance F.Reftable r => Monoid (RTypeQ q r) where
   mempty        = tBot
   mappend t t'  = mkAnd $ bkAnd t ++ bkAnd t'
 
-mkTCons         = (`TObj` fTop)
-
 ----------------------------------------------------------------------------------------
 tOrR :: F.Reftable r => [RTypeQ q r] -> r -> RTypeQ q r
 tOr  :: F.Reftable r => [RTypeQ q r] -> RTypeQ q r
@@ -256,7 +257,7 @@ toplevel f (TVar v r   ) = TVar v (f r)
 toplevel f (TOr ts r   ) = TOr (map (toplevel f) ts) (f r)
 toplevel f (TAnd ts    ) = TAnd (map (second (toplevel f)) ts)
 toplevel f (TRef n r   ) = TRef n (f r)
-toplevel f (TObj ms r  ) = TObj ms (f r)
+toplevel f (TObj m ms r) = TObj m ms (f r)
 toplevel _ (TClass n   ) = TClass n
 toplevel _ (TMod n     ) = TMod n
 toplevel f (TAll b t   ) = TAll b (toplevel f t)
@@ -297,10 +298,10 @@ isBV32    = isPrim TBV32
 isTVar   t | TVar _ _ <- t = True | otherwise = False
 isTUnion t | TOr  _ _ <- t = True | otherwise = False
 
-maybeTObj (TRef _ _) = True
-maybeTObj (TObj _ _) = True
-maybeTObj (TClass _) = True
-maybeTObj (TMod _ )  = True
+maybeTObj TRef{}     = True
+maybeTObj TObj{}     = True
+maybeTObj TClass{}   = True
+maybeTObj TMod{}     = True
 maybeTObj (TAll _ t) = maybeTObj t
 maybeTObj (TOr ts _) = any maybeTObj ts
 maybeTObj _          = False
@@ -314,12 +315,6 @@ isArrayType t | TRef (Gen x _) _ <- t
               = F.symbol x == F.symbol "Array"
               | otherwise
               = False
-
--- bkArrayTyp (cha -> c) t
---   | TRef n _ <- t
---   , weaken c n Array
---               = F.symbol x == F.symbol "Array"
-
 
 orNull t@(TOr ts r) | any isTNull ts = t
                     | otherwise      = TOr (tNull:ts) r
@@ -342,7 +337,7 @@ rTypeR' (TVar _ r)   = Just r
 rTypeR' (TOr _ r)    = Just r
 rTypeR' (TFun _ _ r) = Just r
 rTypeR' (TRef _ r)   = Just r
-rTypeR' (TObj _ r)   = Just r
+rTypeR' (TObj _ _ r) = Just r
 rTypeR' (TClass _)   = Just fTop
 rTypeR' (TMod _)     = Just fTop
 rTypeR' (TAnd _ )    = Nothing

@@ -163,9 +163,9 @@ rTypeSort (TPrim c _)         = rTypeSortPrim c
 rTypeSort (TOr _ _)           = F.fAppTC (rawStringFTycon unionName ) []
 rTypeSort (TAnd _)            = F.fAppTC (rawStringFTycon intersName) []
 rTypeSort (TRef (Gen n ts) _) = F.fAppTC (rawSymbolFTycon (F.symbol n)) (rTypeSort <$> ts)
-rTypeSort (TObj _ _ )         = F.fAppTC (rawStringFTycon objectName) []
-rTypeSort (TClass _)          = F.fAppTC (rawStringFTycon className ) []
-rTypeSort (TMod _)            = F.fAppTC (rawStringFTycon moduleName) []
+rTypeSort  TObj{}             = F.fAppTC (rawStringFTycon objectName) []
+rTypeSort  TClass{}           = F.fAppTC (rawStringFTycon className ) []
+rTypeSort  TMod{}             = F.fAppTC (rawStringFTycon moduleName) []
 rTypeSort _                   = error $ render $ text "BUG: Unsupported in rTypeSort"
 
 rTypeSortPrim TBV32      = BV.mkSort BV.S32
@@ -197,7 +197,7 @@ stripRTypeBase (TPrim _ r)  = Just r
 stripRTypeBase (TRef _ r)   = Just r
 stripRTypeBase (TVar _ r)   = Just r
 stripRTypeBase (TFun _ _ r) = Just r
-stripRTypeBase (TObj _ r)   = Just r
+stripRTypeBase (TObj _ _ r) = Just r
 stripRTypeBase (TOr _ r)    = Just r
 stripRTypeBase _            = Nothing
 

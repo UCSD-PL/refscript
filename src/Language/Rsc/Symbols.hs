@@ -87,7 +87,7 @@ mkArgumentsSI l ts = SI getArgSym Local RdOnly Initialized
 immObjectLitTy :: F.Reftable r => [Prop l] -> [RType r] -> RType r
 --------------------------------------------------------------------------------
 immObjectLitTy ps ts | length ps == length ts
-                     = TObj elts fTop
+                     = TObj tIM elts fTop
                      | otherwise
                      = error "Mismatched args for immObjectLit"
   where

@@ -190,13 +190,13 @@ splitC (Sub g i t1@(TPrim c1 _) t2@(TPrim c2 r2))
 
 -- | S-Obj
 --
-splitC (Sub g i@(Ci _ l) t1@(TObj ms1 r1) t2@(TObj ms2 _))
+splitC (Sub g i@(Ci _ l) t1@(TObj m1 ms1 r1) t2@(TObj m2 ms2 _))
   | F.isFalse (F.simplify r1)
   = return []
   | otherwise
   = do  cs     <- bsplitC g i t1 t2
         (x,g') <- cgEnvAddFresh "" l t1 g
-        cs'    <- splitTM g' (F.symbol x) i ms1 (ltracePP i ("obj-" ++ ppshow ms1) ms2)
+        cs'    <- splitTM g' (F.symbol x) i (m1, ms1) (m2, ms2)
         return $ cs ++ cs'
 
 splitC (Sub g i t1 t2)
@@ -221,10 +221,11 @@ mkBot t = t `strengthen` F.bot (rTypeR t)
 --   Do not substiute static members and constructors.
 --------------------------------------------------------------------------------
 splitTM :: CGEnv -> F.Symbol -> Cinfo
-        -> (TypeMembers F.Reft) -> (TypeMembers F.Reft) -> CGM [FixSubC]
+        -> (Mutability, TypeMembers F.Reft)
+        -> (Mutability, TypeMembers F.Reft) -> CGM [FixSubC]
 --------------------------------------------------------------------------------
-splitTM g x c (TM p1 sp1 c1 k1 s1 n1) (TM p2 sp2 c2 k2 s2 n2)
-  = concatMapM (splitElt g c) (tracePP "splitTM" $ ms ++ sms) +++
+splitTM g x c (m1, TM p1 sp1 c1 k1 s1 n1) (m2, TM p2 sp2 c2 k2 s2 n2)
+  = concatMapM (splitElt g c m1 m2) (ms ++ sms) +++
     concatMapM splitT (cs ++ ks ++ ss ++ ns)
   where
     (+++) = liftM2 (++)
@@ -237,9 +238,10 @@ splitTM g x c (TM p1 sp1 c1 k1 s1 n1) (TM p2 sp2 c2 k2 s2 n2)
     splitT (t1,t2) = splitC (Sub g c t1 t2)
 
 --------------------------------------------------------------------------------
-splitElt :: CGEnv -> Cinfo -> (t, (TypeMember F.Reft, TypeMember F.Reft)) -> CGM [FixSubC]
+splitElt :: CGEnv -> Cinfo -> Mutability -> Mutability
+         -> (t, (TypeMember F.Reft, TypeMember F.Reft)) -> CGM [FixSubC]
 --------------------------------------------------------------------------------
-splitElt g i (_, (FI _ _ m1 t1, FI _ _ _ t2))
+splitElt g i om1 om2 (_, (FI _ _ m1 t1, FI _ _ _ t2))
   -- Co-variant subtying for immutable members
   --
   | isSubtype g m1 tIM
@@ -248,12 +250,12 @@ splitElt g i (_, (FI _ _ m1 t1, FI _ _ _ t2))
   -- Co-variant subtyping for unique members (unaliased)
   --
   | isSubtypeWithUq g m1 tUQ
-  = splitC (Sub g i (ltracePP i "Unique splitC" t1) t2)
+  = splitC (Sub g i t1 t2)
 
   | otherwise
   = (++) <$> splitC (Sub g i t1 t2) <*> splitC (Sub g i t2 t1)
 
-splitElt _ i (_, (m, m'))
+splitElt _ i _ _ (_, (m, m'))
   = cgError $ unsupportedSplitElt (srcPos i) m m'
 
 
@@ -327,7 +329,7 @@ splitW (W g i t@(TOr ts _))
        ws'   <- concatMapM splitW [W g i t | t <- ts]
        return $ ws ++ ws'
 
-splitW (W g i t@(TObj ms _))
+splitW (W g i t@(TObj _ ms _))
   = do let bws = bsplitW g t i
        -- TODO: add field bindings in g?
        ws     <- concatMapM splitW [ W g i t' | t' <- typesOfTM ms ]

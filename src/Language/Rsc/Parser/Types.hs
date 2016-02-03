@@ -325,9 +325,11 @@ boundTypeP c
 argBind :: RRType -> BindQ RK F.Reft
 argBind t = B (rTypeValueVar t) t
 
-tObjP c = TObj <$> typeBodyP c
+tObjP c = TObj <$> option trRO tUQP <*> typeBodyP c
 tRefP c = TRef <$> tGenP c
 tGenP c = Gen  <$> qnameP <*> bareTyArgsP c
+
+tUQP    = parens (reserved "Unique") >> return trUQ
 
 bareTyArgsP c
   =  try (brackets argsP)

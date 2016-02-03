@@ -74,7 +74,7 @@ instance Free (RType r) where
   free (TOr ts _)           = free ts
   free (TAnd ts)            = free $ snd <$> ts
   free (TRef n _)           = free n
-  free (TObj es _)          = free es
+  free (TObj _ es _)        = free es
   free (TClass t)           = free t
   free (TMod _)             = S.empty
   free (TAll α t)           = S.delete (btvToTV α) $ free t
@@ -246,7 +246,7 @@ appTy (Su m) t@(TVar α r)    = (HM.lookupDefault t α m) `strengthen` r
 appTy θ        (TOr ts r)    = TOr (apply θ ts) r
 appTy θ        (TAnd ts)     = TAnd (mapSnd (apply θ) <$> ts)
 appTy θ        (TRef n r)    = TRef (apply θ n) r
-appTy θ        (TObj es r)   = TObj (apply θ es) r
+appTy θ        (TObj m es r) = TObj (appTy θ m) (apply θ es) r
 appTy θ        (TClass t)    = TClass (apply θ t)
 appTy _        (TMod n)      = TMod n
 appTy (Su m)   (TAll α t)    = TAll α $ apply (Su $ HM.delete (btvToTV α) m) t
@@ -285,7 +285,7 @@ instance (F.Reftable r) => Eq (RType r) where
   TOr ts _     == TOr ts' _     = ts == ts'
   TAnd ts      == TAnd ts'      = ts == ts'
   TRef g _     == TRef g' _     = g == g'
-  TObj ms _    == TObj ms' _    = ms == ms'
+  TObj m ms _  == TObj m' ms' _ = m == m' && ms == ms'
   TClass g     == TClass g'     = g == g'
   TMod n       == TMod n'       = n == n'
   TAll v@(BTV _ b _) t == TAll v'@(BTV _ b' _) t'

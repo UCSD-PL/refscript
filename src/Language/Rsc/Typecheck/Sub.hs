@@ -19,6 +19,7 @@ module Language.Rsc.Typecheck.Sub (
   , isSubtypeWithUq
   , isSubtypeC
   , isConvertibleC
+  , isUnique
   , convert
   , SubConf(..), allowUniqueCfg, disallowUniqueCfg
   , SubtypingResult (..)
@@ -29,6 +30,7 @@ import           Data.Default
 import           Data.Monoid
 import           Data.Tuple                     (swap)
 import           Language.Fixpoint.Types        (SEnv, differenceSEnv, intersectWithSEnv, toListSEnv)
+import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
@@ -184,9 +186,8 @@ subtype' l g = subtype l g def
 
 
 --------------------------------------------------------------------------------
-subtypeObj
-  :: (PPRE r, FE g r, IsLocated l)
-  => l -> g r -> SubConf -> RType r -> RType r -> SubtypingResult
+subtypeObj :: (PPRE r, FE g r, IsLocated l)
+           => l -> g r -> SubConf -> RType r -> RType r -> SubtypingResult
 --------------------------------------------------------------------------------
 -- | Cannot convert a structural object type to a nominal class type.
 --   Interfaces are OK.
@@ -195,8 +196,8 @@ subtypeObj l γ _ t1 t2
   | not (isClassType (envCHA γ) t1) && isClassType (envCHA γ) t2
   = NoSub [errorObjectType l t1 t2]
 
-subtypeObj l γ c t1@(TObj e1s _) t2@(TObj e2s _)
-  = subtypeObjMembers l γ c (t1, e1s) (t2, e2s)
+subtypeObj l γ c t1@(TObj m1 e1s _) t2@(TObj m2 e2s _)
+  = subtypeObjMembers l γ c (t1, m1, e1s) (t2, m2, e2s)
 
 -- | Mutability subtyping
 --
@@ -210,10 +211,10 @@ subtypeObj l γ c t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
                    | x1 == x2  = EqT
                    | x1 <: x2  = SubT
                    | isUQ t1   = EqT   -- Allow the `Unique` coercion
-                   | otherwise = NoSub [errorUniqueAsgn l]
+                   | otherwise = NoSub [errorUniqueRef l]
 
-    withUqDisabled | isUQ t1   = NoSub [errorUniqueAsgn l]
-                   | isUQ t2   = NoSub [errorUniqueAsgn l]
+    withUqDisabled | isUQ t1   = NoSub [errorUniqueRef l]
+                   | isUQ t2   = NoSub [errorUniqueRef l]
                    | x1 == x2  = EqT
                    | x1 <: x2  = SubT
                    | otherwise = NoSub [errorIncompMutTy l t1 t2]
@@ -279,8 +280,8 @@ subtypeObj l γ c t1 t2 =
 
 -- | Subtyping type members
 --
-subtypeObjMembers l γ c (t1, TM m1 _ c1 k1 s1 n1) (t2, TM m2 _ c2 k2 s2 n2)
-  = subtypeMems  l γ c (t1, m1) (t2, m2) <>
+subtypeObjMembers l γ c (t1, p1, TM m1 _ c1 k1 s1 n1) (t2, p2, TM m2 _ c2 k2 s2 n2)
+  = subtypeMems  l γ c (t1, p1, m1) (t2, p2, m2) <>
     subtypeCalls l γ t1 c1 t2 c2 <>
     subtypeCtors l γ t1 k1 t2 k2 <>
     subtypeSIdxs l γ t1 s1 t2 s2 <>
@@ -289,12 +290,12 @@ subtypeObjMembers l γ c (t1, TM m1 _ c1 k1 s1 n1) (t2, TM m2 _ c2 k2 s2 n2)
 --------------------------------------------------------------------------------
 subtypeMems :: (IsLocated a, PPRE r, FE g r)
             => a -> g r -> SubConf
-            -> (RType r, SEnv (TypeMember r))
-            -> (RType r, SEnv (TypeMember r))
+            -> (RType r, MutabilityR r, SEnv (TypeMember r))
+            -> (RType r, MutabilityR r, SEnv (TypeMember r))
             -> SubtypingResult
 --------------------------------------------------------------------------------
-subtypeMems l γ c (t1, p1) (t2, p2)
-  -- Props from p2 are missing from p1 - fail width
+subtypeMems l γ c (t1, p1, m1) (t2, p2, m2)
+  -- Props from m2 are missing from p1 - fail width
   | not (null diff21)
   = NoSub [ errorObjSubtype l t1 t2 (map fst diff21) ]
 
@@ -303,8 +304,8 @@ subtypeMems l γ c (t1, p1) (t2, p2)
   = mconcat $ map (subtypeMem l γ c) common
 
   where
-    diff21 = toListSEnv $ p2 `differenceSEnv` p1
-    common = toListSEnv $ intersectWithSEnv (,) p1 p2
+    diff21 = toListSEnv $ m2 `differenceSEnv` m1
+    common = toListSEnv $ intersectWithSEnv (,) m1 m2
 
 --------------------------------------------------------------------------------
 subtypeMem :: (FE g r, PPRE r, IsLocated a, PP f)
@@ -382,4 +383,17 @@ subtypeFun l γ t1@(TAnd t1s) t2
     f t1 = isSubtype γ t1 t2
 
 subtypeFun l _ t1 t2 = NoSub [unsupportedConvFun l t1 t2]
+
+
+-- | `isUnique g t` checks if type t corresponds to a unique reference
+--
+--------------------------------------------------------------------------------
+isUnique :: (PPRE r, FE g r) => g r -> RType r -> Bool
+--------------------------------------------------------------------------------
+isUnique g (TObj m mts _) = isSubtypeWithUq g m tUQ
+isUnique g (TRef s _)     | Gen _ (m : _) <- s
+                          = isSubtypeWithUq g m tUQ
+isUnique g v@(TVar _ _)   | Just t <- envFindBoundOpt g v
+                          = isUnique g t
+isUnique _ _              = False
 

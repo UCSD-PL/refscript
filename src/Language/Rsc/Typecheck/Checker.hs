@@ -18,7 +18,7 @@ import           Data.Function                      (on)
 import           Data.Generics
 import qualified Data.IntMap.Strict                 as I
 import           Data.List                          (find, sortBy)
-import           Data.Maybe                         (catMaybes, fromMaybe)
+import           Data.Maybe                         (catMaybes, fromMaybe, maybeToList)
 import qualified Data.Traversable                   as T
 import           Language.Fixpoint.Misc             as FM
 import qualified Language.Fixpoint.Types            as F
@@ -351,8 +351,11 @@ tcVarDecl γ v@(VarDecl l x (Just e))
       -- Local (no type annotation)
       Nothing ->
         do  (e', to) <- tcExprW γ e
-            return $ (VarDecl l x (Just e'),
-                      tcEnvAddo γ x $ SI (F.symbol x) Local WriteLocal Initialized <$> to)
+            if not (consumable e) && any (isUnique γ) (maybeToList to) then
+                tcError (errorUniqueAsgn x e)
+            else
+                let sio = SI (F.symbol x) Local WriteLocal Initialized <$> to in
+                return (VarDecl l x (Just e'), tcEnvAddo γ x sio)
 
       -- Local (with type annotation)
       Just (SI y lc WriteLocal _ t) ->
@@ -518,13 +521,12 @@ tcEnvAddo γ x (Just t) = Just (tcEnvAdds [(x, t)] γ)
 --------------------------------------------------------------------------------
 tcExprW  :: Unif r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, Maybe (RType r))
 --------------------------------------------------------------------------------
-tcExprW γ e
-  = do  t <- tcWrap (tcExpr γ e Nothing)
-        tcEW γ e t
+tcExprW γ e = tcWrap (tcExpr γ e Nothing) >>= tcEW γ e
 
 
--- | `tcExprWD γ e t` checks expression @e@ under environment @γ@ (with an
---   optional contextual type @t@ potentially wrapping it in a cast.
+-- | `tcExprWD γ e t` checks expression @e@ under environment @γ@.
+--    (with an optional contextual type @t@ potentially wrapping it in a cast)
+--
 --------------------------------------------------------------------------------
 tcExprWD :: Unif r => TCEnv r -> ExprSSAR r -> Maybe (RType r)
                    -> TCM r (ExprSSAR r, RType r)
@@ -620,10 +622,6 @@ tcExpr γ e@(VarRef l x) _
   | F.symbol x == F.symbol "undefined"
   = return (e, tUndef)
 
---   -- | `arguments`
---   | F.symbol x == F.symbol "arguments"
---   = tcExpr γ (VarRef l (Id (getAnnotation x) ("arguments_" ++ show (envFnId γ)))) to
-
   -- | Ignore the `cast` variable
   | Just t <- to, isCastId x
   = return (e,t)
@@ -671,17 +669,16 @@ tcExpr γ e@(ArrayLit l es) to
 -- | { f1: e1, ..., fn: tn }
 tcExpr γ (ObjectLit l pes) to
   = do  (es', ts) <- unzip <$> T.mapM (uncurry (tcExprWD γ)) ets
-        t         <- pure (TObj (tmsFromList (zipWith toFI ps ts)) fTop)
-        return (ObjectLit l (zip ps es'), t)
+        t         <- pure (TObj tUQ (tmsFromList (zipWith toFI ps ts)) fTop)
+        return       (ObjectLit l (zip ps es'), t)
   where
-    -- (cts, ft)  = objLitTy l γ ps to
-    (ps , _)   = unzip pes
-    toFI p t   = FI (F.symbol p) Req tUQ t
-    ets        = map (\(p,e) -> (e, pTy p)) pes
-    pTy p      | Just f@FI{} <- lkup p = Just (f_ty f)
-               | otherwise             = Nothing
-    lkup p     = F.lookupSEnv (F.symbol p) ctxTys
-    ctxTys     = maybe mempty (i_mems . typeMembersOfType (envCHA γ)) to
+    (ps , _)       = unzip pes
+    toFI p t       = FI (F.symbol p) Req tUQ t
+    ets            = map (\(p,e) -> (e, pTy p)) pes
+    pTy p          | Just f@FI{} <- lkup p = Just (f_ty f)
+                   | otherwise             = Nothing
+    lkup p         = F.lookupSEnv (F.symbol p) ctxTys
+    ctxTys         = maybe mempty (i_mems . typeMembersOfType (envCHA γ)) to
 
 -- | <T>e
 tcExpr γ ex@(Cast l e) _
@@ -925,7 +922,7 @@ tcNormalCall :: (Unif r, PP a)
              -> RType r -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
 tcNormalCall γ l fn etos ft0
-  = do ets <- T.mapM (uncurry $ tcExprWD γ) etos
+  = do ets <- T.mapM (uncurry (tcExprWD γ)) etos
        z   <- resolveOverload γ l fn ets ft0
        case z of
          Just (i, θ, ft) ->

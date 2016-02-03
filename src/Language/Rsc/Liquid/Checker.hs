@@ -476,11 +476,11 @@ consVarDecl g (VarDecl l x (Just e))
       Just (SI n lc RdOnly _ t) -> do
         fta       <- freshenType WriteGlobal g l t
         mseq (consExpr g e (Just t)) $ \(y,gy) -> do
-          eT      <- ltracePP l ("Inferred " ++ ppshow e) <$> cgSafeEnvFindTyM y gy
+          eT      <- cgSafeEnvFindTyM y gy
           -- _       <- subType l Nothing gy eT t
           _       <- subType l Nothing gy eT fta
           _       <- subType l Nothing gy fta t
-          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc RdOnly Initialized $ ltracePP l ("Assinged " ++ ppshow e) fta] gy
+          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc RdOnly Initialized fta] gy
 
       _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 
@@ -841,7 +841,7 @@ consExpr g e@(ArrayLit l es) to
 consExpr g (ObjectLit l pes) to
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts      <- mapM (`cgSafeEnvFindTyM` g') xes
-      t       <- pure (TObj (tmsFromList (zipWith toFI ps ts)) fTop)
+      t       <- ltracePP l "obj" <$> pure (TObj tUQ (tmsFromList (zipWith toFI ps ts)) fTop)
       Just   <$> cgEnvAddFresh "ObjectLit" l t g'
   where
     toFI p t   = FI (F.symbol p) Req tUQ t

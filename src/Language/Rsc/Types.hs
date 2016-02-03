@@ -23,7 +23,7 @@ import           Language.Rsc.Names
 
 
 -- | Type parameter
-data TVar         = TV { tv_sym :: F.Symbol                -- Parameter symbol
+data TVar         = TV { tv_sym :: F.Symbol                   -- Parameter symbol
                        , tv_loc :: SrcSpan
                        }
                     deriving (Data, Typeable)
@@ -35,7 +35,8 @@ data BTVarQ q r   = BTV { btv_sym    :: F.Symbol              -- Parameter symbo
                     deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 
-data TPrim        = TString | TStrLit String | TNumber | TBoolean | TBV32 | TVoid | TUndefined | TNull | TAny
+data TPrim        = TString | TStrLit String | TNumber | TBoolean
+                  | TBV32 | TVoid | TUndefined | TNull | TAny
                   {- Internal -}
                   | TTop | TBot | TFPBool
                   deriving (Eq, Show, Data, Typeable)
@@ -66,9 +67,9 @@ data RTypeQ q r =
   --
   -- Object
   --
-  | TObj (TypeMembersQ q r) r
+  | TObj (MutabilityQ q r) (TypeMembersQ q r) r
   --
-  -- Class / Enum
+  -- class C
   --
   | TClass (BTGenQ q r)
   --
@@ -76,7 +77,7 @@ data RTypeQ q r =
   --
   | TMod (QP q)
   --
-  -- Forall [A <: T] . S
+  -- ∀A[<:T].S
   --
   | TAll (BTVarQ q r) (RTypeQ q r)
   --

@@ -435,7 +435,7 @@ unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
 --------------------------------------------------------------------------------
 unqualifyThis g t = F.subst $ F.mkSubst fieldSu
   where
-    fieldSu | Just (TObj fs _) <- expandType Coercive (envCHA g) t
+    fieldSu | Just (TObj _ fs _) <- expandType Coercive (envCHA g) t
             = [ subPair f | (f, FI _ _ m _) <- F.toListSEnv (i_mems fs)
                           , isSubtype g m tIM ]
             | otherwise

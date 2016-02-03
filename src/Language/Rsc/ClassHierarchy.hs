@@ -150,7 +150,7 @@ typeMembersOfType :: (ExprReftable Int r, PPR r) => ClassHierarchy r -> RType r 
 typeMemersOfTDecl :: PPR r => ClassHierarchy r -> TypeDecl r -> TypeMembers r
 --------------------------------------------------------------------------------
 typeMembersOfType cha t
-  | Just (TObj ms _) <- expandType Coercive cha t
+  | Just (TObj _ ms _) <- expandType Coercive cha t
   = ms
   | otherwise
   = mempty
@@ -171,7 +171,7 @@ expandWithSubst cha t@(TD (TS _ (BGen _ bvs) _) _) ts
 
 data CoercionKind = Coercive | NonCoercive
 
--- | `expandType c γ t` expands type @t@ to an object type (TObj)
+-- | `expandType c γ t` expands type @t@ to an object type (toBj)
 --  * It is not intended to be called with mutability types (returns `Nothing`)
 --  * If @c@ is `Coercive`, then primitive types will be treated as their
 --    object counterparts, i.e. String, Number, Boolean.
@@ -179,13 +179,13 @@ data CoercionKind = Coercive | NonCoercive
 expandType :: (ExprReftable Int r, PPR r)
            => CoercionKind -> ClassHierarchy r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
-expandType _ _ t@(TObj _ _) = Just t
+expandType _ _ t@TObj{} = Just t
 
 -- | Enumeration
 --
 expandType _ cha (TRef (Gen n []) _)
   | Just e <- resolveEnum cha n
-  = Just $ TObj (ms e) fTop
+  = Just $ TObj tIM (ms e) fTop
   where
     ms  = tmsFromList . concatMap mkField . envToList . e_mapping
     -- TODO
@@ -200,9 +200,9 @@ expandType _ _ t@(TRef _ _) | mutRelated t = Nothing
 --
 --  TODO: revisit !!!
 --
-expandType _ cha t@(TRef (Gen n ts@(_:_)) r)
-  | isClassType cha t = (\m -> TObj m r) . fltInst <$> ms
-  | otherwise         = (\m -> TObj m r)           <$> ms
+expandType _ cha t@(TRef (Gen n ts@(p:_)) r)
+  | isClassType cha t = (\m -> TObj p m r) . fltInst <$> ms
+  | otherwise         = (\m -> TObj p m r)           <$> ms
   where
     ms      =  expandWithSubst cha
            <$> resolveType cha n
@@ -212,37 +212,41 @@ expandType _ cha t@(TRef (Gen n ts@(_:_)) r)
 -- | Ambient type: String, Number, etc.
 --
 expandType _ cha t@(TRef (Gen n []) r)
-  | isClassType cha t = (\m -> TObj m r) . fltInst <$> ms
-  | otherwise         = (\m -> TObj m r)           <$> ms
+  | isClassType cha t = mkTObj . fltInst <$> ms
+  | otherwise         = mkTObj           <$> ms
   where
     ms = typeMemersOfTDecl cha <$> resolveType cha n
     fltInst (TM m _ _ _ s n) = TM m mempty Nothing Nothing s n
 
 expandType _ cha (TClass (BGen n ts))
-  = (\m -> TObj m fTop) . fltStat <$> ms
+  = mkTObj . fltStat <$> ms
   where
     ms  = expandWithSubst cha <$> resolveType cha n <*> return ts'
     ts' = [ tVar $ TV x s | BTV x s _ <- ts ] -- these shouldn't matter anyway
     fltStat (TM _ m c k _ _) = TM mempty m c k Nothing Nothing
 
 expandType _ cha (TMod n)
-  = (\m -> TObj m fTop) <$> typeMembers
-                             .  fmap (symToField . val)
-                             .  m_variables
-                            <$> resolveModule cha n
-  where
+  = mkTObj . typeMembers . fmap (symToField . val) . m_variables
+ <$> resolveModule cha n
 
 -- Common cases end here. The rest are only valid if non-coercive
 expandType NonCoercive _ _ = Nothing
 
 expandType _ cha (TPrim TNumber _)
-  = (\m -> TObj m fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha numberInterface)
+  = mkTObj . typeMemersOfTDecl cha <$> resolveType cha numberInterface
 expandType _ cha (TPrim TString _)
-  = (\m -> TObj m fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha stringInterface)
+  = mkTObj . typeMemersOfTDecl cha <$> resolveType cha stringInterface
 expandType _ cha (TPrim TBoolean _)
-  = (\m -> TObj m fTop) <$> (typeMemersOfTDecl cha <$> resolveType cha booleanInterface)
+  = mkTObj . typeMemersOfTDecl cha <$> resolveType cha booleanInterface
 
 expandType _ _ t  = Just t
+
+--------------------------------------------------------------------------------
+mkTObjM     :: F.Reftable r => MutabilityR r -> TypeMembers r -> RType r
+mkTObj      :: F.Reftable r =>                  TypeMembers r -> RType r
+--------------------------------------------------------------------------------
+mkTObjM m ms = TObj m ms fTop
+mkTObj       = mkTObjM tIM
 
 
 
@@ -337,7 +341,7 @@ boundKeys :: (ExprReftable Int r, PPR r)
 --------------------------------------------------------------------------------
 boundKeys cha t@(TRef _ _) | Just t <- expandType Coercive cha t = boundKeys cha t
                            | otherwise                         = []
-boundKeys _ (TObj es _)    = fst <$> F.toListSEnv (i_mems es)
+boundKeys _ (TObj _ es _)  = fst <$> F.toListSEnv (i_mems es)
 boundKeys _ _              = []
 
 --------------------------------------------------------------------------------

@@ -56,7 +56,7 @@ getProp l γ f t@(TPrim _ _) = getPropPrim l γ f t
 getProp l γ f (TOr ts _) = getPropUnion l γ f ts
 
 -- | TODO: Chain up to 'Object'
-getProp l γ f t@(TObj _ _)
+getProp l γ f t@TObj{}
   = fmap (map (t,)) (accessMember l γ InstanceK f t)
 
 -- | Enumeration
@@ -115,7 +115,7 @@ extractCtor γ t = go t
     go (TClass (BGen x _)) | Just (TD _ ms) <- resolveTypeInEnv γ x
                            = tm_ctor ms
     go (TRef _ _)          = expandType Coercive (envCHA γ) t >>= go
-    go (TObj ms _)         = tm_ctor ms
+    go (TObj _ ms _)       = tm_ctor ms
     go _                   = Nothing
 
 
@@ -129,7 +129,7 @@ extractCall γ             = zip [0..] . go []
     go αs   (TAll α t)    = go (αs ++ [α]) t
     go αs t@(TRef _ _)    | Just t' <- expandType Coercive (envCHA γ) t
                           = go αs t'
-    go αs   (TObj ms _)   | Just t <- tm_call ms
+    go αs   (TObj _ ms _) | Just t <- tm_call ms
                           = go αs t
     go _  _               = []
 
@@ -138,12 +138,12 @@ accessMember :: (CEnv r t, PPRE r, PP f, IsLocated l, F.Symbolic f)
              => l -> t r -> StaticKind -> f -> RType r -> Either Error [TypeMember r]
 --------------------------------------------------------------------------------
 accessMember l γ static m t
-  | Just (TObj es _) <- expandType Coercive (envCHA γ) t
-  , Just mem <- F.lookupSEnv (F.symbol m) (mems es)
+  | Just (TObj _ es _) <- expandType Coercive (envCHA γ) t
+  , Just mem           <- F.lookupSEnv (F.symbol m) (mems es)
   = Right [mem]
   -- In the case of string indexing, build up an optional and assignable field
-  | Just (TObj es _) <- expandType Coercive (envCHA γ) t
-  , Just tIdx        <- tm_sidx es
+  | Just (TObj _ es _) <- expandType Coercive (envCHA γ) t
+  , Just tIdx          <- tm_sidx es
   , validFieldName m
   = Right [FI (F.symbol m) Opt tMU tIdx]
   | otherwise
@@ -164,7 +164,7 @@ lookupAmbientType ::
 --------------------------------------------------------------------------------
 lookupAmbientType l γ f amb
   | Just (TD _ ms) <- resolveTypeInEnv γ nm
-  = accessMember l γ InstanceK f (TObj ms fTop)
+  = accessMember l γ InstanceK f (TObj tIM ms fTop)
   | otherwise
   = Left (errorAmbientLookup l f (F.symbol amb))
   where
@@ -189,8 +189,8 @@ getFieldMutability ::
   ClassHierarchy r -> RType r -> F.Symbol -> Maybe (MutabilityR r)
 --------------------------------------------------------------------------------
 getFieldMutability cha t f
-  | Just (TObj ms _i) <- expandType Coercive cha t
-  , Just (FI _ _ m _) <- F.lookupSEnv f (i_mems ms)
+  | Just (TObj _ ms _i) <- expandType Coercive cha t
+  , Just (FI _ _ m _)   <- F.lookupSEnv f (i_mems ms)
   = Just m
   | otherwise
   = Nothing

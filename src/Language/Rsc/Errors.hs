@@ -4,17 +4,13 @@
 
 module Language.Rsc.Errors where
 
-import           Debug.Trace
-import           Language.Rsc.AST.Syntax
+import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Typecheck.Types
 import           Text.PrettyPrint.HughesPJ
 import           Text.Printf
-
-import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Types.Errors
-import           Language.Fixpoint.Types.PrettyPrint
 
 
 
@@ -122,7 +118,7 @@ errorIncompMutTy l t t'       = mkErr l $ show $ sep [text "Types:", nest 2 (pp 
 errorUniqueAsgn l             = mkErr l $ show $ sep [text "Cannot handle unique types in this context."]
 errorMutUnknown l t           = mkErr l $ show $ sep [text "Unknown mutability modifier:", nest 2 (pp t)]
 bugMutPartInvalid l t         = mkErr l $ show $ sep [text "[BUG] Invalid mutability part of types:", nest 2 (pp t)]
-errorMutInvalid l t t'        = mkErr l $ show $ sep [text "Invalid mutability type(s):", nest 2 (pp t), text "or", nest 2 (pp t)]
+errorMutInvalid l t t'        = mkErr l $ show $ sep [text "Invalid mutability type(s):", nest 2 (pp t), text "or", nest 2 (pp t')]
 
 errorIncompMethMut l m        = mkErr l $ printf "Mutability modifiers of method '%s' are incompatible." (ppshow m)
 errorIncompCallSigs l t t'    = mkErr l $ printf "Types '%s' and '%s' have incompatible call signatures." (ppshow t) (ppshow t')
@@ -270,6 +266,8 @@ errorImmutableRefAsgn l f t   = mkErr l $ show $ text "Cannot assign field" <+> 
                                                  text "through non-mutable reference of type" $+$
                                                  nest 2 (pp t) $+$
                                                  text "[Hint: try making field" <+> ticks (pp f) <+> text "assignable]."
+errorMethAsgn l m             = mkErr l $ show $ text "Cannot re-assign method" <+> ticks (pp m)
+
 errorCallOptional l m t       = mkErr l $ printf "Cannot call optional field '%s' of type '%s'." (ppshow m) (ppshow t)
 
 errorUnionMergePrims l t a b  = mkErr l $ printf "In type '%s', cannot merge primitive types '%s' and '%s'." (ppshow t) (ppshow a) (ppshow b)

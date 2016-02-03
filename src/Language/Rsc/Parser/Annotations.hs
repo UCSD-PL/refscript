@@ -18,23 +18,18 @@ module Language.Rsc.Parser.Annotations (
     , getSpecString
     ) where
 
-import           Control.Applicative            ((<$>))
 import           Control.Monad
-import           Data.Generics                  hiding (Generic)
+import           Data.Generics             hiding (Generic)
 import           GHC.Generics
 import           Language.Fixpoint.Parse
-import           Language.Fixpoint.Types        hiding (Expression, FI, Loc, Located, quals)
-import           Language.Fixpoint.Types.Errors
-import           Language.Rsc.AST
-import           Language.Rsc.Locations         hiding (val)
+import           Language.Fixpoint.Types   hiding (Expression, FI, Loc, Located, quals)
+import           Language.Rsc.Locations    hiding (val)
 import           Language.Rsc.Names
-import           Language.Rsc.Options
--- import           Language.Rsc.Parser.Sorts
 import           Language.Rsc.Parser.Types
 import           Language.Rsc.Pretty
 import           Language.Rsc.Types
-import           Prelude                        hiding (mapM)
-import           Text.PrettyPrint.HughesPJ      (text)
+import           Prelude                   hiding (mapM)
+import           Text.PrettyPrint.HughesPJ (text)
 
 
 --------------------------------------------------------------------------------
@@ -109,6 +104,7 @@ instance PP Spec where
   pp InvariantSpec{}           = text "InvariantSpec"
   pp OptionSpec{}              = text "OptionSpec"
   pp ErrorSpec{}               = text "ErrorSpec"
+  pp ModuleSpec{}              = text "ModuleSpec"
 
 parseRawSpec :: PContext -> RawSpec -> Parser Spec
 parseRawSpec ctx = go

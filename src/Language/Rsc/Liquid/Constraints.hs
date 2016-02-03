@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE DeriveFunctor             #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LambdaCase                #-}
@@ -20,33 +19,22 @@ module Language.Rsc.Liquid.Constraints (
 
   ) where
 
-import           Control.DeepSeq
 import           Control.Monad
-import qualified Data.HashMap.Strict             as HM
 import qualified Data.List                       as L
-import           Data.Maybe                      (catMaybes)
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types         as F
-import           Language.Fixpoint.Types.Errors
-import           Language.Rsc.Annotations
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.CmdLine
 import           Language.Rsc.Constraints
-import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.CGMonad
 import           Language.Rsc.Liquid.Environment
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc               (concatMapM, mapPair, single)
-import           Language.Rsc.Module
-import           Language.Rsc.Names
+import           Language.Rsc.Misc               (concatMapM)
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
-import           Language.Rsc.Symbols
-import           Language.Rsc.Transformations
-import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Sub
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
@@ -163,7 +151,7 @@ splitC (Sub g c s t@(TOr ts _))
 --    TODO: Find variance for type arguments
 --
 splitC (Sub g i t1@(TRef n1@(Gen x1 (_ :t1s)) r1)
-                t2@(TRef n2@(Gen x2 (m2:t2s)) r2))
+                t2@(TRef    (Gen x2 (m2:t2s)) _ ))
 
   -- Trivial case (do not descend)
   --
@@ -251,19 +239,21 @@ splitTM g x c (TM p1 sp1 c1 k1 s1 n1) (TM p2 sp2 c2 k2 s2 n2)
 --------------------------------------------------------------------------------
 splitElt :: CGEnv -> Cinfo -> (t, (TypeMember F.Reft, TypeMember F.Reft)) -> CGM [FixSubC]
 --------------------------------------------------------------------------------
-splitElt g i (_, (FI _ _ m1 t1, FI _ _ m2 t2))
+splitElt g i (_, (FI _ _ m1 t1, FI _ _ _ t2))
   -- Co-variant subtying for immutable members
   --
-  | isSubtype g m1 tIM = splitC (Sub g i t1 t2)
+  | isSubtype g m1 tIM
+  = splitC (Sub g i t1 t2)
 
   -- Co-variant subtyping for unique members (unaliased)
   --
-  | ltracePP i ("isUQ " ++ ppshow m1) $ isSubtypeWithUq g m1 tUQ = splitC (Sub g i (ltracePP i "Unique splitC" t1) t2)
+  | isSubtypeWithUq g m1 tUQ
+  = splitC (Sub g i (ltracePP i "Unique splitC" t1) t2)
 
-  | otherwise          = (++) <$> splitC (Sub g i t1 t2)
-                              <*> splitC (Sub g i t2 t1)
+  | otherwise
+  = (++) <$> splitC (Sub g i t1 t2) <*> splitC (Sub g i t2 t1)
 
-splitElt g i (_, (m, m'))
+splitElt _ i (_, (m, m'))
   = cgError $ unsupportedSplitElt (srcPos i) m m'
 
 
@@ -332,7 +322,7 @@ splitW (W g i t@(TRef (Gen _ ts) _))
 splitW (W g i (TAnd (map snd -> ts)))
   = concatMapM splitW [W g i t | t <- ts]
 
-splitW (W g i t@(TOr ts r))
+splitW (W g i t@(TOr ts _))
   = do let ws = bsplitW g t i
        ws'   <- concatMapM splitW [W g i t | t <- ts]
        return $ ws ++ ws'
@@ -378,7 +368,7 @@ sameTag _ _            _            = False
 -------------------------------------------------------------------------------
 narrowType :: CGEnv -> RefType-> Type -> RefType
 -------------------------------------------------------------------------------
-narrowType g t1@(TOr t1s r) t2
+narrowType g (TOr t1s r) t2
   = tOrR (L.filter (\t1 -> isSubtype g t1 (ofType t2)) t1s) r
 
 narrowType _ t1 _ = t1

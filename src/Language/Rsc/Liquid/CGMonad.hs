@@ -51,21 +51,16 @@ module Language.Rsc.Liquid.CGMonad (
 
   ) where
 
-import           Control.Applicative             hiding (empty)
 import           Control.Arrow                   ((***))
 import           Control.Exception               (throw)
-import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
-import           Data.Function                   (on)
 import qualified Data.HashMap.Strict             as HM
 import qualified Data.List                       as L
-import           Data.Maybe                      (catMaybes)
-import           Data.Monoid                     (mappend, mempty)
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types         as F
 import           Language.Fixpoint.Types.Errors
-import           Language.Fixpoint.Types.Names   (isPrefixOfSym, symbolString, symbolText, tempPrefix)
+import           Language.Fixpoint.Types.Names   (symbolString)
 import           Language.Fixpoint.Types.Visitor (SymConsts (..))
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
@@ -77,25 +72,15 @@ import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc               (concatMapM, mapPair, single)
-import           Language.Rsc.Module
-import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.Symbols
 import qualified Language.Rsc.SystemUtils        as S
 import           Language.Rsc.Transformations
 import           Language.Rsc.Typecheck.Sub
-import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
-
-import           Debug.Trace                     (trace)
-
-
-
-type EnvKey x = (IsLocated x, F.Symbolic x, PP x, F.Expression x)
 
 
 --------------------------------------------------------------------------------
@@ -293,13 +278,13 @@ mkLiquidError l g t1 t2 = mkErr l $ show
                   text "Right hand side:" $+$ nest 4 (pp τ2)
                 )
   where
-    γ         = {- F.subst sbt -} (cge_names g)
+    -- γ         = {- F.subst sbt -} (cge_names g)
     gr        = {- F.subst sbt -} (cge_guards g)
     τ1        = {- F.subst sbt -} t1
     τ2        = {- F.subst sbt -} t2
-    tmp       = [ x | (x, _) <- F.toListSEnv (envNames g), isPrefixOfSym tempPrefix x ]
-    miniTmp   = map (F.expr . F.symbol . ("_" ++) . single) ['a'..]
-    sbt       = F.mkSubst (zip tmp miniTmp)
+    -- tmp       = [ x | (x, _) <- F.toListSEnv (envNames g), isPrefixOfSym tempPrefix x ]
+    -- miniTmp   = map (F.expr . F.symbol . ("_" ++) . single) ['a'..]
+    -- sbt       = F.mkSubst (zip tmp miniTmp)
 
 --
 -- TODO: KVar subst
@@ -314,7 +299,7 @@ instance (PP r, F.Reftable r, F.Subable r) => F.Subable (SymInfo r) where
   substa f (SI x l a i t) = SI x l a i $ F.substa f t
   substf f (SI x l a i t) = SI x l a i $ F.substf f t
   subst su (SI x l a i t) = SI x l a i $ F.subst su t
-  syms     (SI x l a i t) = F.syms t
+  syms     (SI _ _ _ _ t) = F.syms t
 
 
 -- errorLiquid l g t1 t2         = mkErr k $ printf "Liquid Type Error" where k = srcPos l

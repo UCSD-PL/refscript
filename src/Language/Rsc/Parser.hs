@@ -11,7 +11,6 @@
 
 module Language.Rsc.Parser (parseRscFromFiles, parseScriptFromJSON, parseIdFromJSON) where
 
-import           Control.Applicative              ((<$>))
 import           Control.Arrow                    (second)
 import           Control.Monad
 import           Control.Monad.Trans              (MonadIO, liftIO)
@@ -24,35 +23,27 @@ import           Data.Maybe                       (catMaybes)
 import           Data.Monoid
 import           Data.Traversable                 (mapAccumL)
 import           Data.Tuple
-import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Parse          (Parser)
 import qualified Language.Fixpoint.Types          as F
 import           Language.Fixpoint.Types.Errors
-import           Language.Rsc.Annotations         hiding (err)
+import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Alias
 import           Language.Rsc.Liquid.Qualifiers
-import           Language.Rsc.Locations           hiding (val)
-import           Language.Rsc.Misc                ((&))
+import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Parser.Annotations
 import           Language.Rsc.Parser.Declarations ()
 import           Language.Rsc.Parser.Types        (pCtxFromList)
 import           Language.Rsc.Program
 import           Language.Rsc.Transformations
-import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Language.Rsc.Visitor
 import           Prelude                          hiding (mapM)
 import           Text.Parsec                      hiding (State, parse)
 import           Text.Parsec.Error                (errorMessages, showErrorMessages)
-
--- import           Debug.Trace                             ( trace, traceShow)
-import           Language.Rsc.Pretty
-
 
 --------------------------------------------------------------------------------
 -- | Parse File and Type Signatures

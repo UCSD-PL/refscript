@@ -24,21 +24,16 @@ module Language.Rsc.Typecheck.Subst (
 
   ) where
 
-import           Control.Applicative          ((<$>))
 import qualified Data.HashMap.Strict          as HM
 import qualified Data.HashSet                 as S
-import           Data.Monoid                  hiding ((<>))
-import           Language.Fixpoint.Misc       (intersperse)
 import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
-import           Language.Rsc.Core.Env
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc            (mapSnd)
 import           Language.Rsc.Names
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Text.PrettyPrint.HughesPJ
 
 -- import           Debug.Trace
 
@@ -273,6 +268,7 @@ instance (F.Reftable r) => Eq (TypeMembers r) where
 instance (F.Reftable r) => Eq (TypeMember r) where
   FI n o a t == FI n' o' a' t' = n == n' && o == o' && a == a' && t == t'
   MI m k mt  == MI m' k' mt'   = m == m' && k == k' && mt == mt'
+  _          == _              = False
 
 instance (F.Reftable r) => Eq (Bind r) where
   B x t == B x' t' = x == x' && t == t'

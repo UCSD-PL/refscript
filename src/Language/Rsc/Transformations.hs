@@ -15,9 +15,6 @@ module Language.Rsc.Transformations (
   , fixFunBinders
   ) where
 
-import           Control.Applicative             hiding (empty)
-import           Control.Exception               (throw)
-import           Control.Monad                   (liftM2)
 import           Control.Monad.State.Strict
 import           Data.Default
 import           Data.Functor.Identity
@@ -25,9 +22,6 @@ import           Data.Generics
 import qualified Data.HashSet                    as HS
 import qualified Data.IntMap.Strict              as I
 import           Data.List                       (find)
-import           Data.Maybe                      (fromMaybe)
-import           Data.Maybe                      (listToMaybe)
-import           Data.Monoid                     hiding ((<>))
 import           Data.Text                       (pack, splitOn)
 import qualified Data.Traversable                as T
 import qualified Language.Fixpoint.Types         as F
@@ -352,8 +346,6 @@ mapTypeMembersM f (TM m sm c k s n)
 -- | Replace all relatively qualified names/paths with absolute ones.
 --------------------------------------------------------------------------------
 
-type ReplaceState = State [Error]
-
 --------------------------------------------------------------------------------
 replaceAbsolute :: (PPR r, Data r, Typeable r) => BareRelRsc r -> (BareRsc r, [Error])
 --------------------------------------------------------------------------------
@@ -512,28 +504,28 @@ stransStatement f g ctx st = go st
     b    = f ctx a
     ctx' = g ctx b
     ss   = strans f g ctx'
-    go (BlockStmt a sts)         = BlockStmt b (ss <$> sts)
-    go (EmptyStmt a)             = EmptyStmt b
-    go (ExprStmt a e)            = ExprStmt b (ss e)
-    go (IfStmt a e s1 s2)        = IfStmt b (ss e) (ss s1) (ss s2)
-    go (IfSingleStmt a e s)      = IfSingleStmt b (ss e) (ss s)
-    go (WhileStmt a e s)         = WhileStmt b (ss e) (ss s)
-    go (DoWhileStmt a s e)       = DoWhileStmt b (ss s) (ss e)
-    go (BreakStmt a i)           = BreakStmt b (ss <$> i)
-    go (ContinueStmt a i)        = ContinueStmt b (ss <$> i)
-    go (LabelledStmt a i s)      = LabelledStmt b (ss i) (ss s)
-    go (ForInStmt a fi e s)      = ForInStmt b (ss fi) (ss e) (ss s)
-    go (ForStmt a fi me1 me2 s)  = ForStmt b (ss fi) (ss <$> me1) (ss <$> me2) (ss s)
-    go (TryStmt a s mcc ms)      = TryStmt b (ss s) (ss <$> mcc) (ss <$> ms)
-    go (ThrowStmt a e)           = ThrowStmt b (ss e)
-    go (ReturnStmt a me)         = ReturnStmt b (ss <$> me)
-    go (WithStmt a e s)          = WithStmt b (ss e) (ss s)
-    go (VarDeclStmt a vs)        = VarDeclStmt b (ss <$> vs)
-    go (FunctionStmt a i is mss) = FunctionStmt b (ss i) (ss <$> is) ((ss <$>) <$> mss)
-    go (ClassStmt a i cs)        = ClassStmt b (ss i) (ss <$> cs)
-    go (ModuleStmt a i sts)      = ModuleStmt b (ss i) (ss <$> sts)
-    go (InterfaceStmt a i)       = InterfaceStmt b (ss i)
-    go (EnumStmt a i es)         = EnumStmt b (ss i) (ss <$> es)
+    go (BlockStmt _ sts)         = BlockStmt b (ss <$> sts)
+    go (EmptyStmt _)             = EmptyStmt b
+    go (ExprStmt _ e)            = ExprStmt b (ss e)
+    go (IfStmt _ e s1 s2)        = IfStmt b (ss e) (ss s1) (ss s2)
+    go (IfSingleStmt _ e s)      = IfSingleStmt b (ss e) (ss s)
+    go (WhileStmt _ e s)         = WhileStmt b (ss e) (ss s)
+    go (DoWhileStmt _ s e)       = DoWhileStmt b (ss s) (ss e)
+    go (BreakStmt _ i)           = BreakStmt b (ss <$> i)
+    go (ContinueStmt _ i)        = ContinueStmt b (ss <$> i)
+    go (LabelledStmt _ i s)      = LabelledStmt b (ss i) (ss s)
+    go (ForInStmt _ fi e s)      = ForInStmt b (ss fi) (ss e) (ss s)
+    go (ForStmt _ fi me1 me2 s)  = ForStmt b (ss fi) (ss <$> me1) (ss <$> me2) (ss s)
+    go (TryStmt _ s mcc ms)      = TryStmt b (ss s) (ss <$> mcc) (ss <$> ms)
+    go (ThrowStmt _ e)           = ThrowStmt b (ss e)
+    go (ReturnStmt _ me)         = ReturnStmt b (ss <$> me)
+    go (WithStmt _ e s)          = WithStmt b (ss e) (ss s)
+    go (VarDeclStmt _ vs)        = VarDeclStmt b (ss <$> vs)
+    go (FunctionStmt _ i is mss) = FunctionStmt b (ss i) (ss <$> is) ((ss <$>) <$> mss)
+    go (ClassStmt _ i cs)        = ClassStmt b (ss i) (ss <$> cs)
+    go (ModuleStmt _ i sts)      = ModuleStmt b (ss i) (ss <$> sts)
+    go (InterfaceStmt _ i)       = InterfaceStmt b (ss i)
+    go (EnumStmt _ i es)         = EnumStmt b (ss i) (ss <$> es)
     go s                         = error $ "[unimplemented] stransStatement for " ++ ppshow s
 
 stransExpression f g ctx exp = go exp
@@ -547,11 +539,11 @@ stransExpression f g ctx exp = go exp
     go (NumLit _ d)             = NumLit b d
     go (IntLit _ i)             = IntLit b i
     go (BoolLit _ bl)           = BoolLit b bl
-    go (NullLit a)              = NullLit b
+    go (NullLit _)              = NullLit b
     go (ArrayLit _ es)          = ArrayLit b (ss <$> es)
     go (ObjectLit _ pes)        = ObjectLit b ((\(p,e) -> (ss p, ss e)) <$> pes)
     go (HexLit _ s)             = HexLit b s
-    go (ThisRef a)              = ThisRef b
+    go (ThisRef _)              = ThisRef b
     go (VarRef _ i)             = VarRef b (ss i)
     go (DotRef _ e i)           = DotRef b (ss e) (ss i)
     go (BracketRef _ e1 e2)     = BracketRef b (ss e1) (ss e2)
@@ -563,14 +555,15 @@ stransExpression f g ctx exp = go exp
     go (AssignExpr _ op l e)    = AssignExpr b op (ss l) (ss e)
     go (ListExpr _ es)          = ListExpr b (ss <$> es)
     go (CallExpr _ e es)        = CallExpr b (ss e) (ss <$> es)
-    go (SuperRef a)             = SuperRef b
+    go (SuperRef _)             = SuperRef b
     go (FuncExpr _ mi is sts)   = FuncExpr b (ss <$> mi) (ss <$> is) (ss <$> sts)
     go (Cast _ e)               = Cast b (ss e)
     go (Cast_ _ e)              = Cast_ b (ss e)
 
 stransId f _ ctx (Id a s) = Id (f ctx a) s
 
-stransForInInit f g ctx (ForInVar i) = ForInVar (strans f g ctx i)
+stransForInInit f g ctx (ForInVar i)  = ForInVar (strans f g ctx i)
+stransForInInit f g ctx (ForInLVal i) = ForInLVal (strans f g ctx i)
 
 stransForInit _ _ _   NoInit        = NoInit
 stransForInit f g ctx (VarInit vs)  = VarInit (strans f g ctx <$> vs)
@@ -594,9 +587,9 @@ stransClassElt f g ctx ce = go ce
     b    = f ctx a
     ctx' = g ctx b
     ss   = strans f g ctx'
-    go (Constructor a is sts)         = Constructor b (ss <$> is) (ss <$> sts)
-    go (MemberVarDecl a st i me)      = MemberVarDecl b st (ss i) (ss <$> me)
-    go (MemberMethDecl a st i is sts) = MemberMethDecl b st (ss i) (ss <$> is) (ss <$> sts)
+    go (Constructor    _ is sts)      = Constructor b (ss <$> is) (ss <$> sts)
+    go (MemberVarDecl  _ st i me)     = MemberVarDecl b st (ss i) (ss <$> me)
+    go (MemberMethDecl _ st i is sts) = MemberMethDecl b st (ss i) (ss <$> is) (ss <$> sts)
 
 stransEnumElt f g ctx (EnumElt a i e) = EnumElt b (ss i) (ss e)
   where
@@ -610,9 +603,9 @@ stransProp f g ctx p = go p
     b    = f ctx a
     ctx' = g ctx b
     ss   = strans f g ctx'
-    go (PropId a i)     = PropId b (ss i)
-    go (PropString a s) = PropString b s
-    go (PropNum a i)    = PropNum b i
+    go (PropId _ i)     = PropId b (ss i)
+    go (PropString _ s) = PropString b s
+    go (PropNum _ i)    = PropNum b i
 
 stransLvalue f g ctx lv = go lv
   where

@@ -7,9 +7,7 @@ module Language.Rsc.Pretty.Syntax (
   , renderExpression
 ) where
 
-import           Control.Applicative        ((<$>))
 import           Data.Maybe                 (catMaybes, fromMaybe)
-import qualified Language.Fixpoint.Types    as F
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty.Common
@@ -81,7 +79,7 @@ asBlock  f ss = lbrace $+$ nest indentationLevel (f ss) $$ rbrace
 ssAsBlock :: [Statement a] -> Doc
 ssAsBlock = asBlock stmtList
 
-classEltAsBlock = asBlock classEltList
+-- classEltAsBlock = asBlock classEltList
 
 ppId (Id _ str) = text str
 
@@ -133,7 +131,7 @@ ppStatement s = case s of
   ContinueStmt _ Nothing    -> Just $ text "continue" <> semi
   ContinueStmt _ (Just lbl) -> Just $ text "continue" <+> ppId lbl <> semi
   LabelledStmt _ label s    -> Just $ ppId label <> colon $$ pp s
-  ForInStmt p init e body   -> Just $ text "for" <+>
+  ForInStmt _ init e body   -> Just $ text "for" <+>
                                       parens (ppForInInit init <+> text "in" <+> ppExpression True e) $+$
                                       pp body
   ForStmt _ init incr test body
@@ -162,11 +160,11 @@ ppStatement s = case s of
                                           parens (cat $ punctuate comma (map ppId args)))
                                         (stmtList body)
 
-  FunctionStmt _ name args Nothing
+  FunctionStmt _ _ _ Nothing
                             -> Nothing
   ClassStmt _ name body     -> Just $ headerWithBlock (text "class"  <+> ppId name) (classEltList body)
   ModuleStmt _ name body    -> Just $ headerWithBlock (text "module" <+> ppId name) (stmtList     body)
-  InterfaceStmt _ x         -> Nothing
+  InterfaceStmt _ _         -> Nothing
   EnumStmt _ name elts      -> Just $ text "enumeration" <+> ppId name <+>
                                       braces (cat $ punctuate comma (map ppEnumElt elts))
 

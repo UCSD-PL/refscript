@@ -7,7 +7,6 @@ module Language.Rsc.Pretty.Errors where
 import           Debug.Trace
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Types.Errors
-import           Language.Fixpoint.Types.PrettyPrint
 import           Language.Rsc.Locations
 import           Language.Rsc.Pretty.Common
 import           System.Console.ANSI

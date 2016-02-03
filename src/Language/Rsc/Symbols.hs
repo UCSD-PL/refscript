@@ -28,7 +28,7 @@ module Language.Rsc.Symbols (
 
 import           Control.Exception            (throw)
 import           Data.Generics
-import           Data.List                    (find, findIndex, partition)
+import           Data.List                    (findIndex)
 import qualified Data.Map.Strict              as M
 import           Data.Maybe                   (fromMaybe)
 import           Language.Fixpoint.Misc       (safeZip)
@@ -39,12 +39,10 @@ import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
-import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Text.PrettyPrint.HughesPJ
 
 
 
@@ -78,8 +76,8 @@ mkArgumentsSI :: (F.Reftable r, IsLocated l) => l -> [RType r] -> SymInfo r
 mkArgumentsSI l ts = SI getArgSym Local RdOnly Initialized
                    $ TFun [] (immObjectLitTy [pLen] [tLen]) fTop
   where
-    ts'            = take k ts
-    ps'            = PropNum l . toInteger <$> [0 .. k-1]
+    -- ts'            = take k ts
+    -- ps'            = PropNum l . toInteger <$> [0 .. k-1]
     pLen           = PropId l $ lenId l
     tLen           = tNum `strengthen` rLen
     rLen           = F.ofReft $ F.uexprReft k
@@ -127,7 +125,7 @@ symbols s = SL [ (fSrc <$> n, k, SI (F.symbol n) loc a i t)
 --------------------------------------------------------------------------------
 symbols' :: F.Reftable r => [Statement (AnnR r)] -> [(Id SrcSpan, Assignability)]
 --------------------------------------------------------------------------------
-symbols' s = [ (fSrc <$> n, a) | (n,l,k,a,i) <- hoistBindings s ]
+symbols' s = [ (fSrc <$> n, a) | (n,_,_,a,_) <- hoistBindings s ]
 
 
 --------------------------------------------------------------------------------
@@ -164,7 +162,7 @@ mergeSymInfo :: F.Reftable r => F.Symbol -> (SyntaxKind, SymInfo r)
                                          -> (SyntaxKind, SymInfo r)
                                          -> (SyntaxKind, SymInfo r)
 --------------------------------------------------------------------------------
-mergeSymInfo x (k1, SI m1 l1 a1 i1 t1) (k2, SI m2 l2 a2 i2 t2)
+mergeSymInfo _ (k1, SI m1 l1 a1 i1 t1) (k2, SI m2 l2 a2 i2 t2)
   | m1 == m2, l1 == l2, k1 == k2, a1 == a2, i1 == i2
   = (k1, SI m1 l1 a1 i1 (t1 `mappend` t2))
 mergeSymInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x

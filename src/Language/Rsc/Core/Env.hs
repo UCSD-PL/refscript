@@ -101,9 +101,11 @@ envFromList           = envFromList_ f
                         | otherwise = γ
 
 
-envFromListConcat l = envFromList_ f l
+envFromListConcat :: (Monoid t, F.Symbolic a, IsLocated a)
+                  => [(a, t)] -> F.SEnv (Located t)
+envFromListConcat  = envFromList_ f
   where
-    f γ i (l,t) (l',t') = envAdd i (t `mappend` t') γ
+    f γ i a a'     = envAdd i (snd a `mappend` snd a') γ
 
 -- Allows duplicates in list -- last one in list will be used
 envFromList'      :: (IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t

@@ -3,23 +3,19 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 
-import           Control.Applicative            ((<$>), (<*>))
 import           Control.Exception              (catch)
 import           Control.Monad
 import           Data.Aeson                     (eitherDecode)
 import           Data.Aeson.Types               hiding (Error, Parser, parse)
 import qualified Data.ByteString.Lazy.Char8     as B
 import           Data.List                      (nub, sort)
-import           Data.Monoid
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Solver       (resultExit)
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Utils.Files
 import           Language.Rsc.CmdLine
-import           Language.Rsc.Core.EitherIO
 import           Language.Rsc.Core.Files
-import           Language.Rsc.Errors
 import qualified Language.Rsc.Liquid.Checker    as LQ
 import qualified Language.Rsc.Liquid.Types      as L
 import           Language.Rsc.Misc              (mapi, single, (<//>))
@@ -169,5 +165,5 @@ renderAnnotations srcFile res (SomeAnn ann sol)
     where
        jsonFile = extFileName Json  srcFile
        vimFile  = extFileName Annot (srcFile ++ ".vim")
-       annFile  = extFileName Annot srcFile
+       -- annFile  = extFileName Annot srcFile
        ann'     = sol ann

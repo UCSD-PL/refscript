@@ -13,7 +13,6 @@ module Language.Rsc.Lookup (
   , extractCtor
   ) where
 
-import           Control.Applicative            ((<$>))
 import           Data.Either                    (rights)
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors

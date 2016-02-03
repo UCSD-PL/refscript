@@ -16,13 +16,12 @@ module Language.Rsc.TypeUtilities (
     idTy, idTys
   , castTy
   , arrayLitTy
-  , objLitTy
+  -- , objLitTy
   , mkCondExprTy
   , adjustCtxMut
 
   ) where
 
-import           Data.List                     (unzip4)
 import qualified Language.Fixpoint.Types       as F
 import           Language.Fixpoint.Types.Names (symbolString)
 import           Language.Rsc.AST
@@ -36,7 +35,7 @@ import           Language.Rsc.Pretty
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 
-type PPRE r = (ExprReftable F.Expr r, ExprReftable Int r, PPR r)
+-- type PPRE r = (ExprReftable F.Expr r, ExprReftable Int r, PPR r)
 
 -- | setProp<A, M extends Mutable>(o: { f[M]: A }, x: A) => A
 --
@@ -92,7 +91,7 @@ arrayLitTy l g@(envCHA -> c) e (Just t0) n
   | otherwise
   = return $ Left $ errorArrayLitType l e t0
 
-arrayLitTy l g e Nothing n = mkUniqueArrTy l g n
+arrayLitTy l g _ Nothing n = mkUniqueArrTy l g n
 
 -- | mkIArray :: <A <: T>(x1: A, ... , xn: A) => {v: IArray<A> | len v = n }
 --
@@ -131,49 +130,49 @@ mkArrTy l g n = safeEnvFindTy l g al >>= go
     bs x_ t_ = [ B (tox x_ i) t_ | i <- [1..n] ]
     tox x    = F.symbol . ((symbolString x) ++) . show
 
---------------------------------------------------------------------------------
-objLitTy :: (PPRE r, IsLocated l, CheckingEnvironment r t)
-         => l -> t r -> [Prop l] -> Maybe (RType r) -> ([Maybe (RType r)], RType r)
---------------------------------------------------------------------------------
-objLitTy l g ps to = (ct, mkFun (concat bbs, bs, TObj (tmsFromList et) fTop))
-  where
-    (ct, bbs, bs, et) = unzip4 (map propToBind ps)
-    propToBind p      = propParts l (F.symbol p) (F.lookupSEnv (F.symbol p) ctxTys)
-    ctxTys            = maybe mempty (i_mems . typeMembersOfType (envCHA g)) to
-
---------------------------------------------------------------------------------
-propParts :: (PPRE r, IsLocated l)
-          => l -> F.Symbol -> Maybe (TypeMember r)
-          -> (Maybe (RType r), [BTVar r], Bind r, TypeMember r)
-          --  ^^^^^^^^^^^^^^^
-          --  Contextual type
-          --
---------------------------------------------------------------------------------
-propParts l p (Just (FI _ o m t)) = (Just t, [abtv], b, ot)
-  where
-    loc   = srcPos l
-    aSym  = F.symbol "A" `F.suffixSymbol` p     -- TVar symbol
-    at    = TV  aSym loc
-    abtv  = BTV aSym loc Nothing
-    b     = B p ty
-    -- ot    = FI p o m ty
-    ot    = FI p o tUQ ty
-    ty    = TVar at fTop
-
-propParts l p Nothing = (Nothing, [abtv, pbtv], b, ot)
-  where
-    loc   = srcPos l
-    aSym  = F.symbol "A" `F.suffixSymbol` p
-    pSym  = F.symbol "M" `F.suffixSymbol` p
-    at    = TV  aSym loc
-    abtv  = BTV aSym loc Nothing
-    pt    = TV  pSym loc
-    pbtv  = BTV pSym loc Nothing
-    -- pty   = TVar pt fTop
-    b     = B p ty
-    -- ot    = FI p Req pty ty
-    ot    = FI p Req tUQ ty
-    ty    = TVar at fTop
+-- --------------------------------------------------------------------------------
+-- objLitTy :: (PPRE r, IsLocated l, CheckingEnvironment r t)
+--          => l -> t r -> [Prop l] -> Maybe (RType r) -> ([Maybe (RType r)], RType r)
+-- --------------------------------------------------------------------------------
+-- objLitTy l g ps to = (ct, mkFun (concat bbs, bs, TObj (tmsFromList et) fTop))
+--   where
+--     (ct, bbs, bs, et) = unzip4 (map propToBind ps)
+--     propToBind p      = propParts l (F.symbol p) (F.lookupSEnv (F.symbol p) ctxTys)
+--     ctxTys            = maybe mempty (i_mems . typeMembersOfType (envCHA g)) to
+--
+-- --------------------------------------------------------------------------------
+-- propParts :: (PPRE r, IsLocated l)
+--           => l -> F.Symbol -> Maybe (TypeMember r)
+--           -> (Maybe (RType r), [BTVar r], Bind r, TypeMember r)
+--           --  ^^^^^^^^^^^^^^^
+--           --  Contextual type
+--           --
+-- --------------------------------------------------------------------------------
+-- propParts l p (Just (FI _ o m t)) = (Just t, [abtv], b, ot)
+--   where
+--     loc   = srcPos l
+--     aSym  = F.symbol "A" `F.suffixSymbol` p     -- TVar symbol
+--     at    = TV  aSym loc
+--     abtv  = BTV aSym loc Nothing
+--     b     = B p ty
+--     -- ot    = FI p o m ty
+--     ot    = FI p o tUQ ty
+--     ty    = TVar at fTop
+--
+-- propParts l p Nothing = (Nothing, [abtv, pbtv], b, ot)
+--   where
+--     loc   = srcPos l
+--     aSym  = F.symbol "A" `F.suffixSymbol` p
+--     pSym  = F.symbol "M" `F.suffixSymbol` p
+--     at    = TV  aSym loc
+--     abtv  = BTV aSym loc Nothing
+--     pt    = TV  pSym loc
+--     pbtv  = BTV pSym loc Nothing
+--     -- pty   = TVar pt fTop
+--     b     = B p ty
+--     -- ot    = FI p Req pty ty
+--     ot    = FI p Req tUQ ty
+--     ty    = TVar at fTop
 
 
 mkCondExprTy l g t

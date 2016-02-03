@@ -12,16 +12,13 @@
 
 module Language.Rsc.Parser.Types where
 
-import           Control.Applicative            ((*>), (<$>), (<*>))
 import           Control.Monad
 import           Data.Char                      (isLower)
 import           Data.Foldable                  (concat)
 import           Data.Generics                  hiding (Generic)
 import qualified Data.HashSet                   as S
-import           Data.List                      (foldl')
-import           Data.Maybe                     (catMaybes, maybeToList)
+import           Data.Maybe                     (catMaybes)
 import           Data.Monoid
-import qualified Data.Text                      as DT
 import           Language.Fixpoint.Parse
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
@@ -33,7 +30,6 @@ import           Language.Rsc.Options
 import           Language.Rsc.Parser.Common
 import           Language.Rsc.Parser.Lexer
 import           Language.Rsc.Pretty
-import           Language.Rsc.Transformations
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Prelude                        hiding (concat, mapM)

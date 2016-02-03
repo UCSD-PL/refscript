@@ -15,31 +15,23 @@ module Language.Rsc.Module (
 
 ) where
 
-import           Control.Monad                   (liftM, void)
+import           Control.Monad                (liftM, void)
 import           Data.Default
 import           Data.Generics
-import           Data.List                       (find, findIndex, partition)
-import           Data.Maybe                      (fromMaybe)
-import           Language.Fixpoint.Misc          (intersperse, safeZip)
-import qualified Language.Fixpoint.Types         as F
+import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc               (concatMapM, single)
+import           Language.Rsc.Misc            (concatMapM, single)
 import           Language.Rsc.Names
-import           Language.Rsc.Pretty.Annotations
 import           Language.Rsc.Pretty.Common
-import           Language.Rsc.Pretty.Errors
-import           Language.Rsc.Pretty.Symbols
 import           Language.Rsc.Program
 import           Language.Rsc.Symbols
 import           Language.Rsc.Traversals
-import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Text.PrettyPrint.HughesPJ
 
 --------------------------------------------------------------------------------
 -- | Modules

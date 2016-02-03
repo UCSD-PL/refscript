@@ -26,18 +26,10 @@ module Language.Rsc.Environment (
 
 ) where
 
-import           Control.Applicative            ((<$>))
-import           Control.Exception              (throw)
 import           Data.Default
-import           Data.Generics
-import qualified Data.List                      as L
-import           Data.Maybe                     (fromMaybe)
-import           Language.Fixpoint.Misc         (safeZip)
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Types.Names
-import           Language.Rsc.Annotations
-import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
@@ -46,11 +38,8 @@ import           Language.Rsc.Module
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Symbols
-import           Language.Rsc.Traversals
-import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Text.PrettyPrint.HughesPJ
 
 
 -------------------------------------------------------------------------------

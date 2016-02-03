@@ -21,26 +21,17 @@ module Language.Rsc.Visitor
     , foldStmts
     ) where
 
-import           Control.Applicative
-import           Control.Exception            (throw)
-import           Control.Monad.Trans.Class    (lift)
-import           Control.Monad.Trans.State    (StateT, execState, modify, runState, runStateT)
-import           Data.Functor.Identity        (Identity)
-import qualified Data.List                    as L
-import           Data.Maybe                   (catMaybes, fromMaybe, maybeToList)
-import           Data.Monoid
-import qualified Data.Traversable             as T
-import qualified Language.Fixpoint.Types      as F
-import           Language.Rsc.Annotations     hiding (Annot, err)
+import           Control.Exception         (throw)
+import           Control.Monad.Trans.Class (lift)
+import           Control.Monad.Trans.State (StateT, execState, modify, runState, runStateT)
+import           Data.Functor.Identity     (Identity)
+import qualified Data.Traversable          as T
 import           Language.Rsc.AST
-import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc            (mapSndM)
+import           Language.Rsc.Misc         (mapSndM)
 import           Language.Rsc.Names
 import           Language.Rsc.Program
-import           Language.Rsc.Typecheck.Types
-import           Language.Rsc.Types
 
 
 --------------------------------------------------------------------------------

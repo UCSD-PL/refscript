@@ -14,10 +14,8 @@ module Language.Rsc.Core.Files (
   )
   where
 
-import           Control.Applicative
-import           System.FilePath
-
 import           Paths_refscript
+import           System.FilePath
 
 
 -------------------------------------------------------------------------------
@@ -30,7 +28,3 @@ getDomJSONPath     = (`replaceExtension` ".json") <$> getDomTSPath
 
 getTSBindPath      = getDataFileName "./ext/tsc-bin/built/local/tsc-refscript.js"
 
-
-
-getPrimsTSPath     = getDataFileName "include/rsc/prims.ts"
-getPrimsJSONPath   = (`replaceExtension` ".json") <$> getPrimsTSPath

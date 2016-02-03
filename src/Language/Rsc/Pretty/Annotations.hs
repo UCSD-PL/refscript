@@ -2,7 +2,6 @@
 
 module Language.Rsc.Pretty.Annotations where
 
-import           Control.Applicative        ((<$>))
 import qualified Data.IntMap.Strict         as I
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types    as F
@@ -38,12 +37,12 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (MemberAnn m@MI{})  = text "Method Ann"   <+> pp (m_ty m)
   pp (InterfaceAnn _)    = text "UNIMPLEMENTED:pp:InterfaceAnn"
   pp (ClassAnn _ _)      = text "UNIMPLEMENTED:pp:ClassAnn"
-  pp (ModuleAnn l s)     = text "module"       <+> pp s
+  pp (ModuleAnn _ s)     = text "module"       <+> pp s
   pp (EnumAnn s)         = text "enum"         <+> pp s
   pp (BypassUnique)      = text "BypassUnique"
 
 instance (F.Reftable r, PP r) => PP (AnnR r) where
-  pp (FA _ s fs) = vcat $ map pp fs
+  pp (FA _ _ fs) = vcat $ map pp fs
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
   pp             = vcat . (ppB <$>) . I.toList

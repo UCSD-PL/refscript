@@ -2,26 +2,24 @@
 
 module Language.Rsc.Liquid.Alias (expandAliases) where
 
-import           Control.Applicative          ((<$>))
 import           Control.Monad
 import           Control.Monad.State
 import           Data.Generics
 import           Data.Maybe
+import qualified Language.Fixpoint.Types         as F
 import           Language.Fixpoint.Types.Errors
-import qualified Language.Fixpoint.Types      as F
-import qualified Language.Fixpoint.Types.Visitor    as V
+import qualified Language.Fixpoint.Types.Visitor as V
 import           Language.Rsc.Annotations
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
-import           Language.Rsc.Liquid.Types    ()
+import           Language.Rsc.Liquid.Types       ()
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Program
-import qualified Language.Rsc.Typecheck.Subst as S
+import qualified Language.Rsc.Typecheck.Subst    as S
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 
-import           Language.Rsc.Pretty
 
 -- pe'
 -- te' [using pe']

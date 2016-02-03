@@ -6,29 +6,20 @@
 
 module Language.Rsc.Typecheck.Unify (unifys) where
 
-import           Control.Applicative                ((<$>))
 import           Control.Monad                      (foldM)
-import           Data.Either                        (rights)
 import           Data.Function                      (on)
-import           Data.Generics
 import qualified Data.HashMap.Strict                as HM
 import qualified Data.HashSet                       as S
 import qualified Data.List                          as L
-import qualified Data.Map.Strict                    as M
-import           Data.Maybe                         (maybeToList)
-import           Data.Monoid
-import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Types.Errors
-import           Language.Rsc.Annotations
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc                  (mapPair)
-import           Language.Rsc.Pretty
+import           Language.Rsc.Pretty                ()
 import           Language.Rsc.Typecheck.Environment
-import           Language.Rsc.Typecheck.Sub
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
@@ -40,13 +31,8 @@ import           Language.Rsc.Types
 -----------------------------------------------------------------------------
 
 -----------------------------------------------------------------------------
-unify :: (Unif r)
-      => SrcSpan
-      -> TCEnv r
-      -> RSubst r
-      -> RType r
-      -> RType r
-      -> Either Error (RSubst r)
+unify :: (Unif r) => SrcSpan -> TCEnv r -> RSubst r
+                  -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 
 unify _ _ θ t1 t2 | any isTBot [t1, t2] = return θ
@@ -125,7 +111,6 @@ unifyUnions l γ θ t1 t2
     (t1s, t2s)   = mapPair bkUnion (t1, t2)
     (v1s,c1s)    = L.partition isTVar t1s
     (v2s,c2s)    = L.partition isTVar t2s
-    clc1s        = filter
     (c1s', c2s') = unzip [ (c1, c2) | c1 <- c1s, c2 <- c2s, c1 `match` c2 ]
     unmatched1   = [ c1 | c1 <- c1s, not $ any (match c1) c2s, nonTriv c1 ]
     unmatched2   = [ c2 | c2 <- c2s, not $ any (match c2) c1s, nonTriv c2 ]

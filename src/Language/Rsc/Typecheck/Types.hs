@@ -44,7 +44,7 @@ module Language.Rsc.Typecheck.Types (
 
   --   # Tests
   , isTPrim, isTAny, isTTop, isTUndef, isTUnion, isTStr, isTBool, isBvEnum, isTVar, maybeTObj
-  , isTNull, isTVoid, isTFun, isArrayType, isTBot
+  , isTNull, isTVoid, isTFun, isArrayType, isTBot, isTNum, isBV32
 
 
   --   # Operations
@@ -70,21 +70,17 @@ module Language.Rsc.Typecheck.Types (
 
   ) where
 
-import           Control.Applicative             hiding (empty)
 import           Control.Arrow                   (second)
 import           Data.Default
 import qualified Data.List                       as L
-import           Data.Maybe                      (fromMaybe, maybeToList)
-import           Data.Monoid                     hiding ((<>))
+import           Data.Maybe                      (maybeToList)
 import           Data.Typeable                   ()
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Smt.Bitvector as BV
 import qualified Language.Fixpoint.Types         as F
-import           Language.Fixpoint.Types.Names   (symbolString)
 import           Language.Rsc.AST.Syntax
 import qualified Language.Rsc.Core.Env           as E
-import           Language.Rsc.Locations
-import           Language.Rsc.Misc               (mapFst, mapSnd3)
+import           Language.Rsc.Misc               (mapSnd3)
 import           Language.Rsc.Names
 import           Language.Rsc.Types
 import           Text.Parsec.Pos                 (initialPos)
@@ -309,7 +305,7 @@ maybeTObj (TAll _ t) = maybeTObj t
 maybeTObj (TOr ts _) = any maybeTObj ts
 maybeTObj _          = False
 
-isTFun (TFun _ _ _)  = True
+isTFun  TFun{}       = True
 isTFun (TAnd ts)     = all isTFun $ snd <$> ts
 isTFun (TAll _ t)    = isTFun t
 isTFun _             = False
@@ -404,21 +400,21 @@ tErr    = tVoid
 -- | Object literal types
 ---------------------------------------------------------------------------------
 
--- TODO: Avoid capture
----------------------------------------------------------------------------------
-freshBTV :: (F.Reftable r, IsLocated l, Show a)
-         => l -> F.Symbol -> Maybe (RTypeQ q r) -> a -> (BTVarQ q r, RTypeQ q r)
----------------------------------------------------------------------------------
-freshBTV l s b n  = (bv,t)
-  where
-    i             = F.intSymbol s n
-    bv            = BTV i (srcPos l) b
-    v             = TV i (srcPos l)
-    t             = TVar v fTop
+-- -- TODO: Avoid capture
+-- ---------------------------------------------------------------------------------
+-- freshBTV :: (F.Reftable r, IsLocated l, Show a)
+--          => l -> F.Symbol -> Maybe (RTypeQ q r) -> a -> (BTVarQ q r, RTypeQ q r)
+-- ---------------------------------------------------------------------------------
+-- freshBTV l s b n  = (bv,t)
+--   where
+--     i             = F.intSymbol s n
+--     bv            = BTV i (srcPos l) b
+--     v             = TV i (srcPos l)
+--     t             = TVar v fTop
 
 instance F.Symbolic (LValue a) where
   symbol (LVar _ x) = F.symbol x
-  symbol lv         = F.symbol "DummyLValue"
+  symbol _          = F.symbol "DummyLValue"
 
 instance F.Symbolic (Prop a) where
   symbol (PropId _ (Id _ x)) = F.symbol x -- TODO $ "propId_"     ++ x

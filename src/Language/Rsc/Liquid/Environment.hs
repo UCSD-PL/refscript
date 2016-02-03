@@ -157,7 +157,7 @@ checkSyms l m g ok x t = efoldRType h f F.emptySEnv [] t
 -------------------------------------------------------------------------------
 initClassInstanceEnv :: TypeSig F.Reft -> CGEnv -> CGEnv
 -------------------------------------------------------------------------------
-initClassInstanceEnv sig@(TS _ (BGen nm bs) _) γ =
+initClassInstanceEnv (TS _ (BGen _ bs) _) γ =
   γ { cge_bounds = envAdds bts (cge_bounds γ) }
   where
     bts = [(s,t) | BTV s _ (Just t) <- bs]
@@ -179,12 +179,6 @@ initClassMethEnv m (TS _ (BGen nm bs) _) γ
       }
   where
     tThis = TRef (Gen nm (map btVar bs)) fTop
-
-
---------------------------------------------------------------------------------
-envPushContext    :: (CallSite a) => a -> CGEnv -> CGEnv
---------------------------------------------------------------------------------
-envPushContext c g = g { cge_ctx = pushContext c (cge_ctx g) }
 
 
 data Cast = CNo | CDead [Error] | CType Type
@@ -309,15 +303,11 @@ envAddGroup l msg ks g xts
         return       $ g { cge_names = envAdds (zip xs es)   $ cge_names g
                          , cge_fenv  = F.insertsIBindEnv ids $ cge_fenv  g }
   where
-    errors           = [] -- TODO concat (zipWith (checkSyms l msg g ks) xs ts)
+    errors           = concat (zipWith (checkSyms l msg g ks) xs ts)
     (xs,ls,as,is,ts) = L.unzip5 [(x,loc,a,i,t) | SI x loc a i t <- xts ]
 
     inv Initialized  = addInvariant g
     inv _            = return
-
-    toIBindEnv       = (`F.insertsIBindEnv` F.emptyIBindEnv)
-
-
 
 
 --------------------------------------------------------------------------------
@@ -460,7 +450,7 @@ freshTyInst l g bs τs tbody
        θ     <- pure (fromList (zip αs ts))
        return $ apply θ tbody
   where
-    ff (t, BTV v _ (Just b)) = subType l Nothing g t b
+    ff (t, BTV _ _ (Just b)) = subType l Nothing g t b
     ff (_, BTV _ _ Nothing ) = return ()
     αs        = btvToTV <$> bs
 
@@ -479,9 +469,9 @@ freshTyPhis l g xs τs
 
 -- | Instantiate Fresh Type (at Phi-site)
 --------------------------------------------------------------------------------
-freshTyPhis' :: AnnLq -> CGEnv -> [Id AnnLq] -> [SymInfo ()] -> CGM (CGEnv, [RefType])
+freshTyPhis' :: AnnLq -> CGEnv -> [SymInfo ()] -> CGM (CGEnv, [RefType])
 --------------------------------------------------------------------------------
-freshTyPhis' l g xs es
+freshTyPhis' l g es
   = do  ts' <- mapM (freshTy "freshTyPhis") ts
         g'  <- cgEnvAdds l "freshTyPhis" (L.zipWith5 SI xs ls as is ts') g
         _   <- mapM (wellFormed l g') ts'

@@ -1,9 +1,4 @@
 {-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE DeriveDataTypeable        #-}
-{-# LANGUAGE DeriveFoldable            #-}
-{-# LANGUAGE DeriveFunctor             #-}
-{-# LANGUAGE DeriveGeneric             #-}
-{-# LANGUAGE DeriveTraversable         #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE IncoherentInstances       #-}
@@ -12,22 +7,16 @@
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE UndecidableInstances      #-}
-{-# LANGUAGE ViewPatterns              #-}
 
 module Language.Rsc.Pretty.Types (
 
 ) where
 
-import           Control.Applicative               ((<$>))
-import           Data.Graph.Inductive.Graph        hiding (empty)
-import           Data.Graph.Inductive.PatriciaTree
-import qualified Data.HashMap.Strict               as HM
-import qualified Data.Map.Strict                   as M
-import           Language.Fixpoint.Misc            (intersperse)
-import qualified Language.Fixpoint.Types           as F
-import           Language.Rsc.AST
+import qualified Data.HashMap.Strict          as HM
+import qualified Data.Map.Strict              as M
+import           Language.Fixpoint.Misc       (intersperse)
+import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Pretty.Common
-import           Language.Rsc.Pretty.Syntax
 import           Language.Rsc.Program
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
@@ -35,7 +24,6 @@ import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
 
 angles p = char '<' <> p <> char '>'
-ppHMap p = map (p . snd) . M.toList
 
 instance PP Bool where
   pp True   = text "True"
@@ -73,8 +61,8 @@ instance (F.Reftable r, PP r) => PP (TypeMembersQ q r) where
       ppSIdx sidx $+$
       ppNIdx nidx
 
-ppMem  = sep . map (\(x, f) ->                 pp f <> semi) . F.toListSEnv
-ppSMem = sep . map (\(x, f) -> pp "static" <+> pp f <> semi) . F.toListSEnv
+ppMem  = sep . map (\(_, f) ->                 pp f <> semi) . F.toListSEnv
+ppSMem = sep . map (\(_, f) -> pp "static" <+> pp f <> semi) . F.toListSEnv
 
 ppCall optT | Just t <- optT = pp t              <> semi | otherwise = empty
 ppCtor optT | Just t <- optT = pp "new" <+> pp t <> semi | otherwise = empty
@@ -138,7 +126,6 @@ instance PP Assignability where
   pp ForeignLocal = text "ForeignLocal"
   pp WriteGlobal  = text "WriteGlobal"
   pp ReturnVar    = text "ReturnVar"
-  pp _            = text "ErrorAssignability"
 
 instance (PP r, F.Reftable r) => PP (TypeDeclQ q r) where
   pp (TD s m) = pp s <+> lbrace $+$ nest 4 (pp m) $+$ rbrace
@@ -158,19 +145,6 @@ ppExtends (n:_) = text "extends" <+> pp n
 ppImplements [] = text ""
 ppImplements ts = text "implements" <+> intersperse comma (pp <$> ts)
 
-mutSym (TRef (F.symbol -> s) _)
-  | s == F.symbol "Mutable"       = Just "_MU_"
-  | s == F.symbol "UniqueMutable" = Just "_UM_"
-  | s == F.symbol "Immutable"     = Just "_IM_"
-  | s == F.symbol "ReadOnly"      = Just "_RO_"
-  | s == F.symbol "AssignsFields" = Just "_AF"
-
-mutSym _ = Nothing
-
-ppMut t@TVar{} = pp t
-ppMut t        | Just s <- mutSym t = pp s
-               | otherwise          = pp "_??_"
-
 instance PP EnumDef where
   pp (EnumDef n m) = pp n <+> braces (pp m)
 
@@ -180,6 +154,7 @@ instance PP IContext where
 instance PP Initialization where
   pp Initialized   = text "init"
   pp Uninitialized = text "non-init"
+  pp InitUnknown   = text "init-unknown"
 
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body

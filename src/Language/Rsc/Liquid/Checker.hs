@@ -9,16 +9,13 @@
 -- | Top Level for Refinement Type checker
 module Language.Rsc.Liquid.Checker (verifyFile) where
 
-import           Control.Applicative             (pure, (<$>))
-import           Control.Arrow                   (first, (***))
-import           Control.Exception               (throw)
+import           Control.Arrow                   (first)
 import           Control.Monad
 import           Data.Function                   (on)
 import qualified Data.HashMap.Strict             as HM
 import           Data.List                       (sortBy)
-import           Data.Maybe                      (catMaybes, fromJust, fromMaybe)
+import           Data.Maybe                      (catMaybes, fromMaybe)
 import qualified Data.Text                       as T
-import qualified Data.Traversable                as T
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Solver        (solve)
 import qualified Language.Fixpoint.Types         as F
@@ -44,31 +41,27 @@ import           Language.Rsc.Locations
 import           Language.Rsc.Lookup
 import           Language.Rsc.Misc
 import           Language.Rsc.Names
-import           Language.Rsc.Options
 import           Language.Rsc.Parser
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.SSA.SSA
 import           Language.Rsc.Symbols
 import qualified Language.Rsc.SystemUtils        as A
-import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Checker  (typeCheck)
 import           Language.Rsc.Typecheck.Sub
-import           Language.Rsc.Typecheck.Subst    (apply, fromList)
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Language.Rsc.TypeUtilities
 import           System.Console.CmdArgs.Default
 import           System.FilePath.Posix           (dropExtension)
-import           Text.Printf
+-- import           Text.Printf
 
 import qualified Data.Foldable                   as FO
 import           Text.PrettyPrint.HughesPJ       hiding (first)
 
-import           Debug.Trace                     hiding (traceShow)
+-- import           Debug.Trace                     hiding (traceShow)
 
 type Result = (A.UAnnSol RefType, F.FixResult Error)
-type Err a  = Either (F.FixResult Error) a
 
 --------------------------------------------------------------------------------
 verifyFile :: Config -> FilePath -> [FilePath] -> IO Result
@@ -76,9 +69,8 @@ verifyFile :: Config -> FilePath -> [FilePath] -> IO Result
 verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
   do  p     <- announce "Parse" $ EitherIO   $ parseRscFromFiles fs
       cfg'  <- liftIO           $ withPragmas cfg (pOptions p)
-      _     <- pure             $ checkTypeWF p
+      -- _     <- pure             $ checkTypeWF p
       cha   <- liftEither       $ mkCHA p
-      -- _   <- liftIO            $ dumpJS f cha "-parse" p
       ssa   <- announce "SSA"   $ EitherIO (ssaTransform p cha)
 
       cha0  <- liftEither       $ mkCHA ssa
@@ -93,19 +85,19 @@ verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
 
 announce s a = liftIO (startPhase Loud s) >> a
 
-(>>=>) :: IO (Either a b) -> (b -> IO c) -> IO (Either a c)
-act >>=> k = do
-  r <- act
-  case r of
-    Left l  -> return $  Left l -- (A.NoAnn, l)
-    Right x -> Right <$> k x
+-- (>>=>) :: IO (Either a b) -> (b -> IO c) -> IO (Either a c)
+-- act >>=> k = do
+--   r <- act
+--   case r of
+--     Left l  -> return $  Left l -- (A.NoAnn, l)
+--     Right x -> Right <$> k x
 
-eAct :: IO (Err a) -> IO a
-eAct m = do
-  x <- m
-  case x of
-    Left  l -> throw l
-    Right r -> return r
+-- eAct :: IO (Err a) -> IO a
+-- eAct m = do
+--   x <- m
+--   case x of
+--     Left  l -> throw l
+--     Right r -> return r
 
 
 -- | solveConstraint: solve with `ueqAllSorts` enabled.
@@ -454,7 +446,7 @@ consVarDecl :: CGEnv -> VarDecl AnnLq -> CGM (Maybe CGEnv)
 consVarDecl g (VarDecl _ x (Just e@FuncExpr{}))
   = (snd <$>) <$> consExpr g e (v_type <$> envFindTy x (cge_names g))
 
-consVarDecl g v@(VarDecl l x (Just e))
+consVarDecl g (VarDecl l x (Just e))
   = case envFindTy x (cge_names g) of
       -- Local (no type annotation)
       Nothing ->
@@ -600,7 +592,6 @@ consClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
     TS _ bgen _ = sig
     BGen nm bs  = bgen
     tThis       = TRef (Gen nm (map btVar bs)) fTop
-    idThis      = Id l "this"
     eThis       = SI thisSym Local RdOnly Initialized tThis
 
 --------------------------------------------------------------------------------
@@ -648,39 +639,39 @@ consExpr g (Cast_ l e) s
        tBot t = t `strengthen` F.bot (rTypeR t)
 
 -- | <T>e
-consExpr g ex@(Cast l e) s
+consExpr g ex@(Cast l e) _
   | [tc] <- [ ct | UserCast ct <- fFact l ]
   = consCall g l "Cast" [(e, Just tc)] (castTy tc)
   | otherwise
   = die $ bugNoCasts (srcPos l) ex
 
-consExpr g e@(IntLit l i) s
+consExpr g (IntLit l i) _
   = Just <$> cgEnvAddFresh "8" l (tNum `eSingleton` i) g
 
 -- Assuming by default 32-bit BitVector
-consExpr g e@(HexLit l x) s
+consExpr g (HexLit l x) _
   | Just e <- bitVectorValue x
   = Just <$> cgEnvAddFresh "9" l (tBV32 `strengthen` e) g
   | otherwise
   = Just <$> cgEnvAddFresh "10" l tBV32 g
 
-consExpr g e@(BoolLit l b) s
+consExpr g (BoolLit l b) _
   = Just <$> cgEnvAddFresh "11" l (pSingleton tBool b) g
 
-consExpr g e@(StringLit l x) s
+consExpr g (StringLit l x) _
   = Just <$> cgEnvAddFresh "12" l (tString `eSingleton` T.pack x) g
 
-consExpr g e@(NullLit l) s
+consExpr g (NullLit l) _
   = Just <$> cgEnvAddFresh "13" l tNull g
 
-consExpr g e@(ThisRef l) s
+consExpr g (ThisRef l) _
   = case envFindTyWithAsgn x g of
       Just _  -> return $ Just (x, g)
       Nothing -> cgError $ errorUnboundId (fSrc l) "this"
   where
     x = thisId l
 
-consExpr g e@(VarRef l x) s
+consExpr g (VarRef l x) _
   -- | undefined
   | F.symbol x == F.symbol "undefined"
   = Just <$> cgEnvAddFresh "0" l tUndef g
@@ -688,7 +679,7 @@ consExpr g e@(VarRef l x) s
   | Just (SI _ _ WriteGlobal _ t) <- tInfo
   = Just <$> cgEnvAddFresh "0" l t g
 
-  | Just (SI _ _ a _ t) <- tInfo
+  | Just (SI _ _ _ _ t) <- tInfo
   = do  addAnnot (srcPos l) x t
         Just <$> cgEnvAddFresh "cons VarRef" l t g
 
@@ -697,7 +688,7 @@ consExpr g e@(VarRef l x) s
   where
     tInfo = envFindTyWithAsgn x g
 
-consExpr g ex@(PrefixExpr l o e) s
+consExpr g (PrefixExpr l o e) _
   = do opTy <- cgSafeEnvFindTyM (prefixOpId o) g
        consCall g l o [(e,Nothing)] opTy
 
@@ -741,7 +732,7 @@ consExpr _ e@(CondExpr l _ _ _) Nothing
 -- | super(e1,..,en)
 consExpr g (CallExpr l (SuperRef _) _) _
   | Just thisT        <- cge_this g
-  , Just tSuper       <- getSuperType (envCHA g) thisT
+  , Just _ {-tSuper-} <- getSuperType (envCHA g) thisT
   = error "consExpr super(...) - UNIMPLEMENTED"
   -- = consCall g l "super" (FI Nothing ((,Nothing) <$> es)) ct
   | otherwise
@@ -763,11 +754,12 @@ consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
 
     -- Only support single members at the moment
     checkWithProp xR g_ (Right [(tR, m)]) = checkTM xR g_ tR m
+    checkWithProp _  _  (Right _)         = error "TODO: add case in checkWithProp Right _"
     checkWithProp _  _  (Left er)         = cgError er
 
     -- Check a single type member
-    checkTM _  g_ tR (FI _ Req _ ft) = consCall g_ l em (es `zip` nths) ft
-    checkTM _  g_ tR (FI f _ _ _)    = cgError (errorOptFunUnsup l f e)
+    checkTM _  g_ _  (FI _ Req _ ft) = consCall g_ l em (es `zip` nths) ft
+    checkTM _  _  _  (FI f _ _ _)    = cgError (errorOptFunUnsup l f e)
     checkTM xR g_ tR (MI _ Req mts)  =
       case getMutability (envCHA g_) tR of
         Just mR ->
@@ -775,6 +767,9 @@ consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
               [] -> cgError $ errorMethMutIncomp l em mts mR
               ts -> consCall g_ l em (es `zip` nths) (substThis xR (mkAnd ts))
         Nothing -> cgError $ errorNoMutAvailable l e tR
+
+    checkTM _ _ _ (MI _ Opt _) =
+      error "TODO: Add error message at checkTypeMember MI Opt"
 
 -- | e(es)
 --
@@ -788,7 +783,7 @@ consExpr g (CallExpr l e es) _
 --   Returns type: { v: _ | v = x.f }, if e => x and `f` is an immutable field
 --                 { v: _ | _       }, otherwise
 --
-consExpr g0 ef@(DotRef l e f) _
+consExpr g0 (DotRef l e f) _
   = mseq (consExpr g0 e Nothing) $ \(x, g1) -> do
       cgSafeEnvFindTyM x g1 >>= checkAccess g1 x . getProp l g1 f
 
@@ -803,14 +798,14 @@ consExpr g0 ef@(DotRef l e f) _
     checkAccess _ _ (Left e)   = cgError e
 
     -- The accessed type
-    fieldsTy g x tf   = tOr [ doField g x o m t | (_, FI _ o m t) <- tf ]
+    fieldsTy g x tf   = tOr [ doField g x m t | (_, FI _ _ m t) <- tf ]
 
-    doField g x o m t | isSubtype g m tIM = immFieldTy g x t
-                      | otherwise         = otherFieldTy g x t
+    doField g x m t | isSubtype g m tIM = immFieldTy x t
+                    | otherwise         = otherFieldTy x t
 
     -- XXX: Don't fTop here cause it breaks functions
-    immFieldTy   g x t = t `eSingleton` mkOffsetSym x f
-    otherFieldTy g x t = substThis x t
+    immFieldTy   x t = t `eSingleton` mkOffsetSym x f
+    otherFieldTy x t = substThis x t
 
     addWithOpt Opt = cgEnvAddFreshWithInit InitUnknown "DotRef" l
     addWithOpt Req = cgEnvAddFreshWithInit InitUnknown "DotRef" l
@@ -821,13 +816,11 @@ consExpr g0 ef@(DotRef l e f) _
 --
 --    TODO: TEnum
 --
-consExpr g e@(BracketRef l e1 e2) _
+consExpr g (BracketRef l e1 e2) _
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
-      t1    <- cgSafeEnvFindTyM x1 g'
       opTy  <- cgSafeEnvFindTyM (builtinOpId BIBracketRef) g'
-      traceTypePP l (ppshow e1 ++ " has type " ++ ppshow t1) $ consCall g' l BIBracketRef ([vr x1, e2] `zip` nths) opTy
+      consCall g' l BIBracketRef ([vr x1, e2] `zip` nths) opTy
   where
-    msg = "Support for dynamic access of enumerations"
     vr  = VarRef $ getAnnotation e1
 
 -- | e1[e2] = e3
@@ -845,7 +838,7 @@ consExpr g e@(ArrayLit l es) to
 
 -- | { f1: e1, ..., fn: en }
 --
-consExpr g e@(ObjectLit l pes) to
+consExpr g (ObjectLit l pes) to
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts      <- mapM (`cgSafeEnvFindTyM` g') xes
       t       <- pure (TObj (tmsFromList (zipWith toFI ps ts)) fTop)
@@ -857,7 +850,7 @@ consExpr g e@(ObjectLit l pes) to
                | otherwise             = Nothing
     lkup p     = F.lookupSEnv (F.symbol p) ctxTys
     ctxTys     = maybe mempty (i_mems . typeMembersOfType (envCHA g)) to
-    (ps , es)  = unzip pes
+    (ps , _)   = unzip pes
 
 -- | new C(e, ...)
 --
@@ -930,14 +923,14 @@ consCheckArgs :: PP a => AnnLq -> CGEnv -> a
 --------------------------------------------------------------------------------
 consCheckArgs l g fn ft ts xes
   = do  (rhs, rt) <- instantiateFTy l g fn xes ft
-        lhs       <- zipWithM  (instantiateTy l g fn) [1..] ts
+        lhs       <- mapM (instantiateTy l g fn) ts
         _         <- zipWithM_ (subType l Nothing g) lhs rhs
         Just     <$> cgEnvAddFresh "5" l rt g
 
 --------------------------------------------------------------------------------
-instantiateTy :: PP a => AnnLq -> CGEnv -> a -> Int -> RefType -> CGM RefType
+instantiateTy :: PP a => AnnLq -> CGEnv -> a -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-instantiateTy l g fn i (bkAll -> (βs, t))
+instantiateTy l g fn (bkAll -> (βs, t))
   = freshTyInst l g βs τs t
   where
     τs = envGetContextTypArgs 0 g l fn βs
@@ -1065,7 +1058,7 @@ envJoin' l g g1 g2
         -- up that one.
         -- TODO: Add a raw type check on t1 and t2
         --
-        (g',ls)   <- freshTyPhis' l g xls $ (\(SI x loc a i t) -> SI x loc a i (toType t)) <$> l1s
+        (g',ls)   <- freshTyPhis' l g $ (\(SI x loc a i t) -> SI x loc a i (toType t)) <$> l1s
         l1s'      <- mapM (`cgSafeEnvFindTyM` g1') xls
         l2s'      <- mapM (`cgSafeEnvFindTyM` g2') xls
         _         <- zipWithM_ (subType l Nothing g1') l1s' ls
@@ -1074,7 +1067,7 @@ envJoin' l g g1 g2
         -- GLOBALS:
         --
         let (xgs, gl1s, _) = unzip3 $ globals (zip3 xs t1s t2s)
-        (g'',gls) <- freshTyPhis' l g' xgs $ (\(SI x loc a i t) -> SI x loc a i (toType t)) <$> gl1s
+        (g'',gls) <- freshTyPhis' l g' $ (\(SI x loc a i t) -> SI x loc a i (toType t)) <$> gl1s
         gl1s'     <- mapM (`cgSafeEnvFindTyM` g1') xgs
         gl2s'     <- mapM (`cgSafeEnvFindTyM` g2') xgs
         _         <- zipWithM_ (subType l Nothing g1') gl1s' gls
@@ -1106,19 +1099,16 @@ locals  ts = [(x,s1,s2) | (x, s1@(SI _ Local WriteLocal _ _),
 globals ts = [(x,s1,s2) | (x, s1@(SI _ Local WriteGlobal Initialized _),
                               s2@(SI _ Local WriteGlobal Initialized _)) <- ts ]
 
--- partial ts = [(x,s2)    | (x, s2@(_, WriteGlobal, Uninitialized)) <- ts]
---           ++ [(x,s1)    | (x, s1@(_, WriteGlobal, Uninitialized)) <- ts]
 
-
-traceTypePP l msg act
-  = do  z <- act
-        case z of
-          Just (x,g) -> do  t <- cgSafeEnvFindTyM x g
-                            return $ Just $ trace (str x t) (x,g)
-          Nothing -> return Nothing
-  where
-    str x t = boldBlue (printf "\nTrace: [%s] %s\n" (ppshow (srcPos l)) (ppshow msg)) ++
-              printf "%s: %s" (ppshow x) (ppshow t)
+-- traceTypePP l msg act
+--   = do  z <- act
+--         case z of
+--           Just (x,g) -> do  t <- cgSafeEnvFindTyM x g
+--                             return $ Just $ trace (str x t) (x,g)
+--           Nothing -> return Nothing
+--   where
+--     str x t = boldBlue (printf "\nTrace: [%s] %s\n" (ppshow (srcPos l)) (ppshow msg)) ++
+--               printf "%s: %s" (ppshow x) (ppshow t)
 
 
 -- Local Variables:

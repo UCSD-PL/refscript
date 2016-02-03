@@ -25,25 +25,20 @@ module Language.Rsc.Typecheck.Sub (
   , ConversionResult (..)
   ) where
 
-import           Control.Applicative            ((<$>))
 import           Data.Default
-import           Data.Maybe                     (fromMaybe)
 import           Data.Monoid
 import           Data.Tuple                     (swap)
-import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Types        (Reftable, SEnv, differenceSEnv, intersectWithSEnv, toListSEnv)
+import           Language.Fixpoint.Types        (SEnv, differenceSEnv, intersectWithSEnv, toListSEnv)
 import           Language.Fixpoint.Types.Errors
-import           Language.Rsc.Annotations
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc              (mapPair)
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Text.PrettyPrint.HughesPJ      (text, vcat, ($+$), (<+>))
+import           Text.PrettyPrint.HughesPJ      (vcat, (<+>))
 
 type FE g r = (CheckingEnvironment r g, Functor g)
 type PPRE r = (ExprReftable Int r, PPR r)
@@ -137,7 +132,7 @@ castable _ γ c _ (TOr t1s _) t2
   = ConvWith (toType t2)
 
 -- XXX: Only non generic casting allowed at the moment
-castable l γ c _ t1@(TRef (Gen _ [_]) _) t2@(TRef (Gen _ [_]) _)
+castable _ γ c _ t1@(TRef (Gen _ [_]) _) t2@(TRef (Gen _ [_]) _)
   | not (mutRelated t1), not (mutRelated t2), isSubtypeC γ c t1 t2
   = ConvWith (toType t2)
 
@@ -152,12 +147,12 @@ subtype _ _ _ (TVar v1 _) (TVar v2 _)
   | v1 == v2  = EqT
 
 -- | Unfold bounded variables
-subtype l γ c t1@(TVar v1 _) t2
+subtype l γ c t1@(TVar _ _) t2
   | Just t1' <- envFindBoundOpt γ t1
   = subtype l γ c t1' t2
 
 -- | Primitive types
-subtype l γ _ (TPrim c1 _) (TPrim c2 _)
+subtype _ _ _ (TPrim c1 _) (TPrim c2 _)
   | c1 == c2   = EqT
   | c2 == TAny = SubT
   | c2 == TTop = SubT
@@ -232,8 +227,7 @@ subtypeObj l _ _ _ t2@(TRef (Gen _ []) _)
   = NoSub [bugMutPartInvalid l t2]
 
 -- | Type Reference subtyping
-subtypeObj l γ c t1@(TRef g1@(Gen x1 (m1:t1s)) r1)
-                 t2@(TRef    (Gen x2 (m2:t2s)) r2)
+subtypeObj l γ c (TRef g1@(Gen x1 (m1:t1s)) _) (TRef (Gen x2 (m2:t2s)) _)
   = case subtype l γ c m1 m2 of
       EqT     -> checkBaseType
       SubT    -> checkBaseType
@@ -359,12 +353,6 @@ subtypeCalls l γ = compareMaybe l γ subtypeFun errorIncompCallSigs
 subtypeCtors l γ = compareMaybe l γ subtype'   errorIncompCtorSigs
 subtypeSIdxs l γ = compareMaybe l γ subtype'   errorIncompSIdxSigs
 subtypeNIdxs l γ = compareMaybe l γ subtype'   errorIncompNIdxSigs
-
-t1 `eqMutability` t2 | isMU t1, isMU t2  = True
-                     | isIM t1, isIM t2  = True
-                     | isRO t1, isRO t2  = True
-                     | isUQ t1, isUQ t2  = True
-                     | otherwise         = False
 
 --------------------------------------------------------------------------------
 subtypeFun :: (PPRE r, FE g r, IsLocated l) => l -> g r -> RType r -> RType r -> SubtypingResult

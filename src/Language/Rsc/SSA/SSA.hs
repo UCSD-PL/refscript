@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
@@ -7,22 +6,16 @@
 
 module Language.Rsc.SSA.SSA (ssaTransform) where
 
-import           Control.Applicative            (pure, (<$>), (<*>))
-import           Control.Arrow                  ((***))
+import           Control.Arrow                ((***))
 import           Control.Monad
 import           Data.Data
 import           Data.Default
-import           Data.Generics.Aliases
-import           Data.Generics.Schemes
-import qualified Data.HashSet                   as S
-import qualified Data.IntMap.Strict             as IM
-import qualified Data.IntSet                    as I
-import qualified Data.List                      as L
-import           Data.Maybe                     (catMaybes, fromMaybe, listToMaybe)
-import           Data.Typeable                  ()
+import qualified Data.HashSet                 as S
+import qualified Data.IntMap.Strict           as IM
+import           Data.Maybe                   (catMaybes)
+import           Data.Typeable                ()
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types        as F
-import qualified Language.Fixpoint.Types.Errors as E
+import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
@@ -34,7 +27,6 @@ import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.SSA.SSAMonad
-import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Language.Rsc.Visitor
@@ -45,7 +37,7 @@ import           Language.Rsc.Visitor
 ssaTransform :: (PP r, F.Reftable r, Data r)
              => BareRsc r -> ClassHierarchy r -> IO (Either FError (SsaRsc r))
 ----------------------------------------------------------------------------------
-ssaTransform p cha = return $ execute p cha $ ssaRsc cha p
+ssaTransform p cha = return $ execute p $ ssaRsc cha p
 
 
 -- | `ssaRsc` Perfroms SSA transformation of the input program. The output
@@ -133,12 +125,12 @@ ssaStmt g (IfSingleStmt l b s)
   = ssaStmt g (IfStmt l b s (EmptyStmt l))
 
 -- if (e1 || e2) { s1 } else { s2 }
-ssaStmt g s@(IfStmt l (InfixExpr li OpLOr e1 e2) s1 s2)
-  = ssaExpandIfStmtInfixOr l li e1 e2 s1 s2 >>= ssaStmt g
+ssaStmt g (IfStmt l (InfixExpr _ OpLOr e1 e2) s1 s2)
+  = ssaExpandIfStmtInfixOr l e1 e2 s1 s2 >>= ssaStmt g
 
 -- if (e1 && e2) { s1 } else { s2 }
-ssaStmt g s@(IfStmt l (InfixExpr li OpLAnd e1 e2) s1 s2)
-  = ssaExpandIfStmtInfixAnd l li e1 e2 s1 s2 >>= ssaStmt g
+ssaStmt g (IfStmt l (InfixExpr _ OpLAnd e1 e2) s1 s2)
+  = ssaExpandIfStmtInfixAnd l e1 e2 s1 s2 >>= ssaStmt g
 
 -- if b { s1 } else { s2 }
 ssaStmt g (IfStmt l e s1 s2)
@@ -148,13 +140,13 @@ ssaStmt g (IfStmt l e s1 s2)
         (θ2, s2')    <- ssaWith θ (ssaStmt g) s2
         (phis, θ', φ1, φ2) <- envJoin l g θ1 θ2
         case θ' of
-          Just θ''   -> do  setSsaVars    $ θ''
+          Just θ''   -> do  setSsaVars      θ''
                             latest       <- catMaybes <$> mapM findSsaEnv phis
                             new          <- mapM (updSsaEnv g l) phis
                             addAnn l      $ PhiPost $ zip3 phis latest new
                             let stmt'     = prefixStmt l se
                                           $ IfStmt l e' (splice s1' φ1) (splice s2' φ2)
-                            return        $ (True,  stmt')
+                            return          (True,  stmt')
 
           Nothing    ->     let stmt'     = prefixStmt l se
                                           $ IfStmt l e' (splice s1' φ1) (splice s2' φ2) in
@@ -178,24 +170,24 @@ ssaStmt g (WhileStmt l cnd body)
         l1s'              <- mapM (updSsaEnv g l) l1s
         θ1                <- getSsaVars
         (sc, cnd')        <- ssaExpr g cnd
-        when (not $ null sc) (ssaError $ errorUpdateInExpr (srcPos l) cnd)
+        unless (null sc) (ssaError $ errorUpdateInExpr (srcPos l) cnd)
         (t, body')        <- ssaStmt g body
         θ2                <- getSsaVars
         --
         -- SSA only the WriteLocal variables - globals will remain the same.
         --
-        let l2s            = [ x2 | (Just (x2), WriteLocal) <- mapFst (`envFindTy` θ2) <$> zip xs as ]
+        let l2s            = [ x2 | (Just x2, WriteLocal) <- mapFst (`envFindTy` θ2) <$> zip xs as ]
         addAnn l           $ PhiVar l1s'
-        setSsaVars         $ θ1
+        setSsaVars           θ1
         l'                <- freshenAnn l
         let body''         = body' `splice` asgn l' (mkNextId <$> l1s') l2s
         l''               <- freshenAnn l
-        return             $ (t, asgn l'' l1s' l0s `presplice` WhileStmt l cnd' body'')
+        return               (t, asgn l'' l1s' l0s `presplice` WhileStmt l cnd' body'')
     where
         asgn _  [] _       = Nothing
         asgn l' ls rs      = Just $ maybeBlock l' $ zipWith (mkPhiAsgn l') ls rs
 
-ssaStmt g (ForStmt _  NoInit _ _ _ )     =
+ssaStmt _ (ForStmt _  NoInit _ _ _ )     =
     errorstar "unimplemented: ssaStmt-for-01"
 
 ssaStmt g (ForStmt l v cOpt (Just (UnaryAssignExpr l1 o lv)) b) =
@@ -280,7 +272,7 @@ ssaStmt g (ForInStmt l (ForInVar v) e b) =
                                                         <*> (VarRef <$> fr <*> keysArr)
                                                         <*> (VarRef <$> fr <*> keysIdx))
     forStmt     = ForStmt <$> fr
-                          <*> (VarInit <$> single <$> initIdx)
+                          <*> (VarInit . single <$> initIdx)
                           <*> condition
                           <*> increment
                           <*> (maybeBlock <$> fr
@@ -291,7 +283,7 @@ ssaStmt g (ForInStmt l (ForInVar v) e b) =
     keysArr     = return $ mkKeysId    v
     keysIdx     = return $ mkKeysIdxId v
 
-    mkId s      = Id (FA def def def) s
+    mkId        = Id (FA def def def)
     builtinId s = mkId ("builtin_" ++ s)
 
 
@@ -327,14 +319,14 @@ ssaStmt g (FunctionStmt l f xs (Just bd))
   = do  g'        <- initCallableSsaEnv l g xs bd
         (True,) . FunctionStmt l f xs . Just <$> ssaFun g' l xs bd
 
-ssaStmt g s@(FunctionStmt _ _ _ Nothing)
+ssaStmt _ s@(FunctionStmt _ _ _ Nothing)
   = return (True, s)
 
 -- switch (e) { ... }
 ssaStmt g (SwitchStmt l e xs)
   = do
       id <- updSsaEnv g (an e) (Id (an e) "__switchVar")
-      let go (l, e, s) i = IfStmt (an s) (InfixExpr l OpStrictEq (VarRef l id) e) s i
+      let go (l, e, s) = IfStmt (an s) (InfixExpr l OpStrictEq (VarRef l id) e) s
       mapSnd (maybeBlock l) <$> ssaStmts g
         [ VarDeclStmt (an e) [VarDecl (an e) id (Just e)], foldr go z sss ]
   where
@@ -360,7 +352,7 @@ ssaStmt g (ModuleStmt l n body)
         (True,) . ModuleStmt l n . snd <$> ssaStmts g' body
 
 -- enum { ... }
-ssaStmt g (EnumStmt l n es)
+ssaStmt _ (EnumStmt l n es)
   = return (True, EnumStmt l n es)
 
 -- OTHER (Not handled)
@@ -410,7 +402,7 @@ ctorVisitor g ms          = defaultVisitor { endStmt = es } { endExpr = ee }
                = []
 
         parent | Just n <- curClass g,
-                 Just (TD (TS _ _ ([(Gen (QN path name) _)],_)) _ ) <- resolveType cha n
+                 Just (TD (TS _ _ ([Gen (QN path name) _],_)) _ ) <- resolveType cha n
                = case path of
                    QP _ _ []     -> VarRef <$> fr <*> (Id <$> fr <**> F.symbolSafeString name)
                    QP _ _ (y:ys) -> do init <- VarRef <$> fr <*> (Id <$> fr <**> F.symbolSafeString y)
@@ -431,7 +423,7 @@ ctorVisitor g ms          = defaultVisitor { endStmt = es } { endExpr = ee }
                                          <*> (Id <$> fr <**> F.symbolSafeString x))
 
     ts r@(ReturnStmt l _) = maybeBlock <$> fr_ l <*> ((:[r]) <$> ctorExit l ms)
-    ts r                  = return $ r
+    ts r                  = return r
 
 -------------------------------------------------------------------------------------
 ctorExit :: AnnSSA r -> [Id t] -> SSAM r (Statement (AnnSSA r))
@@ -493,7 +485,7 @@ ssaClassElt g c (Constructor l xs bd)
 
 -- | Initilization expression for instance variables is moved to the beginning
 --   of the constructor.
-ssaClassElt g _ (MemberVarDecl l False x _)
+ssaClassElt _ _ (MemberVarDecl l False x _)
   = return $ MemberVarDecl l False x Nothing
 
 ssaClassElt g _ (MemberVarDecl l True x (Just e))
@@ -518,6 +510,8 @@ preM (ClassStmt _ _ cs)
     f l x e       = VarDeclStmt <$> fr l <*> (single <$> g l x e)
     g l x e       = VarDecl     <$> fr l <*> freshenIdSSA x <*> (Just <$> pure e)
 
+preM _ = return []
+
 
 -- | Expand: [[ if ( e1 || e2) { s1 } else { s2 } ]]
 --
@@ -537,7 +531,7 @@ preM (ClassStmt _ _ cs)
 --          [[ s2 ]]
 --      }
 --
-ssaExpandIfStmtInfixOr l li e1 e2 s1 s2
+ssaExpandIfStmtInfixOr l e1 e2 s1 s2
   = do  n     <- ("lor_" ++) . show  <$> tick
         -- R1 ::= var r_NN = false;
         r     <- Id           <$> fr l <**> n
@@ -587,7 +581,7 @@ ssaExpandIfStmtInfixOr l li e1 e2 s1 s2
 --          [[ s2 ]]
 --      }
 --
-ssaExpandIfStmtInfixAnd l li e1 e2 s1 s2
+ssaExpandIfStmtInfixAnd l e1 e2 s1 s2
   = do  n     <- ("land_" ++) . show  <$> tick
         -- var r_NN = true;
         r     <- Id           <$> fr l <**> n
@@ -643,7 +637,7 @@ presplice z s' = splice_ (getAnnotation s') z (Just s')
 -------------------------------------------------------------------------------------
 splice :: Statement a -> Maybe (Statement a) -> Statement a
 -------------------------------------------------------------------------------------
-splice s z = splice_ (getAnnotation s) (Just s) z
+splice s = splice_ (getAnnotation s) (Just s)
 
 splice_ l Nothing Nothing    = EmptyStmt l
 splice_ _ (Just s) Nothing   = s
@@ -680,10 +674,10 @@ ssaWith :: Env (Var r) -> (a -> SSAM r (Bool, b)) -> a -> SSAM r (Maybe (Env (Va
 ssaWith θ f x
   = do  setSsaVars θ
         (b, x') <- f x
-        (,x') <$> go b x'
+        (,x') <$> go b
   where
-    go b x' | b         = Just <$> getSsaVars
-            | otherwise = pure Nothing
+    go b | b         = Just <$> getSsaVars
+         | otherwise = pure Nothing
 
 -------------------------------------------------------------------------------------
 ssaExpr :: (Data r, PPR r) => SsaEnv r -> Expression (AnnSSA r) -> SSAM r ([Statement (AnnSSA r)], Expression (AnnSSA r))
@@ -735,7 +729,7 @@ ssaExpr g (CondExpr l c e1 e2)
 ssaExpr g (PrefixExpr l o e)
   = ssaExpr1 g (PrefixExpr l o) e
 
-ssaExpr g e@(InfixExpr l OpLOr _ _)
+ssaExpr _ e@(InfixExpr l OpLOr _ _)
   = ssaError $ unimplementedInfix l e
 
 ssaExpr g (InfixExpr l o e1 e2)
@@ -1020,7 +1014,3 @@ ssaForLoopExpr g l exp cOpt incExpOpt b =
     bl         = getAnnotation b
     c          = maybe (BoolLit l True) id cOpt
 
-
--- Local Variables:
--- flycheck-disabled-checkers: (haskell-liquid)
--- End:

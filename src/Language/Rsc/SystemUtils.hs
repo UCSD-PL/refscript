@@ -18,28 +18,30 @@ module Language.Rsc.SystemUtils (
     -- * Rendering Annotations
   , annotByteString
   , annotVimString
+
+  -- * Files
+  , isDeclarationFile
+
   ) where
 
-import           Control.Applicative            ((<$>))
 import           Data.Aeson
-import qualified Data.ByteString.Lazy           as B
-import qualified Data.HashMap.Strict            as M
-import qualified Data.List                      as L
+import qualified Data.ByteString.Lazy             as B
+import qualified Data.HashMap.Strict              as M
+import qualified Data.List                        as L
 import           Data.List.Split
-import           Data.Monoid
-import qualified Data.Text                      as T
-import qualified Data.Vector                    as V
-import           GHC.Exts                       (groupWith, sortWith)
-import           Language.Fixpoint.Misc         (inserts)
-import qualified Language.Fixpoint.Types        as F
+import qualified Data.Text                        as T
+import qualified Data.Vector                      as V
+import           GHC.Exts                         (groupWith, sortWith)
+import           Language.Fixpoint.Misc           (inserts)
+import qualified Language.Fixpoint.Types          as F
 import           Language.Fixpoint.Types.Errors
-import           Language.Fixpoint.Utils.Files  ()
+import           Language.Fixpoint.Utils.Files    ()
 import           Language.Rsc.Locations
-import           Language.Rsc.Parser
+import           Language.Rsc.Parser.Declarations ()
 import           Language.Rsc.Pretty
-import           Language.Rsc.Types             ()
+import           Language.Rsc.Types               ()
 import           Text.Parsec.Pos
-import           Text.PrettyPrint.HughesPJ      (nest, punctuate, render, text, vcat, ($+$), (<+>))
+import           Text.PrettyPrint.HughesPJ        (nest, punctuate, render, text, vcat, ($+$), (<+>))
 
 ------------------------------------------------------------------------------
 -- | Type Definitions For Annotations

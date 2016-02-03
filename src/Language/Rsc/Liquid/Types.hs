@@ -46,12 +46,8 @@ module Language.Rsc.Liquid.Types (
 
   ) where
 
-import           Control.Applicative
-import           Data.Default
 import qualified Data.HashMap.Strict             as HM
-import qualified Data.List                       as L
-import           Data.Maybe                      (catMaybes, mapMaybe, fromMaybe)
-import           Data.Monoid                     (mconcat)
+import           Data.Maybe                      (mapMaybe)
 import qualified Data.Text                       as T
 import qualified Language.Fixpoint.Smt.Bitvector as BV
 import qualified Language.Fixpoint.Types         as F
@@ -164,13 +160,13 @@ rTypeSort (TVar α _)          = F.FObj $ F.symbol α
 rTypeSort (TAll v t)          = rTypeSortForAll $ TAll v t
 rTypeSort (TFun xts t _)      = F.mkFFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TPrim c _)         = rTypeSortPrim c
-rTypeSort (TOr ts _)          = F.fAppTC (rawStringFTycon unionName ) []
-rTypeSort (TAnd ts)           = F.fAppTC (rawStringFTycon intersName) []
+rTypeSort (TOr _ _)           = F.fAppTC (rawStringFTycon unionName ) []
+rTypeSort (TAnd _)            = F.fAppTC (rawStringFTycon intersName) []
 rTypeSort (TRef (Gen n ts) _) = F.fAppTC (rawSymbolFTycon (F.symbol n)) (rTypeSort <$> ts)
 rTypeSort (TObj _ _ )         = F.fAppTC (rawStringFTycon objectName) []
 rTypeSort (TClass _)          = F.fAppTC (rawStringFTycon className ) []
 rTypeSort (TMod _)            = F.fAppTC (rawStringFTycon moduleName) []
-rTypeSort t                   = error $ render $ text "BUG: Unsupported in rTypeSort"
+rTypeSort _                   = error $ render $ text "BUG: Unsupported in rTypeSort"
 
 rTypeSortPrim TBV32      = BV.mkSort BV.S32
 rTypeSortPrim TNumber    = F.intSort
@@ -232,8 +228,8 @@ instance (PPR r, F.Subable r) => F.Subable (RTypeQ q r) where
   subst1 t su = emapReft (\xs r -> F.subst1Except xs r su) [] t
 
 instance (PPR r, F.Subable r) => F.Subable (TypeMemberQ q r) where
-  syms     (FI s o m t)    = F.syms m ++ F.syms t
-  syms     (MI s o mts)    = F.syms mts
+  syms     (FI _ _ m t)    = F.syms m ++ F.syms t
+  syms     (MI _ _ mts)    = F.syms mts
   substa f (FI s o m t)    = FI s o (F.substa f m  ) (F.substa f t)
   substa f (MI s o mts)    = MI s o (F.substa f mts)
   substf f (FI s o m t)    = FI s o (F.substf f m  ) (F.substf f t)
@@ -391,7 +387,7 @@ qualifySymbol (symbolText -> m) x'@(symbolText -> x)
   | otherwise      = F.symbol (m `mappend` "." `mappend` x)
 
 isQualified y = "." `T.isInfixOf` y
-wrapParens x  = "(" `mappend` x `mappend` ")"
+-- wrapParens x  = "(" `mappend` x `mappend` ")"
 
 
 -------------------------------------------------------------------------------

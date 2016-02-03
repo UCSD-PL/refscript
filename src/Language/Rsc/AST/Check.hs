@@ -1,10 +1,6 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFoldable     #-}
-{-# LANGUAGE DeriveFunctor      #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DeriveTraversable  #-}
-{-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Language.Rsc.AST.Check
     (
@@ -13,22 +9,14 @@ module Language.Rsc.AST.Check
     , IsRsc(..)
     ) where
 
-import           Control.Applicative                 ((<$>))
-import           Control.Exception                   (throw)
-import           Data.Default
-import           Data.Foldable                       (Foldable)
-import           Data.Generics                       (Data, Typeable)
-import           Data.Traversable                    (Traversable)
-import           GHC.Generics
-import           Language.Fixpoint.Types.PrettyPrint
-import           Language.Rsc.AST.Annotations        ()
+import           Control.Exception            (throw)
+import           Language.Rsc.AST.Annotations ()
 import           Language.Rsc.AST.Syntax
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Pretty.Errors
-import           Language.Rsc.Pretty.Syntax
-import           Text.Parsec.Pos                     (SourcePos)
+import           Language.Rsc.Pretty.Syntax   ()
 import           Text.PrettyPrint.HughesPJ
 
 ---------------------------------------------------------------------
@@ -199,12 +187,12 @@ instance EndsWithBreak ([Statement a]) where
   endsWithBreak [] = False
   endsWithBreak xs = endsWithBreak $ last xs
 
-instance IsRsc [(CaseClause a)] where
+instance IsRsc [CaseClause a] where
   isRsc [] = False
   isRsc xs = all isRsc xs && holdsInit (not . defaultC) xs
     where
-      defaultC (CaseClause _ _ _) = False
-      defaultC (CaseDefault _ _ ) = True
+      defaultC CaseClause {} = False
+      defaultC CaseDefault{} = True
 
 -- | Check if `p` hold for all xs but the last one.
 holdsInit :: (a -> Bool) -> [a] -> Bool
@@ -216,7 +204,7 @@ flattenStmt s                = [s]
 
 checkTopStmt :: (IsLocated a) => Statement a -> Statement a
 checkTopStmt s | checkBody [s] = s
-checkTopStmt s | otherwise     = throw $ errorInvalidTopStmt (srcPos s) s
+               | otherwise     = throw $ errorInvalidTopStmt (srcPos s) s
 
 checkBody :: [Statement a] -> Bool
-checkBody stmts = all isRsc stmts
+checkBody = all isRsc

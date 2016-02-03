@@ -14,25 +14,22 @@ module Language.Rsc.Traversals (
   , hoistBindings
 
   -- * Check well-formedness
-  , checkTypeWF
+  --
+  -- TODO
+  --
+  -- , checkTypeWF
   ) where
 
-import           Control.Applicative            hiding (empty)
-import           Control.Monad                  (forM_)
 import           Data.Default
-import qualified Data.Foldable                  as Fld
 import           Data.Generics
-import qualified Data.HashSet                   as H
-import qualified Data.List                      as L
-import           Data.Maybe                     (catMaybes, fromMaybe, listToMaybe, maybeToList)
-import           Data.Monoid
-import qualified Language.Fixpoint.Types        as F
-import           Language.Fixpoint.Types.Errors
-import           Language.Rsc.Annotations       hiding (err)
+import qualified Data.HashSet             as H
+import qualified Data.List                as L
+import           Data.Maybe               (catMaybes, fromMaybe, listToMaybe, maybeToList)
+import qualified Language.Fixpoint.Types  as F
+import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
-import           Language.Rsc.Program
 import           Language.Rsc.Types
 import           Language.Rsc.Visitor
 
@@ -317,7 +314,7 @@ hoistBindings = snd . visitStmts vs ()
 -- TODO: Move to TypeUtilities ?
 
 -- checkTypeWF :: RefScript -> Either FError ()
-checkTypeWF p = undefined
+-- checkTypeWF p = undefined
 --   case foldRsc checkTypeWFVisitor () [] p of
 --     []  -> Right ()
 --     lts -> Left $ F.Unsafe [ errorIllFormedType l t | (l, t) <- lts ]

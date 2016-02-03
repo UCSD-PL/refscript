@@ -50,8 +50,6 @@ module Language.Rsc.Typecheck.TCMonad (
   )  where
 
 
-import           Control.Applicative                ((<$>), (<*>))
-import           Control.Arrow                      (second)
 import           Control.Monad.Except               (catchError)
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
@@ -61,7 +59,6 @@ import qualified Data.HashMap.Strict                as M
 import qualified Data.IntMap.Strict                 as I
 import           Data.List                          (isPrefixOf)
 import           Data.Maybe                         (catMaybes)
-import           Data.Monoid
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Types.Errors
@@ -84,7 +81,6 @@ import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Typecheck.Unify
 import           Language.Rsc.Types
 import qualified System.Console.CmdArgs.Verbosity   as V
-import           Text.PrettyPrint.HughesPJ
 
 
 --------------------------------------------------------------------------------
@@ -146,9 +142,9 @@ whenQuiet  act = whenQuiet' act $ return ()
 --------------------------------------------------------------------------------
 whenQuiet' :: TCM r a -> TCM r a -> TCM r a
 --------------------------------------------------------------------------------
-whenQuiet' quiet other = do  tc_verb <$> get >>= \case
-                               V.Quiet -> quiet
-                               _       -> other
+whenQuiet' quiet other = tc_verb <$> get >>= \case
+                           V.Quiet -> quiet
+                           _       -> other
 
 getOpts :: TCM r Config
 getOpts = tc_opts <$> get
@@ -377,7 +373,7 @@ castM :: Unif r => TCEnv r -> Expression (AnnSSA r) -> Consume
 castM γ e consume t1 t2
   = case convert (srcPos e) γ cfg t1 t2 of
       ConvOK      -> return e
-      ConvWith t  -> typecastM (tce_ctx γ) e (toType t2)
+      ConvWith _  -> typecastM (tce_ctx γ) e (toType t2)
       ConvFail es -> deadcastM (tce_ctx γ) es e
   where
     cfg | consume   = allowUniqueCfg

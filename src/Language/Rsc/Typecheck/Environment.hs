@@ -21,9 +21,7 @@ module Language.Rsc.Typecheck.Environment
 import           Data.Data
 import           Data.Function                  (on)
 import           Data.List                      (sortBy)
-import           Data.Monoid
-import           Data.Typeable
-import           Language.Fixpoint.Misc         (fst3, safeZip)
+import           Language.Fixpoint.Misc         (safeZip)
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors (die)
 import           Language.Rsc.Annotations
@@ -33,17 +31,14 @@ import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc              (single)
 import           Language.Rsc.Misc
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Program
 import           Language.Rsc.Symbols
-import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Text.PrettyPrint.HughesPJ
 
 -- import           Debug.Trace
 
@@ -99,7 +94,7 @@ instance CheckingEnvironment r TCEnv where
 --------------------------------------------------------------------------------
 initGlobalEnv :: Unif r => TcRsc r -> ClassHierarchy r -> TCEnv r
 --------------------------------------------------------------------------------
-initGlobalEnv pgm@(Rsc { code = Src ss }) cha
+initGlobalEnv (Rsc { code = Src ss }) cha
   = TCE nms bnds ctx pth cha mut tThis (-1)
   where
     nms   = symEnv ss

@@ -7,12 +7,8 @@
 
 module Language.Rsc.Types where
 
-import           Data.Default
-import           Data.Foldable           (Foldable ())
 import           Data.Generics           (Data)
 import           Data.Hashable
-import           Data.Monoid
-import           Data.Traversable        hiding (mapM, sequence)
 import           Data.Typeable           (Typeable)
 import qualified Language.Fixpoint.Types as F
 import           Language.Rsc.AST.Syntax
@@ -224,13 +220,7 @@ type IOverloadSig r   = (IntCallSite, OverloadSig r)
 -}
 
 data Assignability = RdOnly | Ambient | WriteLocal | ForeignLocal | WriteGlobal | ReturnVar
-                   | {- internal -} ErrorAssignability
                      deriving (Show, Eq, Data, Typeable)
-
-instance Monoid Assignability where
-  mempty = ErrorAssignability
-  mappend a1 a2 | a1 == a2  = a1
-                | otherwise = ErrorAssignability
 
 
 

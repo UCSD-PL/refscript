@@ -3,10 +3,9 @@
 
 module Language.Rsc.Liquid.Qualifiers (scrapeQuals) where
 
-import           Data.List                      (delete, isSuffixOf, nub)
-import           Data.Maybe                     (fromMaybe)
-import           Language.Fixpoint.Types        hiding (quals)
-import           Language.Fixpoint.Types.Errors
+import           Data.List                 (delete, nub)
+import           Data.Maybe                (fromMaybe)
+import           Language.Fixpoint.Types   hiding (quals)
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
@@ -15,8 +14,9 @@ import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
+import           Language.Rsc.SystemUtils
 import           Language.Rsc.Traversals
-import qualified Language.Rsc.Types             as T
+import qualified Language.Rsc.Types        as T
 import           Language.Rsc.Visitor
 import           Text.PrettyPrint.HughesPJ
 
@@ -67,7 +67,7 @@ scrapeQuals qs = (qs ++) . qualifiers . mkUq . foldStmts tbv [] . filter nonLibF
     goe _ (MemberMethDecl l _ x _ _) = [(x, t) | MemberAnn (T.MI _ _ mts) <- fFact l, (_, t) <- mts ]
 
 nonLibFile :: IsLocated a => Statement a -> Bool
-nonLibFile = const False -- not . isSuffixOf ".d.ts" . srcSpanFile
+nonLibFile = not . isDeclarationFile -- not . isSuffixOf ".d.ts" . srcSpanFile
 
 mkUq = zipWith tx ([0..] :: [Int])
   where

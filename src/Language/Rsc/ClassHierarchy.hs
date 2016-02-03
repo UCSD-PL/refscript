@@ -20,7 +20,7 @@ module Language.Rsc.ClassHierarchy (
     , nonStaticFields, inheritedNonStaticFields
     , classAncestors, interfaceAncestors
     , getImmediateSuperclass, getSuperType
-    , boundKeys, immFields
+    , boundKeys
     , getMutability
 
     -- * Type Transformations
@@ -32,48 +32,30 @@ module Language.Rsc.ClassHierarchy (
     , resolveType, resolveModule, resolveEnum
     ) where
 
-import           Control.Applicative               hiding (empty)
-import           Control.Exception                 (throw)
-import           Control.Monad                     (liftM, void)
-import           Data.Default
 import           Data.Foldable                     (foldlM)
 import           Data.Generics
 import           Data.Graph.Inductive.Graph
 import           Data.Graph.Inductive.PatriciaTree
 import           Data.Graph.Inductive.Query.BFS
 import           Data.Graph.Inductive.Query.DFS
-import           Data.Graph.Inductive.Query.Monad  ((><))
 import qualified Data.HashMap.Strict               as HM
 import qualified Data.HashSet                      as HS
-import           Data.List                         (find, findIndex, partition)
-import qualified Data.Map.Strict                   as M
-import           Data.Maybe                        (fromMaybe, isJust, listToMaybe, maybeToList)
-import           Data.Monoid                       hiding ((<>))
-import qualified Data.Traversable                  as T
+import           Data.List                         (find)
+import           Data.Maybe                        (fromMaybe, isJust, maybeToList)
 import           Data.Tuple                        (swap)
-import           Language.Fixpoint.Misc            (intersperse, safeZip)
 import qualified Language.Fixpoint.Types           as F
-import           Language.Fixpoint.Types.Errors
-import           Language.Rsc.Annotations          hiding (err)
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc                 (concatMapM, single)
 import           Language.Rsc.Module
 import           Language.Rsc.Names
-import           Language.Rsc.Pretty.Annotations
 import           Language.Rsc.Pretty.Common
-import           Language.Rsc.Pretty.Errors
-import           Language.Rsc.Pretty.Types
 import           Language.Rsc.Program
 import           Language.Rsc.Symbols
-import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Text.PrettyPrint.HughesPJ
-import           Text.Printf
 
 
 data ClassHierarchy r = CHA {
@@ -153,9 +135,6 @@ isEnumType _ _ = False
 numberInterface      = mkAbsName [] $ F.symbol "Number"
 stringInterface      = mkAbsName [] $ F.symbol "String"
 booleanInterface     = mkAbsName [] $ F.symbol "Boolean"
-objectInterface      = mkAbsName [] $ F.symbol "Object"
-functionInterface    = mkAbsName [] $ F.symbol "Function"
-emptyObjectInterface = mkAbsName [] $ F.symbol "EmptyObject"
 
 --------------------------------------------------------------------------------
 -- RESolveModule :: ClassHierarchy r -> AbsPath -> Maybe (ModuleDef r)
@@ -176,7 +155,7 @@ typeMembersOfType cha t
   | otherwise
   = mempty
 
-typeMemersOfTDecl cha (TD (TS k _ (h,_)) es) = es `mappend` heritage h
+typeMemersOfTDecl cha (TD (TS _ _ (h,_)) es) = es `mappend` heritage h
   where
     expd = expandWithSubst cha
     res  = resolveType cha
@@ -221,7 +200,7 @@ expandType _ _ t@(TRef _ _) | mutRelated t = Nothing
 --
 --  TODO: revisit !!!
 --
-expandType _ cha t@(TRef (Gen n ts@(mut:_)) r)
+expandType _ cha t@(TRef (Gen n ts@(_:_)) r)
   | isClassType cha t = (\m -> TObj m r) . fltInst <$> ms
   | otherwise         = (\m -> TObj m r)           <$> ms
   where
@@ -362,15 +341,6 @@ boundKeys _ (TObj es _)    = fst <$> F.toListSEnv (i_mems es)
 boundKeys _ _              = []
 
 --------------------------------------------------------------------------------
-immFields :: (ExprReftable Int r, PPR r)
-          => ClassHierarchy r -> RType r -> [(F.Symbol, RType r)]
---------------------------------------------------------------------------------
-immFields cha t | Just (TObj es _) <- expandType Coercive cha t
-                = [ (x, t) | (x, FI _ _ tIM t) <- F.toListSEnv $ i_mems es ]
-                | otherwise
-                = []
-
---------------------------------------------------------------------------------
 getImmediateSuperclass :: F.Reftable r => TypeSig r -> Maybe (RType r)
 --------------------------------------------------------------------------------
 getImmediateSuperclass (TS _ _ ([Gen p ps], _)) = Just $ TRef (Gen p ps) fTop
@@ -385,6 +355,8 @@ getSuperType cha (TRef (Gen nm ts) _)
     Just $ apply θ $ TRef p fTop
   | otherwise
   = Nothing
+-- TODO: resolve TVar
+getSuperType _ _ = Nothing
 
 
 

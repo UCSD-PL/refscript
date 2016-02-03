@@ -12,7 +12,6 @@
 
 module Language.Rsc.Typecheck.Checker (verifyFile, typeCheck) where
 
-import           Control.Applicative                (pure, (<$>), (<*>))
 import           Control.Arrow                      (first, second, (***))
 import           Control.Monad
 import           Data.Function                      (on)
@@ -34,7 +33,7 @@ import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Lookup
-import           Language.Rsc.Misc                  (dup, nths, single, zipWith3M, (&))
+import           Language.Rsc.Misc                  (nths, single, zipWith3M, (&))
 import           Language.Rsc.Names
 import           Language.Rsc.Parser
 import           Language.Rsc.Pretty
@@ -347,11 +346,6 @@ tcStmt _ s
 --------------------------------------------------------------------------------
 tcVarDecl :: Unif r => TCEnv r -> VarDecl (AnnTc r) -> TCM r (VarDecl (AnnTc r), TCEnvO r)
 --------------------------------------------------------------------------------
--- PV: Some ugly special casing for Function expressions
-tcVarDecl γ v@(VarDecl l x (Just e@FuncExpr{}))
-  = do  (e', _) <- tcExpr γ e (v_type <$> envFindTy x (tce_names γ))
-        return (VarDecl l x (Just e'), Just γ)
-
 tcVarDecl γ v@(VarDecl l x (Just e))
   = case envFindTy x (tce_names γ) of
       -- Local (no type annotation)
@@ -493,11 +487,18 @@ tcSetPropMut γ l f t0 (e, t') (FI _ _ m t)
   | otherwise
   = tcExprT l BISetProp γ e t
 
+tcSetPropMut _ l _ _ _ m
+  = tcError (errorMethAsgn l m)
+
 tcSetPropImm γ l f t0 (e, t') (FI _ _ m t)
   | isSubtype γ m tIM
   = fatal (errorImmutableRefAsgn l f t0) (e, t')
   | otherwise
   = tcExprT l BISetProp γ e t
+
+tcSetPropImm _ l _ _ _ m
+  = tcError (errorMethAsgn l m)
+
 
 
 -- | `tcExprT l fn γ e t` checks expression @e@ under environment @γ@
@@ -564,10 +565,6 @@ tcNormalCallWD γ l o es t = tcNormalCallW γ l o es t >>= \case
   (es', Just t) -> return (es', t)
   (es', _     ) -> return (es', tNull)
 
-tcNormalCallWDCtx γ l o es t = tcNormalCallWCtx γ l o es t >>= \case
-  (es', Just t) -> return (es', t)
-  (es', _     ) -> return (es', tNull)
-
 --------------------------------------------------------------------------------
 tcRetW :: Unif r => TCEnv r -> AnnSSA r -> Maybe (ExprSSAR r)
                  -> TCM r (Statement (AnnSSA r), Maybe a)
@@ -581,7 +578,7 @@ tcRetW γ l (Just e)
   where
     rt        = tcEnvFindReturn γ
 
-tcRetW γ l Nothing
+tcRetW _ l Nothing
   = return (ReturnStmt l Nothing, Nothing)
 
 --------------------------------------------------------------------------------
@@ -640,19 +637,19 @@ tcExpr γ e@(VarRef l x) _
   where
     to = tcEnvFindTy x γ
 
-tcExpr γ ex@(CondExpr l e e1 e2) (Just t)
+tcExpr γ (CondExpr l e e1 e2) (Just t)
   = do opTy         <- safeEnvFindTy l γ (builtinOpId BITruthy)
        ([e'], z)    <- tcNormalCallW γ l BITruthy [e] opTy
        case z of
          Just _  ->
-            do  (e1', t1) <- tcExprWD γ e1 (Just t)
-                (e2', t2) <- tcExprWD γ e2 (Just t)
-                e1''      <- castMC γ e1 t1 t
-                e2''      <- castMC γ e2 t2 t
-                return     $ (CondExpr l e' e1'' e2'', t)
+            do  (_, t1) <- tcExprWD γ e1 (Just t)
+                (_, t2) <- tcExprWD γ e2 (Just t)
+                e1''    <- castMC γ e1 t1 t
+                e2''    <- castMC γ e2 t2 t
+                return     (CondExpr l e' e1'' e2'', t)
          _  -> error "TODO: error tcExpr condExpr"
 
-tcExpr γ e@(CondExpr l _ _ _) Nothing
+tcExpr _ e@(CondExpr l _ _ _) Nothing
   = tcError $ unimpCondExpCtxType l e
 
 tcExpr γ e@(PrefixExpr _ _ _) s
@@ -672,14 +669,13 @@ tcExpr γ e@(ArrayLit l es) to
       Right opTy -> first (ArrayLit l) <$> tcNormalCallWD γ l BIArrayLit es opTy
 
 -- | { f1: e1, ..., fn: tn }
-tcExpr γ ex@(ObjectLit l pes) to
+tcExpr γ (ObjectLit l pes) to
   = do  (es', ts) <- unzip <$> T.mapM (uncurry (tcExprWD γ)) ets
         t         <- pure (TObj (tmsFromList (zipWith toFI ps ts)) fTop)
         return (ObjectLit l (zip ps es'), t)
   where
-    (cts, ft)  = objLitTy l γ ps to
-    (ps , es)  = unzip pes
-
+    -- (cts, ft)  = objLitTy l γ ps to
+    (ps , _)   = unzip pes
     toFI p t   = FI (F.symbol p) Req tUQ t
     ets        = map (\(p,e) -> (e, pTy p)) pes
     pTy p      | Just f@FI{} <- lkup p = Just (f_ty f)
@@ -889,7 +885,7 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es) _
     checkWithRcvr (Left er      ) = fatal er (ex, tBot)
 
     -- Check all corresponding type members `tms`
-    checkWithProp (Right tms@(unzip -> (ts, ms)))
+    checkWithProp (Right tms@(map fst -> ts))
       = do  (e', _   ) <- tcExprT l1 em γ e (tOr ts)
             (es', ts') <- foldM (\(es_, ts) (tR, m) ->
                             second (:ts) <$> checkTypeMember es_ tR m) (es, []) tms
@@ -897,8 +893,8 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es) _
     checkWithProp (Left er) = tcError er
 
     -- Check a single type member
-    checkTypeMember es_ tR (FI _ Req _ ft) = tcNormalCallWD γ l em es_ ft
-    checkTypeMember _   tR (FI f _   _ _ ) = tcError $ errorOptFunUnsup l f e
+    checkTypeMember es_ _  (FI _ Req _ ft) = tcNormalCallWD γ l em es_ ft
+    checkTypeMember _   _  (FI f _   _ _ ) = tcError $ errorOptFunUnsup l f e
     checkTypeMember es_ tR (MI _ Req mts)  =
       case getMutability (envCHA γ) tR of
         Just mR ->
@@ -907,6 +903,9 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es) _
               ts -> tcNormalCallWD γ l em es_ (mkAnd ts)
 
         Nothing -> tcError $ errorNoMutAvailable l e tR
+
+    checkTypeMember _ _ (MI _ Opt _)  =
+      error "TODO: Add error message at checkTypeMember MI Opt"
 
 -- | `e(es)`
 tcCall γ (CallExpr l e es) _
@@ -1028,8 +1027,8 @@ tcCallCase γ@(tce_ctx -> ξ) l fn es ts ft
 instantiateTy :: Unif r => AnnTc r -> IContext -> Int -> RType r -> TCM r (RType r)
 --------------------------------------------------------------------------------
 instantiateTy l ξ i (bkAll -> (bs, t))
-  = do  (fbs, t)  <- freshTyArgs l i ξ bs t
-        -- TODO: need to take `fbs` into account, i.e. add the
+  = do  (_, t)  <- freshTyArgs l i ξ bs t
+        -- TODO: need to take the first arg into account, i.e. add the
         --       constraint to the environment
         return     $ t
 

@@ -50,12 +50,10 @@ module Language.Rsc.SSA.SSAMonad (
 
    ) where
 
-import           Control.Applicative            ((<$>), (<*>))
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
 import qualified Data.HashSet                   as S
 import qualified Data.IntMap.Strict             as IM
-import qualified Data.IntSet                    as I
 import           Data.Maybe                     (fromMaybe)
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
@@ -70,7 +68,6 @@ import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.Symbols
-import           Language.Rsc.Traversals
 import           Language.Rsc.Types
 
 -- import           Debug.Trace                        (trace)
@@ -106,7 +103,7 @@ initGlobSsaEnv
   :: F.Reftable r => [Statement (AnnR r)] -> ClassHierarchy r -> SsaEnv r
 --------------------------------------------------------------------------------
 initGlobSsaEnv fs cha
-  = SsaEnv (envFromListConcat (symbols' fs)) cha Nothing emptyPath
+  = SsaEnv (envFromList (symbols' fs)) cha Nothing emptyPath
 
 --------------------------------------------------------------------------------
 initCallableSsaEnv
@@ -117,7 +114,7 @@ initCallableSsaEnv l g xs bd
   = do  arg  <- freshArgId l
         ret  <- freshRetId l
         env  <- pure $ envMap toFgn (asgn g)
-                     & mappend (envFromListConcat (symbols' bd))
+                     & mappend (envFromList (symbols' bd))
                      & envAdd ret ReturnVar
                      & envAdd arg RdOnly
                      & envAdds (xs `zip` repeat WriteLocal)
@@ -134,7 +131,7 @@ envToFgn = envMap toFgn
 
 initModuleSsaEnv l g m ss = SsaEnv env cha cls path
   where
-    env  = envFromListConcat (symbols' ss) `mappend` envMap toFgn (asgn g)
+    env  = envFromList (symbols' ss) `mappend` envMap toFgn (asgn g)
     cha  = ssaCHA g
     cls  = curClass g
     path = pathInPath l (curPath g) m
@@ -168,7 +165,7 @@ getSsaVars  = ssaVars <$> get
 -------------------------------------------------------------------------------------
 getAssignability :: IsLocated l => SsaEnv r -> Id l -> Assignability -> Assignability
 -------------------------------------------------------------------------------------
-getAssignability g@(asgn -> asgn) x defAssign
+getAssignability (asgn -> asgn) x defAssign
   = fromMaybe defAssign (envFindTy x asgn)
 
 -------------------------------------------------------------------------------------
@@ -188,7 +185,7 @@ updSsaEnv   :: SsaEnv r -> AnnSSA r -> Var r -> SSAM r (Var r)
 updSsaEnv g a@(srcPos -> l) x
   = go (getAssignability g x WriteLocal)
   where
-    go   WriteLocal   = updSsaEnvLocal g a x
+    go   WriteLocal   = updSsaEnvLocal a x
     go   WriteGlobal  = return x
     go m@Ambient      = ssaError $ errorWriteImmutable l m x
     go m@RdOnly       = ssaError $ errorWriteImmutable l m x
@@ -196,9 +193,9 @@ updSsaEnv g a@(srcPos -> l) x
     go m@ReturnVar    = ssaError $ errorWriteImmutable l m x
 
 -------------------------------------------------------------------------------------
-updSsaEnvLocal :: SsaEnv r -> AnnSSA r -> Var r -> SSAM r (Var r)
+updSsaEnvLocal :: AnnSSA r -> Var r -> SSAM r (Var r)
 -------------------------------------------------------------------------------------
-updSsaEnvLocal g a x
+updSsaEnvLocal a x
   = do n     <- tick
        let x' = mkSSAId a x n
        modify $ \st -> st { ssaVars = envAdds [(x, x')] (ssaVars st) }
@@ -256,10 +253,10 @@ ssaError :: Error -> SSAM r a
 ssaError = throwE
 
 -------------------------------------------------------------------------------------
-execute :: BareRsc r -> ClassHierarchy r -> SSAM r a -> Either (F.FixResult Error) a
+execute :: BareRsc r -> SSAM r a -> Either (F.FixResult Error) a
 -------------------------------------------------------------------------------------
-execute p cha act
-  = case runState (runExceptT act) (initState p cha) of
+execute p act
+  = case runState (runExceptT act) (initState p) of
       (Left err, _) -> Left $ F.Unsafe [err]
       (Right x, _)  -> Right x
 
@@ -268,7 +265,7 @@ execute p cha act
 tryAction act = get >>= return . runState (runExceptT act)
 
 -------------------------------------------------------------------------------------
-initState :: BareRsc r -> ClassHierarchy r -> SsaState r
+initState :: BareRsc r -> SsaState r
 -------------------------------------------------------------------------------------
-initState p cha = SsaST (maxId p) mempty IM.empty S.empty
+initState p = SsaST (maxId p) mempty IM.empty S.empty
 

@@ -26,10 +26,8 @@ module Language.Rsc.Program (
 
   ) where
 
-import           Control.Applicative           hiding (empty)
 import           Data.Generics
 import           Data.List                     (stripPrefix)
-import           Data.Monoid                   hiding ((<>))
 import qualified Language.Fixpoint.Types       as F
 import           Language.Fixpoint.Types.Names (symbolString)
 import           Language.Rsc.Annotations
@@ -37,7 +35,6 @@ import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
-import           Language.Rsc.Options
 import           Language.Rsc.Types
 
 
@@ -101,7 +98,6 @@ data FRsc q r = FRsc (Rsc (FAnnQ q r) r)
 -- type USsaRsc      = SsaRsc  ()
 
 
-type RscQ q r     = Rsc (FAnnQ q r) r
 type BareRelRsc r = Rsc (AnnRel  r) r         -- After parse (relative names)
 type BareRsc r    = Rsc (AnnBare r) r         -- After parse (absolute names)
 type RRsc r       = Rsc (AnnBare r) r         -- After parse (absolute names)

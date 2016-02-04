@@ -114,7 +114,13 @@ errorIncompatCovFields l a b  = mkErr l $ printf "Incompatible covariant fields 
 errorIncompatInvFields l a b  = mkErr l $ printf "Incompatible invariant fields when converting between elements: '%s' and '%s'." (ppshow a) (ppshow b)
 errorNonObjectType l t        = mkErr l $ printf "Type '%s' cannot be treated as an object type." (ppshow t)
 
-errorIncompMutTy l t t'       = mkErr l $ show $ sep [text "Types:", nest 2 (pp t), text "and", nest 2 (pp t'), text "have incompatible mutabilities."]
+errorIncompMutTy l m m' t t' fo = mkErr l $ show $ text "Incompatible mutabilities:" <+>
+                                                 ticks (pp m ) <+> text "and" <+>
+                                                 ticks (pp m') <+> text "when comparing" <+>
+                                                 maybe empty (\f -> text "field" <+> ticks (pp f) <+> text "of") fo <+>
+                                                 text "types:" $+$
+                                                 nest 2 (pp t) $+$ text "and" $+$ nest 2 (pp t')
+
 errorUniqueRef l              = mkErr l $ show $ sep [text "Cannot handle unique types in this context."]
 errorUniqueAsgn l x           = mkErr l $ show $ text "Cannot re-assign unique reference:" <+> ticks (pp x) <> pp "." $+$
                                                  text "Try casting" <+> ticks (pp x) <+> text "to a non unique type."

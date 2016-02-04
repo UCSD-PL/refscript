@@ -351,6 +351,7 @@ tcVarDecl γ v@(VarDecl l x (Just e))
       -- Local (no type annotation)
       Nothing ->
         do  (e', to) <- tcExprW γ e
+            -- XXX: Do not allow assignment of `non-consumable` expression.
             if not (consumable e) && any (isUnique γ) (maybeToList to) then
                 tcError (errorUniqueAsgn x e)
             else
@@ -359,7 +360,7 @@ tcVarDecl γ v@(VarDecl l x (Just e))
 
       -- Local (with type annotation)
       Just (SI y lc WriteLocal _ t) ->
-        do  (e', t') <- tcExprT l "VarDecl" γ e t
+        do  (e', t') <- ltracePP l "Inferred" <$> tcExprT l "VarDecl" γ e t
             return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (SI y lc WriteLocal Initialized t') γ)
 
       -- Global
@@ -372,7 +373,7 @@ tcVarDecl γ v@(VarDecl l x (Just e))
 
       -- ReadOnly
       Just (SI y lc RdOnly _ t) ->
-        do  ([e'], Just t') <- tcNormalCallWCtx γ l "VarDecl-RO" [(e, Just t)] (idTy t)
+        do  ([e'], Just t') <- ltracePP l "inferred" <$> tcNormalCallWCtx γ l "VarDecl-RO" [(e, Just t)] (idTy t)
             return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (SI y lc RdOnly Initialized t') γ)
 
       c -> fatal (unimplemented l "tcVarDecl" ("case: " ++ ppshow c)) (v, Just γ)
@@ -670,7 +671,7 @@ tcExpr γ e@(ArrayLit l es) to
 tcExpr γ (ObjectLit l pes) to
   = do  (es', ts) <- unzip <$> T.mapM (uncurry (tcExprWD γ)) ets
         t         <- pure (TObj tUQ (tmsFromList (zipWith toFI ps ts)) fTop)
-        return       (ObjectLit l (zip ps es'), t)
+        return       (ObjectLit l (zip ps es'), ltracePP l "objlit" t)
   where
     (ps , _)       = unzip pes
     toFI p t       = FI (F.symbol p) Req tUQ t

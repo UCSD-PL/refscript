@@ -841,7 +841,7 @@ consExpr g e@(ArrayLit l es) to
 consExpr g (ObjectLit l pes) to
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts      <- mapM (`cgSafeEnvFindTyM` g') xes
-      t       <- ltracePP l "obj" <$> pure (TObj tUQ (tmsFromList (zipWith toFI ps ts)) fTop)
+      t       <- pure (TObj tUQ (tmsFromList (zipWith toFI ps ts)) fTop)
       Just   <$> cgEnvAddFresh "ObjectLit" l t g'
   where
     toFI p t   = FI (F.symbol p) Req tUQ t

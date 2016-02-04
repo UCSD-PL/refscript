@@ -45,8 +45,10 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
                      :      [text "+"   <+> pp t | t <- tail ts]
   pp (TAnd ts)       = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TRef t r)      = F.ppTy r (pp t)
-  pp (TObj m ms r)   | isRO m    = F.ppTy r (sep [lbrace, nest 2 (pp ms), rbrace])
-                     | otherwise = parens (pp m) <+> F.ppTy r (sep [lbrace, nest 2 (pp ms), rbrace])
+  pp (TObj m ms r)   | isRO m    = ppBody ms r
+                     | otherwise = parens (pp m) <+> ppBody ms r
+    where
+      ppBody ms r    = F.ppTy r (sep [lbrace, nest 2 (pp ms), rbrace])
   pp (TClass t)      = text "class" <+> pp t
   pp (TMod t)        = text "module" <+> pp t
   pp t@(TAll _ _)    = ppArgs angles comma αs <> pp t' where (αs, t') = bkAll t
@@ -74,7 +76,7 @@ ppNIdx (Just t) = pp "[x: number]:" <+> pp t <> semi
 ppNIdx _        = empty
 
 instance PPR r => PP (TypeMemberQ q r) where
-  pp (FI s o m t) = char '@' <> pp (toType m) <+> pp s <> pp o <> colon <+> pp t
+  pp (FI s o m t) = parens (pp (toType m)) <+> pp s <> pp o <> colon <+> pp t
   pp (MI s o mts) = vcat (map (\(m,t) -> char '@' <> pp (toType m) <+> pp s <> pp o <> pp t) mts)
 
 instance PP Optionality where

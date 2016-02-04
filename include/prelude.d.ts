@@ -178,12 +178,8 @@ interface Immutable extends ReadOnly {
     _immutableBrand: any;
 }
 
-interface Unique extends ReadOnly {
+interface Unique extends Immutable, Mutable {
     _uniqueBrand: any;
-}
-
-interface InheritedMut extends ReadOnly {
-    _inheritedMutBrand: any;
 }
 
 /*@ type idx<x> = { v: number | 0 <= v && v < len x } */

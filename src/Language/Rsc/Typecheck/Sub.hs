@@ -26,16 +26,14 @@ module Language.Rsc.Typecheck.Sub (
   , ConversionResult (..)
   ) where
 
-import           Data.Default
 import           Data.Monoid
 import           Data.Tuple                     (swap)
-import           Language.Fixpoint.Types        (SEnv, differenceSEnv, intersectWithSEnv, toListSEnv)
+import           Language.Fixpoint.Types        (SEnv, Symbol, differenceSEnv, intersectWithSEnv, toListSEnv)
 import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
-import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
@@ -48,24 +46,24 @@ type PPRE r = (ExprReftable Int r, PPR r)
 --------------------------------------------------------------------------------
 -- | Subtyping configuration
 --------------------------------------------------------------------------------
-data SubConf = SC {
-  allow_unique :: Bool          -- Allow conversion of `unique` to other permissions
+data SubConf r = SC {
+    allow_unique :: Bool          -- Allow conversion of `unique` to other permissions
+  , sub_lhs      :: RType r
+  , sub_rhs      :: RType r
+  , sub_fld      :: Maybe (Symbol)
 }
 
-instance Default SubConf where
-  def = disallowUniqueCfg
-
-allowUniqueCfg    = SC True
-disallowUniqueCfg = SC False
+allowUniqueCfg    c = c { allow_unique = True }
+disallowUniqueCfg c = c { allow_unique = False }
 
 --------------------------------------------------------------------------------
-isSubtypeC     :: (PPRE r, FE g r) => g r -> SubConf -> RType r -> RType r -> Bool
-isConvertibleC :: (PPRE r, FE g r) => g r -> SubConf -> RType r -> RType r -> Bool
+isSubtypeC     :: (PPRE r, FE g r) => g r -> SubConf r -> RType r -> RType r -> Bool
+isConvertibleC :: (PPRE r, FE g r) => g r -> SubConf r -> RType r -> RType r -> Bool
 --------------------------------------------------------------------------------
 isSubtypeC γ c t1 t2 = subtype dummySpan γ c t1 t2 `elem` [EqT, SubT]
 
-isSubtype γ = isSubtypeC γ def
-isSubtypeWithUq γ = isSubtypeC γ allowUniqueCfg
+isSubtype       γ t1 t2 = isSubtypeC γ (SC False t1 t2 Nothing) t1 t2
+isSubtypeWithUq γ t1 t2 = isSubtypeC γ (SC True  t1 t2 Nothing) t1 t2
 
 isConvertibleC γ c t1 t2
   | isSubtypeC γ c t1 t2
@@ -119,7 +117,7 @@ instance Monoid SubtypingResult where
 --------------------------------------------------------------------------------
 convert
   :: (PPRE r, FE g r, IsLocated l)
-  => l -> g r -> SubConf -> RType r -> RType r -> ConversionResult
+  => l -> g r -> SubConf r -> RType r -> RType r -> ConversionResult
 --------------------------------------------------------------------------------
 convert l g c t1 t2
   -- = case ltracePP l (ppshow t1 ++ " <: " ++ ppshow t2) $ subtype l g t1 t2 of
@@ -141,7 +139,7 @@ castable _ _ _ es _ _ = ConvFail es
 
 --------------------------------------------------------------------------------
 subtype :: (PPRE r, FE g r, IsLocated l)
-        => l -> g r -> SubConf -> RType r -> RType r -> SubtypingResult
+        => l -> g r -> SubConf r -> RType r -> RType r -> SubtypingResult
 --------------------------------------------------------------------------------
 -- | Type Variables
 subtype _ _ _ (TVar v1 _) (TVar v2 _)
@@ -181,12 +179,12 @@ subtype l _ _ t1 t2
 
 
 -- | subtype with default configuration
-subtype' l g = subtype l g def
+subtype' l g t1 t2 = subtype l g (SC False t1 t2 Nothing) t1 t2
 
 
 --------------------------------------------------------------------------------
 subtypeObj :: (PPRE r, FE g r, IsLocated l)
-           => l -> g r -> SubConf -> RType r -> RType r -> SubtypingResult
+           => l -> g r -> SubConf r -> RType r -> RType r -> SubtypingResult
 --------------------------------------------------------------------------------
 -- | Cannot convert a structural object type to a nominal class type.
 --   Interfaces are OK.
@@ -216,7 +214,8 @@ subtypeObj l γ c t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
                    | isUQ t2   = NoSub [errorUniqueRef l]
                    | x1 == x2  = EqT
                    | x1 <: x2  = SubT
-                   | otherwise = NoSub [errorIncompMutTy l t1 t2]
+                   | otherwise = NoSub [errorIncompMutTy l t1 t2
+                                  (sub_lhs c) (sub_rhs c) (sub_fld c)]
 
     a <: b = isAncestorOf (envCHA γ) b a
 
@@ -288,7 +287,7 @@ subtypeObjMembers l γ c (t1, TM m1 _ c1 k1 s1 n1) (t2, TM m2 _ c2 k2 s2 n2)
 
 --------------------------------------------------------------------------------
 subtypeMems :: (IsLocated a, PPRE r, FE g r)
-            => a -> g r -> SubConf
+            => a -> g r -> SubConf r
             -> (RType r, SEnv (TypeMember r))
             -> (RType r, SEnv (TypeMember r))
             -> SubtypingResult
@@ -313,7 +312,9 @@ subtypeMems l γ c (ot1, mems1) (ot2, mems2)
       | (o1, o2) == (Opt, Req)  -- Optionality check
       = NoSub [ errorIncompatOptional (srcPos l) f ]
       | otherwise
-      = subtype l γ c m1 m2 <> deepSub m1 t1 t2
+      = subtype l γ c' m1 m2 <> deepSub m1 t1 t2
+      where
+        c' = c { sub_fld = Just f }
 
     subtypeMem (_, (m1, m2))
       = NoSub [ unsupportedMethodComp (srcPos l) m1 m2 ]
@@ -369,10 +370,10 @@ subtypeFun l _ t1 t2 = NoSub [unsupportedConvFun l t1 t2]
 --------------------------------------------------------------------------------
 isUnique :: (PPRE r, FE g r) => g r -> RType r -> Bool
 --------------------------------------------------------------------------------
-isUnique g (TObj m mts _) = isSubtypeWithUq g m tUQ
-isUnique g (TRef s _)     | Gen _ (m : _) <- s
-                          = isSubtypeWithUq g m tUQ
-isUnique g v@(TVar _ _)   | Just t <- envFindBoundOpt g v
-                          = isUnique g t
-isUnique _ _              = False
+isUnique g (TObj m _ _) = isSubtypeWithUq g m tUQ
+isUnique g (TRef s _)   | Gen _ (m : _) <- s
+                        = isSubtypeWithUq g m tUQ
+isUnique g v@(TVar _ _) | Just t <- envFindBoundOpt g v
+                        = isUnique g t
+isUnique _ _            = False
 

@@ -163,8 +163,8 @@ typeMemersOfTDecl cha (TD (TS _ _ (h,_)) es) = es `mappend` heritage h
     heritage _             = mempty
 
 ---------------------------------------------------------------------------
-expandWithSubst :: (SubstitutableQ q r (TypeMembers r), PPR r)
-                => ClassHierarchy r -> TypeDeclQ AK r -> [RTypeQ q r] -> TypeMembers r
+expandWithSubst :: (Substitutable r (TypeMembers r), PPR r)
+                => ClassHierarchy r -> TypeDecl r -> [RType r] -> TypeMembers r
 ---------------------------------------------------------------------------
 expandWithSubst cha t@(TD (TS _ (BGen _ bvs) _) _) ts
   = apply (fromList $ zip (btvToTV <$> bvs) ts) (typeMemersOfTDecl cha t)
@@ -211,7 +211,7 @@ expandType _ cha t@(TRef (Gen n ts@(p:_)) r)
 
 -- | Ambient type: String, Number, etc.
 --
-expandType _ cha t@(TRef (Gen n []) r)
+expandType _ cha t@(TRef (Gen n []) _)
   | isClassType cha t = mkTObj . fltInst <$> ms
   | otherwise         = mkTObj           <$> ms
   where

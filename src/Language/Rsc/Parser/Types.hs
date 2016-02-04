@@ -17,7 +17,7 @@ import           Data.Char                      (isLower)
 import           Data.Foldable                  (concat)
 import           Data.Generics                  hiding (Generic)
 import qualified Data.HashSet                   as S
-import           Data.Maybe                     (catMaybes)
+import           Data.Maybe                     (catMaybes, fromMaybe)
 import           Data.Monoid
 import           Language.Fixpoint.Parse
 import qualified Language.Fixpoint.Types        as F
@@ -45,9 +45,10 @@ type RMutability = RTypeQ RK F.Reft
 
 -- TODO: Can Also take care of qualified names etc...
 
-data PContext = PContext { pctx_vars :: [TVar]                    -- Type variables in scope
-                         , pctx_mut  :: Maybe (BTVarQ RK F.Reft)  -- Ambient mutability
-                         }
+data PContext = PContext {
+      pctx_vars :: [TVar]                         -- Type variables in scope
+    , pctx_mut  :: Maybe (MutabilityQ RK F.Reft)  -- Ambient mutability
+  }
 
 instance Monoid PContext where
   mempty = PContext [] Nothing
@@ -66,7 +67,7 @@ pCtxFromListWithMut :: [BTVarQ RK F.Reft] -> PContext
 pCtxFromListWithMut []        = mempty
 pCtxFromListWithMut bs@(b1:_)
   | mutRelatedBVar b1
-  = PContext (map btvToTV bs) (Just b1)
+  = PContext (map btvToTV bs) (Just (btVar b1))
   | otherwise
   = PContext (map btvToTV bs) Nothing
 
@@ -150,7 +151,7 @@ interfaceP :: Parser (TypeDeclQ RK F.Reft)
 interfaceP
   = do  _     <- reserved "interface"
         s     <- typeSignatureP mempty InterfaceTDK
-        bd    <- typeBodyP $ pCtxFromSig s
+        bd    <- typeBodyP (pCtxFromSig s)
         return $ TD s bd
 
 classDeclP :: Parser (TypeSigQ RK F.Reft)
@@ -325,7 +326,11 @@ boundTypeP c
 argBind :: RRType -> BindQ RK F.Reft
 argBind t = B (rTypeValueVar t) t
 
-tObjP c = TObj <$> option trRO tUQP <*> typeBodyP c
+tObjP c = do  m   <- option trRO (parens (dummyP (typeP3 c)))
+              c'  <- pure (c { pctx_mut = Just m })
+              ms  <- typeBodyP c'
+              return (TObj m ms)
+
 tRefP c = TRef <$> tGenP c
 tGenP c = Gen  <$> qnameP <*> bareTyArgsP c
 
@@ -390,7 +395,7 @@ allP c p
        tAll αs t = foldr TAll t αs
 
 propBindP :: PContext -> Parser [EltKind]
-propBindP c  = sepEndBy memberP semi
+propBindP c = sepEndBy memberP semi
   where
     unc     = \f (a,b,c,d,e) -> f a b c d e
     memberP =  try (idxP c)
@@ -452,29 +457,28 @@ indexP = xyP id colon sn
     id = symbol <$> (try lowerIdP <|> upperIdP)
     sn = withinSpacesP (string "string" <|> string "number")
 
--- | [STATIC] [@ASSIGNABILITY] f[?]: t
+-- | [Static] [Mutability] f[?]: t
 --
---  e.g.
---
---      static
+--  If mutability is provided, then use that.
+--  If no mutability is provided, then use the contextual one.
+--  If no contextual exist (probably a bug), use ReadOnly.
 --
 propP c
   = do  s     <- option InstanceK (reserved "static" *> return StaticK)
-        a     <- withinSpacesP (fieldAsgnP c)
+        a     <- mutP
         x     <- symbol <$> withinSpacesP binderP
         o     <- option Req (withinSpacesP (char '?') *> return Opt)
         _     <- colon
         t     <- typeP1 c
         return $ (x, s, o, a, t)
+  where
+    mutP = optionMaybe (withinSpacesP mP) >>= \case
+             Just m  -> return m
+             Nothing -> return (fromMaybe trRO (pctx_mut c))
+    mP   = parens (dummyP (typeP3 c))
 
 
--- | [STATIC] [@MUTABILITY] m[<A..>](x:t,..): t
---
---  e.g.
---
---    static @Mutable m<A>(x: A): A
---
---    n(x: number): string
+-- | [Static] [@Mutability] m[<A extends T,..>](x:t,..): t
 --
 methP c
   = do  s     <- option InstanceK (reserved "static" *> return StaticK)
@@ -491,18 +495,11 @@ callP c         = withinSpacesP (methSigP c)
 ctorP c         = withinSpacesP (reserved "new")
                *> withinSpacesP (methSigP c)
 
-mutabilityP     =  brackets . typeP2
-
 methMutabilityP =  try (reserved "@Mutable"       >> return trMU)
                <|> try (reserved "@Immutable"     >> return trIM)
                <|> try (reserved "@ReadOnly"      >> return trRO)
                <|> try (reserved "@AssignsFields" >> return trAF)
                <|>     (                             return trRO)       -- default
-
-fieldAsgnP c    =  try (reserved "@Assignable"    >> return trMU)
-               <|> try (reserved "@Final"         >> return trIM)
-               <|> try (char '@'                  >> dummyP (tVarP c))
-               <|>     (                             return trMU) -- default
 
 dummyP ::  Parser (F.Reft -> b) -> Parser b
 dummyP fm = fm `ap` topP

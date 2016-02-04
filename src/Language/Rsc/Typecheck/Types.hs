@@ -34,8 +34,11 @@ module Language.Rsc.Typecheck.Types (
   , btvToTV, tvToBTV
 
   -- * Mutability primitives
-  , tMU, tUQ, tIM, tAF, tRO, trMU, trIM, trAF, trRO, trUQ
-  , isRO, isMU, isIM, isUQ, isAF, isUMRef, mutRelated, mutRelatedBVar
+  , tMU , tIM , tAF , tRO , tUQ
+  , trMU, trIM, trAF, trRO, trUQ
+  , isMU, isIM, isAF, isRO, isUQ
+
+  , mutRelated, mutRelatedBVar
 
   -- * Primitive Types
 
@@ -103,27 +106,22 @@ tRO   = mkMut "ReadOnly"
 tAF   = mkMut "AssignsFields"
 tUQ   = mkMut "Unique"
 
-trMU, trIM, trRO, trAF :: F.Reftable r => RTypeQ RK r
-trMU  = mkRelMut "Mutable"
-trIM  = mkRelMut "Immutable"
-trRO  = mkRelMut "ReadOnly"
-trAF  = mkRelMut "AssignsFields"
-trUQ  = mkRelMut "Unique"
+trMU, trIM, trRO, trAF, trUQ :: F.Reftable r => RTypeQ RK r
+trMU   = mkRelMut "Mutable"
+trIM   = mkRelMut "Immutable"
+trRO   = mkRelMut "ReadOnly"
+trAF   = mkRelMut "AssignsFields"
+trUQ   = mkRelMut "Unique"
 
 typeName (Gen (QN _ s) _)  = s
 
 isNamed s t | TRef n _ <- t, typeName n == F.symbol s = True | otherwise = False
 
-isRO  = isNamed "ReadOnly"
-isMU  = isNamed "Mutable"
-isIM  = isNamed "Immutable"
-isUQ  = isNamed "Unique"
-isAF  = isNamed "AssignsFields"
-
-isUMRef t | TRef (Gen _ (m:_)) _ <- t, isUQ m
-          = True
-          | otherwise
-          = False
+isRO   = isNamed "ReadOnly"
+isMU   = isNamed "Mutable"
+isIM   = isNamed "Immutable"
+isUQ   = isNamed "Unique"
+isAF   = isNamed "AssignsFields"
 
 mutRelated t = isMU t || isIM t || isUQ t || isRO t
 
@@ -367,10 +365,10 @@ btvToTV  (BTV s l _ ) = TV s l
 
 tvToBTV  (TV s l)     = BTV s l Nothing
 
-tVar :: (F.Reftable r) => TVar -> RType r
+tVar :: (F.Reftable r) => TVar -> RTypeQ q r
 tVar = (`TVar` fTop)
 
-btVar :: (F.Reftable r) => BTVarQ q r -> RType r
+btVar :: (F.Reftable r) => BTVarQ q r -> RTypeQ q r
 btVar = tVar . btvToTV
 
 tNum, tBV32, tBool, tString, tTop, tVoid, tBot, tUndef, tNull, tAny, tErr :: F.Reftable r => RTypeQ q r

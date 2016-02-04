@@ -18,3 +18,7 @@ interface Immutable extends ReadOnly {
 interface Unique extends ReadOnly {
     _uniqueBrand: any;
 }
+
+interface InheritedMut extends ReadOnly {
+    _inheritedMutBrand: any;
+}

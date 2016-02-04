@@ -140,7 +140,8 @@ extractFact fs = map go fs
 
 
 --------------------------------------------------------------------------------
-parseAnnotations :: [Statement (SrcSpan, [RawSpec])] -> Either FError [Statement (SrcSpan, [Spec])]
+parseAnnotations :: [Statement (SrcSpan, [RawSpec])]
+                 -> Either FError [Statement (SrcSpan, [Spec])]
 --------------------------------------------------------------------------------
 parseAnnotations ss
   | [] <- errs = Right ss'
@@ -158,11 +159,11 @@ parseAnnotations ss
 
     -- Update the tvar context
     h :: Spec -> PContext
-    h (FunctionDeclarationSpec t) = pCtxFromList $ fst $ bkAll $ snd t
-    h (FunctionExpressionSpec t)  = pCtxFromList $ fst $ bkAll t
-    h (InterfaceSpec t)           = pCtxFromList $ b_args $ sigTRef $ typeSig t
-    h (ClassSpec t)               = pCtxFromList $ b_args $ sigTRef t
-    h (MethodSpec t)              = mconcat $ pCtxFromList . fst . bkAll . snd <$> m_ty t
+    h (FunctionDeclarationSpec t) = pCtxFromList (fst (bkAll (snd t)))
+    h (FunctionExpressionSpec t)  = pCtxFromList (fst (bkAll t))
+    h (InterfaceSpec t)           = pCtxFromList (b_args (sigTRef (typeSig t)))
+    h (ClassSpec t)               = pCtxFromList (b_args (sigTRef t))
+    h (MethodSpec t)              = mconcat (pCtxFromList . fst . bkAll . snd <$> m_ty t)
     h _                           = mempty
 
 

@@ -182,6 +182,10 @@ interface Unique extends ReadOnly {
     _uniqueBrand: any;
 }
 
+interface InheritedMut extends ReadOnly {
+    _inheritedMutBrand: any;
+}
+
 /*@ type idx<x> = { v: number | 0 <= v && v < len x } */
 declare type idx = number;
 

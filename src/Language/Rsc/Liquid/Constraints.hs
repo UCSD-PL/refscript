@@ -50,23 +50,26 @@ getCGInfo cfg f p = cgStateCInfo f p . execute cfg p . (>> fixCWs)
     fixCs         = getCons   >>= concatMapM splitC
     fixWs         = getWFCons >>= concatMapM splitW
 
+
+addHist (Ci e l h) s = Ci e l (s:h)
+
 --------------------------------------------------------------------------------
 splitC :: SubC -> CGM [FixSubC]
 --------------------------------------------------------------------------------
 
 -- | S-Var-R
 --
-splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
+splitC s@(Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   | α1 == α2
-  = bsplitC g i t1 t2
+  = bsplitC g (addHist i s) t1 t2
   | otherwise
   = splitIncompatC g i t1
 
 -- | S-Var-L
 --
-splitC (Sub g i t1@(TVar _ _) t2)
+splitC s@(Sub g i t1@(TVar _ _) t2)
   | Just t1' <- envFindBoundOpt g t1
-  = splitC (Sub g i t1' t2)
+  = splitC (Sub g (addHist i s) t1' t2)
 
 -- | S-Mut (Ignore if the target type is mutability related)
 --
@@ -80,17 +83,18 @@ splitC (Sub g i t1 t2)
 
 -- | S-Fun
 --
-splitC (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
-  = do bcs       <- bsplitC g i tf1 tf2
+splitC s@(Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
+  = do bcs       <- bsplitC g i' tf1 tf2
        g'        <- envTyAdds "splitC" i xt2s g
-       cs        <- concatMapM splitC $ zipWith (Sub g' i) t2s t1s'
-       cs'       <- splitC $ Sub g' i (F.subst su t1) t2
+       cs        <- concatMapM splitC $ zipWith (Sub g' i') t2s t1s'
+       cs'       <- splitC $ Sub g' i' (F.subst su t1) t2
        return     $ bcs ++ cs ++ cs'
     where
        t2s        = b_type <$> xt2s
        t1s'       = F.subst su (b_type <$> xt1s)
        su         = F.mkSubst $ zipWith bSub xt1s xt2s
        bSub b1 b2 = (b_sym b1, F.eVar $ b_sym b2)
+       i'         = addHist i s
 
 -- | S-And-L
 --
@@ -104,31 +108,36 @@ splitC (Sub _ _ _ TAnd{})
 
 -- | S-All
 --
-splitC (Sub g i (TAll α1 t1) (TAll α2 t2))
+splitC s@(Sub g i (TAll α1 t1) (TAll α2 t2))
   | α1 == α2
-  = splitC $ Sub g i t1 t2
+  = splitC $ Sub g i' t1 t2
   | otherwise
-  = splitC $ Sub g i t1 t2'
+  = splitC $ Sub g i' t1 t2'
   where
     θ   = fromList [(btvToTV α2, btVar α1 :: RefType)]
     t2' = apply θ t2
+    i'  = addHist i s
 
 -- | S-Union-L
 --
-splitC (Sub g c t1@(TOr t1s r) t2)
-  = do  m1      <- bsplitC g c t1 t2
-        ms      <- concatMapM (\t -> splitC (Sub g c (t `strengthen` r) t2)) t1s
+splitC s@(Sub g i t1@(TOr t1s r) t2)
+  = do  m1      <- bsplitC g i t1 t2
+        ms      <- concatMapM (\t -> splitC (Sub g i' (t `strengthen` r) t2)) t1s
         return   $ m1 ++ ms
+  where
+    i' = addHist i s
 
 -- | S-Union-R
 --
-splitC (Sub g c s t@(TOr ts _))
-  = do  m0      <- bsplitC g c s t
-        mss     <- mapM (splitC . Sub g c s) ts
-        ts      <- pure (map (sameTag g s) ts)
+splitC s@(Sub g i t1 t2@(TOr ts _))
+  = do  m0      <- bsplitC g i' t1 t2
+        mss     <- mapM (splitC . Sub g i' t1) ts
+        ts      <- pure (map (sameTag g t1) ts)
         case L.find fst (zip ts mss) of
           Just (_, ms) -> return (m0 ++ ms)
-          Nothing      -> splitIncompatC g c s
+          Nothing      -> splitIncompatC g i' t1
+  where
+    i' = addHist i s
 
 
 -- splitC (Sub g c s t@(TOr ts _))
@@ -150,7 +159,7 @@ splitC (Sub g c s t@(TOr ts _))
 --
 --    TODO: Find variance for type arguments
 --
-splitC (Sub g i t1@(TRef n1@(Gen x1 (_ :t1s)) r1)
+splitC s@(Sub g i t1@(TRef n1@(Gen x1 (_ :t1s)) r1)
                 t2@(TRef    (Gen x2 (m2:t2s)) _ ))
 
   -- Trivial case (do not descend)
@@ -162,13 +171,13 @@ splitC (Sub g i t1@(TRef n1@(Gen x1 (_ :t1s)) r1)
   --
   | x1 == x2
   = if isSubtype g m2 tMU then
-      do  cs    <- bsplitC g i t1 t2
-          cs'   <- concatMapM splitC $ safeZipWith "splitc-5" (Sub g i) t1s t2s
-          cs''  <- concatMapM splitC $ safeZipWith "splitc-6" (Sub g i) t2s t1s
+      do  cs    <- bsplitC g i' t1 t2
+          cs'   <- concatMapM splitC $ safeZipWith "splitc-5" (Sub g i') t1s t2s
+          cs''  <- concatMapM splitC $ safeZipWith "splitc-6" (Sub g i') t2s t1s
           return $ cs ++ cs' ++ cs''
     else
-      do  cs    <- bsplitC g i t1 t2
-          cs'   <- concatMapM splitC $ safeZipWith "splitc-4" (Sub g i) t1s t2s
+      do  cs    <- bsplitC g i' t1 t2
+          cs'   <- concatMapM splitC $ safeZipWith "splitc-4" (Sub g i') t1s t2s
           return $ cs ++ cs'
 
   -- Upcast
@@ -180,30 +189,40 @@ splitC (Sub g i t1@(TRef n1@(Gen x1 (_ :t1s)) r1)
   | otherwise
   = splitIncompatC g i t1
 
+  where
+    i' = addHist i s
+
 -- | S-Prim
 --
-splitC (Sub g i t1@(TPrim c1 _) t2@(TPrim c2 r2))
-  | isTTop t2 = bsplitC g i t1 (rTop t1 `strengthen` r2)
-  | isTAny t2 = bsplitC g i t1 (rTop t1 `strengthen` r2)
-  | c1 == c2  = bsplitC g i t1 t2
-  | otherwise = splitIncompatC g i t1
+splitC s@(Sub g i t1@(TPrim c1 _) t2@(TPrim c2 r2))
+  | isTTop t2 = bsplitC g i' t1 (rTop t1 `strengthen` r2)
+  | isTAny t2 = bsplitC g i' t1 (rTop t1 `strengthen` r2)
+  | c1 == c2  = bsplitC g i' t1 t2
+  | otherwise = splitIncompatC g i' t1
+  where
+    i' = addHist i s
 
 -- | S-Obj
 --
-splitC (Sub g i@(Ci _ l) t1@(TObj _ ms1 r1) t2@(TObj _ ms2 _))
+splitC s@(Sub g i t1@(TObj _ ms1 r1) t2@(TObj _ ms2 _))
   | F.isFalse (F.simplify r1)
   = return []
   | otherwise
-  = do  cs     <- bsplitC g i t1 t2
-        (x,g') <- cgEnvAddFresh "" l t1 g
-        cs'    <- splitTM g' (F.symbol x) i ms1 ms2
+  = do  cs     <- bsplitC g i' t1 t2
+        (x,g') <- cgEnvAddFresh "" i t1 g
+        cs'    <- splitTM g' (F.symbol x) i' ms1 ms2
         return $ cs ++ cs'
+  where
+    i' = addHist i s
 
-splitC (Sub g i t1 t2)
+splitC s@(Sub g i t1 t2)
   | all maybeTObj [t1, t2]
   = case (expandType NonCoercive (envCHA g) t1, expandType NonCoercive (envCHA g) t2) of
-      (Just t1', Just t2') -> splitC (Sub g i t1' t2')
-      _ -> cgError $ errorUnfoldTypes l t1 t2 where l = srcPos i
+      (Just t1', Just t2') -> splitC (Sub g i' t1' t2')
+      _ -> cgError $ errorUnfoldTypes l t1 t2
+  where
+    l  = srcPos i
+    i' = addHist i s
 
 splitC (Sub g i t1 _) = splitIncompatC g i t1
 
@@ -270,7 +289,9 @@ bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 -- NOTE: addInvariant only needed in LHS
 bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant g t1 <*> return t2
 
+--------------------------------------------------------------------------------
 bsplitC' :: CGEnv -> a -> RefType -> RefType -> [F.SubC a]
+--------------------------------------------------------------------------------
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivial r2
   = F.subC bs (conjoinPred p $ r1 {F.sr_reft = typeofReft t1}) r2 Nothing subCTag ci

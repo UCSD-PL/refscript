@@ -102,24 +102,21 @@ announce s a = liftIO (startPhase Loud s) >> a
 
 -- | solveConstraint: solve with `ueqAllSorts` enabled.
 --------------------------------------------------------------------------------
-solveConstraints :: Config
-                 -> FilePath
-                 -> CGInfo
-                 -> IO (A.UAnnSol RefType, F.FixResult Error)
+solveConstraints
+  :: Config -> FilePath -> CGInfo -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
 solveConstraints cfg f cgi
-  = do F.Result r s <- solve fpConf (cgi_finfo cgi)
-       let r'   = fmap  ci_info            r
-       -- let r'= fmap (ci_info . F.sinfo) r
-       let anns = cgi_annot cgi
-       let sol  = applySolution s
-       return   $ (A.SomeAnn anns sol, r')
+  = do  F.Result r s <- solve fpConf (cgi_finfo cgi)
+        r'           <- pure (fmap ciToError r)
+        anns         <- pure (cgi_annot cgi)
+        sol          <- pure (applySolution s)
+        return          (A.SomeAnn anns sol, r')
   where
-    fpConf      = def { C.real        = real cfg
-                      , C.ueqAllSorts = C.UAS True
-                      , C.srcFile     = f
-                      , C.save        = True
-                      }
+    fpConf        = def { C.real        = real cfg
+                        , C.ueqAllSorts = C.UAS True
+                        , C.srcFile     = f
+                        , C.save        = True
+                        }
 
 -- NOT VALID WITH NEW L-F -- solveConstraints cfg f cgi
 -- NOT VALID WITH NEW L-F --   = do F.Result r s <- solve fpConf (cgi_finfo cgi)
@@ -451,50 +448,32 @@ consStmt _ s
 --------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnLq -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
--- PV: Some ugly special casing for Function expressions
---
--- TODO: Fix this with contextual typing
---
-consVarDecl g (VarDecl _ x (Just e@FuncExpr{}))
-  = (snd <$>) <$> consExpr g e (v_type <$> envFindTy x (cge_names g))
-
 consVarDecl g (VarDecl l x (Just e))
   = case envFindTy x (cge_names g) of
       -- Local (no type annotation)
       Nothing ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds l "consVarDecl" [SI (F.symbol x) Local WriteLocal Initialized eT] gy
+          Just   <$> cgEnvAdds l "cvd" [SI (F.symbol x) Local WriteLocal Initialized eT] gy
 
-      -- Local (with type annotation)
-      Just (SI n lc  WriteLocal _ t) -> do
-        fta       <- freshenType WriteGlobal g l t
-        mseq (consExpr g e $ Just t) $ \(y,gy) -> do
+      Just s@(SI _ _ WriteLocal  _ _) -> go s
+      Just s@(SI _ _ WriteGlobal _ _) -> go s
+      Just s@(SI _ _ RdOnly      _ _) -> go s
+      Just   (SI _ _ _           _ _) -> cgError $ errorVarDeclAnnot (srcPos l) x
+  where
+  go (SI n lc a _ t) = freshenTypeOpt a g l t >>= \case
+      Just fta ->
+        mseq (consExpr g e (Just fta)) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
           _       <- subType l Nothing gy eT fta
           _       <- subType l Nothing gy fta t
-          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc WriteLocal Initialized fta] gy
-
-      -- | Global
-      Just (SI n lc WriteGlobal _ t) -> do
-        fta       <- freshenType WriteGlobal g l t
-        mseq (consExpr g e $ Just fta) $ \(y, gy) -> do
-          eT      <- cgSafeEnvFindTyM y gy
-          _       <- subType l Nothing gy eT fta
-          _       <- subType l Nothing gy fta t
-          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc WriteGlobal Initialized fta] gy
-
-      -- | ReadOnly
-      Just (SI n lc RdOnly _ t) -> do
-        fta       <- freshenType WriteGlobal g l t
+          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized fta] gy
+      Nothing ->
         mseq (consExpr g e (Just t)) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
-          -- _       <- subType l Nothing gy eT t
-          _       <- subType l Nothing gy eT fta
-          _       <- subType l Nothing gy fta t
-          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc RdOnly Initialized fta] gy
+          _       <- subType l Nothing gy eT t
+          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized t] gy
 
-      _ -> cgError $ errorVarDeclAnnot (srcPos l) x
 
 consVarDecl g (VarDecl l x Nothing)
   = case envFindTy x (cge_names g) of
@@ -516,8 +495,6 @@ consExprT :: CGEnv -> Expression AnnLq -> RefType -> CGM (Maybe (Id AnnLq, CGEnv
 consExprT g e@FuncExpr{} t = consExpr g e (Just t)
 consExprT g e            t = consCall g l "consExprT" [(e, Just t)] (idTy t)
   where l = getAnnotation e
-
-consExprTs l g fn e ts = consCall g l fn [(e, Nothing)] (idTys ts)
 
 
 --------------------------------------------------------------------------------

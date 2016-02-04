@@ -93,6 +93,7 @@ data CGInfo = CGI { cgi_finfo :: F.FInfo Cinfo
 
 -- Dump the refinement subtyping constraints
 instance PP CGInfo where
+  pp _ = text "YYYY"
   pp (CGI finfo _) = cat (map pp (HM.elems $ F.cm finfo))
 
 
@@ -266,27 +267,9 @@ subType l (Just err) g t1 t2
   = modify $ \st -> st { cg_cs = Sub g (ci err l) t1 t2 : cg_cs st }
 
 subType l Nothing g t1 t2
-  = subType l (Just $ mkLiquidError l g t1 t2) g t1 t2
+  = subType l (Just (mkErr l "Liquid Type Error")) g t1 t2
 
-mkLiquidError l g t1 t2 = mkErr l $ show
-              $ text "Liquid Type Error" $+$
-                nest 2
-                (
-                  -- text "In Environment:"  $+$ nest 4 (pp γ ) $+$
-                  text "With guards:"     $+$ nest 4 (vcat $ map pp gr) $+$
-                  text "Left hand side:"  $+$ nest 4 (pp τ1) $+$
-                  text "Right hand side:" $+$ nest 4 (pp τ2)
-                )
-  where
-    -- γ         = {- F.subst sbt -} (cge_names g)
-    gr        = {- F.subst sbt -} (cge_guards g)
-    τ1        = {- F.subst sbt -} t1
-    τ2        = {- F.subst sbt -} t2
-    -- tmp       = [ x | (x, _) <- F.toListSEnv (envNames g), isPrefixOfSym tempPrefix x ]
-    -- miniTmp   = map (F.expr . F.symbol . ("_" ++) . single) ['a'..]
-    -- sbt       = F.mkSubst (zip tmp miniTmp)
 
---
 -- TODO: KVar subst
 --
 instance F.Subable a => F.Subable (Env a) where

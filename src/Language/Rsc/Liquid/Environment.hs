@@ -18,7 +18,7 @@ module Language.Rsc.Liquid.Environment (
 
   -- * Fresh Templates for Unknown Refinement Types
   , freshTyFun
-  , freshenType
+  , freshenTypeOpt, freshenType
   , freshTyInst
   , freshTyPhis
   , freshTyPhis'
@@ -48,7 +48,7 @@ module Language.Rsc.Liquid.Environment (
 import           Control.Monad
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.List                      as L
-import           Data.Maybe                     (catMaybes)
+import           Data.Maybe                     (catMaybes, fromMaybe)
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
@@ -419,20 +419,21 @@ freshenVI g l v@(SI x loc a i t)
   = return v
 
 --------------------------------------------------------------------------------
+freshenTypeOpt :: IsLocated l
+  => Assignability -> CGEnv -> l -> RefType -> CGM (Maybe RefType)
+--------------------------------------------------------------------------------
+freshenTypeOpt WriteGlobal g l t
+  | isTrivialRefType t = Just <$> (freshTy "ft-WG" t >>= wellFormed l g)
+  | otherwise          = return Nothing
+freshenTypeOpt _ g l t
+  | not (isTFun t)     = return Nothing
+  | isTrivialRefType t = Just <$> (freshTy "ft-RO" t >>= wellFormed l g)
+  | otherwise          = return Nothing
+
+--------------------------------------------------------------------------------
 freshenType :: IsLocated l => Assignability -> CGEnv -> l -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-freshenType WriteGlobal g l t
-  | isTrivialRefType t
-  = freshTy "freshenType-WG" (toType t) >>= wellFormed l g
-  | otherwise
-  = return t
-freshenType _ g l t
-  | not (isTFun t)
-  = return t
-  | isTrivialRefType t
-  = freshTy "freshenType-RO" (toType t) >>= wellFormed l g
-  | otherwise
-  = return t
+freshenType a g l t = fromMaybe t <$> freshenTypeOpt a g l t
 
 -- | 1. Instantiates fresh types (at call-site)
 --   2. Adds well-formedness constraints for instantiated type variables

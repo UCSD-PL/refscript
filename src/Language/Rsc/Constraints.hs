@@ -17,7 +17,7 @@ module Language.Rsc.Constraints (
   , CGEnvR(..), CGEnv
 
   -- * Constraint Information
-  , Cinfo (..), ci
+  , Cinfo (..), ci, ciToError
 
   -- * Constraints
   , SubC (..) , WfC (..), FixSubC   , FixWfC
@@ -41,16 +41,24 @@ import           Text.PrettyPrint.HughesPJ
 
 data Cinfo = Ci { ci_info    :: !Error
                 , ci_srcspan :: !SrcSpan
-                } deriving (Eq, Ord, Show)
+                , ci_history :: [SubC]
+                }
+
+ciToError (Ci e _ h) = err (errLoc e) (errMsg e ++ "\n" ++ hs)
+  where
+    hs = show $ vcat (map pps h)
+    pps (Sub _ _ l r) =
+      text "Which was produced from the subtyping between:" $+$
+      nest 2 (nest 2 (pp l) $+$ text "and" $+$ nest 2 (pp r))
 
 ci   :: (IsLocated a) => Error -> a -> Cinfo
-ci e = Ci e . srcPos
+ci e l = Ci e (srcPos l) []
 
 instance NFData Cinfo where
-  rnf (Ci _ s) = seq s ()
+  rnf (Ci _ s _) = seq s ()
 
 instance PP Cinfo where
-  pp (Ci e l)   = text "CInfo:" <+> pp l <+> (parens $ pp e)
+  pp (Ci e l _) = text "CInfo:" <+> pp l <+> (parens $ pp e)
 
 instance IsLocated Cinfo where
   srcPos = ci_srcspan
@@ -65,10 +73,10 @@ instance F.Fixpoint Cinfo where
 -- | Subtyping Constraints
 
 data SubC
-  = Sub { senv  :: !CGEnv      -- ^ Environment
-        , sinfo :: !Cinfo      -- ^ Source Information
-        , slhs  :: !RefType    -- ^ Subtyping LHS
-        , srhs  :: !RefType    -- ^ Subtyping RHS   ... senv |- slhs <: srhs
+  = Sub { senv  :: !CGEnv         -- ^ Environment
+        , sinfo :: !Cinfo         -- ^ Source Information
+        , slhs  :: !RefType       -- ^ Subtyping LHS
+        , srhs  :: !RefType       -- ^ Subtyping RHS   ... senv |- slhs <: srhs
         }
 
 -- | Wellformedness Constraints
@@ -80,9 +88,10 @@ data WfC
       }
 
 instance PP SubC where
-  pp (Sub γ i t t') = pp (cge_names γ) $+$ pp (cge_guards γ)
-                        $+$ (text "|-" <+> (pp t $+$ text "<:" $+$ pp t'))
-                        $+$ (text "from:" <+> pp i)
+  pp (Sub γ i t t') = pp (cge_names γ)
+                    $+$ pp (cge_guards γ)
+                    $+$ text "|-"    <+> (pp t $+$ text "<:" $+$ pp t')
+                    $+$ text "from:" <+> pp i
 
 instance PP WfC where
   pp (W γ t i)      = pp (cge_names γ)

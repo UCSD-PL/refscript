@@ -236,30 +236,13 @@ tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
                 Left e -> tcError e
                 Right (unzip -> (ts, fs)) ->
                     do  (e1'', _) <- tcExprT γ e1' (tOr ts)
-                        (e2', ts) <- tcScan (tcExprT γ) e2 (map f_ty fs)
+                        (e2' , _) <- tcScan (tcExprT γ) e2 (map f_ty fs)
                         return (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1'' f) e2'), Just γ)
 
             | otherwise -> tcError (errorNonMutFldAsgn l f t1)
 
           (Nothing, _) -> tcError (errorExtractMut l t1 e1)
           (_, Nothing) -> tcError (errorExtractFldMut l f t1)
---
---           (Just m, ThisRef _)
---             | isSubtype γ m tAF ->
---               case getProp l γ f te1 of
---                 Left e        -> tcError e
---                 Right (map snd -> fs) ->
---                     do  (e2', _) <- foldM (tcSetPropMut γ l f te1) (e2, tBot) fs
---                         return (mkAsgnExp e1' e2', Just γ)
---
---           _ ->
---               case getProp l γ f te1 of
---                 Left e        -> tcError e
---                 Right (map snd -> fs) ->
---                     do  (e2', _) <- foldM (tcSetPropImm γ l f te1) (e2, tBot) fs
---                         return (mkAsgnExp e1' e2', Just γ)
-  where
-    mkAsgnExp e1_ e2_ = ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1_ f) e2_)
 
 -- e
 tcStmt γ (ExprStmt l e)
@@ -368,7 +351,7 @@ tcVarDecl γ v@(VarDecl l x (Just e))
 
       -- Local (with type annotation)
       Just (SI y lc WriteLocal _ t) ->
-        do  (e', t') <- ltracePP l "Inferred" <$> tcExprT γ e t
+        do  (e', t') <- tcExprT γ e t
             return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (SI y lc WriteLocal Initialized t') γ)
 
       -- Global
@@ -381,7 +364,7 @@ tcVarDecl γ v@(VarDecl l x (Just e))
 
       -- ReadOnly
       Just (SI y lc RdOnly _ t) ->
-        do  ([e'], Just t') <- ltracePP l "inferred" <$> tcNormalCallWCtx γ l "VarDecl-RO" [(e, Just t)] (idTy t)
+        do  ([e'], Just t') <- tcNormalCallWCtx γ l "VarDecl-RO" [(e, Just t)] (idTy t)
             return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (SI y lc RdOnly Initialized t') γ)
 
       c -> fatal (unimplemented l "tcVarDecl" ("case: " ++ ppshow c)) (v, Just γ)
@@ -481,7 +464,7 @@ tcClassElt γ (TD sig ms) c@(MemberMethDecl l False x xs bd)
 tcAsgn :: Unif r
        => AnnTc r -> TCEnv r -> Id (AnnTc r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 --------------------------------------------------------------------------------
-tcAsgn l γ x e
+tcAsgn _ γ x e
   | Just (SI _ _ a _ t) <- tcEnvFindTyForAsgn x γ
   = do  eitherET  <- tcWrap (tcExprT γ e t)
         (e', to)  <- tcEW γ e eitherET
@@ -502,14 +485,14 @@ tcAsgn l γ x e
 -- tcSetPropMut _ l _ _ _ m
 --   = tcError (errorMethAsgn l m)
 
-tcSetPropImm γ l f t0 (e, t') (FI _ _ m t)
-  | isSubtype γ m tIM
-  = fatal (errorImmutableRefAsgn l f t0) (e, t')
-  | otherwise
-  = tcExprT γ e t
-
-tcSetPropImm _ l _ _ _ m
-  = tcError (errorMethAsgn l m)
+-- tcSetPropImm γ l f t0 (e, t') (FI _ _ m t)
+--   | isSubtype γ m tIM
+--   = fatal (errorImmutableRefAsgn l f t0) (e, t')
+--   | otherwise
+--   = tcExprT γ e t
+--
+-- tcSetPropImm _ l _ _ _ m
+--   = tcError (errorMethAsgn l m)
 
 
 
@@ -679,7 +662,7 @@ tcExpr γ e@(ArrayLit l es) to
 tcExpr γ (ObjectLit l pes) to
   = do  (es', ts) <- unzip <$> T.mapM (uncurry (tcExprWD γ)) ets
         t         <- pure (TObj tUQ (tmsFromList (zipWith toFI ps ts)) fTop)
-        return       (ObjectLit l (zip ps es'), ltracePP l "objlit" t)
+        return       (ObjectLit l (zip ps es'), t)
   where
     (ps , _)       = unzip pes
     toFI p t       = FI (F.symbol p) Req tUQ t

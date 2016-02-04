@@ -3,9 +3,9 @@
 
 function inc(n: number): number { return n + 1; }
 
-/*@ readonly g09 :: {
-    @Final a: number;
-    @Final f: (n: number) => number;
+/*@ readonly g09 :: (Immutable) {
+    a: number;
+    f: (n: number) => number;
 } */
 let g09 = {
     a: 5,

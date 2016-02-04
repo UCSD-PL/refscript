@@ -354,10 +354,11 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
           | isSubtype g m1f tMU || isSubtype g m1 tUQ ->
             case getProp l g1 f t1 of
               Left e -> cgError e
-              Right (unzip -> (ts, fs)) -> do
-                ts  <- pure [ (t,()) | FI _ _ _ t <- fs ]
-                z   <- consScan (\g_ -> const . consExprT g_ e2) g1 ts
-                return (fmap snd z)
+              Right (unzip -> (ts, fs)) ->
+                mseq (consExprT g1 e1 (tOr ts)) $ \(_, g2) -> do
+                  tus <- pure [ (t,()) | FI _ _ _ t <- fs ]
+                  z   <- consScan (\g_ -> const . consExprT g_ e2) g2 tus
+                  return (fmap snd z)
 
           | otherwise -> cgError (errorNonMutFldAsgn l f t1)
 
@@ -476,11 +477,11 @@ consVarDecl g (VarDecl l x (Just e))
 
       -- | Global
       Just (SI n lc WriteGlobal _ t) -> do
-        fta       <- ltracePP l "freshened" <$> freshenType WriteGlobal g l t
+        fta       <- freshenType WriteGlobal g l t
         mseq (consExpr g e $ Just fta) $ \(y, gy) -> do
-          eT      <- ltracePP l "glob inferred" <$> cgSafeEnvFindTyM y gy
-          _       <- subType l Nothing gy eT (ltracePP l "glob stored" fta)
-          _       <- subType l Nothing gy fta (ltracePP l "glob bound" t)
+          eT      <- cgSafeEnvFindTyM y gy
+          _       <- subType l Nothing gy eT fta
+          _       <- subType l Nothing gy fta t
           Just   <$> cgEnvAdds l "consVarDecl" [SI n lc WriteGlobal Initialized fta] gy
 
       -- | ReadOnly

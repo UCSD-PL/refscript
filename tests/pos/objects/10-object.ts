@@ -1,4 +1,4 @@
-/*@ foo:: (o: { @Final x: number; }) => { @Final x: number + boolean } */
+/*@ foo:: (o: { (Immutable) x: number; }) => { (Immutable) x: number + boolean } */
 export function foo(o) {
     return o;
 }

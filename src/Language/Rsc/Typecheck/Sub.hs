@@ -238,7 +238,7 @@ subtypeObj l γ c (TRef g1@(Gen x1 (m1:t1s)) _) (TRef (Gen x2 (m2:t2s)) _)
       | Just (Gen _ (_:t1s')) <- weaken (envCHA γ) g1 x2
       = mconcat $ SubT : zipWith (subtype' l γ) t1s' t2s
       | otherwise
-      = NoSub [errorIncompatTypes (srcPos l) x1 x2]
+      = NoSub [errorSubtype l x1 x2]
 
     checkTypArgs
       | isSubtype γ m2 tIM
@@ -255,7 +255,7 @@ subtypeObj l γ _ t1@(TClass (BGen c1 ts1)) t2@(TClass (BGen c2 ts2))
   , and $ uncurry (isSubtype γ) . swap <$> ts
   = EqT
   | otherwise
-  = NoSub [errorTClassSubtype l t1 t2]
+  = NoSub [errorSubtype l t1 t2]
   where
     ts  = [ (t, t') | (Just t, Just t') <- zip bs1 bs2 ]
     bs1 = btv_constr <$> ts1
@@ -264,7 +264,7 @@ subtypeObj l γ _ t1@(TClass (BGen c1 ts1)) t2@(TClass (BGen c2 ts2))
 -- | Module subtyping
 subtypeObj l _ _ (TMod m1) (TMod m2)
   | m1 == m2  = EqT
-  | otherwise = NoSub [errorTModule l m1 m2]
+  | otherwise = NoSub [errorSubtype l m1 m2]
 
 -- Structural subtyping (fall-back)
 --
@@ -352,13 +352,13 @@ subtypeFun l γ t1@(TAnd _) t2@(TAnd t2s)
   | and $ isSubtype γ t1 <$> map snd t2s
   = SubT
   | otherwise
-  = NoSub [errorFuncSubtype l t1 t2]
+  = NoSub [errorSubtype l t1 t2]
 
 subtypeFun l γ t1@(TAnd t1s) t2
   | or $ f <$> map snd t1s
   = SubT
   | otherwise
-  = NoSub [errorFuncSubtype l t1 t2]
+  = NoSub [errorSubtype l t1 t2]
   where
     f t1 = isSubtype γ t1 t2
 

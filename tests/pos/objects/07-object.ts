@@ -1,6 +1,3 @@
 
-/*@ obj :: {
-    @Final x: number;
-           y: { number | v = this.x };
-  } */
+/*@ obj :: { (Immutable) x: number; y: { number | v = this.x }; } */
 let obj = { x: 1, y: 1 };

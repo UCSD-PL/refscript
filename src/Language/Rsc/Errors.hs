@@ -105,21 +105,21 @@ errorListMismatch l ts ts'    = mkErr l $ show $ text "Cannot unify types:" $+$ 
                                                  text "because of mismatch in count."
 
 -- Subtyping
-errorUserCast l t e           = mkErr l $ printf "User cast of type '%s' on '%s' failed." (ppshow t) (ppshow e)
 errorDownCast l t             = mkErr l $ printf "Downcast to '%s'" (ppshow t)
 errorClassExtends l x y t1 t2 = mkErr l $ printf "Type '%s' cannot extend type '%s'. Type for '%s': '%s'. Type for '%s': '%s'" (ppshow x) (ppshow y)
                                                   (ppshow x) (ppshow t1) (ppshow y) (ppshow t2)
-errorIncompatTypes l a b      = mkErr l $ printf "Type '%s' is not assignable to '%s'." (ppshow a) (ppshow b)
-errorIncompatCovFields l a b  = mkErr l $ printf "Incompatible covariant fields when converting between elements: '%s' and '%s'." (ppshow a) (ppshow b)
-errorIncompatInvFields l a b  = mkErr l $ printf "Incompatible invariant fields when converting between elements: '%s' and '%s'." (ppshow a) (ppshow b)
+
+errorAssignability l a b      = mkErr l $ show $ text "Type" $+$ nest 2 (pp a) $+$ text "is not assignable to type" $+$ nest 2 (pp b)
+errorSubtype       l a b      = mkErr l $ show $ text "Type" $+$ nest 2 (pp a) $+$ text "is not a subtype of type"  $+$ nest 2 (pp b)
+
 errorNonObjectType l t        = mkErr l $ printf "Type '%s' cannot be treated as an object type." (ppshow t)
 
-errorIncompMutTy l m m' t t' fo = mkErr l $ show $ text "Incompatible mutabilities:" <+>
-                                                 ticks (pp m ) <+> text "and" <+>
-                                                 ticks (pp m') <+> text "when comparing" <+>
-                                                 maybe empty (\f -> text "field" <+> ticks (pp f) <+> text "of") fo <+>
-                                                 text "types:" $+$
-                                                 nest 2 (pp t) $+$ text "and" $+$ nest 2 (pp t')
+errorIncompMutTy l m m' t t' fo = mkErr l $ show $ text "Immutability modifier" <+> ticks (pp m ) <+>
+                                                 maybe empty (\f -> text "of field" <+> ticks (pp f)) fo <+>
+                                                 text "of type:" $+$ nest 2 (pp t) $+$
+                                                 text "is not compatible with immutability modifier" <+> ticks (pp m') <+>
+                                                 maybe empty (\f -> text "of field" <+> ticks (pp f)) fo <+>
+                                                 text "of type:" $+$ nest 2 (pp t')
 
 errorUniqueRef l              = mkErr l $ show $ sep [text "Cannot handle unique types in this context."]
 errorUniqueAsgn l x           = mkErr l $ show $ text "Cannot re-assign unique reference:" <+> ticks (pp x) <> pp "." $+$
@@ -128,20 +128,14 @@ errorMutUnknown l t           = mkErr l $ show $ sep [text "Unknown mutability m
 bugMutPartInvalid l t         = mkErr l $ show $ sep [text "[BUG] Invalid mutability part of types:", nest 2 (pp t)]
 errorMutInvalid l t t'        = mkErr l $ show $ sep [text "Invalid mutability type(s):", nest 2 (pp t), text "or", nest 2 (pp t')]
 
-errorIncompMethMut l m        = mkErr l $ printf "Mutability modifiers of method '%s' are incompatible." (ppshow m)
 errorIncompCallSigs l t t'    = mkErr l $ printf "Types '%s' and '%s' have incompatible call signatures." (ppshow t) (ppshow t')
 errorIncompCtorSigs l t t'    = mkErr l $ printf "Types '%s' and '%s' have incompatible constructor signatures." (ppshow t) (ppshow t')
 errorIncompNIdxSigs l t t'    = mkErr l $ printf "Types '%s' and '%s' have incompatible numeric index signatures." (ppshow t) (ppshow t')
 errorIncompSIdxSigs l t t'    = mkErr l $ printf "Types '%s' and '%s' have incompatible string index signatures." (ppshow t) (ppshow t')
 errorObjectType l t t'        = mkErr l $ printf "Cannot treat object type '%s' nominally as type '%s'." (ppshow t) (ppshow t')
-errorIncompMutElt l f m m'    = mkErr l $ printf "Incompatible assignability modifer for property '%s'. Wanted %s, but got %s." (ppshow f) (ppshow m') (ppshow m)
 errorOptionalElt l p t t'     = mkErr l $ printf "Unmatching optionality values for property '%s' in types '%s' and '%s'." (ppshow p) (ppshow t) (ppshow t')
 errorIncompatOptional l f     = mkErr l $ printf "Property '%s' has incompatible optionality modifiers." (ppshow f)
 errorConstrMissing l t        = mkErr l $ printf "Could not find constructor for type '%s'." (ppshow t)
-errorTClassSubtype l s s'     = mkErr l $ printf "Type 'typeof %s' is not a subtype of 'typeof %s'" (ppshow s) (ppshow s')
-errorTEnumSubtype l s s'      = mkErr l $ printf "Type 'enum %s' is not a subtype of 'enum %s'." (ppshow s) (ppshow s')
-errorTModule l s s'           = mkErr l $ printf "Modules '%s' and '%s' are incompatible." (ppshow s) (ppshow s')
-errorUnionSubtype l t t'      = mkErr l $ printf "Union type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
 
 errorObjSubtype l t t' fs     = mkErr l $ show $ text "Object type" $+$
                                                  nest 2 (pp t)              $+$
@@ -150,22 +144,13 @@ errorObjSubtype l t t' fs     = mkErr l $ show $ text "Object type" $+$
                                                  text "The latter is missing field(s):" <+>
                                                  intersperse comma (map pp fs)
 
-errorFuncSubtype l t t'       = mkErr l $ show $ text "Function type"       $+$
-                                                 nest 2 (pp t)              $+$
-                                                 text "is not a subtype of" $+$
-                                                 nest 2 (pp t')
-
-errorSubtype l t t'           = mkErr l $ show $ text "Type"                $+$
-                                                 nest 2 (pp t)              $+$
-                                                 text "is not a subtype of" $+$
-                                                 nest 2 (pp t')
-
 -- Typechecking
+ppBind (a,b) = pp a <+> dcolon <+> pp b
+
 errorCallNotSup l fn ft es ts = mkErr l $ show $ text "Cannot call"       <+> ticks (pp fn)                 <+>
                                                  text "with signature"    $+$ nest 2 (pp ft)                $+$
                                                  text "with argument(s):" $+$
-                                                 nest 2 (vcat $ map (\(e,t) -> pp e <+> dcolon <+> pp t)
-                                                        (safeZip "errorCallNotSup" es ts))
+                                                 nest 2 (vcat (map ppBind (safeZip "errorCallNotSup" es ts)))
 
 errorOptFunUnsup l f e        = mkErr l $ show $ text "Cannot call optional member" <+> ticks (pp f) <+> text "of expression" $+$ nest 2 (pp e)
 

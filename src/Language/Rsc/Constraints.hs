@@ -46,8 +46,16 @@ data Cinfo = Ci { ci_info    :: !Error
 
 ciToError (Ci e _ h) = err (errLoc e) (errMsg e ++ "\n" ++ hs)
   where
-    hs = show $ vcat (map pps h)
-    pps (Sub _ _ l r) =
+    hs = show (ppAll h)
+    ppAll [] = empty
+    ppAll (x:xs) = ppFull x $+$ ppTail xs
+
+    ppTail xs = vcat (map ppShort xs)
+
+    ppFull s@(Sub g _ l r) =
+      text "In the environment" $+$ nest 2 (pp (cge_names g)) $+$
+      ppShort s
+    ppShort (Sub _ _ l r) =
       text "Which was produced from the subtyping between:" $+$
       nest 2 (nest 2 (pp l) $+$ text "and" $+$ nest 2 (pp r))
 

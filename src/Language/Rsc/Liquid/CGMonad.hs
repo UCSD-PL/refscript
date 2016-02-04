@@ -93,7 +93,6 @@ data CGInfo = CGI { cgi_finfo :: F.FInfo Cinfo
 
 -- Dump the refinement subtyping constraints
 instance PP CGInfo where
-  pp _ = text "YYYY"
   pp (CGI finfo _) = cat (map pp (HM.elems $ F.cm finfo))
 
 

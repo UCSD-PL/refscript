@@ -235,28 +235,14 @@ tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
               case getProp l γ f t1 of
                 Left e -> tcError e
                 Right (unzip -> (ts, fs)) ->
-                    do  (e1'', _) <- tcExprT l "DotAsgn-1" γ e1' (tOr ts)
-                        (e2', ts) <- tcScan (tcExprT l "DotAsgn-2" γ) e2 (map f_ty fs)
+                    do  (e1'', _) <- tcExprT γ e1' (tOr ts)
+                        (e2', ts) <- tcScan (tcExprT γ) e2 (map f_ty fs)
                         return (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1'' f) e2'), Just γ)
 
             | otherwise -> tcError (errorNonMutFldAsgn l f t1)
 
           (Nothing, _) -> tcError (errorExtractMut l t1 e1)
           (_, Nothing) -> tcError (errorExtractFldMut l f t1)
-
---                   foldM (\(e1_, e2_) (tBase, tMember) ->
---                     do  (e1'', _) <- tcExprT l "DotAsgn-1" γ e1'
---                         (e2'', _) <- tcExprT l "DotAsgn-2" γ e2'
---                     ) (e1', e2) bts
-
---         case (getFieldMutability (envCHA γ) f te1, e1') of
---           (Just m, _        )
---             | isSubtype γ m tMU || isSubtype γ m tUQ ->
---               case getProp l γ f te1 of
---                 Left e        -> tcError e
---                 Right (map snd -> fs) ->
---                     do  (e2', _) <- foldM (tcSetPropMut γ l f te1) (e2, tBot) fs
---                         return (mkAsgnExp e1' e2', Just γ)
 --
 --           (Just m, ThisRef _)
 --             | isSubtype γ m tAF ->
@@ -382,7 +368,7 @@ tcVarDecl γ v@(VarDecl l x (Just e))
 
       -- Local (with type annotation)
       Just (SI y lc WriteLocal _ t) ->
-        do  (e', t') <- ltracePP l "Inferred" <$> tcExprT l "VarDecl" γ e t
+        do  (e', t') <- ltracePP l "Inferred" <$> tcExprT γ e t
             return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (SI y lc WriteLocal Initialized t') γ)
 
       -- Global
@@ -497,7 +483,7 @@ tcAsgn :: Unif r
 --------------------------------------------------------------------------------
 tcAsgn l γ x e
   | Just (SI _ _ a _ t) <- tcEnvFindTyForAsgn x γ
-  = do  eitherET  <- tcWrap (tcExprT l "assign" γ e t)
+  = do  eitherET  <- tcWrap (tcExprT γ e t)
         (e', to)  <- tcEW γ e eitherET
         return     $ (e', tcEnvAddo γ x $ SI xSym Local a Initialized <$> to)
   | otherwise
@@ -520,7 +506,7 @@ tcSetPropImm γ l f t0 (e, t') (FI _ _ m t)
   | isSubtype γ m tIM
   = fatal (errorImmutableRefAsgn l f t0) (e, t')
   | otherwise
-  = tcExprT l BISetProp γ e t
+  = tcExprT γ e t
 
 tcSetPropImm _ l _ _ _ m
   = tcError (errorMethAsgn l m)
@@ -530,13 +516,13 @@ tcSetPropImm _ l _ _ _ m
 -- | `tcExprT l fn γ e t` checks expression @e@ under environment @γ@
 --   enforcing a type @t@.
 --------------------------------------------------------------------------------
-tcExprT :: (Unif r , PP f)
-        => AnnTc r -> f -> TCEnv r -> ExprSSAR r -> RType r
-        -> TCM r (ExprSSAR r, RType r)
+tcExprT :: Unif r => TCEnv r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
 --------------------------------------------------------------------------------
-tcExprT l fn γ e t
-  = do ([e'], _) <- tcNormalCall γ l fn [(e, Just t)] (idTy t)
+tcExprT γ e t
+  = do ([e'], _) <- tcNormalCall γ l "tcExprT" [(e, Just t)] (idTy t)
        return (e', t)
+  where
+    l = getAnnotation e
 
 tcEnvAddo _ _ Nothing  = Nothing
 tcEnvAddo γ x (Just t) = Just (tcEnvAdds [(x, t)] γ)
@@ -861,7 +847,7 @@ tcCall γ ef@(DotRef l e f) _
 
     -- Normal property access
     checkProp (Left er)   = tcError er
-    checkProp (Right tfs) = adjustOpt tfs . fst <$> tcExprT l ef γ e (rcvrTy tfs)
+    checkProp (Right tfs) = adjustOpt tfs . fst <$> tcExprT γ e (rcvrTy tfs)
 
     -- Add `or undef` in case of an optional field access
     adjustOpt tfs e_
@@ -906,7 +892,7 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es) _
 
     -- Check all corresponding type members `tms`
     checkWithProp (Right tms@(map fst -> ts))
-      = do  (e', _   ) <- tcExprT l1 em γ e (tOr ts)
+      = do  (e', _   ) <- tcExprT γ e (tOr ts)
             (es', ts') <- foldM (\(es_, ts) (tR, m) ->
                             second (:ts) <$> checkTypeMember es_ tR m) (es, []) tms
             return      $ (CallExpr l (DotRef l1 e' f) es', tOr ts')

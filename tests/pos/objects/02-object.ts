@@ -3,7 +3,7 @@
 /*@ local innerObj :: { n: number } */
 let innerObj = { n: 6 };
 
-/*@ outerObj :: { a: number; b: string; c: (Mutable) { n : number } } */
+/*@ outerObj :: { a: number; b: string; c: { n : number } } */
 let outerObj = { a: 5, b: "String", c: innerObj };
 
 export function foo (n: number): { n: number } {

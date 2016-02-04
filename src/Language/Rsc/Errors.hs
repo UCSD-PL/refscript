@@ -198,6 +198,12 @@ errorFunArgMismatch l t t'    = mkErr l $ show $ text "Mismatch in number of arg
 
 errorArgName l x y            = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)
 errorExtractNonFld l f x t    = mkErr l $ printf "Cannot extract non-field '%s' from object '%s' of type '%s'." (ppshow f) (ppshow x) (ppshow t)
+errorExtractFldMut l f t      = mkErr l $ show $ text "Cannot extract mutability from field" <+> ticks (pp f) <+>
+                                                 text "of type" $+$ nest 2 (pp t)
+
+errorExtractMut l t e         = mkErr l $ show $ text "Cannot extract mutability of type" $+$ nest 2 (pp t) $+$
+                                                 text "of expression" <+> ticks (pp e)
+
 errorMissingFld l f t         = mkErr l $ printf "Field '%s' is missing from type '%s'." (ppshow f) (ppshow t)
 errorNoFuncAnn l              = mkErr l $ printf "No type annotation or contextual type for anonymous function."
 errorUnfoldType l t           = mkErr l $ printf "Could not unfold type '%s'." (ppshow t)
@@ -269,7 +275,7 @@ errorVariadicNoArgs l f       = mkErr l $ printf "Cannot make variadic call '%s'
 errorConflateTypeMembers l es = mkErr l $ printf "Cannot conflate type members '%s'." (ppshow es)
 errorCallSuperOnNonClass l x  = mkErr l $ printf "Cannot call 'super' on non class type '%s'." (ppshow x)
 errorAssignsFields l x t      = mkErr l $ printf "Variable '%s' with type '%s' can only be assigned fields or returned." (ppshow x) (ppshow t)
-errorFinalField l f t         = mkErr l $ printf "Cannot assign final field '%s' of type '%s'." (ppshow f) (ppshow t)
+errorNonMutFldAsgn l f t      = mkErr l $ show $ text "Cannot assign non-mutable field" <+> ticks (pp f) <+> text "of type" $+$ nest 2 (pp t)
 errorImmutableRefAsgn l f t   = mkErr l $ show $ text "Cannot assign field" <+> ticks (pp f) <+>
                                                  text "through non-mutable reference of type" $+$
                                                  nest 2 (pp t) $+$

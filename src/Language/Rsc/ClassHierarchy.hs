@@ -20,8 +20,7 @@ module Language.Rsc.ClassHierarchy (
     , nonStaticFields, inheritedNonStaticFields
     , classAncestors, interfaceAncestors
     , getImmediateSuperclass, getSuperType
-    , boundKeys
-    , getMutability
+    , boundKeys, getMutability
 
     -- * Type Transformations
     , weaken, expandType
@@ -294,13 +293,13 @@ nonStaticFields :: ClassHierarchy r -> AbsName -> [F.Symbol]
 nonStaticFields (CHA g m modules) x
   = HS.toList . HS.unions $ HS.fromList . flds <$> ps
   where
-    flds (QN p y) = [ s | ms        <- maybeToList  $ qenvFindTy p modules
-                        , TD _ es   <- maybeToList  $ envFindTy y  $ m_types ms
+    flds (QN p y) = [ s | ms        <- maybeToList (qenvFindTy p modules)
+                        , TD _ es   <- maybeToList (envFindTy y  $ m_types ms)
                         , (s, FI{}) <- F.toListSEnv $ i_mems  es ]
 
-    ps            = [ n | cur <- maybeToList $ HM.lookup x m
+    ps            = [ n | cur <- maybeToList (HM.lookup x m)
                         , anc <- reachable cur g
-                        , TS k (BGen n _) _ <- maybeToList $ lab g anc
+                        , TS k (BGen n _) _ <- maybeToList (lab g anc)
                         , k == ClassTDK ]
 
 --------------------------------------------------------------------------------
@@ -363,19 +362,14 @@ getSuperType cha (TRef (Gen nm ts) _)
 getSuperType _ _ = Nothing
 
 
-
 -- | IGJ's I(..) function
 --
 --------------------------------------------------------------------------------
 getMutability :: (PP r, ExprReftable Int r, F.Reftable r)
               => ClassHierarchy r -> RType r -> Maybe (MutabilityQ AK r)
 --------------------------------------------------------------------------------
-getMutability _ (TRef (Gen _ (m:_)) _) = Just m
-getMutability _ _ = Nothing
-
-
--- getMutability cha t | Just (TObj m _ _) <- expandType Coercive cha t
---                     = Just m
---                     | otherwise
---                     = Nothing
+getMutability cha t | Just (TObj m _ _) <- expandType Coercive cha t
+                    = Just m
+                    | otherwise
+                    = Nothing
 

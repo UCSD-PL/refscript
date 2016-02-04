@@ -41,11 +41,12 @@ type PPRD r   = (ExprReftable Int r, PP r, F.Reftable r)
 type CEnv r t = (CheckingEnvironment () t, CheckingEnvironment r t , Functor t)
 
 -- | `getProp γ b x s t` performs the access `x.f`, where `x: t` and returns a
---   list of:
+--   list of pairs `(tBase, tMember)` where
 --
---   (a) the part of @t@ for which the access of field @f@ is successful, and
+--   (a) `tBase` is the part of `t` for which the access of field `f` is
+--        successful, and
 --
---   (b) the accessed member
+--   (b) `tMember` is the accessed type member.
 --
 --------------------------------------------------------------------------------
 getProp :: (CEnv r t, PPRD r, PP f, IsLocated l, F.Symbolic f)
@@ -185,12 +186,12 @@ getPropUnion l γ f ts =
 
 --------------------------------------------------------------------------------
 getFieldMutability ::
-  (ExprReftable Int r, PPR r) =>
-  ClassHierarchy r -> RType r -> F.Symbol -> Maybe (MutabilityR r)
+  (ExprReftable Int r, PPR r, F.Symbolic s) =>
+  ClassHierarchy r -> RType r -> s -> Maybe (MutabilityR r)
 --------------------------------------------------------------------------------
 getFieldMutability cha t f
   | Just (TObj _ ms _i) <- expandType Coercive cha t
-  , Just (FI _ _ m _)   <- F.lookupSEnv f (i_mems ms)
+  , Just (FI _ _ m _)   <- F.lookupSEnv (F.symbol f) (i_mems ms)
   = Just m
   | otherwise
   = Nothing

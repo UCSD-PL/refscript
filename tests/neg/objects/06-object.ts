@@ -1,10 +1,14 @@
 
-let a06 = { b: { c: 3 } };
+/*@ innerObj :: (Mutable) { c: posint } */
+let innerObj = { c: 3 };
+
+/*@ outerObj :: (Mutable) { b: { c: number } } */
+let outerObj = { b: innerObj };
 
 function foo(o: { c: number }): void {
     o.c = 0;
 }
 
-foo(a06.b);
+foo(outerObj.b);
 
-assert(a06.b.c > 0);
+assert(outerObj.b.c > 0);

@@ -45,8 +45,7 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
                      :      [text "+"   <+> pp t | t <- tail ts]
   pp (TAnd ts)       = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TRef t r)      = F.ppTy r (pp t)
-  pp (TObj m ms r)   | isRO m    = ppBody ms r
-                     | otherwise = parens (pp m) <+> ppBody ms r
+  pp (TObj m ms r)   = parens (pp (toType m)) <+> ppBody ms r
     where
       ppBody ms r    = F.ppTy r (sep [lbrace, nest 2 (pp ms), rbrace])
   pp (TClass t)      = text "class" <+> pp t

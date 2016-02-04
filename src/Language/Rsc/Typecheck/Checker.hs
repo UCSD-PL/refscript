@@ -225,31 +225,53 @@ tcStmt γ (ExprStmt l (AssignExpr l1 OpAssign (LVar lx x) e))
 
 -- e1.f = e2
 --
-tcStmt γ@(envCHA -> c) (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
-  = do  (e1', te1) <- tcExpr γ e1 Nothing
-        case (getMutability c te1, e1') of
-          (Just m, _        )
-            | isSubtype γ m tMU || isSubtype γ m tUQ ->
-              case getProp l γ f te1 of
-                Left e        -> tcError e
-                Right (map snd -> fs) ->
-                    do  (e2', _) <- foldM (tcSetPropMut γ l f te1) (e2, tBot) fs
-                        return (mkAsgnExp e1' e2', Just γ)
+tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
+  = do  (e1', t1) <- tcExprWD γ e1 Nothing
+        m1o       <- pure (getMutability (envCHA γ) t1)
+        m1fo      <- pure (getFieldMutability (envCHA γ) t1 f)
+        case (m1o, m1fo) of
+          (Just m1, Just m1f)
+            | isSubtype γ m1f tMU || isSubtype γ m1 tUQ ->
+              case getProp l γ f t1 of
+                Left e -> tcError e
+                Right (unzip -> (ts, fs)) ->
+                    do  (e1'', _) <- tcExprT l "DotAsgn-1" γ e1' (tOr ts)
+                        (e2', ts) <- tcScan (tcExprT l "DotAsgn-2" γ) e2 (map f_ty fs)
+                        return (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1'' f) e2'), Just γ)
 
-          (Just m, ThisRef _)
-            | isSubtype γ m tAF ->
-              case getProp l γ f te1 of
-                Left e        -> tcError e
-                Right (map snd -> fs) ->
-                    do  (e2', _) <- foldM (tcSetPropMut γ l f te1) (e2, tBot) fs
-                        return (mkAsgnExp e1' e2', Just γ)
+            | otherwise -> tcError (errorNonMutFldAsgn l f t1)
 
-          _ ->
-              case getProp l γ f te1 of
-                Left e        -> tcError e
-                Right (map snd -> fs) ->
-                    do  (e2', _) <- foldM (tcSetPropImm γ l f te1) (e2, tBot) fs
-                        return (mkAsgnExp e1' e2', Just γ)
+          (Nothing, _) -> tcError (errorExtractMut l t1 e1)
+          (_, Nothing) -> tcError (errorExtractFldMut l f t1)
+
+--                   foldM (\(e1_, e2_) (tBase, tMember) ->
+--                     do  (e1'', _) <- tcExprT l "DotAsgn-1" γ e1'
+--                         (e2'', _) <- tcExprT l "DotAsgn-2" γ e2'
+--                     ) (e1', e2) bts
+
+--         case (getFieldMutability (envCHA γ) f te1, e1') of
+--           (Just m, _        )
+--             | isSubtype γ m tMU || isSubtype γ m tUQ ->
+--               case getProp l γ f te1 of
+--                 Left e        -> tcError e
+--                 Right (map snd -> fs) ->
+--                     do  (e2', _) <- foldM (tcSetPropMut γ l f te1) (e2, tBot) fs
+--                         return (mkAsgnExp e1' e2', Just γ)
+--
+--           (Just m, ThisRef _)
+--             | isSubtype γ m tAF ->
+--               case getProp l γ f te1 of
+--                 Left e        -> tcError e
+--                 Right (map snd -> fs) ->
+--                     do  (e2', _) <- foldM (tcSetPropMut γ l f te1) (e2, tBot) fs
+--                         return (mkAsgnExp e1' e2', Just γ)
+--
+--           _ ->
+--               case getProp l γ f te1 of
+--                 Left e        -> tcError e
+--                 Right (map snd -> fs) ->
+--                     do  (e2', _) <- foldM (tcSetPropImm γ l f te1) (e2, tBot) fs
+--                         return (mkAsgnExp e1' e2', Just γ)
   where
     mkAsgnExp e1_ e2_ = ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1_ f) e2_)
 
@@ -485,14 +507,14 @@ tcAsgn l γ x e
     xSym = F.symbol x
 
 
-tcSetPropMut γ l f t0 (e, t') (FI _ _ m t)
-  | isSubtype γ m tIM
-  = fatal (errorFinalField l f t0) (e, t')
-  | otherwise
-  = tcExprT l BISetProp γ e t
-
-tcSetPropMut _ l _ _ _ m
-  = tcError (errorMethAsgn l m)
+-- tcSetPropMut γ l f t0 (e, t') (FI _ _ m t)
+--   | isSubtype γ m tIM
+--   = fatal (errorFinalField l f t0) (e, t')
+--   | otherwise
+--   = tcExprT l BISetProp γ e t
+--
+-- tcSetPropMut _ l _ _ _ m
+--   = tcError (errorMethAsgn l m)
 
 tcSetPropImm γ l f t0 (e, t') (FI _ _ m t)
   | isSubtype γ m tIM
@@ -1181,6 +1203,15 @@ expandBlock = concatMap f
   where
     f (BlockStmt _ ss) = ss
     f s                = [s ]
+
+
+--------------------------------------------------------------------------------
+tcScan :: (a -> b -> TCM r (a, b)) -> a -> [b] -> TCM r (a, [b])
+--------------------------------------------------------------------------------
+tcScan f e ts = second reverse <$> foldM step (e, []) ts
+  where
+    step (a, bs) b = second (:bs) <$> f a b
+
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

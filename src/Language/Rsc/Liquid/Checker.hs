@@ -345,13 +345,24 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 --   TODO: add indexer updates
 --
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
-  = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
-      t <- cgSafeEnvFindTyM x1 g'
-      case getProp l g' f t of
-        Right (ftys . map snd -> ts) -> fmap snd <$> consExprTs l g BISetProp e2 ts
-        Left e -> cgError e
-  where
-      ftys fs = [ t | FI _ _ _ t <- fs ]
+  = mseq (consExpr g e1 Nothing) $ \(x1,g1) -> do
+      t1        <- cgSafeEnvFindTyM x1 g1
+      m1o       <- pure (getMutability (envCHA g1) t1)
+      m1fo      <- pure (getFieldMutability (envCHA g1) t1 f)
+      case (m1o, m1fo) of
+        (Just m1, Just m1f)
+          | isSubtype g m1f tMU || isSubtype g m1 tUQ ->
+            case getProp l g1 f t1 of
+              Left e -> cgError e
+              Right (unzip -> (ts, fs)) -> do
+                ts  <- pure [ (t,()) | FI _ _ _ t <- fs ]
+                z   <- consScan (\g_ -> const . consExprT g_ e2) g1 ts
+                return (fmap snd z)
+
+          | otherwise -> cgError (errorNonMutFldAsgn l f t1)
+
+        (Nothing, _) -> cgError (errorExtractMut l t1 e1)
+        (_, Nothing) -> cgError (errorExtractFldMut l f t1)
 
 -- e
 consStmt g (ExprStmt _ e)
@@ -465,11 +476,11 @@ consVarDecl g (VarDecl l x (Just e))
 
       -- | Global
       Just (SI n lc WriteGlobal _ t) -> do
-        fta       <- freshenType WriteGlobal g l t
+        fta       <- ltracePP l "freshened" <$> freshenType WriteGlobal g l t
         mseq (consExpr g e $ Just fta) $ \(y, gy) -> do
-          eT      <- cgSafeEnvFindTyM y gy
-          _       <- subType l Nothing gy eT fta
-          _       <- subType l Nothing gy fta t
+          eT      <- ltracePP l "glob inferred" <$> cgSafeEnvFindTyM y gy
+          _       <- subType l Nothing gy eT (ltracePP l "glob stored" fta)
+          _       <- subType l Nothing gy fta (ltracePP l "glob bound" t)
           Just   <$> cgEnvAdds l "consVarDecl" [SI n lc WriteGlobal Initialized fta] gy
 
       -- | ReadOnly
@@ -499,10 +510,11 @@ consVarDecl g (VarDecl l x Nothing)
 --   XXX: perhaps other cases should work similarly.
 --
 --------------------------------------------------------------------------------
-consExprT :: AnnLq -> CGEnv -> String -> Expression AnnLq -> RefType -> CGM (Maybe (Id AnnLq, CGEnv))
+consExprT :: CGEnv -> Expression AnnLq -> RefType -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
-consExprT _ g _  e@FuncExpr{} t = consExpr g e (Just t)
-consExprT l g fn e            t = consCall g l fn [(e, Just t)] (idTy t)
+consExprT g e@FuncExpr{} t = consExpr g e (Just t)
+consExprT g e            t = consCall g l "consExprT" [(e, Just t)] (idTy t)
+  where l = getAnnotation e
 
 consExprTs l g fn e ts = consCall g l fn [(e, Nothing)] (idTys ts)
 
@@ -602,13 +614,13 @@ consAsgn l g x e =
     -- This is the first time we initialize this variable
     Just (SI n lc WriteGlobal Uninitialized t) ->
       do  t' <- freshenType WriteGlobal g l t
-          mseq (consExprT l g "assign" e t') $ \(_, g') -> do
+          mseq (consExprT g e t') $ \(_, g') -> do
             g'' <- cgEnvAdds l "consAsgn-0" [SI n lc WriteGlobal Initialized t'] g'
             return $ Just g''
 
-    Just (SI _ _ WriteGlobal _ t) -> mseq (consExprT l g "assign" e t) $ \(_, g') ->
+    Just (SI _ _ WriteGlobal _ t) -> mseq (consExprT g e t) $ \(_, g') ->
                                      return $ Just g'
-    Just (SI n lc a i t) -> mseq (consExprT l g "assign" e t) $ \(x', g') -> do
+    Just (SI n lc a i t) -> mseq (consExprT g e t) $ \(x', g') -> do
                               t_     <- cgSafeEnvFindTyM x' g'
                               Just  <$> cgEnvAdds l "consAsgn-1" [SI n lc a i t_] g'
     Nothing -> mseq (consExpr g e Nothing) $ \(x', g') -> do

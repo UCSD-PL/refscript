@@ -30,7 +30,6 @@ import           Data.Default
 import           Data.Monoid
 import           Data.Tuple                     (swap)
 import           Language.Fixpoint.Types        (SEnv, differenceSEnv, intersectWithSEnv, toListSEnv)
-import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
@@ -197,7 +196,7 @@ subtypeObj l γ _ t1 t2
   = NoSub [errorObjectType l t1 t2]
 
 subtypeObj l γ c t1@(TObj m1 e1s _) t2@(TObj m2 e2s _)
-  = subtypeObjMembers l γ c (t1, m1, e1s) (t2, m2, e2s)
+  = subtype l γ c m1 m2 `mappend` subtypeObjMembers l γ c (t1, e1s) (t2, e2s)
 
 -- | Mutability subtyping
 --
@@ -280,8 +279,8 @@ subtypeObj l γ c t1 t2 =
 
 -- | Subtyping type members
 --
-subtypeObjMembers l γ c (t1, p1, TM m1 _ c1 k1 s1 n1) (t2, p2, TM m2 _ c2 k2 s2 n2)
-  = subtypeMems  l γ c (t1, p1, m1) (t2, p2, m2) <>
+subtypeObjMembers l γ c (t1, TM m1 _ c1 k1 s1 n1) (t2, TM m2 _ c2 k2 s2 n2)
+  = subtypeMems  l γ c (t1, m1) (t2, m2) <>
     subtypeCalls l γ t1 c1 t2 c2 <>
     subtypeCtors l γ t1 k1 t2 k2 <>
     subtypeSIdxs l γ t1 s1 t2 s2 <>
@@ -290,59 +289,38 @@ subtypeObjMembers l γ c (t1, p1, TM m1 _ c1 k1 s1 n1) (t2, p2, TM m2 _ c2 k2 s2
 --------------------------------------------------------------------------------
 subtypeMems :: (IsLocated a, PPRE r, FE g r)
             => a -> g r -> SubConf
-            -> (RType r, MutabilityR r, SEnv (TypeMember r))
-            -> (RType r, MutabilityR r, SEnv (TypeMember r))
+            -> (RType r, SEnv (TypeMember r))
+            -> (RType r, SEnv (TypeMember r))
             -> SubtypingResult
 --------------------------------------------------------------------------------
-subtypeMems l γ c (t1, p1, m1) (t2, p2, m2)
-  -- Props from m2 are missing from p1 - fail width
+subtypeMems l γ c (ot1, mems1) (ot2, mems2)
+
+  -- Props from `mems2` are missing from `mems1` - fail width subtyping
+  --
   | not (null diff21)
-  = NoSub [ errorObjSubtype l t1 t2 (map fst diff21) ]
+  = NoSub [ errorObjSubtype l ot1 ot2 (map fst diff21) ]
 
   -- Descend into property subtyping
+  --
   | otherwise
-  = mconcat $ map (subtypeMem l γ c) common
+  = mconcat $ map subtypeMem common
 
   where
-    diff21 = toListSEnv $ m2 `differenceSEnv` m1
-    common = toListSEnv $ intersectWithSEnv (,) m1 m2
+    diff21 = toListSEnv (mems2 `differenceSEnv` mems1)
+    common = toListSEnv (intersectWithSEnv (,) mems1 mems2)
 
---------------------------------------------------------------------------------
-subtypeMem :: (FE g r, PPRE r, IsLocated a, PP f)
-           => a -> g r -> SubConf
-           -> (f, (TypeMemberQ AK r, TypeMemberQ AK r))
-           -> SubtypingResult
---------------------------------------------------------------------------------
-subtypeMem l γ c (f, (FI _ o1 m1 t1, FI _ o2 m2 t2))
+    subtypeMem (f, (FI _ o1 m1 t1, FI _ o2 m2 t2))
+      | (o1, o2) == (Opt, Req)  -- Optionality check
+      = NoSub [ errorIncompatOptional (srcPos l) f ]
+      | otherwise
+      = subtype l γ c m1 m2 <> deepSub m1 t1 t2
 
-  -- Different optionality modifier
-  --
-  | (o1, o2) == (Opt, Req)
-  = NoSub [ errorIncompatOptional (srcPos l) f ]
+    subtypeMem (_, (m1, m2))
+      = NoSub [ unsupportedMethodComp (srcPos l) m1 m2 ]
 
-  -- Incompatible field assignabilities
-  --
-  | NoSub e <- subtype l γ c m1 m2
-  = NoSub e
-
-  -- If the field is Unique, then just do co-variant subtyping.
-  -- This is compatible with any RHS-mutability modifier.
-  --
-  | allow_unique c, isSubtype γ m1 tUQ
-  = subtype' l γ t1 t2
-
-  -- Co-& Contra-Variance (mutable fields)
-  --
-  | isSubtype γ m1 tMU
-  = subtype' l γ t1 t2 <> subtype' l γ t2 t1
-
-  -- Co-Variance (immutable or readonly)
-  --
-  | otherwise
-  = subtype' l γ t1 t2
-
-subtypeMem l _ _ (_, (m1, m2))
-  = NoSub [ unsupportedMethodComp (srcPos l) m1 m2 ]
+    deepSub m1 t1 t2
+      | isSubtype γ m1 tMU = subtype' l γ t1 t2 <> subtype' l γ t2 t1
+      | otherwise          = subtype' l γ t1 t2
 
 
 compareMaybe l γ f _ _ (Just c1) _ (Just c2) = f l γ c1 c2
@@ -356,7 +334,8 @@ subtypeSIdxs l γ = compareMaybe l γ subtype'   errorIncompSIdxSigs
 subtypeNIdxs l γ = compareMaybe l γ subtype'   errorIncompNIdxSigs
 
 --------------------------------------------------------------------------------
-subtypeFun :: (PPRE r, FE g r, IsLocated l) => l -> g r -> RType r -> RType r -> SubtypingResult
+subtypeFun :: (PPRE r, FE g r, IsLocated l)
+           => l -> g r -> RType r -> RType r -> SubtypingResult
 --------------------------------------------------------------------------------
 subtypeFun l γ t1@(TFun b1s o1 _) t2@(TFun b2s o2 _)
   = mconcat   $ lengthSub

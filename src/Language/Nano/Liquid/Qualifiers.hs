@@ -2,7 +2,7 @@
 
 module Language.Nano.Liquid.Qualifiers (qualifiers) where
 
-import Language.Fixpoint.Errors
+import Language.Fixpoint.Types.Errors
 import Language.Fixpoint.Types hiding (quals)
 import Language.Nano.Liquid.Types
 import Language.Nano.Env

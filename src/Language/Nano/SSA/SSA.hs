@@ -22,9 +22,9 @@ import           Language.Nano.Syntax
 import           Language.Nano.Syntax.Annotations
 import           Language.Nano.Syntax.PrettyPrint
 
-import qualified Language.Fixpoint.Errors         as E
+import qualified Language.Fixpoint.Types.Errors         as E
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Names          (symbolString)
+import           Language.Fixpoint.Types.Names          (symbolString)
 import qualified Language.Fixpoint.Types          as F
 
 import           Language.Nano.Annots

@@ -47,9 +47,9 @@ import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Types
 import           Language.Nano.Visitor
 
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Misc              as FM
-import           Language.Fixpoint.Names             (symbolString)
+import           Language.Fixpoint.Types.Names             (symbolString)
 import qualified Language.Fixpoint.Types             as F
 import           Language.Nano.Syntax
 import           Language.Nano.Syntax.Annotations

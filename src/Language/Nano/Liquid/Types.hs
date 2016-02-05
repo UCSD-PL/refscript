@@ -94,13 +94,13 @@ import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
 
-import qualified Language.Fixpoint.Bitvector      as BV
-import           Language.Fixpoint.Errors
+import qualified Language.Fixpoint.Smt.Bitvector      as BV
+import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Names          (symbolText)
-import           Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.Types.Names          (symbolText)
+import           Language.Fixpoint.Types.PrettyPrint
 import qualified Language.Fixpoint.Types          as F
-import qualified Language.Fixpoint.Visitor        as V
+import qualified Language.Fixpoint.Types.Visitor        as V
 
 -- import           Debug.Trace                        (trace)
 
@@ -280,8 +280,8 @@ rTypeSort :: (PPR r) => RTypeQ q r -> F.Sort
 ------------------------------------------------------------------------------------------
 rTypeSort (TVar α _)               = F.FObj $ F.symbol α
 rTypeSort (TAll v t)               = rTypeSortForAll $ TAll v t
-rTypeSort (TFun (Just s) xts t _)  = F.FFunc 0 $ rTypeSort <$> [s] ++ (b_type <$> xts) ++ [t]
-rTypeSort (TFun Nothing  xts t _)  = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
+rTypeSort (TFun (Just s) xts t _)  = F.mkFFunc 0 $ rTypeSort <$> [s] ++ (b_type <$> xts) ++ [t]
+rTypeSort (TFun Nothing  xts t _)  = F.mkFFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TApp TBV32 _ _ )        = BV.mkSort BV.S32
 rTypeSort (TApp c ts _)            = rTypeSortApp c ts
 rTypeSort (TAnd (t:_))             = rTypeSort t
@@ -318,8 +318,9 @@ rTypeSortForAll t                  = genSort n θ $ rTypeSort tbody
     n                              = length αs
     θ                              = HM.fromList $ zip (F.symbol <$> αs) (F.FVar <$> [0..])
 
-genSort n θ (F.FFunc _ t)          = F.FFunc n (F.sortSubst θ <$> t)
-genSort n θ t                      = F.FFunc n [F.sortSubst θ t]
+--BC FIXME: 
+--genSort n θ (F.FFunc _ t)          = F.mkFFunc n (F.sortSubst θ <$> t)
+genSort n θ t                      = F.mkFFunc n [F.sortSubst θ t]
 
 ------------------------------------------------------------------------------------------
 stripRTypeBase :: RTypeQ q r -> Maybe r
@@ -615,7 +616,7 @@ zipType γ x t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _)
   --
   where
     rtExt t c           = F.reft (vv t) (raExt t c)
-    raExt t c           = F.PBexp $ F.EApp (sym t) [F.expr $ vv t, F.expr $ symbolText c]
+    raExt t c           = F.mkEApp (sym t) [F.expr $ vv t, F.expr $ symbolText c]
     vv                  = rTypeValueVar
     sym t
       | isClassType γ t = F.dummyLoc extendsClassName
@@ -737,9 +738,10 @@ substThis x t         = F.subst (F.mkSubst [(thisSym,F.expr x)]) t
 substOffsetThis = emapReft (\_ -> V.trans vs () ()) []
   where
     vs     = V.defaultVisitor { V.txExpr = tx }
-    tx _ (F.EApp o [ F.EVar x, F.ESym (F.SL f) ])
-           | F.symbol o == offsetName, F.symbol x == thisSym
-           = F.eVar f
+    --BC FIXME
+    --tx _ (F.EApp o [ F.EVar x, F.ESym (F.SL f) ])
+    --       | F.symbol o == offsetName, F.symbol x == thisSym
+    --       = F.eVar f
     tx _ e = e
 
 
@@ -788,4 +790,4 @@ mkQualSym    x f = qualifySymbol (F.symbol x) (F.symbol f)
 -------------------------------------------------------------------------------
 mkOffset :: (F.Symbolic f, F.Expression x) => x -> f -> F.Expr
 -------------------------------------------------------------------------------
-mkOffset x f = F.EApp offsetLocSym [F.expr x, F.expr $ symbolText $ F.symbol f]
+mkOffset x f = F.mkEApp offsetLocSym [F.expr x, F.expr $ symbolText $ F.symbol f]

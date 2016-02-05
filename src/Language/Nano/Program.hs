@@ -57,7 +57,7 @@ import           Language.Nano.Syntax
 import           Language.Nano.Syntax.PrettyPrint
 
 import           Language.Fixpoint.Misc            hiding (mkGraph)
-import           Language.Fixpoint.Names           (symbolString)
+import           Language.Fixpoint.Types.Names           (symbolString)
 import qualified Language.Fixpoint.Types           as F
 
 -- import           Debug.Trace                        hiding (traceShow)

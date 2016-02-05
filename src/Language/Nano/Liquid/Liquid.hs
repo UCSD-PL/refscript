@@ -26,13 +26,13 @@ import           Language.Nano.Syntax
 import           Language.Nano.Syntax.Annotations
 import           Language.Nano.Syntax.PrettyPrint
 
-import qualified Language.Fixpoint.Config          as C
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Interface       (solve)
+import qualified Language.Fixpoint.Types.Config    as C
+import           Language.Fixpoint.Types.Errors
+import           Language.Fixpoint.Solver          (solve)
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Names           (symbolString)
+import           Language.Fixpoint.Types.Names           (symbolString)
 import qualified Language.Fixpoint.Types           as F
-import qualified Language.Fixpoint.Visitor         as V
+import qualified Language.Fixpoint.Types.Visitor         as V
 
 import qualified Data.Text                         as T
 import           Language.Nano.Annots
@@ -140,7 +140,7 @@ solveConstraints :: Config
 --------------------------------------------------------------------------------
 solveConstraints cfg p f cgi
   = do F.Result r s <- solve fpConf $ cgi_finfo cgi
-       let r'   = fmap (ci_info . F.sinfo) r
+       let r'   = fmap ci_info r
        let anns = cgi_annot cgi
        let sol  = applySolution s
        return (A.SomeAnn anns sol, r')
@@ -148,7 +148,6 @@ solveConstraints cfg p f cgi
     fpConf      = def { C.real        = real cfg
                       , C.ueqAllSorts = C.UAS True
                       , C.srcFile     = f
-                      , C.extSolver   = extSolver cfg
                       }
 
 -- withUEqAllSorts c b = c { ueqAllSorts = UAS b }

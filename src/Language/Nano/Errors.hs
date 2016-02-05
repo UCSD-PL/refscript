@@ -4,9 +4,9 @@
 module Language.Nano.Errors where
 
 import           Debug.Trace
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.Types.PrettyPrint
 import           Language.Nano.Locations
 import           Language.Nano.Syntax.PrettyPrint
 import           Text.PrettyPrint.HughesPJ

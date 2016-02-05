@@ -47,9 +47,9 @@ import           Control.Arrow                    (first, second)
 import           Control.Monad
 import           Control.Monad.Trans              (MonadIO, liftIO)
 
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Misc           (fst3)
-import           Language.Fixpoint.Names          (symbolString)
+import           Language.Fixpoint.Types.Names          (symbolString)
 import           Language.Fixpoint.Parse          hiding (qualifierP)
 import           Language.Fixpoint.Types          hiding (Expression, Loc, Located, quals)
 

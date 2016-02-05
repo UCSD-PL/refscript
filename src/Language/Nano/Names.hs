@@ -64,9 +64,9 @@ import           Language.Nano.Syntax.PrettyPrint
 import           Language.Nano.Locations
 import           Language.Nano.Errors()
 import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.Names         (symbolString)
+import           Language.Fixpoint.Types.Names         (symbolString)
 -- import           Language.Fixpoint.Misc
-import           Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.Types.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 
 --------------------------------------------------------------------------

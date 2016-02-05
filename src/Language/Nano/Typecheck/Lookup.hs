@@ -19,7 +19,7 @@ import qualified Data.Map.Strict                  as M
 import           Language.Nano.Syntax
 import           Language.Nano.Syntax.PrettyPrint
 
-import qualified Language.Fixpoint.Bitvector      as BV
+import qualified Language.Fixpoint.Smt.Bitvector      as BV
 import qualified Language.Fixpoint.Types          as F
 
 import           Control.Applicative              ((<$>))

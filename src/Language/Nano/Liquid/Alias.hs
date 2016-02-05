@@ -11,9 +11,9 @@ import           Data.Generics
 import           Control.Monad
 import           Control.Monad.State
 
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Errors
 import qualified Language.Fixpoint.Types as F
-import qualified Language.Fixpoint.Visitor as V
+import qualified Language.Fixpoint.Types.Visitor as V
 
 import           Language.Nano.Annots
 import           Language.Nano.Env

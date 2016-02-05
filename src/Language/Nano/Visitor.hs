@@ -60,11 +60,11 @@ import           Data.Maybe                       (fromMaybe, listToMaybe, maybe
 import           Data.Monoid
 import           Data.Text                        (pack, splitOn)
 import qualified Data.Traversable                 as T
-import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Misc           hiding ((<$$>))
-import           Language.Fixpoint.Names          (symSepName, symbolString)
+import           Language.Fixpoint.Types.Names          (symbolString)
 import qualified Language.Fixpoint.Types          as F
-import qualified Language.Fixpoint.Visitor        as V
+import qualified Language.Fixpoint.Types.Visitor        as V
 import           Language.Nano.Annots             hiding (err)
 import           Language.Nano.Env
 import           Language.Nano.Errors
@@ -724,7 +724,7 @@ replaceDotRef p@(Nano{ code = Src fs, tAlias = ta, pAlias = pa, invts = is })
     tx _ (F.EVar s)    | (x:y:zs) <- pack "." `splitOn` pack (symbolString s)
                        = foldl offset (F.eVar x) (y:zs)
     tx _ e             = e
-    offset k v         = F.EApp offsetLocSym [F.expr k, F.expr v]
+    offset k v         = F.mkEApp offsetLocSym [F.expr k, F.expr v]
 
 
 -- | Replace `TRef x _ _` where `x` is a name for an enumeration with `number`
@@ -768,7 +768,7 @@ fixFunBindersInType t | Just is <- bkFuns t = mkAnd $ map (mkFun . f) is
     f (vs,s,yts,t)    = (vs,ssm s,ssb yts,ss t)
       where
         ks            = [ y | B y _ <- yts ]
-        ks'           = (F.eVar . (`mappend` F.symbol [symSepName])) <$> ks
+        ks'           = (F.eVar . (`F.suffixSymbol` F.symbol "")) <$> ks
         su            = F.mkSubst $ zip ks ks'
         ss            = F.subst su
         ssb bs        = [ B (ss s) (ss t) | B s t <- bs ]

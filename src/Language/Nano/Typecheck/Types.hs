@@ -89,11 +89,11 @@ import qualified Data.Map.Strict                  as M
 import           Data.Maybe                       (fromJust, fromMaybe, isJust)
 import           Data.Monoid                      hiding ((<>))
 import           Data.Typeable                    ()
-import qualified Language.Fixpoint.Bitvector      as BV
-import           Language.Fixpoint.Errors
+import qualified Language.Fixpoint.Smt.Bitvector      as BV
+import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Names          (symbolString)
-import           Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.Types.Names          (symbolString)
+import           Language.Fixpoint.Types.PrettyPrint
 import qualified Language.Fixpoint.Types          as F
 import qualified Language.Nano.Env                as E
 import           Language.Nano.Errors

@@ -57,10 +57,10 @@ import           Language.Nano.Syntax.PrettyPrint
 import           Language.Nano.Locations
 import           Language.Nano.Errors
 import           Language.Nano.Names
-import           Language.Fixpoint.Names
+import           Language.Fixpoint.Types.Names
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.Types.PrettyPrint
 import           Text.PrettyPrint.HughesPJ hiding (first)
 
 --------------------------------------------------------------------------

@@ -419,21 +419,16 @@ freshenVI g l v@(SI x loc a i t)
   = return v
 
 --------------------------------------------------------------------------------
-freshenTypeOpt :: IsLocated l
-  => Assignability -> CGEnv -> l -> RefType -> CGM (Maybe RefType)
+freshenTypeOpt :: IsLocated l => CGEnv -> l -> RefType -> CGM (Maybe RefType)
 --------------------------------------------------------------------------------
-freshenTypeOpt WriteGlobal g l t
+freshenTypeOpt g l t
   | isTrivialRefType t = Just <$> (freshTy "ft-WG" t >>= wellFormed l g)
-  | otherwise          = return Nothing
-freshenTypeOpt _ g l t
-  | not (isTFun t)     = return Nothing
-  | isTrivialRefType t = Just <$> (freshTy "ft-RO" t >>= wellFormed l g)
   | otherwise          = return Nothing
 
 --------------------------------------------------------------------------------
-freshenType :: IsLocated l => Assignability -> CGEnv -> l -> RefType -> CGM RefType
+freshenType :: IsLocated l => CGEnv -> l -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-freshenType a g l t = fromMaybe t <$> freshenTypeOpt a g l t
+freshenType g l t = fromMaybe t <$> freshenTypeOpt g l t
 
 -- | 1. Instantiates fresh types (at call-site)
 --   2. Adds well-formedness constraints for instantiated type variables

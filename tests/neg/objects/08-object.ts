@@ -4,14 +4,8 @@
 
 function inc(n: number): number { return n + 1; }
 
-/*@ readonly g09 :: {
-    @Final a: number;
-    @Final f: (n: number) => number;
-} */
-let g09 = {
-    a: 5,
-    f: inc
-};
+/*@ readonly g09 :: (Immutable) { a: number; f: (n: number) => number; } */
+let g09 = { a: 5, f: inc };
 
 /*@ foo :: () => { number | v = 7 } */
 function foo() {

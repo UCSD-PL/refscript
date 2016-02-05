@@ -2,7 +2,7 @@
 /*@ qualif Gt1(v: int): v > 1 */
 /*@ qualif Gt2(v: int): v > 2 */
 
-/*@ global */
+/*@ global gobj :: (Mutable) { a: number; b: string } */
 let gobj = {
 	a: 1,
 	b: "glorp",

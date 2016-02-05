@@ -1,9 +1,6 @@
 
-/*@ global */
-let gobj = {
-	a: 1,
-	b: "glorp",
-};
+/*@ global gobj :: (Mutable) { a: number; b: string } */
+let gobj = {a: 1, b: "glorp" };
 
 export function foo(): void {
   gobj.a = gobj.a + 1;

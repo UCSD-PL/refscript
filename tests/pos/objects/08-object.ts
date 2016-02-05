@@ -3,17 +3,11 @@
 
 function inc(n: number): number { return n + 1; }
 
-/*@ readonly g09 :: (Immutable) {
-    a: number;
-    f: (n: number) => number;
-} */
-let g09 = {
-    a: 5,
-    f: inc
-};
+/*@ readonly gg :: (Immutable) { a: number; f: (n: number) => number; } */
+let gg = { a: 5, f: inc };
 
 /*@ foo :: () => { number | v = 6 } */
 function foo() {
-    let gf = g09.f;
-    return gf(g09.a);
+    let gf = gg.f;
+    return gf(gg.a);
 }

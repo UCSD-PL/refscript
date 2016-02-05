@@ -461,7 +461,7 @@ consVarDecl g (VarDecl l x (Just e))
       Just s@(SI _ _ RdOnly      _ _) -> go s
       Just   (SI _ _ _           _ _) -> cgError $ errorVarDeclAnnot (srcPos l) x
   where
-  go (SI n lc a _ t) = freshenTypeOpt a g l t >>= \case
+  go (SI n lc a _ t) = freshenTypeOpt g l t >>= \case
       Just fta ->
         mseq (consExpr g e (Just fta)) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
@@ -591,7 +591,7 @@ consAsgn l g x e =
   case envFindTyWithAsgn x g of
     -- This is the first time we initialize this variable
     Just (SI n lc WriteGlobal Uninitialized t) ->
-      do  t' <- freshenType WriteGlobal g l t
+      do  t' <- freshenType g l t
           mseq (consExprT g e t') $ \(_, g') -> do
             g'' <- cgEnvAdds l "consAsgn-0" [SI n lc WriteGlobal Initialized t'] g'
             return $ Just g''

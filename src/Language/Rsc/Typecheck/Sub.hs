@@ -309,7 +309,8 @@ subtypeMems l γ c (ot1, mems1) (ot2, mems2)
   = mconcat $ map subtypeMem common
 
   where
-    diff21 = toListSEnv (mems2 `differenceSEnv` mems1)
+    diff21 = filter (isReqMember . snd)
+           $ toListSEnv $ mems2 `differenceSEnv` mems1
     common = toListSEnv (intersectWithSEnv (,) mems1 mems2)
 
     subtypeMem (f, (FI _ o1 m1 t1, FI _ o2 m2 t2))

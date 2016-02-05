@@ -1,9 +1,9 @@
 
-/*@ foo :: ( ) =>  { number | v > 0 }*/
+/*@ foo :: ( ) =>  posint */
 export function foo(): number {
     let hehehehehe = 32;
 
-    /*@ a :: { number | v > 0 } */
+    /*@ a :: posint */
     let a = 1;
     a = a + 123;
 

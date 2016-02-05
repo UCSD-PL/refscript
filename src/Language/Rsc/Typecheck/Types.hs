@@ -51,6 +51,8 @@ module Language.Rsc.Typecheck.Types (
   , isBvEnum, isTVar, maybeTObj, isTNull, isTVoid, isTFun
   , isArrayType, isTBot, isTNum, isBV32
 
+  --   # Predicates
+  , isReqMember
 
   --   # Operations
   , orNull
@@ -455,6 +457,10 @@ typesOfTM (TM m sm c k s n) =
 
 typesOfMem (FI _ _ _ t) = [t]
 typesOfMem (MI _ _ mts) = map snd mts
+
+isReqMember (FI _ Req _ _) = True
+isReqMember (MI _ Req _  ) = True
+isReqMember _              = False
 
 -- --------------------------------------------------------------------------------
 -- returnTy :: F.Reftable r => RType r -> Bool -> RType r

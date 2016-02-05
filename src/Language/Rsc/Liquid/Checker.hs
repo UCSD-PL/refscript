@@ -183,8 +183,9 @@ ppCasts (Rsc { code = Src fs })
     vcat es                   $+$
     pp (take 80 (repeat '='))
   where
-    as  = concatMap FO.toList fs
-    es  = [pp "TYPE-CAST" $+$ pp t | a <- as, TypeCast _ t <- fFact a]
+    ass = map FO.toList fs
+    as  = concat ass
+    es  = [pp "TYPE-CAST" $+$ pp t            | a <- as, TypeCast _ t <- fFact a]
        ++ [pp "DEAD-CAST" $+$ vcat (map pp e) | a <- as, DeadCast _ e <- fFact a ]
 
 --------------------------------------------------------------------------------
@@ -348,13 +349,13 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
       m1fo      <- pure (getFieldMutability (envCHA g1) t1 f)
       case (m1o, m1fo) of
         (Just m1, Just m1f)
-          | isSubtype g m1f tMU || isSubtype g m1 tUQ ->
+          | isSubtype g m1f tMU || isSubtypeWithUq g m1 tUQ ->
             case getProp l g1 f t1 of
               Left e -> cgError e
-              Right (unzip -> (ts, fs)) ->
-                mseq (consExprT g1 e1 (tOr ts)) $ \(_, g2) -> do
+              Right (unzip -> (ts, fs)) -> do
+                  subType l Nothing g1 t1 (tOr ts)
                   tus <- pure [ (t,()) | FI _ _ _ t <- fs ]
-                  z   <- consScan (\g_ -> const . consExprT g_ e2) g2 tus
+                  z   <- consScan (\g_ -> const . consExprT g_ e2) g1 tus
                   return (fmap snd z)
 
           | otherwise -> cgError (errorImmutableRefAsgn l f e1 t1)

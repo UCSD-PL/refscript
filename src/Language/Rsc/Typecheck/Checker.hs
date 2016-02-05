@@ -122,7 +122,7 @@ patch fs
   = do  (m, θ) <- (,) <$> getAnns <*> getSubst
         return $ map (\f -> apply θ $ fmap (pa m) f) fs
   where
-    pa m (FA i l f)   = FA i l $ f ++ filter vld (I.findWithDefault [] i m)
+    pa m (FA i l f) = FA i l $ f ++ filter vld (I.findWithDefault [] i m)
     vld TypInst{}     = True
     vld Overload{}    = True
     vld EltOverload{} = True
@@ -209,56 +209,58 @@ tcStmts = tcSeq tcStmt
 tcStmt  :: Unif r =>
   TCEnv r -> Statement (AnnTc r) -> TCM r (Statement (AnnTc r), TCEnvO r)
 --------------------------------------------------------------------------------
--- skip
+-- | skip
 tcStmt γ s@(EmptyStmt _)
   = return (s, Just γ)
 
--- interface Foo;
--- this definitions will be hoisted
+-- | interface Foo; (this definitions will be hoisted)
 tcStmt γ s@(InterfaceStmt _ _)
   = return (s, Just γ)
 
--- x = e
+-- | x = e
 tcStmt γ (ExprStmt l (AssignExpr l1 OpAssign (LVar lx x) e))
   = do (e', g) <- tcAsgn l γ (Id lx x) e
        return $ (ExprStmt l (AssignExpr l1 OpAssign (LVar lx x) e'), g)
 
--- e1.f = e2
---
-tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
-  = do  (e1', t1) <- tcExprWD γ e1 Nothing
-        m1o       <- pure (getMutability (envCHA γ) t1)
-        m1fo      <- pure (getFieldMutability (envCHA γ) t1 f)
-        case (m1o, m1fo) of
-          (Just m1, Just m1f)
-            | isSubtype γ m1f tMU || isSubtype γ m1 tUQ ->
-              case getProp l γ f t1 of
-                Left e -> tcError e
-                Right (unzip -> (ts, fs)) ->
-                    do  (e1'', _) <- tcExprT γ e1' (tOr ts)
-                        (e2' , _) <- tcScan (tcExprT γ) e2 (map f_ty fs)
-                        return (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1'' f) e2'), Just γ)
+-- | e1.f = e2
+tcStmt γ s@(ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
+  = tcWrap check >>= tcSW γ s
+  where
+    check = do
+      ue1       <- pure (enableUnique e1)
+      (e1', t1) <- tcExpr γ ue1 Nothing
+      m1o       <- pure (getMutability (envCHA γ) t1)
+      m1fo      <- pure (getFieldMutability (envCHA γ) t1 f)
+      case (m1o, m1fo) of
+        (Just m1, Just m1f)
+          | isSubtype γ m1f tMU || isSubtypeWithUq γ m1 tUQ ->
+            case getProp l γ f t1 of
+              Left e -> tcError e
+              Right (unzip -> (ts, fs)) ->
+                  do  e1''      <- castM γ e1' True t1 (tOr ts)   -- This is a consumable position --> UQ is allowed
+                      (e2' , _) <- tcScan (tcExprT γ) e2 (map f_ty fs)
+                      return (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1'' f) e2'), γ)
 
-            | otherwise -> tcError (errorImmutableRefAsgn l f e1 t1)
+          | otherwise -> tcError (errorImmutableRefAsgn l f e1 t1)
 
-          (Nothing, _) -> tcError (errorExtractMut l t1 e1)
-          (_, Nothing) -> tcError (errorExtractFldMut l f t1)
+        (Nothing, _) -> tcError (errorExtractMut l t1 e1)
+        (_, Nothing) -> tcError (errorExtractFldMut l f t1)
 
--- e
+-- | e
 tcStmt γ (ExprStmt l e)
   = do (e', to) <- tcExprW γ e
        return (ExprStmt l e', const γ <$> to)
 
--- s1;s2;...;sn
+-- | s1;s2;...;sn
 tcStmt γ (BlockStmt l stmts)
   = do (stmts', g) <- tcStmts γ stmts
        return (BlockStmt l stmts', g)
 
--- if b { s1 }
+-- | if b { s1 }
 tcStmt γ (IfSingleStmt l b s)
   = tcStmt γ (IfStmt l b s (EmptyStmt l))
 
--- if b { s1 } else { s2 }
+-- | if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
   = do opTy         <- safeEnvFindTy l γ (builtinOpId BITruthy)
        ([e'], z)    <- tcNormalCallW γ l BITruthy [e] opTy
@@ -278,7 +280,7 @@ tcStmt γ (IfStmt l e s1 s2)
                     return (IfStmt l e' s1' s2', Nothing)
          _       -> return (IfStmt l e' s1 s2, Nothing)
 
--- while c { b }
+-- | while c { b }
 tcStmt γ (WhileStmt l c b)
   = tcExprW γ c >>= \case
       (c', Nothing) -> return (WhileStmt l c' b, Nothing)
@@ -295,21 +297,21 @@ tcStmt γ (WhileStmt l c b)
     xs            = [ mkNextId x | x <- phis ]
     phis          = phiVarsAnnot l
 
--- var x1 [ = e1 ]; ... ; var xn [= en];
+-- | var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt γ (VarDeclStmt l ds)
   = do (ds', z) <- tcSeq tcVarDecl γ ds
        return      (VarDeclStmt l ds', z)
 
--- return e
+-- | return e
 tcStmt γ (ReturnStmt l eo)
   = tcRetW γ l eo
 
--- throw e
+-- | throw e
 tcStmt γ (ThrowStmt l e)
   = do  (e', _) <- tcExprW γ e
         return     (ThrowStmt l e', Nothing)
 
-
+-- | function (xs) { s }
 tcStmt γ s@FunctionStmt{}
   = tcFun γ s
 
@@ -457,7 +459,6 @@ tcClassElt γ (TD sig ms) c@(MemberMethDecl l False x xs bd)
     eThis       = (idThis, SI thisSym Local RdOnly Initialized tThis)
 
 
-
 --------------------------------------------------------------------------------
 tcAsgn :: Unif r
        => AnnTc r -> TCEnv r -> Id (AnnTc r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
@@ -472,26 +473,6 @@ tcAsgn _ γ x e
        return      $ (e', tcEnvAddo γ x $ SI xSym Local WriteLocal Initialized <$> to)
   where
     xSym = F.symbol x
-
-
--- tcSetPropMut γ l f t0 (e, t') (FI _ _ m t)
---   | isSubtype γ m tIM
---   = fatal (errorFinalField l f t0) (e, t')
---   | otherwise
---   = tcExprT l BISetProp γ e t
---
--- tcSetPropMut _ l _ _ _ m
---   = tcError (errorMethAsgn l m)
-
--- tcSetPropImm γ l f t0 (e, t') (FI _ _ m t)
---   | isSubtype γ m tIM
---   = fatal (errorImmutableRefAsgn l f t0) (e, t')
---   | otherwise
---   = tcExprT γ e t
---
--- tcSetPropImm _ l _ _ _ m
---   = tcError (errorMethAsgn l m)
-
 
 
 -- | `tcExprT l fn γ e t` checks expression @e@ under environment @γ@
@@ -539,12 +520,12 @@ tcNormalCallW :: (Unif r, PP a)
 tcNormalCallW γ l o es t
   = tcWrap (tcNormalCall γ l o (es `zip` nths) t) >>= \case
       Right (es', t') -> return (es', Just t')
-      Left e -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) [e]) es
+      Left e -> (,Nothing) <$> mapM (deadcastM γ [e]) es
 
 tcNormalCallWCtx γ l o es t
   = tcWrap (tcNormalCall γ l o es t) >>= \case
       Right (es', t') -> return (es', Just t')
-      Left err -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) [err]) (fst <$> es)
+      Left err -> (,Nothing) <$> mapM (deadcastM γ [err]) (fst <$> es)
 
 -- | Like `tcNormalCallW`, but return tNull in case of failure
 --
@@ -573,16 +554,43 @@ tcRetW γ l (Just e)
 tcRetW _ l Nothing
   = return (ReturnStmt l Nothing, Nothing)
 
+
+-- | Wrap expressions and statement in deadcasts
+--
+--   Both return empty environments in case of a failure. This causes the
+--   remainder of the basic block to not b checked at all. If this is not the
+--   prefered behavior, change by returning `Just γ`, where `γ` the input
+--   environment.
+--
 --------------------------------------------------------------------------------
--- tcEW :: Unif r => TCEnv r -> ExprSSAR r -> Either Error ((ExprSSAR r), b)
---                -> TCM r ((ExprSSAR r), Maybe b)
+tcEW :: Unif r => TCEnv r -> ExprSSAR r -> Either Error (ExprSSAR r, b)
+               -> TCM r ((ExprSSAR r), Maybe b)
 --------------------------------------------------------------------------------
 tcEW _ _ (Right (e', t')) = return (e', Just t')
-tcEW γ e (Left er)        = (,Nothing) <$> deadcastM (tce_ctx γ) [er] e
+tcEW γ e (Left er)        = (,Nothing) <$> deadcastM γ [er] e
 
--- Execute a and if it fails wrap e in a deadcast
-tcWA γ e a = tcWrap a >>= \x -> case x of Right r -> return $ Right r
-                                          Left  l -> Left <$> deadcastM (tce_ctx γ) [l] e
+--------------------------------------------------------------------------------
+tcSW :: Unif r => TCEnv r -> Statement (AnnSSA r)
+               -> Either Error (Statement (AnnSSA r), b)
+               -> TCM r (Statement (AnnSSA r), Maybe b)
+--------------------------------------------------------------------------------
+tcSW _ _ (Right (s, b)) = return (s, Just b)
+tcSW γ s (Left  e)      = do
+    l1    <- freshenAnn l
+    l2    <- freshenAnn l
+    dc    <- deadcastM γ [e] (NullLit l1)
+    return   (ExprStmt l2 dc, Nothing)
+  where l = getAnnotation s
+
+
+-- | Execute a and if it fails wrap e in a deadcast
+--
+--------------------------------------------------------------------------------
+tcWA :: Unif r => TCEnv r -> ExprSSAR r -> TCM r b -> TCM r (Either (ExprSSAR r) b)
+--------------------------------------------------------------------------------
+tcWA γ e a = tcWrap a >>= \case
+  Right r -> return (Right r)
+  Left  l -> Left <$> deadcastM γ [l] e
 
 --------------------------------------------------------------------------------
 enableUnique :: ExprSSAR r -> ExprSSAR r
@@ -710,15 +718,21 @@ tcExpr γ ex@(Cast l e) _
 --   typechecked, so just return the inferred type.
 --
 tcExpr γ (Cast_ l e) to
-  = case [ t_ | TypeCast ξ t_ <- fFact l, tce_ctx γ == ξ ] of
+  = case tCasts ++ dCasts of
       [ ] -> do (e', t)    <- tcExpr γ e to
                 case e' of
                   Cast_ {} -> die (bugNestedCasts (srcPos l) e)
                   _        -> (,t) . (`Cast_` e') <$> freshenAnn l
 
-      [t] -> pure (Cast_ l e, ofType t)
+      [Right t] -> pure (Cast_ l e, ofType t)
 
-      _   -> die $ bugNestedCasts (srcPos l) e
+      [Left _ ] -> pure (Cast_ l e, tNull)
+
+      _         -> die $ bugNestedCasts (srcPos l) e
+
+  where
+    tCasts = [ Right t_ | TypeCast ξ t_ <- fFact l, tce_ctx γ == ξ ]
+    dCasts = [ Left  es | DeadCast ξ es <- fFact l, tce_ctx γ == ξ ]
 
 -- | e.f
 tcExpr γ e@(DotRef _ _ _) s
@@ -943,8 +957,8 @@ tcNormalCall γ l fn etos ft0
                 addSubst l θ
                 (es, ts) <- pure (unzip ets)
                 tcWrap (tcCallCase γ l fn es ts ft) >>= \case
-                  Right ets' -> return $ ets'
-                  Left  er  -> (,tNull) <$> T.mapM (deadcastM (tce_ctx γ) [er] . fst) ets
+                  Right ets' -> return ets'
+                  Left  er  -> (,tNull) <$> T.mapM (deadcastM γ [er] . fst) ets
          Nothing -> tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) (unzip ets)
 
 
@@ -1029,7 +1043,7 @@ tcCallCase γ@(tce_ctx -> ξ) l fn es ts ft
         θ               <- unifyTypesM (srcPos l) γ lhs rhs
         θβ              <- pure $ fromList [ (TV s l_, t) | BTV s l_ (Just t) <- βs ]
         θ'              <- pure $ θ `mappend` θβ
-        (lhs', rhs')    <- pure $ apply θ' $ (lhs, rhs)
+        (lhs', rhs')    <- pure (apply θ' (lhs, rhs))
         es'             <- zipWith3M (castMC γ) es lhs' rhs'
         return           $ (es', apply θ ot)
 

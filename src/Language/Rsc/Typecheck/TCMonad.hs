@@ -198,7 +198,7 @@ extSubst bs = getSubst >>= setSubst . (`mappend` θ)
 -- | Error handling
 --------------------------------------------------------------------------------
 
--- | tcError produces a *recoverable* error
+-- | tcError produces a *recoverable* error (e.g. in a dead-cast environment)
 --------------------------------------------------------------------------------
 tcError     :: Error -> TCM r a
 --------------------------------------------------------------------------------
@@ -343,24 +343,27 @@ unifyTypeM l γ t t' = unifyTypesM l γ [t] [t']
 
 -- | @deadcastM@ wraps an expression @e@ with a dead-cast around @e@.
 --------------------------------------------------------------------------------
-deadcastM :: (Unif r) => IContext -> [Error] -> Expression (AnnSSA r) -> TCM r (Expression (AnnSSA r))
+deadcastM :: Unif r => TCEnv r -> [Error] -> Expression (AnnSSA r)
+                    -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-deadcastM ξ es e = addAnn i fact >> wrapCast loc fact e
+deadcastM γ es e = addAnn i fact >> wrapCast loc fact e
   where
     i            = fId (getAnnotation e)
     loc          = fSrc (getAnnotation e)
     fact         = DeadCast ξ es
+    ξ            = tce_ctx γ
 
 -- | `typecastM ξ e t` wraps an expression @e@ with a type-cast to type @t@.
 --------------------------------------------------------------------------------
-typecastM :: (Unif r) => IContext -> Expression (AnnSSA r) -> Type -> TCM r (Expression (AnnSSA r))
+typecastM :: Unif r => TCEnv r -> Expression (AnnSSA r) -> Type
+                    -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-typecastM ξ e t  = addAnn i fact >> wrapCast loc fact e
+typecastM γ e t  = addAnn i fact >> wrapCast loc fact e
   where
     i            = fId (getAnnotation e)
     loc          = fSrc (getAnnotation e)
     fact         = TypeCast ξ t
-
+    ξ            = tce_ctx γ
 
 
 -- | For the expression @e@, check the subtyping relation between the type @t1@
@@ -373,8 +376,8 @@ castM :: Unif r => TCEnv r -> Expression (AnnSSA r) -> Consume
 castM γ e consume t1 t2
   = case convert (srcPos e) γ cfg t1 t2 of
       ConvOK      -> return e
-      ConvWith _  -> typecastM (tce_ctx γ) e (toType t2)
-      ConvFail es -> deadcastM (tce_ctx γ) es e
+      ConvWith _  -> typecastM γ e (toType t2)
+      ConvFail es -> deadcastM γ es e
   where
     cfg | consume   = SC True  t1 t2 Nothing (Just e)
         | otherwise = SC False t1 t2 Nothing (Just e)

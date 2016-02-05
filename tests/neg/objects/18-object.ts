@@ -1,5 +1,5 @@
 
-/*@ gobj :: { a: posint } */
+/*@ gobj :: (Mutable) { a: posint } */
 let gobj = { a: 5, b: "glorp" };
 
 function foo() {

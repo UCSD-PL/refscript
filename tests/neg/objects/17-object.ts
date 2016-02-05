@@ -1,7 +1,7 @@
 /*@ qualif PLusOne(v:number, w: number): v = w + 1 */
 /*@ qualif Eq5(v:number): v = 5                    */
 
-function inc(n) { return n + 2; }
+function inc(n: number) { return n + 2; }
 
 /*@ readonly */
 let gobj = {

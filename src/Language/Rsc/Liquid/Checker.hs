@@ -54,12 +54,12 @@ import           Language.Rsc.Types
 import           Language.Rsc.TypeUtilities
 import           System.Console.CmdArgs.Default
 import           System.FilePath.Posix           (dropExtension)
--- import           Text.Printf
+import           Text.Printf
 
 import qualified Data.Foldable                   as FO
 import           Text.PrettyPrint.HughesPJ       hiding (first)
 
--- import           Debug.Trace                     hiding (traceShow)
+import           Debug.Trace                     hiding (traceShow)
 
 type Result = (A.UAnnSol RefType, F.FixResult Error)
 
@@ -402,7 +402,7 @@ consStmt g (IfSingleStmt l b s)
 -- if e { s1 } else { s2 }
 consStmt g (IfStmt l e s1 s2) =
   mseq (cgSafeEnvFindTyM (builtinOpId BITruthy) g
-        >>= consCall g l "truthy" [(e, Nothing)]) $ \(xe,ge) -> do
+        >>= consCall g l (builtinOpId BITruthy) [(e, Nothing)]) $ \(xe,ge) -> do
     g1' <- (`consStmt` s1) $ envAddGuard xe True ge
     g2' <- (`consStmt` s2) $ envAddGuard xe False ge
     envJoin l g g1' g2'
@@ -512,7 +512,7 @@ consVarDecl g (VarDecl l x Nothing)
 consExprT :: CGEnv -> Expression AnnLq -> RefType -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
 consExprT g e@FuncExpr{} t = consExpr g e (Just t)
-consExprT g e            t = consCall g l "consExprT" [(e, Just t)] (idTy t)
+consExprT g e            t = consCall g l (builtinOpId BIExprT) [(e, Just t)] (idTy t)
   where l = getAnnotation e
 
 
@@ -551,7 +551,7 @@ consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
 --
 consClassElt g (TD sig ms) (MemberVarDecl l True x (Just e))
   | Just (FI _ _ _ t) <- F.lookupSEnv (F.symbol x) (s_mems ms)
-  = void $ consCall g l "field init" [(e, Just t)] (mkInitFldTy t)
+  = void $ consCall g l (builtinOpId BIFieldInit) [(e, Just t)] (mkInitFldTy t)
   | otherwise
   = cgError $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
 
@@ -626,7 +626,7 @@ consExpr g (Cast_ l e) s
 -- | <T>e
 consExpr g ex@(Cast l e) _
   | [tc] <- [ ct | UserCast ct <- fFact l ]
-  = consCall g l "Cast" [(e, Just tc)] (castTy tc)
+  = consCall g l (builtinOpId BICallExpr) [(e, Just tc)] (castTy tc)
   | otherwise
   = die $ bugNoCasts (srcPos l) ex
 
@@ -684,14 +684,14 @@ consExpr g (VarRef l x) _
 
 consExpr g (PrefixExpr l o e) _
   = do opTy <- cgSafeEnvFindTyM (prefixOpId o) g
-       consCall g l o [(e,Nothing)] opTy
+       consCall g l (prefixOpId o) [(e,Nothing)] opTy
 
 consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
   = mseq (consExpr g e2 Nothing) $ \(x, g') -> do
        t            <- cgSafeEnvFindTyM x g'
        case t of
          TClass x_  -> do opTy <- cgSafeEnvFindTyM (infixOpId o) g
-                          consCall g l o (zwNth [e1, StringLit l2 (cc x_)]) opTy
+                          consCall g l (infixOpId o) (zwNth [e1, StringLit l2 (cc x_)]) opTy
          _          -> cgError $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
   where
     l2 = getAnnotation e2
@@ -699,7 +699,7 @@ consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
 
 consExpr g (InfixExpr l o e1 e2) _
   = do opTy <- cgSafeEnvFindTyM (infixOpId o) g
-       consCall g l o (zwNth [e1, e2]) opTy
+       consCall g l (infixOpId o) (zwNth [e1, e2]) opTy
 
 -- | e ? e1 : e2
 consExpr g (CondExpr l e e1 e2) (Just t)
@@ -718,7 +718,7 @@ consExpr g (CondExpr l e e1 e2) (Just t)
   where
     checkCond = do
         t   <- cgSafeEnvFindTyM (builtinOpId BITruthy) g
-        consCall g l "truthy" [(e, Nothing)] t
+        consCall g l (builtinOpId BITruthy) [(e, Nothing)] t
 
 consExpr _ e@(CondExpr l _ _ _) Nothing
   = cgError $ unimpCondExpCtxType l e
@@ -752,25 +752,26 @@ consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
     checkWithProp _  _  (Left er)         = cgError er
 
     -- Check a single type member
-    checkTM _  g_ _  (FI _ Req _ ft) = consCall g_ l em (es `zip` nths) ft
+    checkTM _  g_ _  (FI _ Req _ ft) = consCall g_ l biID (es `zip` nths) ft
     checkTM _  _  _  (FI f _ _ _)    = cgError (errorOptFunUnsup l f e)
     checkTM xR g_ tR (MI _ Req mts)  =
       case getMutability (envCHA g_) tR of
         Just mR ->
             case [ ft_ | (m, ft_) <- mts, isSubtype g_ mR m ] of
               [] -> cgError $ errorMethMutIncomp l em mts mR
-              ts -> consCall g_ l em (es `zip` nths) (substThis xR (mkAnd ts))
+              ts -> consCall g_ l biID (es `zip` nths) (substThis xR (mkAnd ts))
         Nothing -> cgError $ errorNoMutAvailable l e tR
 
     checkTM _ _ _ (MI _ Opt _) =
       error "TODO: Add error message at checkTypeMember MI Opt"
+    biID = builtinOpId BIDotRefCallExpr
 
 -- | e(es)
 --
 consExpr g (CallExpr l e es) _
   = mseq (consExpr g e Nothing) $ \(x, g') ->
       do  ft <- cgSafeEnvFindTyM x g'
-          consCall g' l e (es `zip` nths) ft
+          consCall g' l (builtinOpId BICallExpr) (es `zip` nths) ft
 
 -- | e.f
 --
@@ -813,7 +814,7 @@ consExpr g0 (DotRef l e f) _
 consExpr g (BracketRef l e1 e2) _
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
       opTy  <- cgSafeEnvFindTyM (builtinOpId BIBracketRef) g'
-      consCall g' l BIBracketRef ([vr x1, e2] `zip` nths) opTy
+      consCall g' l (builtinOpId BIBracketRef) ([vr x1, e2] `zip` nths) opTy
   where
     vr  = VarRef $ getAnnotation e1
 
@@ -821,14 +822,14 @@ consExpr g (BracketRef l e1 e2) _
 --
 consExpr g (AssignExpr l OpAssign (LBracket _ e1 e2) e3) _
   = do  opTy <- cgSafeEnvFindTyM (builtinOpId BIBracketAssign) g
-        consCall g l BIBracketAssign ([e1,e2,e3] `zip` nths) opTy
+        consCall g l (builtinOpId BIBracketAssign) ([e1,e2,e3] `zip` nths) opTy
 
 -- | [e1,...,en]
 --
 consExpr g e@(ArrayLit l es) to
   = arrayLitTy l g e to (length es) >>= \case
       Left ee    -> cgError ee
-      Right opTy -> consCall g l BIArrayLit (zip es nths) opTy
+      Right opTy -> consCall g l (builtinOpId BIArrayLit) (zip es nths) opTy
 
 -- | { f1: e1, ..., fn: en }
 --
@@ -852,11 +853,13 @@ consExpr g (NewExpr l e es) s
   = mseq (consExpr g e Nothing) $ \(x,g1) -> do
       t <- cgSafeEnvFindTyM x g1
       case extractCtor g1 t of
-        Just ct -> mseq (consCall g1 l "ctor" (es `zip` nths) ct) $ \(x, g2) -> do
-                      tNew    <- cgSafeEnvFindTyM x g2
-                      tNew'   <- pure (adjustCtxMut tNew s)
-                      Just   <$> cgEnvAddFresh "18" l tNew' g2
-        Nothing -> cgError $ errorConstrMissing (srcPos l) t
+        Just ct ->
+            mseq (consCall g1 l (builtinOpId BICtor) (es `zip` nths) ct) $ \(x, g2) -> do
+              tNew    <- cgSafeEnvFindTyM x g2
+              tNew'   <- pure (adjustCtxMut tNew s)
+              Just   <$> cgEnvAddFresh "18" l tNew' g2
+        Nothing ->
+            cgError $ errorConstrMissing (srcPos l) t
 
 -- | super
 --
@@ -880,26 +883,28 @@ consExpr g (FuncExpr l fo xs body) tCtxO
     funTy | [ft] <- [t | SigAnn _ t <- fFact l] = Just ft
           | Just ft <- tCtxO = Just ft
           | otherwise        = Nothing
-    f     = maybe (F.symbol "<anonymous>") F.symbol fo
+
+    f     = fromMaybe (builtinOpId BIAnonymousFun) (fmap (fmap srcPos) fo)
 
 -- not handled
 consExpr _ e _ = cgError $ unimplemented l "consExpr" e where l = srcPos  e
 
 
 --------------------------------------------------------------------------------
-validOverloads :: CGEnv -> AnnLq -> RefType -> [RefType]
+validOverloads :: (F.Symbolic f) => CGEnv -> AnnLq -> f -> RefType -> [RefType]
 --------------------------------------------------------------------------------
-validOverloads g l ft0
-  = [ mkFun t | Overload cx i <- fFact l              -- all overloads
+validOverloads g l fn ft0
+  = [ mkFun t | Overload cx fn0 i <- fFact l          -- all overloads
               , cge_ctx g == cx                       -- right context
+              , F.symbol fn0 == F.symbol fn
               , (j, t) <- extractCall g ft0           -- extract callables
               , i == j ]                              -- pick the one resolved at TC
 
 --------------------------------------------------------------------------------
-consCall :: PP a => CGEnv -> AnnLq -> a -> [(Expression AnnLq, Maybe RefType)]
-                 -> RefType -> CGM (Maybe (Id AnnLq, CGEnv))
+consCall :: CGEnv -> AnnLq -> Identifier -> [(Expression AnnLq, Maybe RefType)]
+         -> RefType -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
-consCall g l fn ets ft@(validOverloads g l -> fts)
+consCall g l fn ets ft@(validOverloads g l fn -> fts)
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
@@ -1094,15 +1099,15 @@ globals ts = [(x,s1,s2) | (x, s1@(SI _ Local WriteGlobal Initialized _),
                               s2@(SI _ Local WriteGlobal Initialized _)) <- ts ]
 
 
--- traceTypePP l msg act
---   = do  z <- act
---         case z of
---           Just (x,g) -> do  t <- cgSafeEnvFindTyM x g
---                             return $ Just $ trace (str x t) (x,g)
---           Nothing -> return Nothing
---   where
---     str x t = boldBlue (printf "\nTrace: [%s] %s\n" (ppshow (srcPos l)) (ppshow msg)) ++
---               printf "%s: %s" (ppshow x) (ppshow t)
+traceTypePP l msg act
+  = do  z <- act
+        case z of
+          Just (x,g) -> do  t <- cgSafeEnvFindTyM x g
+                            return $ Just $ trace (str x t) (x,g)
+          Nothing -> return Nothing
+  where
+    str x t = boldBlue (printf "\nTrace: [%s] %s\n" (ppshow (srcPos l)) (ppshow msg)) ++
+              printf "%s: %s" (ppshow x) (ppshow t)
 
 
 -- Local Variables:

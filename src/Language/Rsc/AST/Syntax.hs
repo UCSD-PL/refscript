@@ -275,6 +275,11 @@ data BuiltinOp = BIUndefined
                | BIBracketAssign
                | BIImmArrayLit
                | BIArrayLit
+               | BICallExpr
+               | BIDotRefCallExpr
+               | BIAnonymousFun
+               | BIFieldInit
+               | BIExprT
                | BIUniqueArrayLit
                | BIObjectLit
                | BINumArgs

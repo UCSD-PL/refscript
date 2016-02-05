@@ -52,8 +52,8 @@ ciToError (Ci e _ h) = err (errLoc e) (errMsg e ++ "\n" ++ hs)
 
     ppTail xs = vcat (map ppShort xs)
 
-    ppFull s@(Sub g _ l r) =
-      text "In the environment" $+$ nest 2 (pp (cge_names g)) $+$
+    ppFull s = -- @(Sub g _ l r) =
+      -- text "In the environment" $+$ nest 2 (pp (cge_names g)) $+$
       ppShort s
     ppShort (Sub _ _ l r) =
       text "Which was produced from the subtyping between:" $+$

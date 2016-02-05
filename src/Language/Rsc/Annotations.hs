@@ -56,7 +56,7 @@ data FactQ q r
 
   -- Overloading
   | EltOverload   IContext (MutabilityQ q r) (RTypeQ q r)
-  | Overload      IContext Int  -- Overload index
+  | Overload      IContext F.Symbol Int  -- (Overload index) (Func Name) (Node id)
 
   -- ** SPECIFICATIONS **
 

@@ -64,6 +64,7 @@ module Language.Rsc.Typecheck.Types (
   , mkTypeMembers, typeMembers, tmsFromList, typesOfTM
 
   -- * Operator Types
+  , Identifier
   , infixOpId, prefixOpId, builtinOpId, finalizeTy
 
   -- * Builtin: Binders
@@ -90,7 +91,6 @@ import qualified Language.Rsc.Core.Env           as E
 import           Language.Rsc.Misc               (mapSnd3)
 import           Language.Rsc.Names
 import           Language.Rsc.Types
-import           Text.Parsec.Pos                 (initialPos)
 
 -- import           Debug.Trace                     (trace)
 
@@ -484,11 +484,18 @@ finalizeTy t  | TRef (Gen x (m:ts)) _ <- t, isUQ m
 
 mkInitFldTy t = mkFun ([], [B (F.symbol "f") t], tVoid)
 
+type Identifier = Id F.SrcSpan
 
+builtinOpId :: BuiltinOp -> Identifier
 builtinOpId BIUndefined      = builtinId "BIUndefined"
 builtinOpId BIBracketRef     = builtinId "BIBracketRef"
 builtinOpId BIBracketAssign  = builtinId "BIBracketAssign"
 builtinOpId BIArrayLit       = builtinId "BIArrayLit"
+builtinOpId BICallExpr       = builtinId "BICallExpr"
+builtinOpId BIDotRefCallExpr = builtinId "BIDotRefCallExpr"
+builtinOpId BIExprT          = builtinId "BIExprT"
+builtinOpId BIAnonymousFun   = builtinId "BIAnonymousFun"
+builtinOpId BIFieldInit      = builtinId "BIFieldInit"
 builtinOpId BIUniqueArrayLit = builtinId "BIUniqueArrayLit"
 builtinOpId BIImmArrayLit    = builtinId "BIImmArrayLit"
 builtinOpId BIObjectLit      = builtinId "BIObjectLit"
@@ -535,7 +542,7 @@ prefixOpId PrefixTypeof     = builtinId "PrefixTypeof"
 prefixOpId PrefixBNot       = builtinId "PrefixBNot"
 prefixOpId o                = errorstar $ "prefixOpId: Cannot handle: " ++ show o
 
-mkId      = Id (initialPos "")
+mkId      = Id F.dummySpan
 builtinId = mkId . ("builtin_" ++)
 
 

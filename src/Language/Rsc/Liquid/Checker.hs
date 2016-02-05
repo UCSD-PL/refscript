@@ -333,8 +333,26 @@ consStmt g (EmptyStmt _)
   = return $ Just g
 
 -- x = e
-consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
-  = consAsgn l g (Id lx x) e
+consStmt g (ExprStmt l (AssignExpr _ OpAssign v@(LVar _ x) e))
+  = case envFindTyWithAsgn v g of
+
+      -- This is the first time we initialize this variable
+      Just (SI n lc WriteGlobal Uninitialized t) -> do
+          t' <- freshenType g l t
+          mseq (consExprT g e t') $ \(_, g') ->
+            Just <$> cgEnvAdds l "consAsgn-0" [SI n lc WriteGlobal Initialized t'] g'
+
+      Just (SI _ _ WriteGlobal _ t) ->
+          mseq (consExprT g e t) $ \(_, g') -> return $ Just g'
+
+      Just (SI n lc a i t) ->
+          mseq (consExprT g e t) $ \(x', g') -> do
+            t_     <- cgSafeEnvFindTyM x' g'
+            Just  <$> cgEnvAdds l "consAsgn-1" [SI n lc a i t_] g'
+      Nothing ->
+          mseq (consExpr g e Nothing) $ \(x', g') -> do
+            t      <- cgSafeEnvFindTyM x' g'
+            Just  <$> cgEnvAdds l "consAsgn-1" [SI (F.symbol x) Local WriteLocal Initialized t] g'
 
 -- e1.f = e2
 --
@@ -585,28 +603,6 @@ consClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
     tThis       = TRef (Gen nm (map btVar bs)) fTop
     eThis       = SI thisSym Local RdOnly Initialized tThis
 
---------------------------------------------------------------------------------
-consAsgn :: AnnLq -> CGEnv -> Id AnnLq -> Expression AnnLq -> CGM (Maybe CGEnv)
---------------------------------------------------------------------------------
-consAsgn l g x e =
-  case envFindTyWithAsgn x g of
-    -- This is the first time we initialize this variable
-    Just (SI n lc WriteGlobal Uninitialized t) ->
-      do  t' <- freshenType g l t
-          mseq (consExprT g e t') $ \(_, g') -> do
-            g'' <- cgEnvAdds l "consAsgn-0" [SI n lc WriteGlobal Initialized t'] g'
-            return $ Just g''
-
-    Just (SI _ _ WriteGlobal _ t) -> mseq (consExprT g e t) $ \(_, g') ->
-                                     return $ Just g'
-    Just (SI n lc a i t) -> mseq (consExprT g e t) $ \(x', g') -> do
-                              t_     <- cgSafeEnvFindTyM x' g'
-                              Just  <$> cgEnvAdds l "consAsgn-1" [SI n lc a i t_] g'
-    Nothing -> mseq (consExpr g e Nothing) $ \(x', g') -> do
-                 t      <- cgSafeEnvFindTyM x' g'
-                 Just  <$> cgEnvAdds l "consAsgn-1" [SI (F.symbol x) Local WriteLocal Initialized t] g'
-
-
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh,
 --   temporary (A-Normalized) variable holding the value of `e`,
 --   g' is g extended with a binding for x' (and other temps required for `e`)
@@ -664,6 +660,15 @@ consExpr g (VarRef l x) _
   -- | undefined
   | F.symbol x == F.symbol "undefined"
   = Just <$> cgEnvAddFresh "0" l tUndef g
+
+--   -- | If `x` is a unique reference and it this does not appear to be
+--   --   place where unique references can appear, then flag an error.
+--   | Just (SI _ _ _ _ t) <- tInfo
+--   , Just m <- getMutability (envCHA γ) t
+--   , isSubtypeWithUq g m tUQ
+--   , not (isUniqueEnabled e)
+--   = cgError (errorUniqueRef l (Just e))
+
 
   | Just (SI _ _ WriteGlobal _ t) <- tInfo
   = Just <$> cgEnvAddFresh "0" l t g

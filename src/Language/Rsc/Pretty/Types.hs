@@ -47,7 +47,7 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp (TRef t r)      = F.ppTy r (pp t)
   pp (TObj m ms r)   = parens (pp (toType m)) <+> ppBody ms r
     where
-      ppBody ms r    = F.ppTy r (sep [lbrace, nest 2 (pp ms), rbrace])
+      ppBody ms r    = F.ppTy r (hsep [lbrace, nest 2 (pp ms), rbrace])
   pp (TClass t)      = text "class" <+> pp t
   pp (TMod t)        = text "module" <+> pp t
   pp t@(TAll _ _)    = ppArgs angles comma αs <> pp t' where (αs, t') = bkAll t

@@ -218,9 +218,31 @@ tcStmt γ s@(InterfaceStmt _ _)
   = return (s, Just γ)
 
 -- | x = e
-tcStmt γ (ExprStmt l (AssignExpr l1 OpAssign (LVar lx x) e))
-  = do (e', g) <- tcAsgn l γ (Id lx x) e
-       return $ (ExprStmt l (AssignExpr l1 OpAssign (LVar lx x) e'), g)
+tcStmt γ s@(ExprStmt l (AssignExpr l1 OpAssign v@(LVar lx x) e))
+  = tcWrap check >>= tcSW γ s
+  where
+    check =
+      case info of
+        Just (SI _ _ WriteGlobal Uninitialized t) -> do
+            (e', _) <- tcExprT γ e t
+            γ'      <- pure (tcEnvAdd v (SI xSym Local WriteGlobal Initialized t) γ)
+            return     (mkStmt e', γ')
+
+        Just (SI _ _ WriteGlobal _ t) -> do
+            (e', _) <- tcExprT γ e t
+            return     (mkStmt e', γ)
+
+        Just (SI _ _ a _ _) -> error $ "Could this happen- x = e ?? " ++ ppshow a
+
+        Nothing -> do
+            (e', t) <- tcExpr γ e Nothing
+            γ'      <- pure (tcEnvAdd v (SI xSym Local WriteLocal Initialized t) γ)
+            return     (mkStmt e', γ')
+
+    mkStmt  = ExprStmt l . AssignExpr l1 OpAssign (LVar lx x)
+    xSym    = F.symbol x
+    info    = tcEnvFindTyForAsgn x γ
+
 
 -- | e1.f = e2
 tcStmt γ s@(ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
@@ -237,7 +259,8 @@ tcStmt γ s@(ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
             case getProp l γ f t1 of
               Left e -> tcError e
               Right (unzip -> (ts, fs)) ->
-                  do  e1''      <- castM γ e1' True t1 (tOr ts)   -- This is a consumable position --> UQ is allowed
+                  do  e1''      <- castM γ e1' True t1 (tOr ts)
+                      -- This is a consumable position --> UQ is allowed
                       (e2' , _) <- tcScan (tcExprT γ) e2 (map f_ty fs)
                       return (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1'' f) e2'), γ)
 
@@ -354,12 +377,12 @@ tcVarDecl γ v@(VarDecl l x (Just e))
                    , Just $ tcEnvAdd x (SI y lc WriteLocal Initialized t') γ)
 
       -- Global
-      Just (SI _ _ WriteGlobal _ _) ->
+      Just (SI _ _ WriteGlobal _ t) ->
         -- PV: the global variable should be in scope already,
         --     since it is being hoisted to the beginning of the
         --     scope.
-        do  (e', γ') <- tcAsgn l γ x e
-            return    $ (VarDecl l x (Just e'), γ')
+        do  (e', _) <- tcExprT γ e t
+            return    $ (VarDecl l x (Just e'), Just γ)
 
       -- ReadOnly
       Just (SI y lc RdOnly _ t) ->
@@ -459,22 +482,6 @@ tcClassElt γ (TD sig ms) c@(MemberMethDecl l False x xs bd)
     eThis       = (idThis, SI thisSym Local RdOnly Initialized tThis)
 
 
---------------------------------------------------------------------------------
-tcAsgn :: Unif r
-       => AnnTc r -> TCEnv r -> Id (AnnTc r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
---------------------------------------------------------------------------------
-tcAsgn _ γ x e
-  | Just (SI _ _ a _ t) <- tcEnvFindTyForAsgn x γ
-  = do  eitherET  <- tcWrap (tcExprT γ e t)
-        (e', to)  <- tcEW γ e eitherET
-        return     $ (e', tcEnvAddo γ x $ SI xSym Local a Initialized <$> to)
-  | otherwise
-  = do (e', to)   <- tcExprW γ e
-       return      $ (e', tcEnvAddo γ x $ SI xSym Local WriteLocal Initialized <$> to)
-  where
-    xSym = F.symbol x
-
-
 -- | `tcExprT l fn γ e t` checks expression @e@ under environment @γ@
 --   enforcing a type @t@.
 --------------------------------------------------------------------------------
@@ -499,8 +506,8 @@ tcExprW γ e = tcWrap (tcExpr γ e Nothing) >>= tcEW γ e
 --    (with an optional contextual type @t@ potentially wrapping it in a cast)
 --
 --------------------------------------------------------------------------------
-tcExprWD :: Unif r => TCEnv r -> ExprSSAR r -> Maybe (RType r)
-                   -> TCM r (ExprSSAR r, RType r)
+tcExprWD :: Unif r
+  => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
 --------------------------------------------------------------------------------
 tcExprWD γ e t
   = do  eet <- tcWrap (tcExpr γ e t)
@@ -949,7 +956,8 @@ tcNormalCall :: (Unif r, PP a)
              -> RType r -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
 tcNormalCall γ l fn etos ft0
-  = do ets <- T.mapM (uncurry (tcExprWD γ)) etos
+  -- = do ets <- ltracePP l fn <$> T.mapM (uncurry (tcExprWD γ)) etos
+  = do ets <- T.mapM (uncurry (tcExpr γ)) etos
        z   <- resolveOverload γ l fn ets ft0
        case z of
          Just (i, θ, ft) ->

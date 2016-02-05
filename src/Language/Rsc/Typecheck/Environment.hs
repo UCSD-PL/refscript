@@ -198,6 +198,9 @@ initClassCtorEnv (TS _ (BGen nm bs) _) γ
 
 tcEnvAdds xs γ = γ { tce_names = envAdds xs $ tce_names γ }
 
+--------------------------------------------------------------------------------
+tcEnvAdd :: (F.Symbolic x, IsLocated x) => x -> SymInfo r -> TCEnv r -> TCEnv r
+--------------------------------------------------------------------------------
 tcEnvAdd x t γ = γ { tce_names = envAdd x t $ tce_names γ }
 
 --------------------------------------------------------------------------------

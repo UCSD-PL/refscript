@@ -222,8 +222,10 @@ errorTAliasMismatch l t a     = mkErr l $ printf "Invalid type alias application
 errorBadPAlias l p nx ne      = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." (ppshow p) nx ne
 
 errorNoMatchCallee l fn ts ft = mkErr l $ show $ text "No matching callee type for:" <+> ticks (pp fn)      $+$
-                                                 text "Argument Types:" <+> intersperse comma (map (pp . toType) ts) $+$
-                                                 text "Function Type:"  <+> pp (toType ft)
+                                                 text "Argument Types:" $+$
+                                                 nest 2 (intersperse comma (map (pp . toType) ts)) $+$
+                                                 text "Function Type:"  $+$
+                                                 nest 2 (pp (toType ft))
 
 errorMultipleCasts l cs       = mkErr l $ printf "Multiple Casts: %s" (ppshow cs)
 errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"

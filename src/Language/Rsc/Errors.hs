@@ -137,12 +137,12 @@ errorOptionalElt l p t t'     = mkErr l $ printf "Unmatching optionality values 
 errorIncompatOptional l f     = mkErr l $ printf "Property '%s' has incompatible optionality modifiers." (ppshow f)
 errorConstrMissing l t        = mkErr l $ printf "Could not find constructor for type '%s'." (ppshow t)
 
-errorObjSubtype l t t' fs     = mkErr l $ show $ text "Object type" $+$
-                                                 nest 2 (pp t)              $+$
-                                                 text "is not a subtype of" $+$
-                                                 nest 2 (pp t')             $+$
-                                                 text "The latter is missing field(s):" <+>
-                                                 intersperse comma (map pp fs)
+errorObjSubtype l t t' fs     = mkErr l $ show $ text "Object type:"         $+$
+                                                 nest 2 (pp t)               $+$
+                                                 text "is not a subtype of:" $+$
+                                                 nest 2 (pp t')              $+$
+                                                 text "The former is missing field(s):" <+>
+                                                 intersperse comma (map (ticks . pp) fs)
 
 -- Typechecking
 ppBind (a,b) = pp a <+> dcolon <+> pp b

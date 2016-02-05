@@ -318,9 +318,10 @@ rTypeSortForAll t                  = genSort n θ $ rTypeSort tbody
     n                              = length αs
     θ                              = HM.fromList $ zip (F.symbol <$> αs) (F.FVar <$> [0..])
 
---BC FIXME: 
---genSort n θ (F.FFunc _ t)          = F.mkFFunc n (F.sortSubst θ <$> t)
-genSort n θ t                      = F.mkFFunc n [F.sortSubst θ t]
+genSort n θ t = case F.bkFFunc t of
+                 Just (_, ts) -> F.mkFFunc n (F.sortSubst θ <$> ts)
+                 Nothing      -> F.mkFFunc n [F.sortSubst θ t]
+
 
 ------------------------------------------------------------------------------------------
 stripRTypeBase :: RTypeQ q r -> Maybe r

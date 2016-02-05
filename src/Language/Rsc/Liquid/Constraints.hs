@@ -19,7 +19,6 @@ module Language.Rsc.Liquid.Constraints (
 
   ) where
 
-import           Control.Monad
 import qualified Data.List                       as L
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types         as F
@@ -204,16 +203,20 @@ splitC s@(Sub g i t1@(TPrim c1 _) t2@(TPrim c2 r2))
 
 -- | S-Obj
 --
-splitC s@(Sub g i t1@(TObj _ ms1 r1) t2@(TObj _ ms2 _))
+splitC s@(Sub g i t1@(TObj m1 ms1 r1) t2@(TObj _ ms2 _))
   | F.isFalse (F.simplify r1)
   = return []
   | otherwise
   = do  cs     <- bsplitC g i' t1 t2
-        (x,g') <- cgEnvAddFresh "" i t1 g
-        cs'    <- splitTM g' (F.symbol x) i' ms1 ms2
+        -- (x,g') <- cgEnvAddFresh "" i t1 g
+        cs'    <- splitTM g i' m1 ms1 r1 ms2
         return $ cs ++ cs'
   where
     i' = addHist i s
+
+
+
+
 
 splitC s@(Sub g i t1 t2)
   | all maybeTObj [t1, t2]
@@ -239,22 +242,43 @@ mkBot t = t `strengthen` F.bot (rTypeR t)
 -- | Substitute occurences of `this` in the parts of the object members
 --   Do not substiute static members and constructors.
 --------------------------------------------------------------------------------
-splitTM :: CGEnv -> F.Symbol -> Cinfo
-        -> TypeMembers F.Reft
-        -> TypeMembers F.Reft -> CGM [FixSubC]
+splitTM
+  :: CGEnv -> Cinfo -> Mutability -> RefTypeMembers -> F.Reft
+  -> RefTypeMembers -> CGM [FixSubC]
 --------------------------------------------------------------------------------
-splitTM g x c (TM p1 sp1 c1 k1 s1 n1) (TM p2 sp2 c2 k2 s2 n2)
-  = concatMapM (splitElt g c) (ms ++ sms) +++
-    concatMapM splitT (cs ++ ks ++ ss ++ ns)
+splitTM g i m1_ (TM p1 sp1 c1 k1 s1 n1) r1 (TM p2 sp2 c2 k2 s2 n2)
+  = do
+        -- Add a binding for the LHS, but replace the Unique mutabilities
+        -- with the mutabilities that appear in the RHS
+        --
+        (x, g') <- cgEnvAddFresh "splitTM" i t1' g
+        ps'     <- pure $ substThis x ps
+        cs1     <- concatMapM (splitElt g' i) ps'
+        cs2     <- concatMapM (splitElt g  i) sps
+
+        cs      <- pure $ substThis x [ (t1,t2) | Just t1 <- [c1], Just t2 <- [c2] ]
+        ks      <- pure $             [ (t1,t2) | Just t1 <- [k1], Just t2 <- [k2] ]
+        ss      <- pure $ substThis x [ (t1,t2) | Just t1 <- [s1], Just t2 <- [s2] ]
+        ns      <- pure $ substThis x [ (t1,t2) | Just t1 <- [n1], Just t2 <- [n2] ]
+
+        cs3     <- concatMapM splitT (cs ++ ks ++ ss ++ ns)
+
+        return     (cs1 ++ cs2 ++ cs3)
   where
-    (+++) = liftM2 (++)
-    ms  = substThis x $ F.toListSEnv $ F.intersectWithSEnv (,) p1 p2
-    sms =               F.toListSEnv $ F.intersectWithSEnv (,) sp1 sp2
-    cs  = substThis x [ (t1,t2) | Just t1 <- [c1], Just t2 <- [c2] ]
-    ks  =             [ (t1,t2) | Just t1 <- [k1], Just t2 <- [k2] ]
-    ss  = substThis x [ (t1,t2) | Just t1 <- [s1], Just t2 <- [s2] ]
-    ns  = substThis x [ (t1,t2) | Just t1 <- [n1], Just t2 <- [n2] ]
-    splitT (t1,t2) = splitC (Sub g c t1 t2)
+    ps  = F.toListSEnv (F.intersectWithSEnv (,) p1  p2)
+    sps = F.toListSEnv (F.intersectWithSEnv (,) sp1 sp2)
+    t1' = TObj m1_ (tmsFromList (map fixMut ps)) r1
+
+    splitT (a,b) = splitC (Sub g i a b)
+
+    -- Carry over the RHS's mutability (to avoid having unique when including
+    -- the object type in the environment). The goal is to get the `Immutable`s
+    -- from the RHS.
+    fixMut (_, (FI s1 o m1 t, FI _ _ m2 _)) | isSubtypeWithUq g m1 tUQ
+                                            = FI s1 o m2 t
+    fixMut (_, (f1          , _          )) = f1
+
+
 
 --------------------------------------------------------------------------------
 splitElt

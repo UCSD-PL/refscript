@@ -184,6 +184,7 @@ type Bind r           = BindQ AK r
 type TGen r           = TGenQ AK r
 type BTGen r          = BTGenQ AK r
 type TypeMembers r    = TypeMembersQ AK r
+type RefTypeMembers   = TypeMembers F.Reft
 type BTVar r          = BTVarQ AK r
 
 type TypeDecl r       = TypeDeclQ AK r

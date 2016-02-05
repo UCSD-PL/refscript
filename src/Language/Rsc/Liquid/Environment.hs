@@ -272,9 +272,9 @@ objFields g e@(SI x loc a _ t)
   | otherwise                           = e:xts
   where
     xts | Just (TObj _ ms _) <- expandType Coercive (envCHA g) t
-        , fs <- F.toListSEnv (i_mems ms)
-        = [ mkSI f o ft | (_, FI f o m ft) <- fs
-                        , isSubtype g m tIM ]
+        , fs                 <- F.toListSEnv (i_mems ms)
+        = [ mkSI f o ft       | (_, FI f o m ft) <- fs
+                              , isSubtype g m tIM ]
         | otherwise
         = []
 

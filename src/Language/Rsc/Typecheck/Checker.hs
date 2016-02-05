@@ -18,7 +18,7 @@ import           Data.Function                      (on)
 import           Data.Generics
 import qualified Data.IntMap.Strict                 as I
 import           Data.List                          (find, sortBy)
-import           Data.Maybe                         (catMaybes, fromMaybe, maybeToList)
+import           Data.Maybe                         (catMaybes, fromMaybe)
 import qualified Data.Traversable                   as T
 import           Language.Fixpoint.Misc             as FM
 import qualified Language.Fixpoint.Types            as F
@@ -239,7 +239,7 @@ tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
                         (e2' , _) <- tcScan (tcExprT γ) e2 (map f_ty fs)
                         return (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1'' f) e2'), Just γ)
 
-            | otherwise -> tcError (errorNonMutFldAsgn l f t1)
+            | otherwise -> tcError (errorImmutableRefAsgn l f e1 t1)
 
           (Nothing, _) -> tcError (errorExtractMut l t1 e1)
           (_, Nothing) -> tcError (errorExtractFldMut l f t1)
@@ -342,17 +342,14 @@ tcVarDecl γ v@(VarDecl l x (Just e))
       -- Local (no type annotation)
       Nothing ->
         do  (e', to) <- tcExprW γ e
-            -- XXX: Do not allow assignment of `non-consumable` expression.
-            if not (consumable e) && any (isUnique γ) (maybeToList to) then
-                tcError (errorUniqueAsgn x e)
-            else
-                let sio = SI (F.symbol x) Local WriteLocal Initialized <$> to in
-                return (VarDecl l x (Just e'), tcEnvAddo γ x sio)
+            sio      <- pure (SI (F.symbol x) Local WriteLocal Initialized <$> to)
+            return (VarDecl l x (Just e'), tcEnvAddo γ x sio)
 
       -- Local (with type annotation)
       Just (SI y lc WriteLocal _ t) ->
         do  (e', t') <- tcExprT γ e t
-            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (SI y lc WriteLocal Initialized t') γ)
+            return ( VarDecl l x $ Just e'
+                   , Just $ tcEnvAdd x (SI y lc WriteLocal Initialized t') γ)
 
       -- Global
       Just (SI _ _ WriteGlobal _ _) ->
@@ -365,7 +362,8 @@ tcVarDecl γ v@(VarDecl l x (Just e))
       -- ReadOnly
       Just (SI y lc RdOnly _ t) ->
         do  ([e'], Just t') <- tcNormalCallWCtx γ l "VarDecl-RO" [(e, Just t)] (idTy t)
-            return $ (VarDecl l x $ Just e', Just $ tcEnvAdd x (SI y lc RdOnly Initialized t') γ)
+            return ( VarDecl l x $ Just e'
+                   , Just $ tcEnvAdd x (SI y lc RdOnly Initialized t') γ)
 
       c -> fatal (unimplemented l "tcVarDecl" ("case: " ++ ppshow c)) (v, Just γ)
 
@@ -564,7 +562,7 @@ tcRetW :: Unif r => TCEnv r -> AnnSSA r -> Maybe (ExprSSAR r)
                  -> TCM r (Statement (AnnSSA r), Maybe a)
 --------------------------------------------------------------------------------
 tcRetW γ l (Just e)
-  = do  (e', t)   <- tcExpr γ e (Just rt)
+  = do  (e', t)   <- tcExpr γ (enableUnique e) (Just rt)
         θ         <- unifyTypeM (srcPos l) γ t rt
         (t', rt') <- pure (apply θ t, apply θ rt)
         e''       <- castM γ e' True t' rt'
@@ -587,7 +585,22 @@ tcWA γ e a = tcWrap a >>= \x -> case x of Right r -> return $ Right r
                                           Left  l -> Left <$> deadcastM (tce_ctx γ) [l] e
 
 --------------------------------------------------------------------------------
-tcExpr :: Unif r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
+enableUnique :: ExprSSAR r -> ExprSSAR r
+--------------------------------------------------------------------------------
+enableUnique    = fmap (\a -> a { fFact = BypassUnique : fFact a })
+
+--------------------------------------------------------------------------------
+isUniqueEnabled :: ExprSSAR r -> Bool
+--------------------------------------------------------------------------------
+isUniqueEnabled = any isBypassUnique . fFact . getAnnotation
+  where
+    isBypassUnique BypassUnique = True
+    isBypassUnique _            = False
+
+
+--------------------------------------------------------------------------------
+tcExpr :: Unif r
+       => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
 --------------------------------------------------------------------------------
 tcExpr _ e@(IntLit _ _) _
   = return (e, tNum)
@@ -617,6 +630,14 @@ tcExpr γ e@(VarRef l x) _
   -- | Ignore the `cast` variable
   | Just t <- to, isCastId x
   = return (e,t)
+
+  -- | If `x` is a unique reference and it this does not appear to be
+  --   place where unique references can appear, then flag an error.
+  | Just t <- to
+  , Just m <- getMutability (envCHA γ) t
+  , isSubtypeWithUq γ m tUQ
+  , not (isUniqueEnabled e)
+  = tcError (errorUniqueRef l (Just e))
 
   -- | Regural bound variable
   | Just t <- to

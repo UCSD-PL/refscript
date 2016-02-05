@@ -376,8 +376,8 @@ castM γ e consume t1 t2
       ConvWith _  -> typecastM (tce_ctx γ) e (toType t2)
       ConvFail es -> deadcastM (tce_ctx γ) es e
   where
-    cfg | consume   = SC True  t1 t2 Nothing
-        | otherwise = SC False t1 t2 Nothing
+    cfg | consume   = SC True  t1 t2 Nothing (Just e)
+        | otherwise = SC False t1 t2 Nothing (Just e)
 
 --------------------------------------------------------------------------------
 castMC :: Unif r => TCEnv r -> Expression (AnnSSA r)

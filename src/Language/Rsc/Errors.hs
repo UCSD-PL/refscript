@@ -121,9 +121,12 @@ errorIncompMutTy l m m' t t' fo = mkErr l $ show $ text "Immutability modifier" 
                                                  maybe empty (\f -> text "of field" <+> ticks (pp f)) fo <+>
                                                  text "of type:" $+$ nest 2 (pp t')
 
-errorUniqueRef l              = mkErr l $ show $ sep [text "Cannot handle unique types in this context."]
+errorUniqueRef l x            = mkErr l $ show $ text "Cannot handle unique reference" <+>
+                                                 maybe empty (ticks . pp) x <+>
+                                                 text "in this context." $+$
+                                                 text "Try casting" <+> ticks (pp x) <+> text "to a non-unique type."
 errorUniqueAsgn l x           = mkErr l $ show $ text "Cannot re-assign unique reference:" <+> ticks (pp x) <> pp "." $+$
-                                                 text "Try casting" <+> ticks (pp x) <+> text "to a non unique type."
+                                                 text "Try casting" <+> ticks (pp x) <+> text "to a non-unique type."
 errorMutUnknown l t           = mkErr l $ show $ sep [text "Unknown mutability modifier:", nest 2 (pp t)]
 bugMutPartInvalid l t         = mkErr l $ show $ sep [text "[BUG] Invalid mutability part of types:", nest 2 (pp t)]
 errorMutInvalid l t t'        = mkErr l $ show $ sep [text "Invalid mutability type(s):", nest 2 (pp t), text "or", nest 2 (pp t')]
@@ -259,9 +262,9 @@ errorVariadicNoArgs l f       = mkErr l $ printf "Cannot make variadic call '%s'
 errorConflateTypeMembers l es = mkErr l $ printf "Cannot conflate type members '%s'." (ppshow es)
 errorCallSuperOnNonClass l x  = mkErr l $ printf "Cannot call 'super' on non class type '%s'." (ppshow x)
 errorAssignsFields l x t      = mkErr l $ printf "Variable '%s' with type '%s' can only be assigned fields or returned." (ppshow x) (ppshow t)
-errorNonMutFldAsgn l f t      = mkErr l $ show $ text "Cannot assign non-mutable field" <+> ticks (pp f) <+> text "of type" $+$ nest 2 (pp t)
-errorImmutableRefAsgn l f t   = mkErr l $ show $ text "Cannot assign field" <+> ticks (pp f) <+>
-                                                 text "through non-mutable reference of type" $+$
+errorImmutableRefAsgn l f e t = mkErr l $ show $ text "Cannot assign field" <+> ticks (pp f) <+>
+                                                 text "of expression" <+> ticks (pp e) <+>
+                                                 text "through non-mutable reference of type:" $+$
                                                  nest 2 (pp t) $+$
                                                  text "[Hint: try making field" <+> ticks (pp f) <+> text "assignable]."
 errorMethAsgn l m             = mkErr l $ show $ text "Cannot re-assign method" <+> ticks (pp m)

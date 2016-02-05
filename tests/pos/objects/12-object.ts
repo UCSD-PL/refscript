@@ -1,5 +1,5 @@
 
-/*@ foo :: ({x: number}) => void */
+/*@ foo :: ( (Mutable){x: number}) => void */
 export function foo(o):void {
-  o.x = 10;
+    o.x = 10;
 }

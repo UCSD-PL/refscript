@@ -357,7 +357,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
                   z   <- consScan (\g_ -> const . consExprT g_ e2) g2 tus
                   return (fmap snd z)
 
-          | otherwise -> cgError (errorNonMutFldAsgn l f t1)
+          | otherwise -> cgError (errorImmutableRefAsgn l f e1 t1)
 
         (Nothing, _) -> cgError (errorExtractMut l t1 e1)
         (_, Nothing) -> cgError (errorExtractFldMut l f t1)

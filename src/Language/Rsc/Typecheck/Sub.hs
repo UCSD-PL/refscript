@@ -21,7 +21,7 @@ module Language.Rsc.Typecheck.Sub (
   , isConvertibleC
   , isUnique
   , convert
-  , SubConf(..), allowUniqueCfg, disallowUniqueCfg
+  , SubConfA(..), allowUniqueCfg, disallowUniqueCfg
   , SubtypingResult (..)
   , ConversionResult (..)
   ) where
@@ -35,6 +35,7 @@ import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Pretty
+import           Language.Rsc.Program           (ExprSSAR)
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ      (vcat, (<+>))
@@ -46,12 +47,15 @@ type PPRE r = (ExprReftable Int r, PPR r)
 --------------------------------------------------------------------------------
 -- | Subtyping configuration
 --------------------------------------------------------------------------------
-data SubConf r = SC {
-    allow_unique :: Bool          -- Allow conversion of `unique` to other permissions
-  , sub_lhs      :: RType r
-  , sub_rhs      :: RType r
-  , sub_fld      :: Maybe (Symbol)
+data SubConfA a r = SC {
+    allow_unique :: Bool            -- Allow conversion of `unique` to other permissions
+  , sub_lhs      :: RType r         -- The LHS type
+  , sub_rhs      :: RType r         -- The RHS type
+  , sub_fld      :: Maybe (Symbol)  -- Last relevant field
+  , sub_var      :: Maybe a         -- A relevant expression
 }
+
+type SubConf r = SubConfA (ExprSSAR r) r
 
 allowUniqueCfg    c = c { allow_unique = True }
 disallowUniqueCfg c = c { allow_unique = False }
@@ -62,8 +66,8 @@ isConvertibleC :: (PPRE r, FE g r) => g r -> SubConf r -> RType r -> RType r -> 
 --------------------------------------------------------------------------------
 isSubtypeC γ c t1 t2 = subtype dummySpan γ c t1 t2 `elem` [EqT, SubT]
 
-isSubtype       γ t1 t2 = isSubtypeC γ (SC False t1 t2 Nothing) t1 t2
-isSubtypeWithUq γ t1 t2 = isSubtypeC γ (SC True  t1 t2 Nothing) t1 t2
+isSubtype       γ t1 t2 = isSubtypeC γ (SC False t1 t2 Nothing Nothing) t1 t2
+isSubtypeWithUq γ t1 t2 = isSubtypeC γ (SC True  t1 t2 Nothing Nothing) t1 t2
 
 isConvertibleC γ c t1 t2
   | isSubtypeC γ c t1 t2
@@ -179,7 +183,7 @@ subtype l _ _ t1 t2
 
 
 -- | subtype with default configuration
-subtype' l g t1 t2 = subtype l g (SC False t1 t2 Nothing) t1 t2
+subtype' l g t1 t2 = subtype l g (SC False t1 t2 Nothing Nothing) t1 t2
 
 
 --------------------------------------------------------------------------------
@@ -208,10 +212,10 @@ subtypeObj l γ c t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
                    | x1 == x2  = EqT
                    | x1 <: x2  = SubT
                    | isUQ t1   = EqT   -- Allow the `Unique` coercion
-                   | otherwise = NoSub [errorUniqueRef l]
+                   | otherwise = NoSub [errorUniqueRef l (sub_var c)]
 
-    withUqDisabled | isUQ t1   = NoSub [errorUniqueRef l]
-                   | isUQ t2   = NoSub [errorUniqueRef l]
+    withUqDisabled | isUQ t1   = NoSub [errorUniqueRef l (sub_var c)]
+                   | isUQ t2   = NoSub [errorUniqueRef l (sub_var c)]
                    | x1 == x2  = EqT
                    | x1 <: x2  = SubT
                    | otherwise = NoSub [errorIncompMutTy l t1 t2

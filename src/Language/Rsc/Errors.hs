@@ -109,8 +109,8 @@ errorDownCast l t             = mkErr l $ printf "Downcast to '%s'" (ppshow t)
 errorClassExtends l x y t1 t2 = mkErr l $ printf "Type '%s' cannot extend type '%s'. Type for '%s': '%s'. Type for '%s': '%s'" (ppshow x) (ppshow y)
                                                   (ppshow x) (ppshow t1) (ppshow y) (ppshow t2)
 
-errorAssignability l a b      = mkErr l $ show $ text "Type" $+$ nest 2 (pp a) $+$ text "is not assignable to type" $+$ nest 2 (pp b)
-errorSubtype       l a b      = mkErr l $ show $ text "Type" $+$ nest 2 (pp a) $+$ text "is not a subtype of type"  $+$ nest 2 (pp b)
+errorAssignability l a b      = mkErr l $ show $ text "Type:" $+$ nest 2 (pp a) $+$ text "is not assignable to type:" $+$ nest 2 (pp b)
+errorSubtype       l a b      = mkErr l $ show $ text "Type:" $+$ nest 2 (pp a) $+$ text "is not a subtype of type:"  $+$ nest 2 (pp b)
 
 errorNonObjectType l t        = mkErr l $ printf "Type '%s' cannot be treated as an object type." (ppshow t)
 
@@ -191,8 +191,7 @@ errorExtractMut l t e         = mkErr l $ show $ text "Cannot extract mutability
 
 errorMissingFld l f t         = mkErr l $ printf "Field '%s' is missing from type '%s'." (ppshow f) (ppshow t)
 errorNoFuncAnn l              = mkErr l $ printf "No type annotation or contextual type for anonymous function."
-errorUnfoldType l t           = mkErr l $ printf "Could not unfold type '%s'." (ppshow t)
-errorUnfoldTypes l t1 t2      = mkErr l $ printf "Could not unfold one of the types: '%s' and '%s'." (ppshow t1) (ppshow t2)
+errorUnfoldType l t           = mkErr l $ show $ text "Could not unfold type:" $+$ nest 2 (pp t)
 errorUnresolvedType l t       = mkErr l $ printf "Could not resolve type '%s'." (ppshow t)
 errorUnresolvedTypes l t1 t2  = mkErr l $ printf "Could not resolve types '%s' and '%s'." (ppshow t1) (ppshow t2)
 errorConsSigMissing l t       = mkErr l $ printf "Constructor signature for '%s' is missing." (ppshow t)

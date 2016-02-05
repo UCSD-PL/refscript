@@ -622,11 +622,9 @@ consExpr g (Cast_ l e) s
                     t'  <- pure (narrowType g t s)
                     Just <$> cgEnvAddFresh "cast_" l t' g
       -- Dead-cast: Do not attempt to check the enclosed expression
-      CDead [] -> subType l (Just (errorDeadCast l)) g tBool (tBot tBool) >> return Nothing
-      CDead es -> mapM_ (\e -> subType l (Just e) g tBool (tBot tBool)) es >> return Nothing
+      CDead [] -> subType l (Just (errorDeadCast l)) g tBool tBot >> return Nothing
+      CDead es -> subType l (Just (F.catErrors es))  g tBool tBot >> return Nothing
       CNo      -> consExpr g e s
-  where
-       tBot t = t `strengthen` F.bot (rTypeR t)
 
 -- | <T>e
 consExpr g ex@(Cast l e) _

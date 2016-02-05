@@ -56,13 +56,19 @@ addHist (Ci e l h) s = Ci e l (s:h)
 splitC :: SubC -> CGM [FixSubC]
 --------------------------------------------------------------------------------
 
+-- | S-Bot-R
+--   Use this to keep the deadcast messages cleaner
+--
+splitC (Sub g i t1 (TPrim TBot _))
+  | not (isTBot t1) = splitIncompatC g i t1
+
 -- | S-Var-R
 --
 splitC s@(Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
-  | α1 == α2
-  = bsplitC g (addHist i s) t1 t2
-  | otherwise
-  = splitIncompatC g i t1
+  | α1 == α2  = bsplitC g i' t1 t2
+  | otherwise = splitIncompatC g i' t1
+  where
+    i' = addHist i s
 
 -- | S-Var-L
 --
@@ -120,7 +126,7 @@ splitC s@(Sub g i (TAll α1 t1) (TAll α2 t2))
 -- | S-Union-L
 --
 splitC s@(Sub g i t1@(TOr t1s r) t2)
-  = do  m1      <- bsplitC g i t1 t2
+  = do  m1      <- bsplitC g i t1 (ltracePP i ("history: " ++ ppshow (length $ ci_history i')) t2)
         ms      <- concatMapM (\t -> splitC (Sub g i' (t `strengthen` r) t2)) t1s
         return   $ m1 ++ ms
   where
@@ -159,7 +165,7 @@ splitC s@(Sub g i t1 t2@(TOr ts _))
 --    TODO: Find variance for type arguments
 --
 splitC s@(Sub g i t1@(TRef n1@(Gen x1 (_ :t1s)) r1)
-                t2@(TRef    (Gen x2 (m2:t2s)) _ ))
+                  t2@(TRef    (Gen x2 (m2:t2s)) _ ))
 
   -- Trivial case (do not descend)
   --
@@ -185,8 +191,9 @@ splitC s@(Sub g i t1@(TRef n1@(Gen x1 (_ :t1s)) r1)
   , x1' == x2 -- sanity check
   = splitC (Sub g i (TRef n1' r1) t2)
 
+  -- XXX: Is this possible to be caught later?
   | otherwise
-  = splitIncompatC g i t1
+  = splitIncompatC g i' t1
 
   where
     i' = addHist i s
@@ -208,21 +215,17 @@ splitC s@(Sub g i t1@(TObj m1 ms1 r1) t2@(TObj _ ms2 _))
   = return []
   | otherwise
   = do  cs     <- bsplitC g i' t1 t2
-        -- (x,g') <- cgEnvAddFresh "" i t1 g
         cs'    <- splitTM g i' m1 ms1 r1 ms2
         return $ cs ++ cs'
   where
     i' = addHist i s
 
-
-
-
-
 splitC s@(Sub g i t1 t2)
   | all maybeTObj [t1, t2]
   = case (expandType NonCoercive (envCHA g) t1, expandType NonCoercive (envCHA g) t2) of
       (Just t1', Just t2') -> splitC (Sub g i' t1' t2')
-      _ -> cgError $ errorUnfoldTypes l t1 t2
+      (Nothing , _       ) -> cgError $ errorUnfoldType l t1
+      (_       , Nothing ) -> cgError $ errorUnfoldType l t2
   where
     l  = srcPos i
     i' = addHist i s

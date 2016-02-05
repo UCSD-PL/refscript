@@ -740,10 +740,16 @@ substOffsetThis = emapReft (\_ -> V.trans vs () ()) []
   where
     vs     = V.defaultVisitor { V.txExpr = tx }
     --BC FIXME
-    --tx _ (F.EApp o [ F.EVar x, F.ESym (F.SL f) ])
+    tx _ e
+      | (F.EVar o, [F.EVar x, F.ESym (F.SL f)]) <- F.splitEApp e
+      , o == offsetName, x == thisSym
+      = F.eVar f
+      | otherwise
+      = e
+    -- tx _ (F.EApp o [ F.EVar x, F.ESym (F.SL f) ])
     --       | F.symbol o == offsetName, F.symbol x == thisSym
     --       = F.eVar f
-    tx _ e = e
+    -- tx _ e = e
 
 
 -- | Substitute occurences of 'this' in type @t'@, given that the receiver

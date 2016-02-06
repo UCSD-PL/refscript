@@ -294,14 +294,9 @@ envAddGroup
 envAddGroup l msg ks g xts
   = do  -- Flag any errors
         _           <- mapM_ cgError errors
-
-        -- TODO: should the invariants be added here?
         es          <- L.zipWith5 SI xs ls as is <$> zipWithM inv is ts
-
-        ids         <- catMaybes <$> mapM (addFixpointBind g) es
-
-        return       $ g { cge_names = envAdds (zip xs es)   $ cge_names g
-                         , cge_fenv  = F.insertsIBindEnv ids $ cge_fenv  g }
+        g'          <- foldM addFixpointBind g es
+        return       $ g' { cge_names = envAdds (zip xs es) (cge_names g) }
   where
     errors           = concat (zipWith (checkSyms l msg g ks) xs ts)
     (xs,ls,as,is,ts) = L.unzip5 [(x,loc,a,i,t) | SI x loc a i t <- xts ]
@@ -310,19 +305,42 @@ envAddGroup l msg ks g xts
     inv _            = return
 
 
+-- | Adds a fixpoint binding to g's cge_fenv, updating the relevant
+--   environments of the monad's state.
 --------------------------------------------------------------------------------
-addFixpointBind :: CGEnv -> CGEnvEntry -> CGM (Maybe F.BindId)
+addFixpointBind :: CGEnv -> CGEnvEntry -> CGM CGEnv
 --------------------------------------------------------------------------------
 -- No binding for globals or RetVal: shouldn't appear in refinements
-addFixpointBind _ (SI _ _ WriteGlobal _ _) = return Nothing
-addFixpointBind _ (SI _ _ ReturnVar   _ _) = return Nothing
+addFixpointBind g (SI _ _ WriteGlobal _ _) = return g
+addFixpointBind g (SI _ _ ReturnVar   _ _) = return g
 addFixpointBind g (SI x _ _           _ t)
   = do  bs           <- getCgBinds
+        rbs          <- getCgRevBinds
+        let ibs0      = cge_fenv g
+
+        -- Remove the old binding from IBindEnv of the CGEnv
+        let ibs1      = case F.lookupSEnv x rbs of
+                          Just i  -> F.deleteIBindEnv i ibs0
+                          Nothing -> ibs0
+
+        -- Add Type Invariants (XXX: again?)
         t'           <- addInvariant g t
         let r         = rTypeSortedReft t'
-            (i, bs')  = F.insertBindEnv x r bs
-        setCgBinds bs'
-        return        $ Just i
+
+        -- Update the Monad's BindEnv
+        let (i, bs')  = F.insertBindEnv x r bs
+
+        -- Update the Monad's (Sym -> Bid) mapping
+        let rbs'      = F.insertSEnv x i rbs
+
+        -- Set the Monad' envs
+        _            <- setCgBinds    bs'
+        _            <- setCgRevBinds rbs'
+
+        -- Update the CGEnv's IBindEnv
+        let ibs2      = F.insertsIBindEnv [i] ibs1
+        return        $ g { cge_fenv = ibs2 }
+
 
 --------------------------------------------------------------------------------
 addInvariant :: CGEnv -> RefType -> CGM RefType

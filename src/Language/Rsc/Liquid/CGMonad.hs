@@ -15,7 +15,9 @@ module Language.Rsc.Liquid.CGMonad (
     CGM
   , cgTickAST
   , getCgBinds
+  , getCgRevBinds
   , setCgBinds
+  , setCgRevBinds
   , getCgOpts
   , getCgInvs
   , getCons
@@ -104,35 +106,41 @@ data CGState = CGS {
   --
   -- ^ global list of fixpoint binders
   --
-    cg_binds   :: F.BindEnv
+    cg_binds     :: F.BindEnv
+
+  --
+  -- ^ reverse mapping of fixpoint symbols
+  --   (to ensure unique bindings)
+  --
+  , cg_rev_binds :: F.SEnv F.BindId
   --
   -- ^ subtyping constraints
   --
-  , cg_cs      :: ![SubC]
+  , cg_cs        :: ![SubC]
   --
   -- ^ well-formedness constraints
   --
-  , cg_ws      :: ![WfC]
+  , cg_ws        :: ![WfC]
   --
   -- ^ freshness counter
   --
-  , cg_cnt     :: !Integer
+  , cg_cnt       :: !Integer
   --
   -- ^ recorded annotations
   --
-  , cg_ann     :: S.UAnnInfo RefType
+  , cg_ann       :: S.UAnnInfo RefType
   --
   -- ^ type constructor invariants
   --
-  , cg_invs    :: TConInv
+  , cg_invs      :: TConInv
   --
   -- ^ configuration options
   --
-  , cg_opts    :: Config
+  , cg_opts      :: Config
   --
   -- ^ AST Counter
   --
-  , cg_ast_cnt :: NodeId
+  , cg_ast_cnt   :: NodeId
 
   }
 
@@ -147,13 +155,14 @@ cgTickAST = do
   modify $ \st -> st {cg_ast_cnt = 1 + n}
   return $ n
 
-getCgBinds   = cg_binds <$> get
-setCgBinds b = modify $ \st -> st { cg_binds = b }
-getCgOpts    = cg_opts <$> get
-getCgInvs    = cg_invs <$> get
-getCons      = cg_cs   <$> get
-getWFCons    = cg_ws   <$> get
-
+getCgBinds    = cg_binds     <$> get
+getCgRevBinds = cg_rev_binds <$> get
+setCgBinds    b = modify $ \st -> st { cg_binds = b }
+setCgRevBinds b = modify $ \st -> st { cg_rev_binds = b }
+getCgOpts     = cg_opts <$> get
+getCgInvs     = cg_invs <$> get
+getCons       = cg_cs   <$> get
+getWFCons     = cg_ws   <$> get
 
 
 --------------------------------------------------------------------------------
@@ -167,7 +176,7 @@ execute cfg pgm act
 --------------------------------------------------------------------------------
 initState :: Config -> RefScript -> CGState
 --------------------------------------------------------------------------------
-initState c p = CGS F.emptyBindEnv [] [] 0 mempty invars c (maxId p)
+initState c p = CGS F.emptyBindEnv F.emptySEnv [] [] 0 mempty invars c (maxId p)
   where
     invars    = HM.fromList [(pr, t) | t@(Loc _ (TPrim pr _)) <- invts p]
 

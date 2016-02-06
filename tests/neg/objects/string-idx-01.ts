@@ -1,18 +1,19 @@
 
-/*@ qualif HasP(v:string, s:a): hasProperty(v,s) */
-/*@ qualif EnumP(v:string, s:a): enumProp(v,s) */
+/*@ qualif HasP (v: Str, s:a): hasProperty(v,s) */
+/*@ qualif EnumP(v: Str, s:a): enumProp(v,s) */
 
-/*@ extend :: (src: (Immutable) { [s:string]:string }, dest: (Mutable) { [s:string]:top }) => (Mutable) { [s:string]:top } */
+/*@ extend :: (src: (Immutable) { [s:string]: top }, dest: (Mutable) { [s:string]:top }) => (Mutable) { [s:string]:top } */
 export function extend(src, dest) {
-  for (var p in src) {
-    dest[p] = src[p];
-  }
-  return dest;
+    for (let p in src) {
+        dest[p] = src[p];
+    }
+    return dest;
 }
 
+/*@ readonly options :: { [s: string]: top } */
 let options = {};
 
-var this_options = extend({
+let this_options = extend({
     canvasHeight: 100,
     canvasWidth: 100,
     pixelWidth: 2,
@@ -22,4 +23,4 @@ var this_options = extend({
     renderHighlights: false,
     renderReflections: false,
     rayDepth: 2
-  }, options || {});
+}, options /*|| {}*/);

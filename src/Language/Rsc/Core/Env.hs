@@ -50,6 +50,7 @@ import qualified Language.Fixpoint.Types       as F
 import           Language.Fixpoint.Types.Names (symbolString)
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
+import           Language.Rsc.Pretty.Common
 
 --------------------------------------------------------------------------
 -- | Environment Definitions
@@ -97,8 +98,15 @@ envFromList_ f     = L.foldl' step mempty
 envFromList          :: (IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t
 envFromList           = envFromList_ f
   where
-    f γ _ (l,_) (l', _) | l /= l'   = error "Duplicate specification"
+    f γ x (l,_) (l', _) | l /= l'   = error $ "Duplicate specification: " ++ ppshow (F.symbol x)
                         | otherwise = γ
+
+-- envFromListWithConflict
+--   :: (IsLocated x, F.Symbolic x)
+--   => ((SrcSpan, t) -> (SrcSpan, t) -> t) -> [(x, t)] -> Env t
+-- envFromListWithConflict g = envFromList_ f
+--   where
+--     f γ x a a' = envAdd x (g a a') γ
 
 
 envFromListConcat :: (Monoid t, F.Symbolic a, IsLocated a)

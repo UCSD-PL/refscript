@@ -98,12 +98,15 @@ data SsaEnv r = SsaEnv {
 instance PP (SsaEnv r) where
   pp (SsaEnv asgn _ _ _) = pp asgn
 
+resolveConflict _ a a' | a == a' = a
+                       | otherwise = error "SSAMonad-initGlobSsaEnv"
+
 --------------------------------------------------------------------------------
 initGlobSsaEnv
   :: F.Reftable r => [Statement (AnnR r)] -> ClassHierarchy r -> SsaEnv r
 --------------------------------------------------------------------------------
 initGlobSsaEnv fs cha
-  = SsaEnv (envFromList (symbols' fs)) cha Nothing emptyPath
+  = SsaEnv (envFromListWithKey resolveConflict (symbols' fs)) cha Nothing emptyPath
 
 --------------------------------------------------------------------------------
 initCallableSsaEnv
@@ -114,7 +117,7 @@ initCallableSsaEnv l g xs bd
   = do  arg  <- freshArgId l
         ret  <- freshRetId l
         env  <- pure $ envMap toFgn (asgn g)
-                     & mappend (envFromList (symbols' bd))
+                     & mappend (envFromListWithKey resolveConflict (symbols' bd))
                      & envAdd ret ReturnVar
                      & envAdd arg RdOnly
                      & envAdds (xs `zip` repeat WriteLocal)
@@ -131,7 +134,7 @@ envToFgn = envMap toFgn
 
 initModuleSsaEnv l g m ss = SsaEnv env cha cls path
   where
-    env  = envFromList (symbols' ss) `mappend` envMap toFgn (asgn g)
+    env  = envFromListWithKey resolveConflict (symbols' ss) `mappend` envMap toFgn (asgn g)
     cha  = ssaCHA g
     cls  = curClass g
     path = pathInPath l (curPath g) m

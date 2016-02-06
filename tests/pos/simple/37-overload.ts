@@ -35,9 +35,6 @@ module M {
 
 }
 
-declare function bak<A>(x: A): string;
-declare function bak(x: number): number;
-
 interface IA<M extends ReadOnly> {
 
     interfacefoo(x: number): number;
@@ -70,9 +67,6 @@ class A<M extends ReadOnly> {
         else return true;
     }
 
-    // bbb: (x: number) => number = function(x: number) {
-    //     return 1;
-    // };
 }
 
 

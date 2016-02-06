@@ -3,7 +3,7 @@
 /*@ qualif HasP (v: Str, s: a): hasProperty(v,s)        */
 /*@ qualif EnumP(v: Str, s: a): enumProp(v,s)          */
 
-/*@ extend :: ( src:  { [s:string]: string }, dest: { [s:string]: top }) => {[s:string]: top } */
+/*@ extend :: ( src:  { [s:string]: top }, dest: { [s:string]: top }) => {[s:string]: top } */
 function extend(src, dest) {
     for (let p in src) {
         dest[p] = src[p];

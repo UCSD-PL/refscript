@@ -141,6 +141,10 @@ castable _ γ c _ t1@(TRef (Gen _ [_]) _) t2@(TRef (Gen _ [_]) _)
 
 castable _ _ _ es _ _ = ConvFail es
 
+
+
+-- | TODO: We can also keep track of the stack of subtyping constraints seen so
+--         far, for better error reporting.
 --------------------------------------------------------------------------------
 subtype :: (PPRE r, FE g r, IsLocated l)
         => l -> g r -> SubConf r -> RType r -> RType r -> SubtypingResult

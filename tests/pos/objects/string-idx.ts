@@ -1,7 +1,7 @@
 
-/*@ qualif HasDP<A>(v: Str, s: a): hasDirectProperty(v,s) */
-/*@ qualif HasP<A> (v: Str, s: a): hasProperty(v,s)        */
-/*@ qualif EnumP<A>(v: Str, s: a): enumProp(v,s)          */
+/*@ qualif HasDP(v: Str, s: a): hasDirectProperty(v,s) */
+/*@ qualif HasP (v: Str, s: a): hasProperty(v,s)        */
+/*@ qualif EnumP(v: Str, s: a): enumProp(v,s)          */
 
 /*@ extend :: ( src:  { [s:string]: top }, dest: { [s:string]: top }) => {[s:string]: top } */
 function extend(src, dest) {
@@ -13,14 +13,14 @@ function extend(src, dest) {
 
 let options = null;
 
-let this_options = extend({
-    canvasHeight: 100,
-    canvasWidth: 100,
-    pixelWidth: 2,
-    pixelHeight: 2,
-    renderDiffuse: false,
-    renderShadows: false,
-    renderHighlights: false,
-    renderReflections: false,
-    rayDepth: 2
-}, /*options || */{});
+// let this_options = extend({
+//     canvasHeight: 100,
+//     canvasWidth: 100,
+//     pixelWidth: 2,
+//     pixelHeight: 2,
+//     renderDiffuse: false,
+//     renderShadows: false,
+//     renderHighlights: false,
+//     renderReflections: false,
+//     rayDepth: 2
+// }, /*options || */{});

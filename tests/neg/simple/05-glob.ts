@@ -1,10 +1,10 @@
 
 // Globals are not allowed to apper in refinements
 
-/*@ [global] a :: posint */
+/*@ a :: posint */
 let a = 1;
 
-/*@ [global] c :: posint */
+/*@ c :: posint */
 let c = 1;
 
 a = a - 5;

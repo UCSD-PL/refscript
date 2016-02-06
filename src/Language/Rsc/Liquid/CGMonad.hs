@@ -200,7 +200,7 @@ measureEnv = fmap rTypeSortedReft . envSEnv . consts
 --------------------------------------------------------------------------------
 cgError     :: Error -> CGM b
 --------------------------------------------------------------------------------
-cgError err = throwE $ catMessage err "CG-ERROR\n"
+cgError err = throwE $ catMessage err "[CG-ERROR]\n"
 
 --------------------------------------------------------------------------------
 -- | Environment API

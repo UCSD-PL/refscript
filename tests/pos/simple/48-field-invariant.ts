@@ -1,8 +1,8 @@
 /*@ qualif PP(v: int): v > 1 */
 
-/*@ type TT = {
-    @Final f: { number | v > 1 };
-           g: boolean;
+/*@ type TT = (Mutable) {
+    f: { number | v > 1 };
+    g: boolean;
 } */
 type TT = { f: number; g: boolean };
 

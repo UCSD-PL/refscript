@@ -152,3 +152,8 @@ let g:syntastic_javascript_checkers += ['liquid']
 ~~~~~
 let g:syntastic_typescript_liquid_args = '...'
 ~~~~~
+
+
+### Notes
+
++ Using `export let a = ... ` brings in the inferred type from TypeScript.

@@ -243,7 +243,9 @@ errorUnboundSyms l x t s m    = mkErr l $ show $ text "Symbol" <+> ticks (pp s) 
                                                  text "is unbound [ERROR_CODE:" <+> pp m <+> text "]."
 
 unimplementedReservedSyms l   = mkErr l $ printf "Please avoid using 'func' and 'obj' as symbols in refinements."
-errorAsgnInRef l x t a        = mkErr l $ printf "Only readonly variables can be used in refinements. In type '%s' symbol '%s' is %s." (ppshow t) (ppshow x) (ppshow a)
+errorAsgnInRef l x t a        = mkErr l $ show $ text "Only readonly variables can be used in refinements." $+$
+                                                 text "In type:" $+$ nest 2 (pp t) $+$
+                                                 text "symbol" <+> ticks (pp x) <+> text "is" <+> pp a <> text "."
 errorContextual l e t         = mkErr l $ printf "Contextual error occured when checking expression '%s' under type '%s'." (ppshow e) (ppshow t)
 bugDeadCast l                 = mkErr l $ "Dead-cast with no error associated."
 unimplSplitC l t1 t2          = mkErr l $ show $ text "[Unimplemented] Cannot generate constraints for the subtyping of" $+$

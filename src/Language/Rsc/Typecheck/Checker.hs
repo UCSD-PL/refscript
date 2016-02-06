@@ -673,16 +673,15 @@ tcExpr γ e@(VarRef l x) _
     to = tcEnvFindTy x γ
 
 tcExpr γ (CondExpr l e e1 e2) (Just t)
-  = do opTy         <- safeEnvFindTy l γ (builtinOpId BITruthy)
-       ([e'], z)    <- tcNormalCallW γ l (builtinOpId BITruthy) [e] opTy
-       case z of
-         Just _  ->
-            do  (_, t1) <- tcExprWD γ e1 (Just t)
-                (_, t2) <- tcExprWD γ e2 (Just t)
-                e1''    <- castMC γ e1 t1 t
-                e2''    <- castMC γ e2 t2 t
-                return     (CondExpr l e' e1'' e2'', t)
-         _  -> error "TODO: error tcExpr condExpr"
+  = do  opTy         <- safeEnvFindTy l γ (builtinOpId BITruthy)
+        ([e'], z)    <- tcNormalCallW γ l (builtinOpId BITruthy) [e] opTy
+        case z of
+          Just _  -> do
+              (e1', _) <- tcWrap (tcExprT γ e1 t) >>= tcEW γ e1
+              (e2', _) <- tcWrap (tcExprT γ e2 t) >>= tcEW γ e2
+              return      (CondExpr l e' e1' e2', t)
+
+          Nothing -> error "TODO: error tcExpr condExpr"
 
 tcExpr _ e@(CondExpr l _ _ _) Nothing
   = tcError $ unimpCondExpCtxType l e

@@ -610,11 +610,20 @@ consClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
     tThis       = TRef (Gen nm (map btVar bs)) fTop
     eThis       = SI thisSym Local RdOnly Initialized tThis
 
--- | @consExpr g e@ returns a pair (g', x') where x' is a fresh,
---   temporary (A-Normalized) variable holding the value of `e`,
---   g' is g extended with a binding for x' (and other temps required for `e`)
+-- | `consExpr g e` returns:
+--
+--    * `Just (g', x')` where
+--      - `x'` is a fresh, temporary (A-Normalized) variable holding the value
+--        of `e`,
+--      - `g'` is `g` extended with a binding for `x'` (and other temps required
+--        for `e`)
+--
+--    * `Nothing` when something goes wrong and the code should be considered
+--      dead-code.
+--
 --------------------------------------------------------------------------------
-consExpr :: CGEnv -> Expression AnnLq -> Maybe RefType -> CGM (Maybe (Id AnnLq, CGEnv))
+consExpr
+  :: CGEnv -> Expression AnnLq -> Maybe RefType -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
 -- | Dead-casts / Type-casts
 consExpr g (Cast_ l e) s

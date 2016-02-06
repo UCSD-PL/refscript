@@ -211,6 +211,8 @@ errorGenericLookup l f t      = mkErr l $ printf "Cannot find member '%s' in typ
 errorAmbientLookup l t f      = mkErr l $ printf "Cannot find member '%s' in ambient element '%s'" (ppshow f) (ppshow t)
 errorUnionLookup l t f        = mkErr l $ printf "Cannot find member '%s' in any part of the union '%s'" (ppshow f) (ppshow t)
 
+errorExprTyping l e t         = mkErr l $ show $ text "Could not type expression" <+> ticks (pp e) <+> text "at type:" $+$ nest 2 (pp t)
+
 ---------------------------------------------------------------------------
 -- | LIQUID
 ---------------------------------------------------------------------------

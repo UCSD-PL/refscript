@@ -642,7 +642,7 @@ consExpr g (Cast_ l e) s
 -- | <T>e
 consExpr g ex@(Cast l e) _
   | [tc] <- [ ct | UserCast ct <- fFact l ]
-  = consCall g l (builtinOpId BICallExpr) [(e, Just tc)] (castTy tc)
+  = consCall g l (builtinOpId BICastExpr) [(e, Just tc)] (castTy tc)
   | otherwise
   = die $ bugNoCasts (srcPos l) ex
 

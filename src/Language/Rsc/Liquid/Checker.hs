@@ -1029,7 +1029,7 @@ consWhileBase l xs tIs g
 
 consWhileStep l xs tIs gI''
   = do  stepTs <- mapM (`cgSafeEnvFindTyM` gI'') xs'
-        zipWithM_ (subType l Nothing gI'') stepTs tIs'                           -- (f)
+        zipWithM_ (subType l Nothing gI'') stepTs tIs'                       -- (f)
   where
     tIs' = F.subst su <$> tIs
     xs'  = mkNextId   <$> xs

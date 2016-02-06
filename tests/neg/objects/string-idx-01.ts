@@ -2,7 +2,7 @@
 /*@ qualif HasP (v: Str, s:a): hasProperty(v,s) */
 /*@ qualif EnumP(v: Str, s:a): enumProp(v,s) */
 
-/*@ extend :: (src: (Immutable) { [s:string]: top }, dest: (Mutable) { [s:string]:top }) => (Mutable) { [s:string]:top } */
+/*@ extend :: (src: (Immutable) { [s:string]: string }, dest: (Mutable) { [s:string]:top }) => (Mutable) { [s:string]:top } */
 export function extend(src, dest) {
     for (let p in src) {
         dest[p] = src[p];
@@ -10,7 +10,7 @@ export function extend(src, dest) {
     return dest;
 }
 
-/*@ readonly options :: { [s: string]: top } */
+/*@ readonly options :: (Mutable) { [s: string]: top } */
 let options = {};
 
 let this_options = extend({

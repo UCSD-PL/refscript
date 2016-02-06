@@ -612,14 +612,11 @@ consClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
 
 -- | `consExpr g e` returns:
 --
---    * `Just (g', x')` where
---      - `x'` is a fresh, temporary (A-Normalized) variable holding the value
---        of `e`,
---      - `g'` is `g` extended with a binding for `x'` (and other temps required
---        for `e`)
+--   * `Just (g', x')` where
+--     - `x'` is a fresh, temporary (A-Normalized) variable holding value `e`,
+--     - `g'` is `g` extended with a binding for `x'` (and other temp vars)
 --
---    * `Nothing` when something goes wrong and the code should be considered
---      dead-code.
+--   * `Nothing` when the code should be considered dead-code.
 --
 --------------------------------------------------------------------------------
 consExpr
@@ -636,7 +633,7 @@ consExpr g (Cast_ l e) s
                     Just <$> cgEnvAddFresh "cast_" l t' g
       -- Dead-cast: Do not attempt to check the enclosed expression
       CDead [] -> subType l (Just (errorDeadCast l)) g tBool tBot >> return Nothing
-      CDead es -> subType l (Just (F.catErrors es))  g tBool tBot >> return Nothing
+      CDead es -> mapM_ (\e -> subType l (Just e) g tBool tBot) es >> return Nothing
       CNo      -> consExpr g e s
 
 -- | <T>e

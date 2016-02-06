@@ -144,9 +144,9 @@ accessMember l γ static m t
   = Right [mem]
   -- In the case of string indexing, build up an optional and assignable field
   | Just (TObj _ es _) <- expandType Coercive (envCHA γ) t
-  , Just tIdx          <- tm_sidx es
+  , Just (mIdx, tIdx)  <- tm_sidx es
   , validFieldName m
-  = Right [FI (F.symbol m) Opt tMU tIdx]
+  = Right [FI (F.symbol m) Opt mIdx tIdx]
   | otherwise
   = Left $ errorMemLookup l m t
   where

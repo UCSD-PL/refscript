@@ -85,8 +85,8 @@ efoldTypeMembers' g f h (TM m sm c k s n) γ z =
     step (_, MI _ _ mts ) = (map snd mts ++)
     cl  = maybeToList c
     kl  = maybeToList k
-    sl  = maybeToList s
-    nl  = maybeToList n
+    sl  = map snd $ maybeToList s
+    nl  = map snd $ maybeToList n
 
 
 -- debugTyBinds p@(Rsc { code = Src SS }) = trace msg p

@@ -420,7 +420,9 @@ instance F.Symbolic (Prop a) where
 
 ---------------------------------------------------------------------------------
 mkTypeMembers :: [(F.Symbol, TypeMemberQ q r)] -> [(F.Symbol, TypeMemberQ q r)]
-              -> [RTypeQ q r] -> [RTypeQ q r] -> [RTypeQ q r] -> [RTypeQ q r]
+              -> [RTypeQ q r] -> [RTypeQ q r]
+              -> [(MutabilityQ q r, RTypeQ q r)]
+              -> [(MutabilityQ q r, RTypeQ q r)]
               -> TypeMembersQ q r
 ---------------------------------------------------------------------------------
 mkTypeMembers lms lsms lcs lct lsi lni = TM ms sms call ctor sidx nidx
@@ -429,8 +431,12 @@ mkTypeMembers lms lsms lcs lct lsi lni = TM ms sms call ctor sidx nidx
     sms  = L.foldl' step mempty lsms
     call | [] <- lcs = Nothing | otherwise = Just (mkAnd lcs)
     ctor | [] <- lct = Nothing | otherwise = Just (mkAnd lct)
-    sidx | [] <- lsi = Nothing | otherwise = Just (mkAnd lsi)
-    nidx | [] <- lni = Nothing | otherwise = Just (mkAnd lni)
+
+    -- XXX: Dropping excess index binders
+    sidx | (m,t):_ <- lsi = Just (m,t)
+         | otherwise      = Nothing
+    nidx | (m,t):_ <- lni = Just (m,t)
+         | otherwise      = Nothing
 
     step g (x, MI n o mts) | Just (MI _ o' mts') <- F.lookupSEnv x g
                            = F.insertSEnv x (MI n (o `mappend` o') (mts' ++ mts)) g
@@ -447,13 +453,15 @@ tmsFromList :: [TypeMember r] -> TypeMembers r
 tmsFromList f = TM (F.fromListSEnv (map (\f_ -> (F.symbol f_, f_)) f))
                    mempty Nothing Nothing Nothing Nothing
 
+-- XXX: Not including mutabilities
 --------------------------------------------------------------------------------------------
 typesOfTM :: TypeMembers r -> [RType r]
 --------------------------------------------------------------------------------------------
 typesOfTM (TM m sm c k s n) =
   concatMap typesOfMem (map snd $ F.toListSEnv m ) ++
   concatMap typesOfMem (map snd $ F.toListSEnv sm) ++
-  concatMap maybeToList [c, k, s, n]
+  concatMap maybeToList [c, k] ++
+  map snd (concatMap maybeToList [s, n])
 
 typesOfMem (FI _ _ _ t) = [t]
 typesOfMem (MI _ _ mts) = map snd mts

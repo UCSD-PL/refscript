@@ -258,15 +258,20 @@ splitTM g i m1_ (TM p1 sp1 c1 k1 s1 n1) r1 (TM p2 sp2 c2 k2 s2 n2)
         ps'     <- pure $ substThis x ps
         cs1     <- concatMapM (splitElt g' i) ps'
         cs2     <- concatMapM (splitElt g  i) sps
-
+        -- Call signature
         cs      <- pure $ substThis x [ (t1,t2) | Just t1 <- [c1], Just t2 <- [c2] ]
+        -- Constructor signature
         ks      <- pure $             [ (t1,t2) | Just t1 <- [k1], Just t2 <- [k2] ]
-        ss      <- pure $ substThis x [ (t1,t2) | Just t1 <- [s1], Just t2 <- [s2] ]
-        ns      <- pure $ substThis x [ (t1,t2) | Just t1 <- [n1], Just t2 <- [n2] ]
+        cs3     <- concatMapM splitT (cs ++ ks)
+        -- Indexers
+        s1'     <- pure $ substThis x <$> s1
+        s2'     <- pure $ substThis x <$> s2
+        n1'     <- pure $ substThis x <$> n1
+        n2'     <- pure $ substThis x <$> n2
+        cs4     <- splitSIdxs g i p1 s1' s2'
+        cs5     <- splitNIdxs g i    n1' n2'
 
-        cs3     <- concatMapM splitT (cs ++ ks ++ ss ++ ns)
-
-        return     (cs1 ++ cs2 ++ cs3)
+        return     (cs1 ++ cs2 ++ cs3 ++ cs4 ++ cs5)
   where
     ps  = F.toListSEnv (F.intersectWithSEnv (,) p1  p2)
     sps = F.toListSEnv (F.intersectWithSEnv (,) sp1 sp2)
@@ -281,6 +286,38 @@ splitTM g i m1_ (TM p1 sp1 c1 k1 s1 n1) r1 (TM p2 sp2 c2 k2 s2 n2)
                                             = FI s1 o m2 t
     fixMut (_, (f1          , _          )) = f1
 
+type IndInfo = Maybe (Mutability, RefType)
+
+--------------------------------------------------------------------------------
+splitSIdxs :: CGEnv -> Cinfo -> F.SEnv (TypeMember F.Reft)
+           -> IndInfo -> IndInfo -> CGM [FixSubC]
+--------------------------------------------------------------------------------
+-- LHS should have empty props if there is a string indexer present
+splitSIdxs g i _ (Just (m1, t1)) (Just (m2, t2)) =
+    splitElt g i (f, (FI f Opt m1 t1, FI f Opt m2 t2))
+  where
+    f = F.symbol "String indexer"
+
+-- LHS should not have an indexer type here
+splitSIdxs g i ps1 _ (Just (m2, t2)) =
+    concatMapM doMem fps
+  where
+    doMem (f, p) = splitElt g i (f, (p, FI f Opt m2 t2))
+    fps          = [(f, p) | (_, p@(FI f _ _ _)) <- F.toListSEnv ps1 ]
+
+splitSIdxs _ _ _ _ Nothing = return []
+
+--------------------------------------------------------------------------------
+splitNIdxs :: CGEnv -> Cinfo -> IndInfo -> IndInfo -> CGM [FixSubC]
+--------------------------------------------------------------------------------
+-- LHS should have empty props if there is a string indexer present
+splitNIdxs g i (Just (m1, t1)) (Just (m2, t2)) =
+    splitElt g i (f, (FI f Opt m1 t1, FI f Opt m2 t2))
+  where
+    f = F.symbol "Numeric indexer"
+
+splitNIdxs _ _ _ Nothing = return []
+splitNIdxs g i Nothing _ = splitIncompatC g i tBool
 
 
 --------------------------------------------------------------------------------

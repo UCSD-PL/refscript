@@ -2,11 +2,8 @@
 /*@ qualif HasP(v:string, s:a): hasProperty(v,s) */
 /*@ qualif EnumP(v:string, s:a): enumProp(v,s) */
 
-/*@ extend :: (
-    src:[Immutable]{[s:string]:string}
-  , dest:[Mutable]{[s:string]:top}
-  ) => {[Mutable]{[s:string]:top} | 0 < 1} */
-function extend(src, dest) {
+/*@ extend :: (src: (Immutable) { [s:string]:string }, dest: (Mutable) { [s:string]:top }) => (Mutable) { [s:string]:top } */
+export function extend(src, dest) {
   for (var p in src) {
     dest[p] = src[p];
   }

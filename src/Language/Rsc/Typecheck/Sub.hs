@@ -28,7 +28,7 @@ module Language.Rsc.Typecheck.Sub (
 
 import           Data.Monoid
 import           Data.Tuple                     (swap)
-import           Language.Fixpoint.Types        (SEnv, Symbol, differenceSEnv, intersectWithSEnv, toListSEnv)
+import           Language.Fixpoint.Types        (SEnv, Symbol, differenceSEnv, intersectWithSEnv, symbol, toListSEnv)
 import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
@@ -197,8 +197,8 @@ subtypeObj l γ _ t1 t2
   | not (isClassType (envCHA γ) t1) && isClassType (envCHA γ) t2
   = NoSub [errorObjectType l t1 t2]
 
-subtypeObj l γ c t1@(TObj m1 e1s _) t2@(TObj m2 e2s _)
-  = subtype l γ c m1 m2 `mappend` subtypeObjMembers l γ c (t1, e1s) (t2, e2s)
+subtypeObj l γ c (TObj m1 e1s _) (TObj m2 e2s _)
+  = subtype l γ c m1 m2 `mappend` subtypeObjMembers l γ c e1s e2s
 
 -- | Mutability subtyping
 --
@@ -282,21 +282,19 @@ subtypeObj l γ c t1 t2 =
 
 -- | Subtyping type members
 --
-subtypeObjMembers l γ c (t1, TM m1 _ c1 k1 s1 n1) (t2, TM m2 _ c2 k2 s2 n2)
-  = subtypeMems  l γ c (t1, m1) (t2, m2) <>
-    subtypeCalls l γ t1 c1 t2 c2 <>
-    subtypeCtors l γ t1 k1 t2 k2 <>
-    subtypeSIdxs l γ t1 s1 t2 s2 <>
-    subtypeNIdxs l γ t1 n1 t2 n2
+subtypeObjMembers l γ c (TM m1 _ c1 k1 s1 n1) (TM m2 _ c2 k2 s2 n2)
+  = subtypeMems  l γ c m1 m2 <>
+    subtypeCalls l γ c c1 c2 <>
+    subtypeCtors l γ c k1 k2 <>
+    subtypeSIdxs l γ c m1 s1 s2 <>
+    subtypeNIdxs l γ c n1 n2
 
 --------------------------------------------------------------------------------
 subtypeMems :: (IsLocated a, PPRE r, FE g r)
             => a -> g r -> SubConf r
-            -> (RType r, SEnv (TypeMember r))
-            -> (RType r, SEnv (TypeMember r))
-            -> SubtypingResult
+            -> SEnv (TypeMember r) -> SEnv (TypeMember r) -> SubtypingResult
 --------------------------------------------------------------------------------
-subtypeMems l γ c (ot1, mems1) (ot2, mems2)
+subtypeMems l γ c mems1 mems2
 
   -- Props from `mems2` are missing from `mems1` - fail width subtyping
   --
@@ -306,38 +304,82 @@ subtypeMems l γ c (ot1, mems1) (ot2, mems2)
   -- Descend into property subtyping
   --
   | otherwise
-  = mconcat $ map subtypeMem common
+  = mconcat $ map (subtypeMem l γ c) common
 
   where
+
+    ot1    = sub_lhs c
+    ot2    = sub_rhs c
+
     diff21 = filter (isReqMember . snd)
            $ toListSEnv $ mems2 `differenceSEnv` mems1
     common = toListSEnv (intersectWithSEnv (,) mems1 mems2)
 
-    subtypeMem (f, (FI _ o1 m1 t1, FI _ o2 m2 t2))
-      | (o1, o2) == (Opt, Req)  -- Optionality check
-      = NoSub [ errorIncompatOptional (srcPos l) f ]
-      | otherwise
-      = subtype l γ c' m1 m2 <> deepSub m1 t1 t2
-      where
-        c' = c { sub_fld = Just f }
 
-    subtypeMem (_, (m1, m2))
-      = NoSub [ unsupportedMethodComp (srcPos l) m1 m2 ]
-
+subtypeMem l γ c (f, (FI _ o1 m1 t1, FI _ o2 m2 t2))
+  | (o1, o2) == (Opt, Req)  -- Optionality check
+  = NoSub [ errorIncompatOptional (srcPos l) f ]
+  | otherwise
+  = subtype l γ c' m1 m2 <> deepSub m1 t1 t2
+  where
+    c' = c { sub_fld = Just f }
     deepSub m1 t1 t2
       | isSubtype γ m1 tMU = subtype' l γ t1 t2 <> subtype' l γ t2 t1
       | otherwise          = subtype' l γ t1 t2
 
+subtypeMem l _ _ (_, (m1, m2))
+  = NoSub [ unsupportedMethodComp (srcPos l) m1 m2 ]
 
-compareMaybe l γ f _ _ (Just c1) _ (Just c2) = f l γ c1 c2
-compareMaybe _ _ _ _ _ Nothing   _ Nothing   = EqT
-compareMaybe _ _ _ _ _ _         _ Nothing   = SubT
-compareMaybe l _ _ e _ t1        _ t2        = NoSub [e (srcPos l) t1 t2]
 
-subtypeCalls l γ = compareMaybe l γ subtypeFun errorIncompCallSigs
-subtypeCtors l γ = compareMaybe l γ subtype'   errorIncompCtorSigs
-subtypeSIdxs l γ = compareMaybe l γ subtype'   errorIncompSIdxSigs
-subtypeNIdxs l γ = compareMaybe l γ subtype'   errorIncompNIdxSigs
+
+compareMaybe l γ _ f _ (Just c1) (Just c2) = f l γ c1 c2
+compareMaybe _ _ _ _ _ Nothing   Nothing   = EqT
+compareMaybe _ _ _ _ _ _         Nothing   = SubT
+compareMaybe l _ _ _ e t1        t2        = NoSub [e (srcPos l) t1 t2]
+
+subtypeCalls l γ c = compareMaybe l γ c subtypeFun errorIncompCallSigs
+subtypeCtors l γ c = compareMaybe l γ c subtype'   errorIncompCtorSigs
+
+type IndInfo r = Maybe (MutabilityR r, RType r)
+
+--------------------------------------------------------------------------------
+subtypeSIdxs :: (IsLocated a, PPRE r, FE g r)
+             => a -> g r -> SubConfA (ExprSSAR r) r
+             -> SEnv (TypeMember r)           -- Check LHS props (if exist)
+             -> IndInfo r                     -- Otherwise the string index type
+             -> IndInfo r
+             -> SubtypingResult
+--------------------------------------------------------------------------------
+subtypeSIdxs _ _ _ _ _ Nothing = SubT
+
+-- LHS should have empty props if there is a string indexer present
+subtypeSIdxs l γ c _ (Just (m1,t1)) (Just (m2, t2)) =
+    subtypeMem l γ c (f, (FI f Opt m1 t1, FI f Opt m2 t2))
+  where
+    f = symbol "String indexer"
+
+-- LHS should not have an indexer type here
+subtypeSIdxs l γ c ps1 _ (Just (m2, t2)) =
+    mconcat (map doMem fps)
+  where
+    doMem (f, p) = subtypeMem l γ c (f, (p, FI f Opt m2 t2))
+    fps          = [(f, p) | (_, p@(FI f _ _ _)) <- toListSEnv ps1 ]
+
+--------------------------------------------------------------------------------
+subtypeNIdxs :: (IsLocated a, PPRE r, FE g r)
+             => a -> g r -> SubConfA (ExprSSAR r) r
+             -> IndInfo r
+             -> IndInfo r
+             -> SubtypingResult
+--------------------------------------------------------------------------------
+subtypeNIdxs l γ c (Just (m1,t1)) (Just (m2, t2)) =
+    subtypeMem l γ c (f, (FI f Opt m1 t1, FI f Opt m2 t2))
+  where
+    f = symbol "Numeric indexer"
+
+subtypeNIdxs _ _ _ _ Nothing = SubT
+subtypeNIdxs l _ c Nothing _ = NoSub [errorIncompSIdxSigs l (sub_lhs c) (sub_rhs c)]
+
 
 --------------------------------------------------------------------------------
 subtypeFun :: (PPRE r, FE g r, IsLocated l)

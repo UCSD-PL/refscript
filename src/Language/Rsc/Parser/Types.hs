@@ -408,8 +408,8 @@ data EltKind = Prop Symbol StaticKind Optionality RMutability RRType
              | Meth Symbol StaticKind Optionality RMutability RRType
              | Call RRType
              | Ctor RRType
-             | SIdx RRType
-             | NIdx RRType
+             | SIdx RMutability RRType
+             | NIdx RMutability RRType
              deriving (Data, Typeable)
 
 eltKindsToTypeMembers :: [EltKind] -> TypeMembersQ RK F.Reft
@@ -435,20 +435,21 @@ eltKindsToTypeMembers eks = mkTypeMembers
     ek2ct (Ctor t)                  = Just t
     ek2ct _                         = Nothing
 
-    ek2si (SIdx t)                  = Just t
+    ek2si (SIdx m t)                = Just (m, t)
     ek2si _                         = Nothing
 
-    ek2ni (NIdx t)                  = Just t
+    ek2ni (NIdx m t)                = Just (m, t)
     ek2ni _                         = Nothing
 
 
 -- | [f: string]: t
 -- | [f: number]: t
 idxP c
-  = do  ((_, k), t) <- xyP (brackets indexP) colon (typeP1 c)
+  = do  m           <- mutP c
+        ((_, k), t) <- xyP (brackets indexP) colon (typeP1 c)
         case k of
-          "number" -> return $ NIdx t
-          "string" -> return $ SIdx t
+          "number" -> return $ NIdx m t
+          "string" -> return $ SIdx m t
           _        -> error $ "Index signature can only have " ++
                               "string or number as index."
 
@@ -465,20 +466,23 @@ indexP = xyP id colon sn
 --
 propP c
   = do  s     <- option InstanceK (reserved "static" *> return StaticK)
-        a     <- mutP
+        a     <- mutP c
         x     <- symbol <$> withinSpacesP binderP
         o     <- option Req (withinSpacesP (char '?') *> return Opt)
         _     <- colon
         t     <- typeP1 c
         return $ (x, s, o, a, t)
-  where
-    mutP = optionMaybe (withinSpacesP mP) >>= \case
-             Just m  -> return m
-             Nothing -> return (fromMaybe trRO (pctx_mut c))
+
+
+-- Parse (Mutability) with trRO as default if not specified in the context
+mutP c = optionMaybe (withinSpacesP mP) >>= \case
+    Just m  -> return m
+    Nothing -> return (fromMaybe trRO (pctx_mut c))
+ where
     mP   = parens (dummyP (typeP3 c))
 
 
--- | [Static] [@Mutability] m[<A extends T,..>](x:t,..): t
+-- | [Static] [Mutability] m[<A extends T,..>](x:t,..): t
 --
 methP c
   = do  s     <- option InstanceK (reserved "static" *> return StaticK)

@@ -15,6 +15,7 @@ module Language.Rsc.Transformations (
   , fixFunBinders
   ) where
 
+import           Control.Arrow                   ((***))
 import           Control.Monad.State.Strict
 import           Data.Default
 import           Data.Functor.Identity
@@ -73,12 +74,10 @@ instance Transformable TypeSigQ where
         αs' = map btvToTV (b_args b) ++ αs
 
 instance Transformable TypeMembersQ where
-  trans f αs xs (TM m sm c k s n) = TM (fmap (trans f αs xs) m)
-                                       (fmap (trans f αs xs) sm)
-                                       (fmap (trans f αs xs) c)
-                                       (fmap (trans f αs xs) k)
-                                       (fmap (trans f αs xs) s)
-                                       (fmap (trans f αs xs) n)
+  trans f αs xs (TM m sm c k s n) =
+    TM (fmap g m) (fmap g sm) (fmap g c) (fmap g k) (fmap (g *** g) s) (fmap (g *** g) n)
+    where
+      g = trans f αs xs
 
 instance Transformable BTGenQ where
   trans f αs xs (BGen n ts) = BGen n $ trans f αs xs <$> ts
@@ -184,12 +183,14 @@ instance NameTransformable TypeSigQ where
     = TS k <$> ntrans f g b <*> liftM2 (,) (mapM (ntrans f g) e) (mapM (ntrans f g) i)
 
 instance NameTransformable TypeMembersQ where
-  ntrans f g (TM m sm c k s n) = TM <$> T.mapM (ntrans f g) m
-                                    <*> T.mapM (ntrans f g) sm
-                                    <*> T.mapM (ntrans f g) c
-                                    <*> T.mapM (ntrans f g) k
-                                    <*> T.mapM (ntrans f g) s
-                                    <*> T.mapM (ntrans f g) n
+  ntrans f g (TM m sm c k s n) = TM <$> T.mapM h m
+                                    <*> T.mapM h sm
+                                    <*> T.mapM h c
+                                    <*> T.mapM h k
+                                    <*> T.mapM (\(m_, t_) -> (,) <$> h m_ <*> h t_) s
+                                    <*> T.mapM (\(m_, t_) -> (,) <$> h m_ <*> h t_) n
+    where
+      h = ntrans f g
 
 instance NameTransformable BTGenQ where
   ntrans f g (BGen n ts) = BGen <$> f n <*> mapM (ntrans f g) ts
@@ -291,8 +292,8 @@ emapReftTM f γ (TM m sm c k s n)
        (fmap (emapReftElt f γ) sm)
        (emapReft f γ <$> c)
        (emapReft f γ <$> k)
-       (emapReft f γ <$> s)
-       (emapReft f γ <$> n)
+       ((emapReft f γ *** emapReft f γ) <$> s)
+       ((emapReft f γ *** emapReft f γ) <$> n)
 
 emapReftElt f γ (FI x m a t) = FI x m (emapReft f γ a) (emapReft f γ t)
 emapReftElt f γ (MI x m mts) = MI x m (mapPair (emapReft f γ) <$> mts)
@@ -324,8 +325,8 @@ mapTypeMembers f (TM m sm c k s n)
        <*> T.mapM (mapReftElt f) sm
        <*> T.mapM (mapReftM f) c
        <*> T.mapM (mapReftM f) k
-       <*> T.mapM (mapReftM f) s
-       <*> T.mapM (mapReftM f) n
+       <*> T.mapM (\(m_,t_) -> (,) <$> mapReftM f m_ <*> mapReftM f t_) s
+       <*> T.mapM (\(m_,t_) -> (,) <$> mapReftM f m_ <*> mapReftM f t_) n
 
 mapReftElt f (FI x m a t) = FI x m <$> mapReftM f a <*> mapReftM f t
 mapReftElt f (MI x m mts) = MI x m <$> mapM (mapPairM (mapReftM f) (mapReftM f)) mts
@@ -339,8 +340,8 @@ mapTypeMembersM f (TM m sm c k s n)
        <*> T.mapM memMapM sm
        <*> T.mapM f c
        <*> T.mapM f k
-       <*> T.mapM f s
-       <*> T.mapM f n
+       <*> T.mapM (\(m_, t_) -> (,) <$> f m_ <*> f t_) s
+       <*> T.mapM (\(m_, t_) -> (,) <$> f m_ <*> f t_) n
   where
     memMapM (FI x o a t) = FI x o <$> f a <*> f t
     memMapM (MI x o mts) = MI x o <$> mapM (mapSndM f) mts

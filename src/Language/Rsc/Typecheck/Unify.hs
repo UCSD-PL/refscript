@@ -145,7 +145,11 @@ unifyMembers l γ θ (TM m1 _ c1 k1 s1 n1) (TM m2 _ c2 k2 s2 n2)
     merge _ = []
     fromBoth (Just a1, Just a2)  = [(a1,a2)]
     fromBoth _                   = []
-    (r1s, r2s)  = unzip $ concatMap fromBoth [(c1,c2),(k1,k2),(s1,s2),(n1,n2)]
+
+    fromBoth' (Just (m1,a1), Just (m2,a2))  = [(m1,m2),(a1,a2)]
+    fromBoth' _                   = []
+    (r1s, r2s)  = unzip $ concatMap fromBoth  [(c1,c2),(k1,k2)] ++
+                          concatMap fromBoth' [(s1,s2),(n1,n2)]
 
 -----------------------------------------------------------------------------
 unifys :: Unif r

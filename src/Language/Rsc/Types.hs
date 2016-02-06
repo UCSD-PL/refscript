@@ -109,8 +109,10 @@ data TypeMembersQ q r = TM { i_mems  :: F.SEnv (TypeMemberQ q r)      -- Instanc
                            , s_mems  :: F.SEnv (TypeMemberQ q r)      -- Static members
                            , tm_call :: Maybe (RTypeQ q r)            -- Call signatures
                            , tm_ctor :: Maybe (RTypeQ q r)            -- Contructor signatures
-                           , tm_sidx :: Maybe (RTypeQ q r)            -- String indexer
-                           , tm_nidx :: Maybe (RTypeQ q r)            -- Numeric indexer
+                           , tm_sidx :: Maybe ( MutabilityQ q r       -- String indexer
+                                              , RTypeQ q r)
+                           , tm_nidx :: Maybe ( MutabilityQ q r       -- Numeric indexer
+                                              , RTypeQ q r)
                            }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 

@@ -381,7 +381,7 @@ tcVarDecl γ v@(VarDecl l x (Just e))
         -- PV: the global variable should be in scope already,
         --     since it is being hoisted to the beginning of the
         --     scope.
-        do  (e', _) <- tcExprT γ e t
+        do  (e', _)  <- tcExprT γ e t
             return    $ (VarDecl l x (Just e'), Just γ)
 
       -- ReadOnly
@@ -482,14 +482,23 @@ tcClassElt γ (TD sig ms) c@(MemberMethDecl l False x xs bd)
     eThis       = (idThis, SI thisSym Local RdOnly Initialized tThis)
 
 
--- | `tcExprT l fn γ e t` checks expression @e@ under environment @γ@
---   enforcing a type @t@.
+-- | `tcExprT l fn γ e t` checks expression `e`
+--
+--     * under environment `γ`,
+--
+--     * against a type `t`.
+--
+--   Expressions that are ONLY contextually typed, do not need to be checked
+--   against type `t`.
 --------------------------------------------------------------------------------
 tcExprT :: Unif r => TCEnv r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
 --------------------------------------------------------------------------------
 tcExprT γ e t
-  = do ([e'], _) <- tcNormalCall γ l (builtinOpId BIExprT) [(e, Just t)] (idTy t)
-       return (e', t)
+  | onlyCtxTyped e
+  = tcExprWD γ e (Just t)
+  | otherwise
+  = do  ([e'], _) <- tcNormalCall γ l (builtinOpId BIExprT) [(e, Just t)] (idTy t)
+        return (e', t)
   where
     l = getAnnotation e
 

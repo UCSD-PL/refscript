@@ -33,6 +33,8 @@ module Language.Rsc.AST.Syntax (
 
   , Consumable(..)
   , Consume
+  , onlyCtxTyped
+
   ) where
 
 import           Data.Default
@@ -321,3 +323,8 @@ instance Consumable (Statement a) where
   consumable (ReturnStmt _ _) = True
   consumable _                = False
 
+
+
+onlyCtxTyped :: Expression t -> Bool
+onlyCtxTyped FuncExpr{} = True
+onlyCtxTyped _          = False

@@ -482,16 +482,23 @@ consVarDecl g (VarDecl l x (Just e))
   where
   go (SI n lc a _ t) = freshenTypeOpt g l t >>= \case
       Just fta ->
-        mseq (consExpr g e (Just fta)) $ \(y,gy) -> do
-          eT      <- cgSafeEnvFindTyM y gy
-          _       <- subType l Nothing gy eT fta
-          _       <- subType l Nothing gy fta t
-          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized fta] gy
+        if onlyCtxTyped e then
+            fmap snd <$> consExpr g e (Just t)
+        else
+            mseq (consExpr g e (Just fta)) $ \(y,gy) -> do
+              eT      <- cgSafeEnvFindTyM y gy
+              _       <- subType l Nothing gy eT fta
+              _       <- subType l Nothing gy fta t
+              Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized fta] gy
+
       Nothing ->
-        mseq (consExpr g e (Just t)) $ \(y,gy) -> do
-          eT      <- cgSafeEnvFindTyM y gy
-          _       <- subType l Nothing gy eT t
-          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized t] gy
+        if onlyCtxTyped e then
+            fmap snd <$> consExpr g e (Just t)
+        else
+            mseq (consExpr g e (Just t)) $ \(y,gy) -> do
+              eT      <- cgSafeEnvFindTyM y gy
+              _       <- subType l Nothing gy eT t
+              Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized t] gy
 
 
 consVarDecl g (VarDecl l x Nothing)

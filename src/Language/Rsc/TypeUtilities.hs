@@ -183,13 +183,20 @@ mkCondExprTy l g t
                            (TFun [B c_ tc_, B a_ ta_, B b_ tb_] (t `strengthen` rTypeR rt) r')
           _ -> error "[BUG] mkCondExprTy"
 
+
+-- `adjustCtxMut t ctxT`: adjust type `t` to the contextual type `tCtx`
+-- (used for the type of NewExpr)
 --------------------------------------------------------------------------------
-adjustCtxMut :: RTypeQ q r -> Maybe (RTypeQ q r) -> RTypeQ q r
+adjustCtxMut :: F.Reftable r => RType r -> Maybe (RType r) -> RType r
 --------------------------------------------------------------------------------
-adjustCtxMut t so | TRef (Gen n (m:ts)) r        <- t
-                  , isUQ m
-                  , Just (TRef (Gen _ (m':_)) _) <- so
-                  = TRef (Gen n (m':ts)) r
-                  | otherwise
-                  = t
+adjustCtxMut t (Just ctxT)
+  | TRef (Gen n (_ :ts)) r  <- t
+  , TRef (Gen _ (m':_ )) _  <- ctxT
+  = TRef (Gen n (m':ts)) r
+
+adjustCtxMut t Nothing
+  | TRef (Gen n (_  :ts)) r <- t
+  = TRef (Gen n (tUQ:ts)) r
+
+adjustCtxMut t _ = t
 

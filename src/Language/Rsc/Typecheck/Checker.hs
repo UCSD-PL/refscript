@@ -622,19 +622,6 @@ tcWA γ e a = tcWrap a >>= \case
   Right r -> return (Right r)
   Left  l -> Left <$> deadcastM γ [l] e
 
---------------------------------------------------------------------------------
-enableUnique :: ExprSSAR r -> ExprSSAR r
---------------------------------------------------------------------------------
-enableUnique    = fmap (\a -> a { fFact = BypassUnique : fFact a })
-
---------------------------------------------------------------------------------
-isUniqueEnabled :: ExprSSAR r -> Bool
---------------------------------------------------------------------------------
-isUniqueEnabled = any isBypassUnique . fFact . getAnnotation
-  where
-    isBypassUnique BypassUnique = True
-    isBypassUnique _            = False
-
 
 --------------------------------------------------------------------------------
 tcExpr :: Unif r
@@ -879,9 +866,11 @@ tcCall γ c@(NewExpr l e es) s
 
 -- | e.f
 --
-tcCall γ ef@(DotRef l e f) _
-  = runFailM (tcExpr γ e Nothing) >>= checkAccess
+tcCall γ ef@(DotRef l e0 f) _
+  = runFailM (tcExpr γ ue Nothing) >>= checkAccess
+
   where
+    ue = enableUnique e0
     checkAccess (Right (_, tRcvr))
       | isArrayLen tRcvr = checkArrayLength
       | otherwise        = checkProp (getProp l γ f tRcvr)
@@ -892,11 +881,11 @@ tcCall γ ef@(DotRef l e f) _
       = do  l1  <- freshenAnn l
             l2  <- freshenAnn l
             i   <- pure $ Id l2 "__getLength"
-            tcExpr γ (CallExpr l1 (DotRef l e i) []) Nothing
+            tcExpr γ (CallExpr l1 (DotRef l ue i) []) Nothing
 
     -- Normal property access
     checkProp (Left er)   = tcError er
-    checkProp (Right tfs) = adjustOpt tfs . fst <$> tcExprT γ e (rcvrTy tfs)
+    checkProp (Right tfs) = adjustOpt tfs . fst <$> tcExprT γ ue (ltracePP l ue $ rcvrTy tfs)
 
     -- Add `or undef` in case of an optional field access
     adjustOpt tfs e_
@@ -990,7 +979,7 @@ tcNormalCall γ l fn etos ft0
              do addAnn (fId l) (Overload (tce_ctx γ) (F.symbol fn) i)
                 addSubst l θ
                 (es, ts) <- pure (unzip ets)
-                tcWrap (tcCallCase γ l fn es ts ft) >>= \case
+                tcWrap (tcCallCase γ l fn es (ltracePP l (ppshow fn ++ " :: " ++ ppshow ft) ts) ft) >>= \case
                   Right ets' -> return ets'
                   Left  er  -> (,tNull) <$> T.mapM (deadcastM γ [er] . fst) ets
          Nothing -> tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) (unzip ets)

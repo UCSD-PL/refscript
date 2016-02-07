@@ -47,6 +47,9 @@ module Language.Rsc.Typecheck.TCMonad (
   -- * Verbosity / Options
   , whenLoud', whenLoud, whenQuiet', whenQuiet, getOpts, getAstCount
 
+  -- * Uniqueness
+  , isUniqueEnabled, enableUnique
+
   )  where
 
 
@@ -364,6 +367,20 @@ typecastM γ e t  = addAnn i fact >> wrapCast loc fact e
     ξ            = tce_ctx γ
 
 
+--------------------------------------------------------------------------------
+enableUnique :: ExprSSAR r -> ExprSSAR r
+--------------------------------------------------------------------------------
+enableUnique    = fmap (\a -> a { fFact = BypassUnique : fFact a })
+
+--------------------------------------------------------------------------------
+isUniqueEnabled :: ExprSSAR r -> Bool
+--------------------------------------------------------------------------------
+isUniqueEnabled = any isBypassUnique . fFact . getAnnotation
+  where
+    isBypassUnique BypassUnique = True
+    isBypassUnique _            = False
+
+
 -- | For the expression @e@, check the subtyping relation between the type @t1@
 --   (the actual type for @e@) and @t2@ (the target type) and insert the cast.
 
@@ -380,11 +397,14 @@ castM γ e consume t1 t2
     cfg | consume   = SC True  t1 t2 Nothing (Just e)
         | otherwise = SC False t1 t2 Nothing (Just e)
 
+-- Allow special treatment of Unique values IF:
+--  - this is a "consumable" expression (ObjectLit, etc.), or
+--  - this is a spot where uniqueness is not compromised.
 --------------------------------------------------------------------------------
 castMC :: Unif r => TCEnv r -> Expression (AnnSSA r)
                  -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-castMC γ e = castM γ e (consumable e)
+castMC γ e = castM γ e (consumable e || isUniqueEnabled e)
 
 -- | Run the monad `a` in the current state. This action will not alter the state.
 --------------------------------------------------------------------------------

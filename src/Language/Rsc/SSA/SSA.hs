@@ -10,8 +10,10 @@ import           Control.Arrow                ((***))
 import           Control.Monad
 import           Data.Data
 import           Data.Default
+import           Data.Function                (on)
 import qualified Data.HashSet                 as S
 import qualified Data.IntMap.Strict           as IM
+import           Data.List                    (sortBy)
 import           Data.Maybe                   (catMaybes)
 import           Data.Typeable                ()
 import           Language.Fixpoint.Misc
@@ -467,7 +469,7 @@ ssaClassElt :: (Data r, PPR r) => SsaEnv r -> Statement (AnnSSA r)
 -------------------------------------------------------------------------------------
 ssaClassElt g c (Constructor l xs bd)
   = do  pre       <- preM c
-        fs        <- mapM symToVar fields
+        fs        <- (mapM symToVar fields)
         bfs       <- bdM fs
         efs       <- exitM fs
         bd'       <- pure (pre ++ bfs ++ efs)
@@ -477,10 +479,14 @@ ssaClassElt g c (Constructor l xs bd)
   where
     symToVar       = freshenIdSSA . mkId . F.symbolSafeString
     cha            = ssaCHA g
-    fields         | Just n <- curClass g = nonStaticFields cha n
-                   | otherwise            = []
+    fields         | Just n <- curClass g
+                   = sortBy c_sym (nonStaticFields cha n)   -- Sort alphabetically
+                   | otherwise
+                   = []
     bdM fs         = visitStmtsT (ctorVisitor g fs) () bd
     exitM  fs      = single <$> ctorExit l fs
+
+    c_sym          = on compare show     -- XXX: Symbolic compare is on Symbol ID
 
 
 -- | Initilization expression for instance variables is moved to the beginning

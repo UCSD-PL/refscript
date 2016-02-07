@@ -148,28 +148,37 @@ resolveType cha (QN p s) = resolveModule cha p >>= envFindTy s . m_types
 resolveEnum cha (QN p s) = resolveModule cha p >>= envFindTy s . m_enums
 
 --------------------------------------------------------------------------------
-typeMembersOfType :: (ExprReftable Int r, PPR r) => ClassHierarchy r -> RType r -> TypeMembers r
+typeMembersOfType
+  :: (ExprReftable Int r, PPR r) => ClassHierarchy r -> RType r -> TypeMembers r
+--------------------------------------------------------------------------------
+typeMembersOfType cha t =
+  case expandType def cha t of
+    Just (TObj _ ms _) -> ms
+    _                  -> mempty
+
+
+-- `typeMemersOfTDecl cha d` returns the type members of a declaration `d`
+-- including members inherited by `d`'s parent types.
+--------------------------------------------------------------------------------
 typeMemersOfTDecl :: PPR r => ClassHierarchy r -> TypeDecl r -> TypeMembers r
 --------------------------------------------------------------------------------
-typeMembersOfType cha t
-  | Just (TObj _ ms _) <- expandType def cha t
-  = ms
-  | otherwise
-  = mempty
-
-typeMemersOfTDecl cha (TD (TS _ _ (h,_)) es) = es `mappend` heritage h
+typeMemersOfTDecl cha (TD (TS _ _ (h,_)) es) =
+    es `mappend` heritage h
   where
     expd = expandWithSubst cha
     res  = resolveType cha
     heritage (Gen p ys: _) = fromMaybe mempty $ (`expd` ys) <$> res p
     heritage _             = mempty
 
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 expandWithSubst :: (Substitutable r (TypeMembers r), PPR r)
                 => ClassHierarchy r -> TypeDecl r -> [RType r] -> TypeMembers r
----------------------------------------------------------------------------
-expandWithSubst cha t@(TD (TS _ (BGen _ bvs) _) _) ts
-  = apply (fromList $ zip (btvToTV <$> bvs) ts) (typeMemersOfTDecl cha t)
+--------------------------------------------------------------------------------
+expandWithSubst cha t@(TD (TS _ (BGen _ bvs) _) _) ts =
+    apply θ ms
+  where
+    θ   = fromList $ zip (btvToTV <$> bvs) ts
+    ms  = typeMemersOfTDecl cha t
 
 
 -- | Expansion configuration
@@ -232,16 +241,14 @@ expandType _ _ t@(TRef _ _) | mutRelated t = Nothing
 
 -- | Type Reference
 --
---  TODO: revisit !!!
---
-expandType _ cha t@(TRef (Gen n ts@(p:_)) r)
-    | isClassType cha t = (\m -> TObj p m r) . fltInst <$> ms
-    | otherwise         = (\m -> TObj p m r)           <$> ms
+expandType _ cha (TRef (Gen n ts@(p:_)) r) =
+    case resolveType cha n of
+      Just d  ->  let m  = expandWithSubst cha d ts in
+                  let m' = cropStatic m in  -- filter out static parts
+                  Just (TObj p m' r)
+      Nothing ->  Nothing
   where
-    ms      =  expandWithSubst cha
-           <$> resolveType cha n
-           <*> return ts
-    fltInst = \(TM m _ _ _ s n) -> TM m mempty Nothing Nothing s n
+    cropStatic (TM m _ _ _ s n) = TM m mempty Nothing Nothing s n
 
 -- | Ambient type: String, Number, etc.
 --

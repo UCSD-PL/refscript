@@ -14,6 +14,7 @@ module Language.Rsc.Typecheck.Checker (verifyFile, typeCheck) where
 
 import           Control.Arrow                      (first, second, (***))
 import           Control.Monad
+import           Data.Default
 import           Data.Function                      (on)
 import           Data.Generics
 import qualified Data.IntMap.Strict                 as I
@@ -383,7 +384,7 @@ tcVarDecl γ v@(VarDecl l x (Just e))
       -- Local (no type annotation)
       Nothing ->
         do  (e', to) <- tcExprW γ e
-            sio      <- pure (SI (F.symbol x) Local WriteLocal Initialized <$> to)
+            sio      <- pure (SI (F.symbol x) Local WriteLocal Initialized <$> ltracePP l x to)
             return (VarDecl l x (Just e'), tcEnvAddo γ x sio)
 
       -- Local (with type annotation)
@@ -436,10 +437,14 @@ tcClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
 
     thisT   = TRef (Gen nm (map btVar bs)) fTop
     cExit   = builtinOpId BICtorExit
-    viExit  = SI (F.symbol cExit) Local Ambient Initialized $ mkFun (bs, xts, ret)
+    viExit  = ltracePP l cExit $ SI (F.symbol cExit) Local Ambient Initialized $ mkFun (bs, xts, ret)
     ret     = thisT
 
-    xts     = sortBy c_sym [ B x t | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
+    -- xts     = sortBy c_sym [ B x t | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
+    --
+    xts      = case expandType def (envCHA γ) thisT of
+                Just (TObj _ ms _ ) ->
+                    sortBy c_sym [ B x t | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
 
     c_sym = on compare (show . b_sym)     -- XXX: Symbolic compare is on Symbol ID
     ctorTy = fromMaybe (die $ unsupportedNonSingleConsTy (srcPos l)) (tm_ctor ms)
@@ -880,7 +885,7 @@ tcCall γ ef@(DotRef l e f) _
   where
     checkAccess (Right (_, tRcvr))
       | isArrayLen tRcvr = checkArrayLength
-      | otherwise        = checkProp (ltracePP l ("getting prop " ++ ppshow f ++ " from " ++ ppshow tRcvr) <$> getProp l γ f tRcvr)
+      | otherwise        = checkProp (getProp l γ f tRcvr)
     checkAccess (Left er) = fatal er (ef, tBot)
 
     -- `array.length`
@@ -892,7 +897,7 @@ tcCall γ ef@(DotRef l e f) _
 
     -- Normal property access
     checkProp (Left er)   = tcError er
-    checkProp (Right tfs) = adjustOpt tfs . fst <$> tcExprT γ e (ltracePP l ("Checking " ++ ppshow e) $ rcvrTy tfs)
+    checkProp (Right tfs) = adjustOpt tfs . fst <$> tcExprT γ e (rcvrTy tfs)
 
     -- Add `or undef` in case of an optional field access
     adjustOpt tfs e_

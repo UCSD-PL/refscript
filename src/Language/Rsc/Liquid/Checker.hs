@@ -636,15 +636,19 @@ consExpr
 -- | Dead-casts / Type-casts
 consExpr g (Cast_ l e) s
   = case envGetContextCast g l of
+
       -- Type-cast
       CType s  -> mseq (consExpr g e (Just $ ofType s)) $ \(x, g') -> do
                     t   <- cgSafeEnvFindTyM x g'
                     _   <- subType l Nothing g t (ofType s)
-                    t'  <- pure (narrowType g t s)
-                    Just <$> cgEnvAddFresh "cast_" l t' g
+                    case narrowType g t s of
+                      Just t' -> Just <$> cgEnvAddFresh "cast_" l t' g
+                      Nothing -> return (Just (x, g'))
+
       -- Dead-cast: Do not attempt to check the enclosed expression
-      CDead [] -> subType l (Just (errorDeadCast l)) g tBool tBot >> return Nothing
+      CDead [] -> subType l (Just (errorDeadCast l)) g tBool tBot  >> return Nothing
       CDead es -> mapM_ (\e -> subType l (Just e) g tBool tBot) es >> return Nothing
+
       CNo      -> consExpr g e s
 
 -- | <T>e

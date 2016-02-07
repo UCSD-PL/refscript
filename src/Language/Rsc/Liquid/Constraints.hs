@@ -32,6 +32,7 @@ import           Language.Rsc.Liquid.Environment
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc               (concatMapM)
+import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.Typecheck.Sub
@@ -160,9 +161,31 @@ splitC s@(Sub g i t1 t2@(TOr ts _))
 --           ms'   <- splitC $ Sub g' c s t2
 --           return $ (ms ++ ms', g'')
 
+
 -- | S-Ref
 --
 --    TODO: Find variance for type arguments
+
+-- | Narrowing:
+--
+--  e.g. { Shape | r1 } <: { Circle | r2 }
+--
+--  TODO: fix: use qualified name for narrowing ?
+--
+splitC (Sub g i t1@(TRef n1@(Gen x1 [_]) _) t2@(TRef (Gen x2 [_]) r2))
+  | x1 /= x2
+  , isAncestorOf (envCHA g) x1 x2
+  , isClassType  (envCHA g) t1
+  = splitC (Sub g i t1 (TRef n1 r2 `strengthen` rtExt))
+  where
+
+    rtExt     = F.reft (vv t2) (raExt t2 (F.symbol x2))
+    raExt t c = F.mkEApp (sym t) [F.expr (vv t), F.expr (F.symbolText c)]
+    vv        = rTypeValueVar
+    sym t     | isClassType (envCHA g) t = F.dummyLoc extendsClassSym
+              | otherwise                = F.dummyLoc extendsInterfaceSym
+
+-- | Normal case
 --
 splitC s@(Sub g i t1@(TRef n1@(Gen x1 (_ :t1s)) r1)
                   t2@(TRef    (Gen x2 (m2:t2s)) _ ))
@@ -197,6 +220,7 @@ splitC s@(Sub g i t1@(TRef n1@(Gen x1 (_ :t1s)) r1)
 
   where
     i' = addHist i s
+
 
 -- | S-Prim
 --
@@ -450,11 +474,16 @@ sameTag _ _            _            = False
 
 
 -------------------------------------------------------------------------------
-narrowType :: CGEnv -> RefType-> Type -> RefType
+narrowType :: CGEnv -> RefType -> Type -> Maybe RefType
 -------------------------------------------------------------------------------
 narrowType g (TOr t1s r) t2
-  = tOrR (L.filter (\t1 -> isSubtype g t1 (ofType t2)) t1s) r
+  = Just $ tOrR (L.filter (\t1 -> isSubtype g t1 (ofType t2)) t1s) r
 
-narrowType g (TRef (Gen n ts) r) (TRef (Gen n' _) _) = error "TODO: narrowType"
+-- | narrowType Shape Circle --> Circle
+--
+narrowType g (TRef (Gen n [p]) r) (TRef (Gen n' [_]) _)
+  | isAncestorOf (envCHA g) n n'
+  = Just $ TRef (Gen n' [p]) r
 
-narrowType _ t1 _ = t1
+narrowType _ _ _ = Nothing
+

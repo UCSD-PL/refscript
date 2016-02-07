@@ -121,7 +121,7 @@ errorIncompMutTy l m m' t t' fo = mkErr l $ show $ text "Immutability modifier" 
                                                  maybe empty (\f -> text "of field" <+> ticks (pp f)) fo <+>
                                                  text "of type:" $+$ nest 2 (pp t')
 
-errorUniqueRef l x            = mkErr l $ show $ text "Cannot handle unique reference" <+>
+errorUniqueRef l x            = mkErr l $ show $ text "Cannot have a unique reference" <+>
                                                  maybe empty (ticks . pp) x <+>
                                                  text "in this context." $+$
                                                  text "Try casting" <+> ticks (pp x) <+> text "to a non-unique type."

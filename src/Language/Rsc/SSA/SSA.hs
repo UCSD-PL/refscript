@@ -371,10 +371,10 @@ ssaAsgnStmt l1 l2 x@(Id l3 v) x' e'
 fr_ = freshenAnn
 
 -------------------------------------------------------------------------------------
-ctorVisitor :: (Data r, PPR r) => SsaEnv r -> [Id (AnnSSA r)] -> VisitorM (SSAM r) () () (AnnSSA r)
+ctorVisitor :: (Data r, PPR r) => [Id (AnnSSA r)] -> VisitorM (SSAM r) () () (AnnSSA r)
 -------------------------------------------------------------------------------------
-ctorVisitor g ms          = defaultVisitor { endStmt = es } { endExpr = ee }
-                                           { mStmt   = ts } { mExpr   = te }
+ctorVisitor ms =
+    defaultVisitor { endStmt = es } { endExpr = ee } { mStmt = ts } { mExpr = te }
   where
     es FunctionStmt{}     = True
     es _                  = False
@@ -388,44 +388,52 @@ ctorVisitor g ms          = defaultVisitor { endStmt = es } { endExpr = ee }
                                        <*> return e
     te lv                 = return lv
 
-    ts (ExprStmt _ (CallExpr l (SuperRef _) es))
-      = do  svs     <- superVS parent
-            flds    <- mapM asgnS fields
-            let body = svs : flds
-            l'      <- fr_ l
-            return   $ maybeBlock l' body
-      where
-        fr     = fr_ l
-        cha    = ssaCHA g
-
-        fields | Just n <- curClass g
-               = inheritedNonStaticFields cha n
-               | otherwise
-               = []
-
-        parent | Just n <- curClass g,
-                 Just (TD (TS _ _ ([Gen (QN path name) _],_)) _ ) <- resolveType cha n
-               = case path of
-                   QP _ _ []     -> VarRef <$> fr <*> (Id <$> fr <**> F.symbolSafeString name)
-                   QP _ _ (y:ys) -> do init <- VarRef <$> fr <*> (Id <$> fr <**> F.symbolSafeString y)
-                                       foldM (\e q -> DotRef <$> fr <*> return e
-                                                                    <*> (Id <$> fr <**> F.symbolSafeString q)) init (ys ++ [name])
-               | otherwise = ssaError $ bugSuperWithNoParent (srcPos l)
-
-        superVS n = VarDeclStmt <$> fr <*> (single <$> superVD n)
-        superVD n = VarDecl  <$> fr
-                             <*> freshenIdSSA (builtinOpId BISuperVar)
-                             <*> justM (NewExpr <$> fr <*> n <**> es)
-        asgnS x = ExprStmt   <$> fr <*> asgnE x
-        asgnE x = AssignExpr <$> fr
-                             <*> return OpAssign
-                             <*> (LDot <$> fr <*> (ThisRef <$> fr) <**> F.symbolSafeString x)
-                             <*> (DotRef <$> fr
-                                         <*> (VarRef <$> fr <*> freshenIdSSA (builtinOpId BISuperVar))
-                                         <*> (Id <$> fr <**> F.symbolSafeString x))
-
     ts r@(ReturnStmt l _) = maybeBlock <$> fr_ l <*> ((:[r]) <$> ctorExit l ms)
     ts r                  = return r
+
+
+-------------------------------------------------------------------------------------
+transSuper
+  :: IsLocated a
+  => a -> SsaEnv r -> [Expression (AnnSSA r)] -> SSAM r [Statement (AnnSSA r)]
+-------------------------------------------------------------------------------------
+transSuper l g es
+  = do  svs     <- superVS parent
+        flds    <- mapM asgnS fields
+        let body = svs : flds
+        l'      <- fr_ l
+        return     [maybeBlock l' body]
+  where
+    fr     = fr_ l
+    cha    = ssaCHA g
+
+    fields | Just n <- curClass g
+           = inheritedNonStaticFields cha n
+           | otherwise
+           = []
+
+    parent | Just n <- curClass g,
+             Just (TD (TS _ _ ([Gen (QN path name) _],_)) _ ) <- resolveType cha n
+           = case path of
+               QP _ _ []     -> VarRef <$> fr <*> (Id <$> fr <**> F.symbolSafeString name)
+               QP _ _ (y:ys) -> do
+                  init <- VarRef <$> fr <*> (Id <$> fr <**> F.symbolSafeString y)
+                  foldM (\e q -> DotRef <$> fr <*> return e
+                                               <*> (Id <$> fr <**> F.symbolSafeString q)) init (ys ++ [name])
+           | otherwise = ssaError $ bugSuperWithNoParent (srcPos l)
+
+    superVS n = VarDeclStmt <$> fr <*> (single <$> superVD n)
+    superVD n = VarDecl  <$> fr
+                         <*> freshenIdSSA (builtinOpId BISuperVar)
+                         <*> justM (NewExpr <$> fr <*> n <**> es)
+    asgnS x = ExprStmt   <$> fr <*> asgnE x
+    asgnE x = AssignExpr <$> fr
+                         <*> return OpAssign
+                         <*> (LDot <$> fr <*> (ThisRef <$> fr) <**> F.symbolSafeString x)
+                         <*> (DotRef <$> fr
+                                     <*> (VarRef <$> fr <*> freshenIdSSA (builtinOpId BISuperVar))
+                                     <*> (Id <$> fr <**> F.symbolSafeString x))
+
 
 -------------------------------------------------------------------------------------
 ctorExit :: AnnSSA r -> [Id t] -> SSAM r (Statement (AnnSSA r))
@@ -441,7 +449,7 @@ ctorExit l ms
 -- | Constructor Transformation
 --
 --  constructor() {
---
+--    super(..);
 --    this.x = 1;
 --    this.y = "sting";
 --    if () {  this.x = 2; }
@@ -452,6 +460,7 @@ ctorExit l ms
 --          vv
 --
 --  constructor() {
+--    [[ super(..); ]]
 --
 --    var _ctor_x_0 = 1;                        // preM
 --    var _ctor_y_1 = "string"
@@ -467,26 +476,41 @@ ctorExit l ms
 ssaClassElt :: (Data r, PPR r) => SsaEnv r -> Statement (AnnSSA r)
             -> ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
 -------------------------------------------------------------------------------------
-ssaClassElt g c (Constructor l xs bd)
-  = do  pre       <- preM c
-        fs        <- (mapM symToVar fields)
-        bfs       <- bdM fs
-        efs       <- exitM fs
-        bd'       <- pure (pre ++ bfs ++ efs)
-        g'        <- initCallableSsaEnv l g xs bd'
-        (_, bd'') <- ssaStmts g' bd'
-        return     $ Constructor l xs bd''
-  where
-    symToVar       = freshenIdSSA . mkId . F.symbolSafeString
-    cha            = ssaCHA g
-    fields         | Just n <- curClass g
-                   = sortBy c_sym (nonStaticFields cha n)   -- Sort alphabetically
-                   | otherwise
-                   = []
-    bdM fs         = visitStmtsT (ctorVisitor g fs) () bd
-    exitM  fs      = single <$> ctorExit l fs
+ssaClassElt g c (Constructor l xs bd0) = do
 
-    c_sym          = on compare show     -- XXX: Symbolic compare is on Symbol ID
+    fs          <- mapM symToVar fields
+
+    -- `super(..)` must precede field initializations
+    (sup, bd1)  <- case bd0 of
+                     ExprStmt _ (CallExpr l (SuperRef _) es) : bbs -> do
+                         s_   <- transSuper l g es
+                         -- XXX: Apply the "this.x = ..." transformation
+                         -- here as well !!!
+                         s_'  <- bdM fs s_
+                         return (s_', bbs)
+                     _ -> pure ([], bd0)
+
+    pre         <- preM c
+    bfs         <- bdM fs bd1
+    efs         <- exitM fs
+    bd2         <- pure (sup ++ pre ++ bfs ++ efs)
+    g'          <- initCallableSsaEnv l g xs bd2
+    (_, bd3)   <- ssaStmts g' bd2
+    return       $ Constructor l xs bd3
+
+  where
+
+    symToVar     = freshenIdSSA . mkId . F.symbolSafeString
+    cha          = ssaCHA g
+    fields       | Just n <- curClass g
+                 = sortBy c_sym (nonStaticFields cha n)   -- Sort alphabetically
+                 | otherwise
+                 = []
+    exitM  fs    = single <$> ctorExit l fs
+
+    bdM fs       = visitStmtsT (ctorVisitor fs) ()
+
+    c_sym        = on compare show     -- XXX: Symbolic compare is on Symbol ID
 
 
 -- | Initilization expression for instance variables is moved to the beginning

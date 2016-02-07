@@ -918,8 +918,7 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es) _
     isVariadicCall f_ = F.symbol f_ == F.symbol "call"
 
     -- Non-variadic
-    checkNonVariadic = runFailM (tcExpr γ e Nothing)
-                   >>= checkWithRcvr
+    checkNonVariadic = runFailM (tcExpr γ e Nothing) >>= checkWithRcvr
 
     -- Check receiver
     checkWithRcvr (Right (_, te)) = checkWithProp (getProp l γ f te)

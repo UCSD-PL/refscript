@@ -318,16 +318,18 @@ instance F.Symbolic (TypeSigQ q r) where
 
 -- | Monoid
 
+-- | If an elements occurs in both maps, the mapping from the first
+--   will be the mapping in the result.
+--
+--   This requires that the type yielding the second TypeMembers correctly
+--   extends the one yielding the first one.
+--
 instance Monoid (TypeMembersQ q r) where
   mempty = TM mempty mempty Nothing Nothing Nothing Nothing
-  TM m1 sm1 c1 ct1 s1 n1 `mappend` TM m2 sm2 c2 ct2 s2 n2
-    = TM (m1  `mappend` m2)
-         (sm1 `mappend` sm2)
-         (c1 `orElse` c2) (ct1 `orElse` ct2)
-         (s1 `orElse` s2) (n1 `orElse` n2)
-    where
-      Just x  `orElse` _ = Just x
-      Nothing `orElse` y = y
+  mappend (TM ps1 sps1 c1 k1 s1 n1) (TM ps2 sps2 c2 k2 s2 n2)
+    = TM (ps1  `mappend` ps2) (sps1 `mappend` sps2)
+         (maybe c2 Just c1)   (maybe k2 Just k1)
+         (maybe s2 Just s1)   (maybe n2 Just n1)
 
 instance Monoid Initialization where
   mempty                                = InitUnknown

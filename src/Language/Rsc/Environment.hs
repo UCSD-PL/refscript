@@ -160,7 +160,8 @@ toFgn = envMap go
     go v = v
 
 --------------------------------------------------------------------------------
-safeEnvFindTy :: (CheckingEnvironment r t, IsLocated l, Symbolic x, Monad m) => l -> t r -> x -> m (RType r)
+safeEnvFindTy :: (CheckingEnvironment r t, IsLocated l, Symbolic x, Monad m)
+              => l -> t r -> x -> m (RType r)
 --------------------------------------------------------------------------------
 safeEnvFindTy l γ x | Just t <- chkEnvFindTy x γ = return t
                     | otherwise = die $ bugEnvFindTy (srcPos l) (F.symbol x)

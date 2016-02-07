@@ -13,6 +13,7 @@ module Language.Rsc.Lookup (
   , extractCtor
   ) where
 
+import           Data.Default
 import           Data.Either                    (rights)
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
@@ -115,7 +116,7 @@ extractCtor γ t = go t
   where
     go (TClass (BGen x _)) | Just (TD _ ms) <- resolveTypeInEnv γ x
                            = tm_ctor ms
-    go (TRef _ _)          = expandType Coercive (envCHA γ) t >>= go
+    go (TRef _ _)          = expandType def (envCHA γ) t >>= go
     go (TObj _ ms _)       = tm_ctor ms
     go _                   = Nothing
 
@@ -128,7 +129,7 @@ extractCall γ             = zip [0..] . go []
     go αs   (TFun ts t _) = [(αs, ts, t)]
     go αs   (TAnd ts)     = concatMap (go αs) (map snd ts)
     go αs   (TAll α t)    = go (αs ++ [α]) t
-    go αs t@(TRef _ _)    | Just t' <- expandType Coercive (envCHA γ) t
+    go αs t@(TRef _ _)    | Just t' <- expandType def (envCHA γ) t
                           = go αs t'
     go αs   (TObj _ ms _) | Just t <- tm_call ms
                           = go αs t
@@ -139,11 +140,11 @@ accessMember :: (CEnv r t, PPRE r, PP f, IsLocated l, F.Symbolic f)
              => l -> t r -> StaticKind -> f -> RType r -> Either Error [TypeMember r]
 --------------------------------------------------------------------------------
 accessMember l γ static m t
-  | Just (TObj _ es _) <- expandType Coercive (envCHA γ) t
+  | Just (TObj _ es _) <- expandType econf (envCHA γ) t
   , Just mem           <- F.lookupSEnv (F.symbol m) (mems es)
   = Right [mem]
   -- In the case of string indexing, build up an optional and assignable field
-  | Just (TObj _ es _) <- expandType Coercive (envCHA γ) t
+  | Just (TObj _ es _) <- expandType econf (envCHA γ) t
   , Just (mIdx, tIdx)  <- tm_sidx es
   , validFieldName m
   = Right [FI (F.symbol m) Opt mIdx tIdx]
@@ -152,6 +153,8 @@ accessMember l γ static m t
   where
     mems | static == StaticK  = s_mems
          | otherwise          = i_mems
+
+    econf = EConf True True -- Lookup members inherited from built-in objects
 
 --------------------------------------------------------------------------------
 validFieldName  :: F.Symbolic f => f -> Bool
@@ -190,7 +193,7 @@ getFieldMutability ::
   ClassHierarchy r -> RType r -> s -> Maybe (MutabilityR r)
 --------------------------------------------------------------------------------
 getFieldMutability cha t f
-  | Just (TObj _ ms _i) <- expandType Coercive cha t
+  | Just (TObj _ ms _i) <- expandType def cha t
   , Just (FI _ _ m _)   <- F.lookupSEnv (F.symbol f) (i_mems ms)
   = Just m
   | otherwise

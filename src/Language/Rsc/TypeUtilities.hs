@@ -85,7 +85,7 @@ arrayLitTy :: (Monad m, F.Reftable r, IsLocated l, PP r, PP a1, CheckingEnvironm
 ---------------------------------------------------------------------------------
 arrayLitTy l g@(envCHA -> c) e (Just t0) n
   | TRef nm _          <- t0        -- Get mutability from contextual type
-  , Just (Gen _ [m,t]) <- weaken c nm (mkAbsName [] arrayName)
+  , Just (Gen _ [m,t]) <- weaken c nm arrayName
   = if isIM m then mkImmArrTy l g t n
               else mkArrTy    l g n
   | otherwise

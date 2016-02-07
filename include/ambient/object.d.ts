@@ -1,41 +1,32 @@
 
-interface Object { }
+/**
+    https://github.com/Microsoft/TypeScript/blob/master/lib/lib.d.ts#L94
+*/
 
-// https://github.com/Microsoft/TypeScript/blob/master/lib/lib.d.ts#L82
+interface Object {
+    hasOwnProperty(v: string): boolean;
+    toString(): string;
+}
 
 interface ObjectConstructor<M extends ReadOnly> {
     new (value?: any): Object;
     (): any;
     /*@ (value: string): string */
     (value: any): any;
-
     prototype: Object;
-
     /*@ getPrototypeOf(o: string): { string | v = "" }  */
     getPrototypeOf(o: any): any;
-
     getOwnPropertyDescriptor(o: any, p: string): PropertyDescriptor<M>;
-
     getOwnPropertyNames(o: any): string[];
-
     create(o: any, properties?: PropertyDescriptorMap<M>): any;
-
     defineProperty(o: any, p: string, attributes: PropertyDescriptor<M>): any;
-
     defineProperties(o: any, properties: PropertyDescriptorMap<M>): any;
-
     seal<T>(o: T): T;
-
     freeze<T>(o: T): T;
-
     preventExtensions<T>(o: T): T;
-
     isSealed(o: any): boolean;
-
     isFrozen(o: any): boolean;
-
     isExtensible(o: any): boolean;
-
     keys(o: any): string[];
 }
 
@@ -56,21 +47,18 @@ interface PropertyDescriptorMap<M extends ReadOnly> {
 }
 
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for...in
-// /*@ builtin_BIForInKeys ::
-//     /\ forall A . (a: IArray<A>)                 => IArray<{ number | (0 <= v && v < (len a)) }>
-//     /\            (o: Object<Immutable>)         => IArray<{ string | (hasProperty(v,o) && enumProp(v,o)) }>
-//     /\            (o: [Immutable]{ })            => IArray<{ string | (hasProperty(v,o) && enumProp(v,o)) }>
-//     /\ forall A . (o: [Immutable]{[s:string]:A}) => IArray<{ string | (hasProperty(v,o) && enumProp(v,o)) }>
-//  */
-// //TODO: remove the last overload once {[s:string]:A} extends { }
-// declare function builtin_BIForInKeys(obj: Object): string[];
+//TODO: remove the last overload once {[s:string]:A} extends { } PV: ???
+
+/*@ builtin_BIForInKeys :: <A>(a: IArray<A>)         => IArray<{ number | 0 <= v && v < len a }> */
+/*@ builtin_BIForInKeys ::    (o: Object<Immutable>) => IArray<{ string | hasProperty v o && enumProp v o }> */
+/*@ builtin_BIForInKeys ::    (o: (Immutable) { })   => IArray<{ string | hasProperty v o && enumProp v o }> */
+/*@ builtin_BIForInKeys :: <A>(o: (Immutable) { [s:string]:A }) => IArray<{ string | hasProperty v o && enumProp v o }> */
+declare function builtin_BIForInKeys(obj: Object): string[];
 
 /*@ builtin_OpInstanceof :: <A>(x:A, s: string) => { v: boolean | Prop v <=> extends_class(x, s) } */
 declare function builtin_OpInstanceof<A>(x: A, s: string): boolean;
 
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/in
-// /*@ builtin_OpIn ::
-//     /\ forall A . (i: number, a: IArray<A>) => { v: boolean | ((Prop v) <=> (0 <= i && i < (len a))) }
-//     /\            (s: string, o: { }      ) => { v: boolean | ((Prop v) <=> hasProperty(s,o)) }
-//  */
-// declare function builtin_OpIn(s: string, obj: Object): boolean;
+/*@ builtin_OpIn :: <A>(i: number, a: IArray<A>) => { v: boolean | Prop v <=> (0 <= i && i < len a) } */
+/*@ builtin_OpIn ::    (s: string, o: { }      ) => { v: boolean | Prop v <=> hasProperty s o }        */
+declare function builtin_OpIn(s: string, obj: Object): boolean;

@@ -57,6 +57,7 @@ import           Control.Arrow                   ((***))
 import           Control.Exception               (throw)
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
+import           Data.Default
 import qualified Data.HashMap.Strict             as HM
 import qualified Data.List                       as L
 import           Language.Fixpoint.Misc
@@ -426,7 +427,7 @@ unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
 --------------------------------------------------------------------------------
 unqualifyThis g t = F.subst $ F.mkSubst fieldSu
   where
-    fieldSu | Just (TObj _ fs _) <- expandType Coercive (envCHA g) t
+    fieldSu | Just (TObj _ fs _) <- expandType def (envCHA g) t
             = [ subPair f | (f, FI _ _ m _) <- F.toListSEnv (i_mems fs)
                           , isSubtype g m tIM ]
             | otherwise

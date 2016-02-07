@@ -277,11 +277,13 @@ subtypeObj l _ _ (TMod m1) (TMod m2)
 -- Structural subtyping (fall-back)
 --
 subtypeObj l γ c t1 t2 =
-  case (expandType NonCoercive (envCHA γ) t1, expandType NonCoercive (envCHA γ) t2) of
+  case (expandType econf (envCHA γ) t1, expandType econf (envCHA γ) t2) of
     (Just ft1, Just ft2) -> subtypeObj l γ c ft1 ft2
     (Nothing , Nothing ) -> NoSub [errorUnresolvedTypes l t1 t2]
     (Nothing , _       ) -> NoSub [errorNonObjectType l t1]
     (_       , Nothing ) -> NoSub [errorNonObjectType l t2]
+  where
+    econf = EConf False False
 
 
 -- | Subtyping type members

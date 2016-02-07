@@ -53,22 +53,25 @@ module Language.Rsc.Names (
   , undefinedId
 
   -- * Hard-coded names
-  , arrayName
-  , boolName
-  , voidName
-  , unionName
-  , intersName
-  , topName
-  , anyName
-  , nullName
-  , undefName
   , objectName
-  , selfName
-  , className
-  , moduleName
-  , enumName
-  , extendsClassName
-  , extendsInterfaceName
+  , arrayName
+
+  , arraySym
+  , boolSym
+  , voidSym
+  , unionSym
+  , intersSym
+  , topSym
+  , anySym
+  , nullSym
+  , undefSym
+  , objectSym
+  , selfSym
+  , classSym
+  , moduleSym
+  , enumSym
+  , extendsClassSym
+  , extendsInterfaceSym
   , offsetName
 
   ) where
@@ -208,8 +211,8 @@ emptyPath = mkAbsPath []
 
 
 -- toLocSym        = F.dummyLoc . F.symbol
-extClassSym     = F.dummyLoc extendsClassName     -- "extends_class"
-extInterfaceSym = F.dummyLoc extendsInterfaceName --  "extends_interface"
+extClassSym     = F.dummyLoc extendsClassSym     -- "extends_class"
+extInterfaceSym = F.dummyLoc extendsInterfaceSym --  "extends_interface"
 offsetLocSym    = F.dummyLoc offsetName
 
 -- ttagSym         = F.dummyLoc "ttag"
@@ -229,25 +232,28 @@ offsetName = "offset"
 -- | Global Names
 ----------------------------------------------------------------------
 
-arrayName, boolName, voidName, unionName, topName, nullName, undefName :: F.Symbol
-arrayName = "Array"
-boolName  = "Boolean"
-voidName  = "Void"
-unionName = "Union"
-topName   = "Top"
-anyName   = "Any"
-nullName  = "Tull"
-undefName = "Undefined"
+objectName = mkAbsName [] objectSym
+arrayName  = mkAbsName [] arraySym
 
-objectName, selfName, className, moduleName, enumName, intersName:: F.Symbol
-objectName = "Object"
-selfName   = "Self"
-className  = "class"
-moduleName = "module"
-enumName   = "enum"
-intersName = "intersection"
+arraySym, boolSym, voidSym, unionSym, topSym, nullSym, undefSym :: F.Symbol
+arraySym = "Array"
+boolSym  = "Boolean"
+voidSym  = "Void"
+unionSym = "Union"
+topSym   = "Top"
+anySym   = "Any"
+nullSym  = "Tull"
+undefSym = "Undefined"
 
-extendsClassName, extendsInterfaceName :: F.Symbol
-extendsClassName     = "extends_class"
-extendsInterfaceName = "extends_interface"
+objectSym, selfSym, classSym, moduleSym, enumSym, intersSym:: F.Symbol
+objectSym = "Object"
+selfSym   = "Self"
+classSym  = "class"
+moduleSym = "module"
+enumSym   = "enum"
+intersSym = "intersection"
+
+extendsClassSym, extendsInterfaceSym :: F.Symbol
+extendsClassSym     = "extends_class"
+extendsInterfaceSym = "extends_interface"
 

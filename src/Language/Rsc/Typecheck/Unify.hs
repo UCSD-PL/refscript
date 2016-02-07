@@ -73,10 +73,12 @@ unify l γ θ (TClass (BGen n1 b1s)) (TClass (BGen n2 b2s))
 
 -- "Object"-ify types that can be expanded to an object literal type
 unify l γ θ t1 t2
-  | all maybeTObj [t1,t2]
-  , Just (TObj _ ms1 _) <- expandType NonCoercive (envCHA γ) t1
-  , Just (TObj _ ms2 _) <- expandType NonCoercive (envCHA γ) t2
-  = unifyMembers l γ θ ms1 ms2
+    | all maybeTObj [t1,t2]
+    , Just (TObj _ ms1 _) <- expandType econf (envCHA γ) t1
+    , Just (TObj _ ms2 _) <- expandType econf (envCHA γ) t2
+    = unifyMembers l γ θ ms1 ms2
+  where
+    econf = EConf False False
 
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ

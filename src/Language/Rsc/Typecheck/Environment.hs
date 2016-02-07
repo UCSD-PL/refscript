@@ -19,6 +19,7 @@ module Language.Rsc.Typecheck.Environment
     ) where
 
 import           Data.Data
+import           Data.Default
 import           Data.Function                  (on)
 import           Data.List                      (sortBy)
 import           Language.Fixpoint.Misc         (safeZip)
@@ -184,7 +185,7 @@ initClassCtorEnv (TS _ (BGen nm bs) _) γ
     --      * Make the return object immutable to avoid contra-variance
     --        checks at the return from the constructor.
     exitTy   = mkFun (bs, xts, tThis)
-    xts      | Just (TObj _ ms _) <- expandType Coercive (envCHA γ) tThis
+    xts      | Just (TObj _ ms _) <- expandType def (envCHA γ) tThis
              = sortBy c_sym [ B x t | (x, FI _ _ _ t) <- F.toListSEnv $ i_mems ms ]
              | otherwise
              = []

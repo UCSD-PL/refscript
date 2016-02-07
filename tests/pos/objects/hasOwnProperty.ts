@@ -1,3 +1,5 @@
+
 /*@ x :: { } */
-declare var x;
+declare let x;
+
 x.hasOwnProperty("prop");

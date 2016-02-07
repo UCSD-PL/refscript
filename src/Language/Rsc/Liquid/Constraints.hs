@@ -222,13 +222,14 @@ splitC s@(Sub g i t1@(TObj m1 ms1 r1) t2@(TObj _ ms2 _))
 
 splitC s@(Sub g i t1 t2)
   | all maybeTObj [t1, t2]
-  = case (expandType NonCoercive (envCHA g) t1, expandType NonCoercive (envCHA g) t2) of
+  = case (expandType econf (envCHA g) t1, expandType econf (envCHA g) t2) of
       (Just t1', Just t2') -> splitC (Sub g i' t1' t2')
       (Nothing , _       ) -> cgError $ errorUnfoldType l t1
       (_       , Nothing ) -> cgError $ errorUnfoldType l t2
   where
-    l  = srcPos i
-    i' = addHist i s
+    l     = srcPos i
+    i'    = addHist i s
+    econf = EConf False False
 
 splitC (Sub g i t1 _) = splitIncompatC g i t1
 

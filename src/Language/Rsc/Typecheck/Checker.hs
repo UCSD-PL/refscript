@@ -326,8 +326,20 @@ tcStmt γ (VarDeclStmt l ds)
        return      (VarDeclStmt l ds', z)
 
 -- | return e
-tcStmt γ (ReturnStmt l eo)
-  = tcRetW γ l eo
+tcStmt γ (ReturnStmt l (Just e)) =
+    do  (e', _)   <- tcWrap check >>= tcEW γ e
+        return       (ReturnStmt l (Just e'), Nothing)
+  where
+    rt    = tcEnvFindReturn γ
+    check = do
+        (e', t)   <- tcExpr γ (enableUnique e) (Just rt)
+        θ         <- unifyTypeM (srcPos l) γ t rt
+        (t', rt') <- pure (apply θ t, apply θ rt)
+        e''       <- castM γ e' True t' rt'
+        return       (e'', rt')
+
+tcStmt _ (ReturnStmt l Nothing)
+  = return (ReturnStmt l Nothing, Nothing)
 
 -- | throw e
 tcStmt γ (ThrowStmt l e)
@@ -452,14 +464,17 @@ tcClassElt _ _ (MemberVarDecl l False x _)
 
 -- | Static method: The classes type parameters should not be included in env
 --
-tcClassElt γ (TD sig ms) c@(MemberMethDecl l True x xs body)
-  | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) $ s_mems ms
-  = do  let t = mkAnd $ map snd mts
+tcClassElt γ (TD sig ms) c@(MemberMethDecl l True x xs body) =
+  case F.lookupSEnv (F.symbol x) (s_mems ms) of
+    Just FI{} ->
+        tcError $ bugStaticField l x sig
+    Just (MI _ _ mts) -> do
+        let t = mkAnd $ map snd mts
         its <- tcFunTys l x xs t
         body' <- foldM (tcCallable γ l x xs) body its
         return $ MemberMethDecl l True x xs body'
-  | otherwise
-  = fatal (errorClassEltAnnot (srcPos l) (sig) x) c
+    Nothing ->
+        fatal (errorClassEltAnnot (srcPos l) (sig) x) c
 
 -- | Instance method
 --
@@ -560,22 +575,6 @@ tcNormalCallWD
 tcNormalCallWD γ l o es t = tcNormalCallW γ l o es t >>= \case
   (es', Just t) -> return (es', t)
   (es', _     ) -> return (es', tNull)
-
---------------------------------------------------------------------------------
-tcRetW :: Unif r => TCEnv r -> AnnSSA r -> Maybe (ExprSSAR r)
-                 -> TCM r (Statement (AnnSSA r), Maybe a)
---------------------------------------------------------------------------------
-tcRetW γ l (Just e)
-  = do  (e', t)   <- tcExpr γ (enableUnique e) (Just rt)
-        θ         <- unifyTypeM (srcPos l) γ t rt
-        (t', rt') <- pure (apply θ t, apply θ rt)
-        e''       <- castM γ e' True t' rt'
-        return     $ (ReturnStmt l (Just e''), Nothing)
-  where
-    rt        = tcEnvFindReturn γ
-
-tcRetW _ l Nothing
-  = return (ReturnStmt l Nothing, Nothing)
 
 
 -- | Wrap expressions and statement in deadcasts
@@ -862,7 +861,7 @@ tcCall γ e@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3) _
 -- | `new e(e1,...,en)`
 tcCall γ c@(NewExpr l e es) s
   = do (e',t) <- tcExpr γ e Nothing
-       case ltracePP l "CTOR" $ extractCtor γ t of
+       case extractCtor γ t of
          Just ct -> do
             (es', tNew) <- tcNormalCallWD γ l (builtinOpId BICtor) es ct
             tNew'       <- pure (adjustCtxMut tNew s)

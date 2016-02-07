@@ -2,7 +2,7 @@
 class Foo<M extends ReadOnly, A> {
 
 	/*@ (Mutable) ffffff:  A */
-	public ffffff;
+	public ffffff: A;
 
   	constructor(x: A) {
 		if (0 < 1)

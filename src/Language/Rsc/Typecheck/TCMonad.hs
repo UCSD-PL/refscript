@@ -321,15 +321,13 @@ isCastId (Id _ s) = castPrefix `isPrefixOf` s
 unifyTypesM :: Unif r => SrcSpan -> TCEnv r -> [RType r] -> [RType r] -> TCM r (RSubst r)
 --------------------------------------------------------------------------------
 unifyTypesM l γ t1s t2s
-  | t1s |=| t2s
+  | length t1s == length t2s
   = do  θ <- getSubst
         case unifys l γ θ t1s t2s of
-          Left err -> tcError $ err
+          Left e   -> tcError e
           Right θ' -> setSubst θ' >> return θ'
   | otherwise
-  = tcError $ errorListMismatch l t1s t2s
-  where
-    (|=|) = (==) `on` length
+  = tcError (errorListMismatch l t1s t2s)
 
 --------------------------------------------------------------------------------
 unifyTypeM :: Unif r => SrcSpan -> TCEnv r -> RType r -> RType r -> TCM r (RSubst r)

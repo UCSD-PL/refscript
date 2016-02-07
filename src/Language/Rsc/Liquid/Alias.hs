@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ViewPatterns     #-}
 
 module Language.Rsc.Liquid.Alias (expandAliases) where
 
@@ -12,10 +13,12 @@ import qualified Language.Fixpoint.Types.Visitor as V
 import           Language.Rsc.Annotations
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
-import           Language.Rsc.Liquid.Types       ()
+import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
+import           Language.Rsc.Pretty.Errors
 import           Language.Rsc.Program
+import           Language.Rsc.Transformations
 import qualified Language.Rsc.Typecheck.Subst    as S
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
@@ -45,7 +48,10 @@ expandCodeTAlias te p@(Rsc { code = Src stmts }) = p { code = Src $ (patch <$>) 
 expandCodePred :: PAliasEnv -> RelRefScript -> RelRefScript
 expandCodePred te p@(Rsc { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
   where
-    patch (FA i ss f) = FA i ss (expandPred te <$> f)
+    patch (FA i ss f) = FA i ss (transFact <$> f)
+    transFact     = trans transType [] []
+    transType _ _ = emapReft transReft []
+    transReft _   = expandPred te
 
 
 ------------------------------------------------------------------------------
@@ -60,12 +66,11 @@ expandPAliasEnv pe = solve pe support expandPAlias
 getPApps :: F.Expr -> [F.Symbol]
 getPApps = V.fold pAppVis () []
   where
-    -- pAppVis                     = V.defaultVisitor { V.accExpr = pA }
     pA :: () -> F.Expr -> [F.Symbol]
     pA _ (F.EApp (F.EVar f) _)  = [f]
     pA _ _                      = []
     pAppVis = V.Visitor {
-      V.ctxExpr    = const -- \c _ -> c
+      V.ctxExpr    = const
     , V.txExpr     = \_ x -> x
     , V.accExpr    = pA
     }
@@ -75,13 +80,18 @@ getPApps = V.fold pAppVis () []
 expandPAlias      :: PAliasEnv -> PAlias -> PAlias
 expandPAlias pe a = a { al_body = expandPred pe $ al_body a }
 
-expandPred :: Data a => PAliasEnv -> a -> a
-expandPred pe = everywhere $ mkT tx
+
+expandPred :: V.Visitable t => F.SEnv (Located (Alias a F.Symbol F.Expr)) -> t -> t
+expandPred p = V.trans vis () ()
   where
-    tx p | Just (F.EVar f, es) <- splitEApp p
-         = maybe p (applyPAlias p f es) $ envFindTy f pe
-         | otherwise
-         = p
+    vis :: V.Visitor () ()
+    vis = V.defaultVisitor {
+            V.txExpr = tExpr
+          }
+    tExpr _ e@(splitEApp -> Just (F.EVar f , es))
+         = maybe e (applyPAlias e f $ tracePP "NEW" es) (envFindTy f p)
+    tExpr _ e = e
+
 
 -- TODO: Move to Language.Fixpoint.Types.Refinements
 splitEApp :: F.Expr -> Maybe (F.Expr, [F.Expr])
@@ -94,7 +104,7 @@ splitEApp _              = Nothing
 
 applyPAlias p f es a
   | ne == nx  = F.subst su $ al_body a
-  | otherwise = die $ errorBadPAlias (srcPos f) p nx ne
+  | otherwise = die $ errorBadPAlias (dummySpan) p nx ne
   where
     su        = F.mkSubst $ zip xs es
     xs        = al_syvars a
@@ -106,7 +116,7 @@ applyPAlias p f es a
 -- | One-shot expansion for @TAlias@ -----------------------------------------
 ------------------------------------------------------------------------------
 
-expandTAliasEnv    :: TAliasEnv (RTypeQ RK F.Reft) ->  TAliasEnv (RTypeQ RK F.Reft)
+expandTAliasEnv    :: TAliasEnv RRType ->  TAliasEnv RRType
 expandTAliasEnv te = solve te support expandTAlias
   where
     support        = filter (`envMem` te) . getTApps . al_body
@@ -118,13 +128,10 @@ getTApps    = everything (++) ([] `mkQ` fromT)
     fromT (TRef (Gen (QN (QP RK_ _ []) c) _) _) = [c]
     fromT _ = [ ]
 
-expandTAlias  :: TAliasEnv (RTypeQ RK F.Reft) ->  TAlias (RTypeQ RK F.Reft) -> TAlias (RTypeQ RK F.Reft)
+expandTAlias  :: TAliasEnv RRType ->  TAlias RRType -> TAlias RRType
 expandTAlias te a = a {al_body = expandRefType te $ al_body a}
 
--- expandRefType :: TAliasEnv RefType -> RefType -> RefType
--- expandRefType = expandRefType'
-
-expandRefType :: Data a => TAliasEnv (RTypeQ RK F.Reft) -> a -> a
+expandRefType :: Data a => TAliasEnv RRType -> a -> a
 expandRefType te = everywhere $ mkT tx
   where
     tx t@(TRef (Gen (QN (QP RK_ l []) c) ts) r) = maybe t (applyTAlias l t c ts r) $ envFindTy c te

@@ -39,7 +39,6 @@ import           Text.PrettyPrint.HughesPJ      ((<+>))
 -- import           Language.Rsc.Pretty
 
 
-type RRType = RTypeQ RK F.Reft
 type RMutability = RTypeQ RK F.Reft
 
 

@@ -224,7 +224,9 @@ errorBadTAlias l t nt ne a m  = mkErr l $ printf "Invalid type alias application
 errorTAliasNumArgs l t a x n  = mkErr l $ printf "Invalid type alias application on type '%s'. Expected %d type, %d value arguments, but %d found." (ppshow t) a x n
 errorTAliasMismatch l t a     = mkErr l $ printf "Invalid type alias application %s : Cannot convert %s into value argument" (ppshow t) (ppshow a)
 
-errorBadPAlias l p nx ne      = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." (ppshow p) nx ne
+errorBadPAlias l p nx ne      = mkErr l $ show $ text "Invalid predicate alias application:" $+$
+                                                 nest 2 (pp p) $+$
+                                                 text "Expected" <+> pp nx <+> text "arguments, but got" <+> pp ne <> text "."
 
 errorNoMatchCallee l fn ts ft = mkErr l $ show $ text "No matching callee type for:" <+> ticks (pp fn)      $+$
                                                  text "Argument Types:" $+$

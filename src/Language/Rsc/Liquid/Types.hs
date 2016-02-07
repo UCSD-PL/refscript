@@ -16,7 +16,7 @@
 module Language.Rsc.Liquid.Types (
 
   -- * Refinement Types
-    RefType
+    RefType, RRType
 
   -- * Conversions
   , RefTypable (..), eSingleton, pSingleton
@@ -66,6 +66,7 @@ import           Text.PrettyPrint.HughesPJ
 --------------------------------------------------------------------------------
 
 type RefType     = RType F.Reft
+type RRType      = RTypeQ RK F.Reft
 
 
 --------------------------------------------------------------------------------

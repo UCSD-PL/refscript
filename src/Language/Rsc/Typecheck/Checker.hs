@@ -868,7 +868,6 @@ tcCall γ c@(NewExpr l e es) s
 --
 tcCall γ ef@(DotRef l e0 f) _
   = runFailM (tcExpr γ ue Nothing) >>= checkAccess
-
   where
     ue = enableUnique e0
     checkAccess (Right (_, tRcvr))
@@ -885,7 +884,7 @@ tcCall γ ef@(DotRef l e0 f) _
 
     -- Normal property access
     checkProp (Left er)   = tcError er
-    checkProp (Right tfs) = adjustOpt tfs . fst <$> tcExprT γ ue (ltracePP l ue $ rcvrTy tfs)
+    checkProp (Right tfs) = adjustOpt tfs . fst <$> tcExprT γ ue (rcvrTy tfs)
 
     -- Add `or undef` in case of an optional field access
     adjustOpt tfs e_
@@ -913,15 +912,16 @@ tcCall _ (CallExpr _ (SuperRef _)  _) _
 
 -- | `e.m(es)`
 --
-tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es) _
+tcCall γ ex@(CallExpr l em@(DotRef l1 e0 f) es) _
   | isVariadicCall f = tcError (unimplemented l "Variadic" ex)
   | otherwise        = checkNonVariadic
   where
+    ue  = enableUnique e0
     -- Variadic check
     isVariadicCall f_ = F.symbol f_ == F.symbol "call"
 
     -- Non-variadic
-    checkNonVariadic = runFailM (tcExpr γ e Nothing) >>= checkWithRcvr
+    checkNonVariadic = runFailM (tcExpr γ ue Nothing) >>= checkWithRcvr
 
     -- Check receiver
     checkWithRcvr (Right (_, te)) = checkWithProp (getProp l γ f te)
@@ -929,7 +929,7 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es) _
 
     -- Check all corresponding type members `tms`
     checkWithProp (Right tms@(map fst -> ts))
-      = do  (e', _   ) <- tcExprT γ e (tOr ts)
+      = do  (e', _   ) <- tcExprT γ ue (tOr ts)
             (es', ts') <- foldM (\(es_, ts) (tR, m) ->
                             second (:ts) <$> checkTypeMember es_ tR m) (es, []) tms
             return      $ (CallExpr l (DotRef l1 e' f) es', tOr ts')
@@ -937,15 +937,15 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es) _
 
     -- Check a single type member
     checkTypeMember es_ _  (FI _ Req _ ft) = tcNormalCallWD γ l biID es_ ft
-    checkTypeMember _   _  (FI f _   _ _ ) = tcError $ errorOptFunUnsup l f e
+    checkTypeMember _   _  (FI f _   _ _ ) = tcError $ errorOptFunUnsup l f ue
     checkTypeMember es_ tR (MI _ Req mts)  =
       case getMutability (envCHA γ) tR of
         Just mR ->
-            case [ t | (m, t) <- mts, isSubtype γ mR m ] of
+            case [ t | (m, t) <- mts, isSubtypeWithUq γ mR m ] of
               [] -> tcError $ errorMethMutIncomp l em mts mR
               ts -> tcNormalCallWD γ l biID es_ (mkAnd ts)
 
-        Nothing -> tcError $ errorNoMutAvailable l e tR
+        Nothing -> tcError $ errorNoMutAvailable l ue tR
 
     checkTypeMember _ _ (MI _ Opt _)  =
       error "TODO: Add error message at checkTypeMember MI Opt"
@@ -979,7 +979,7 @@ tcNormalCall γ l fn etos ft0
              do addAnn (fId l) (Overload (tce_ctx γ) (F.symbol fn) i)
                 addSubst l θ
                 (es, ts) <- pure (unzip ets)
-                tcWrap (tcCallCase γ l fn es (ltracePP l (ppshow fn ++ " :: " ++ ppshow ft) ts) ft) >>= \case
+                tcWrap (tcCallCase γ l fn es ts ft) >>= \case
                   Right ets' -> return ets'
                   Left  er  -> (,tNull) <$> T.mapM (deadcastM γ [er] . fst) ets
          Nothing -> tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) (unzip ets)

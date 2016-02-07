@@ -781,7 +781,7 @@ consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
     checkTM xR g_ tR (MI _ Req mts)  =
       case getMutability (envCHA g_) tR of
         Just mR ->
-            case [ ft_ | (m, ft_) <- mts, isSubtype g_ mR m ] of
+            case [ ft_ | (m, ft_) <- mts, isSubtypeWithUq g_ mR m ] of
               [] -> cgError $ errorMethMutIncomp l em mts mR
               ts -> consCall g_ l biID (es `zip` nths) (substThis xR (mkAnd ts))
         Nothing -> cgError $ errorNoMutAvailable l e tR

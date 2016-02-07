@@ -16,7 +16,7 @@ import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
-import           Language.Rsc.Pretty.Errors
+-- import           Language.Rsc.Pretty.Errors
 import           Language.Rsc.Program
 import           Language.Rsc.Transformations
 import qualified Language.Rsc.Typecheck.Subst    as S
@@ -26,7 +26,7 @@ import           Language.Rsc.Types
 
 -- pe'
 -- te' [using pe']
--- tx :: RefType -> RefType p(using pe' and te')
+-- tx :: RefType -> RefType p (using pe' and te')
 -- lift above to Annot r
 
 expandAliases   :: RelRefScript -> RelRefScript
@@ -40,7 +40,7 @@ expandAliases p =  expandCodePred pe'
     pe'         = expandPAliasEnv $ pAlias p
     te'         = expandTAliasEnv $ tAlias p
 
-expandCodeTAlias :: TAliasEnv (RTypeQ RK F.Reft) -> RelRefScript -> RelRefScript
+expandCodeTAlias :: TAliasEnv RRType -> RelRefScript -> RelRefScript
 expandCodeTAlias te p@(Rsc { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
   where
     patch (FA i ss f) = FA i ss (expandRefType te <$> f)
@@ -76,7 +76,6 @@ getPApps = V.fold pAppVis () []
     }
 
 
-
 expandPAlias      :: PAliasEnv -> PAlias -> PAlias
 expandPAlias pe a = a { al_body = expandPred pe $ al_body a }
 
@@ -84,12 +83,10 @@ expandPAlias pe a = a { al_body = expandPred pe $ al_body a }
 expandPred :: V.Visitable t => F.SEnv (Located (Alias a F.Symbol F.Expr)) -> t -> t
 expandPred p = V.trans vis () ()
   where
-    vis :: V.Visitor () ()
-    vis = V.defaultVisitor {
-            V.txExpr = tExpr
-          }
+    vis      :: V.Visitor () ()
+    vis       = V.defaultVisitor { V.txExpr = tExpr }
     tExpr _ e@(splitEApp -> Just (F.EVar f , es))
-         = maybe e (applyPAlias e f $ tracePP "NEW" es) (envFindTy f p)
+              = maybe e (applyPAlias e f es) (envFindTy f p)
     tExpr _ e = e
 
 
@@ -102,9 +99,9 @@ splitEApp e@(F.EApp _ _) = Just $ go [] e
 splitEApp _              = Nothing
 
 
-applyPAlias p f es a
+applyPAlias p _ es a
   | ne == nx  = F.subst su $ al_body a
-  | otherwise = die $ errorBadPAlias (dummySpan) p nx ne
+  | otherwise = die $ errorBadPAlias dummySpan p nx ne
   where
     su        = F.mkSubst $ zip xs es
     xs        = al_syvars a

@@ -50,10 +50,13 @@ lookupSort l  x γ = fromMaybe errorMsg $ lookupSEnv x γ
 orderedFreeVars γ = nub . filter (`memberSEnv` γ) . syms
 
 -- | Extracts all qualifiers from a RefScript program
+--
+--   Excludes qualifier declarations (qualif Q(...): ...)
+--
 ---------------------------------------------------------------------------------
-scrapeQuals :: [Qualifier] -> [Statement (AnnRel Reft)] -> [Qualifier]
+scrapeQuals :: [Statement (AnnRel Reft)] -> [Qualifier]
 ---------------------------------------------------------------------------------
-scrapeQuals qs = (qs ++) . qualifiers . mkUq . foldStmts tbv [] . filter nonLibFile
+scrapeQuals = qualifiers . mkUq . foldStmts tbv [] . filter nonLibFile
   where
     tbv = defaultVisitor { accStmt = gos, accCElt = goe }
 

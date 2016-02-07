@@ -31,7 +31,7 @@ import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Alias
-import           Language.Rsc.Liquid.Qualifiers
+import qualified Language.Rsc.Liquid.Qualifiers   as Q
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Parser.Annotations
@@ -89,11 +89,12 @@ mkRsc :: [Statement (SrcSpan, [Spec])] -> Either FError RefScript
 --------------------------------------------------------------------------------
 mkRsc ss = let p1          = mkRelRsc        ss
                p2          = expandAliases   p1
-               (p3, errs)  = replaceAbsolute p2
-               p4          = replaceDotRef   p3
-               p5          = fixFunBinders   p4 in
+               p3          = scrapeQuals     p2     -- Scrape quals after expanding aliases
+               (p4, errs)  = replaceAbsolute p3
+               p5          = replaceDotRef   p4
+               p6          = fixFunBinders   p5 in
             case errs of
-              [] -> Right p5
+              [] -> Right p6
               _  -> Left $ F.Unsafe errs
 
 --------------------------------------------------------------------------------
@@ -104,7 +105,7 @@ mkRelRsc ss = Rsc {
       , consts        = envFromList [ second (ntransPure f g) t | MeasureSpec t <- anns ]
       , tAlias        = envFromList [ t | TypeAliasSpec      t <- anns ]
       , pAlias        = envFromList [ t | PredicateAliasSpec t <- anns ]
-      , pQuals        = scrapeQuals [ t | QualifierSpec      t <- anns ] ss'
+      , pQuals        =             [ t | QualifierSpec      t <- anns ]
       , pOptions      =             [ t | OptionSpec         t <- anns ]
       , invts         = [Loc (srcPos l) (ntransPure f g t) | InvariantSpec l t <- anns ]
       , maxId         = endingId
@@ -117,6 +118,12 @@ mkRelRsc ss = Rsc {
     starting_id       = 0
     (endingId, ss')   = mapAccumL (mapAccumL (\n -> (n+1,) . toBare n)) starting_id ss
     anns              = concatMap (FO.foldMap snd) ss
+
+--------------------------------------------------------------------------------
+scrapeQuals :: RelRefScript -> RelRefScript
+--------------------------------------------------------------------------------
+scrapeQuals p@(Rsc { code = Src c }) = p { pQuals = pQuals p ++ Q.scrapeQuals c }
+
 
 --------------------------------------------------------------------------------
 extractFact :: [PSpec t r] -> [Maybe (FactQ RK r)]

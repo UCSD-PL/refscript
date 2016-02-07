@@ -437,7 +437,7 @@ tcClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
 
     thisT   = TRef (Gen nm (map btVar bs)) fTop
     cExit   = builtinOpId BICtorExit
-    viExit  = ltracePP l cExit $ SI (F.symbol cExit) Local Ambient Initialized $ mkFun (bs, xts, ret)
+    viExit  = SI (F.symbol cExit) Local Ambient Initialized $ mkFun (bs, xts, ret)
     ret     = thisT
 
     xts      = case expandType def (envCHA γ) thisT of

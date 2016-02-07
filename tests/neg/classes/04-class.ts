@@ -20,7 +20,9 @@ class A<M extends ReadOnly> {
 
     private foo(): void { }
     bar(x: IColorPoint<M>): void { }
-    constructor() { }
+    constructor() {
+        this.a = -2;
+    }
 }
 
 class B<M extends ReadOnly> extends A<M> {

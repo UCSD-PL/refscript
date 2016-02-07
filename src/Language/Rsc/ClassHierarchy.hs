@@ -243,9 +243,13 @@ expandType _ _ t@(TRef _ _) | mutRelated t = Nothing
 --
 expandType _ cha (TRef (Gen n ts@(p:_)) r) =
     case resolveType cha n of
-      Just d  ->  let m  = expandWithSubst cha d ts in
-                  let m' = cropStatic m in  -- filter out static parts
-                  Just (TObj p m' r)
+      Just d  ->
+          let m  = expandWithSubst cha d ts in
+          let m' = case sigKind (typeSig d) of
+                     InterfaceTDK -> m
+                     ClassTDK     -> cropStatic m  -- filter out static parts
+          in
+          Just (TObj p m' r)
       Nothing ->  Nothing
   where
     cropStatic (TM m _ _ _ s n) = TM m mempty Nothing Nothing s n

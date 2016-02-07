@@ -114,7 +114,7 @@ extractCtor :: (PPRD r, CheckingEnvironment r g) => g r -> RType r -> Maybe (RTy
 --------------------------------------------------------------------------------
 extractCtor γ t = go t
   where
-    go (TClass (BGen x _)) | Just (TD _ ms) <- resolveTypeInEnv γ x
+    go (TClass (BGen x _)) | Just (TD _ ms) <- tracePP ("resolveTypeInEnv " ++ ppshow x) <$>  resolveTypeInEnv γ x
                            = tm_ctor ms
     go (TRef _ _)          = expandType def (envCHA γ) t >>= go
     go (TObj _ ms _)       = tm_ctor ms

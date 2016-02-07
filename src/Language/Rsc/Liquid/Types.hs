@@ -174,6 +174,7 @@ rTypeSortPrim TString    = F.strSort
 rTypeSortPrim TBoolean   = F.fAppTC (rawStringFTycon boolSym ) []
 rTypeSortPrim TVoid      = F.fAppTC (rawStringFTycon voidSym ) []
 rTypeSortPrim TTop       = F.fAppTC (rawStringFTycon topSym  ) []
+rTypeSortPrim TBot       = F.fAppTC (rawStringFTycon botSym  ) []
 rTypeSortPrim TAny       = F.fAppTC (rawStringFTycon anySym  ) []
 rTypeSortPrim TNull      = F.fAppTC (rawStringFTycon nullSym ) []
 rTypeSortPrim TUndefined = F.fAppTC (rawStringFTycon undefSym) []

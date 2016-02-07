@@ -200,9 +200,12 @@ expandType :: (ExprReftable Int r, PPR r)
 ---------------------------------------------------------------------------
 -- | Object type
 --
-expandType c cha t@TObj{}
-    | exp_prim_mems c, Just ot <- resolveType cha objectName
-    = Just (TObj tRO (typeBody ot) fTop)
+expandType c cha t@(TObj m ms r)
+    | exp_prim_mems c
+    = case resolveType cha objectName of
+        Just ms' -> Just (TObj m (ms `mappend` typeBody ms') r)
+        Nothing  -> Nothing
+
     | otherwise
     = Just t
 

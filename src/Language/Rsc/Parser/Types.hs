@@ -466,7 +466,7 @@ indexP = xyP id colon sn
 --
 propP c
   = do  s     <- option InstanceK (reserved "static" *> return StaticK)
-        a     <- mutP c
+        a     <- withinSpacesP (mutP c)
         x     <- symbol <$> withinSpacesP binderP
         o     <- option Req (withinSpacesP (char '?') *> return Opt)
         _     <- colon
@@ -475,7 +475,7 @@ propP c
 
 
 -- Parse (Mutability) with trRO as default if not specified in the context
-mutP c = optionMaybe (withinSpacesP mP) >>= \case
+mutP c = optionMaybe mP >>= \case
     Just m  -> return m
     Nothing -> return (fromMaybe trRO (pctx_mut c))
  where

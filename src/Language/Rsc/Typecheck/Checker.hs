@@ -226,18 +226,18 @@ tcStmt γ s@(ExprStmt l (AssignExpr l1 OpAssign v@(LVar lx x) e))
         Just (SI _ _ WriteGlobal Uninitialized t) -> do
             (e', _) <- tcExprT γ e t
             γ'      <- pure (tcEnvAdd v (SI xSym Local WriteGlobal Initialized t) γ)
-            return     (mkStmt e', γ')
+            return     (mkStmt e', Just γ')
 
         Just (SI _ _ WriteGlobal _ t) -> do
             (e', _) <- tcExprT γ e t
-            return     (mkStmt e', γ)
+            return     (mkStmt e', Just γ)
 
         Just (SI _ _ a _ _) -> error $ "Could this happen- x = e ?? " ++ ppshow a
 
         Nothing -> do
             (e', t) <- tcExpr γ e Nothing
             γ'      <- pure (tcEnvAdd v (SI xSym Local WriteLocal Initialized t) γ)
-            return     (mkStmt e', γ')
+            return     (mkStmt e', Just γ')
 
     mkStmt  = ExprStmt l . AssignExpr l1 OpAssign (LVar lx x)
     xSym    = F.symbol x
@@ -262,7 +262,7 @@ tcStmt γ s@(ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
                   do  e1''      <- castM γ e1' True t1 (tOr ts)
                       -- This is a consumable position --> UQ is allowed
                       (e2' , _) <- tcScan (tcExprT γ) e2 (map f_ty fs)
-                      return (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1'' f) e2'), γ)
+                      return (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1'' f) e2'), Just γ)
 
           | otherwise -> tcError (errorImmutableRefAsgn l f e1 t1)
 
@@ -284,24 +284,28 @@ tcStmt γ (IfSingleStmt l b s)
   = tcStmt γ (IfStmt l b s (EmptyStmt l))
 
 -- | if b { s1 } else { s2 }
-tcStmt γ (IfStmt l e s1 s2)
+tcStmt γ s@(IfStmt l e s1 s2)
   = do opTy         <- safeEnvFindTy l γ (builtinOpId BITruthy)
        ([e'], z)    <- tcNormalCallW γ l (builtinOpId BITruthy) [e] opTy
        case z of
          Just _  ->
-            do  (s1', γ1) <- tcStmt γ s1
-                (s2', γ2) <- tcStmt γ s2
-                z1         <- envJoin l γ γ1 γ2
-                case z1 of
-                  Just (γ3',s1s,s2s) ->
-                    do  l1 <- freshenAnn l
-                        l2 <- freshenAnn l
-                        return (IfStmt l e' (postfixStmt l1 s1s s1')
-                                            (postfixStmt l2 s2s s2')
-                               , Just γ3')
-                  Nothing ->
-                    return (IfStmt l e' s1' s2', Nothing)
-         _       -> return (IfStmt l e' s1 s2, Nothing)
+            do  z1 <- tcStmt γ s1
+                z2 <- tcStmt γ s2
+                tcWrap (check e' z1 z2) >>= tcSW γ s
+
+         Nothing -> return (IfStmt l e' s1 s2, Nothing)
+  where
+    check e' (s1', γ1) (s2', γ2) = do
+        z1 <- envJoin l γ γ1 γ2
+        case z1 of
+          Just (γ3', s1s, s2s) ->
+              do  l1 <- freshenAnn l
+                  l2 <- freshenAnn l
+                  return (IfStmt l e' (postfixStmt l1 s1s s1')
+                                      (postfixStmt l2 s2s s2')
+                         , Just γ3')
+          Nothing ->
+              return (IfStmt l e' s1' s2', Nothing)
 
 -- | while c { b }
 tcStmt γ (WhileStmt l c b)
@@ -593,10 +597,10 @@ tcEW γ e (Left er)        = (,Nothing) <$> deadcastM γ [er] e
 
 --------------------------------------------------------------------------------
 tcSW :: Unif r => TCEnv r -> Statement (AnnSSA r)
-               -> Either Error (Statement (AnnSSA r), b)
+               -> Either Error (Statement (AnnSSA r), Maybe b)
                -> TCM r (Statement (AnnSSA r), Maybe b)
 --------------------------------------------------------------------------------
-tcSW _ _ (Right (s, b)) = return (s, Just b)
+tcSW _ _ (Right (s, b)) = return (s, b)
 tcSW γ s (Left  e)      = do
     l1    <- freshenAnn l
     l2    <- freshenAnn l
@@ -1093,8 +1097,15 @@ instantiateFTy l ξ fn ft@(bkAll -> (bs, t))
     where
       er      = tcError $ errorNonFunction (srcPos l) fn ft
 
+-- | envJoin
+--
+--   XXX: May throw `tcError`: wrap appropriately
+--
 --------------------------------------------------------------------------------
--- envJoin :: Unif r => AnnTc r -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)
+envJoin :: Unif r
+        => AnnTc r -> TCEnv r
+        -> TCEnvO r -> TCEnvO r
+        -> TCM r (Maybe (TCEnv r, [Statement (AnnSSA r)], [Statement (AnnSSA r)]))
 --------------------------------------------------------------------------------
 envJoin _ _ Nothing x           = return $ fmap (,[],[]) x
 envJoin _ _ x Nothing           = return $ fmap (,[],[]) x
@@ -1112,11 +1123,11 @@ envJoinStep l γ1 γ2 next (γ, st01, st02) xt =
     (v, ta@(SI _ _ WriteLocal _ t)) ->
       case find ((v ==) . snd3) next of
         Just (_,va, vb) -> do
-          st1     <- mkVdStmt l γ1 va vb t          -- FIRST BRANCH
-          st2     <- mkVdStmt l γ2 va vb t          -- SECOND BRANCH
-          θ       <- getSubst
-          addAnn (fId l) $ PhiVarTC vb
-          return   $ (tcEnvAdd vb ta $ γ { tce_names = apply θ (tce_names γ) }, st1:st01, st2:st02)
+            st1     <- mkVdStmt l γ1 va vb t          -- FIRST BRANCH
+            st2     <- mkVdStmt l γ2 va vb t          -- SECOND BRANCH
+            θ       <- getSubst
+            addAnn (fId l) $ PhiVarTC vb
+            return   $ (tcEnvAdd vb ta $ γ { tce_names = apply θ (tce_names γ) }, st1:st01, st2:st02)
         Nothing -> error $ "Couldn't find " ++ ppshow v ++ " in " ++ ppshow next
     (v, ta) ->
           do  addAnn (fId l) $ PhiVarTC v
@@ -1186,7 +1197,7 @@ unifyPhiTypes :: Unif r => AnnTc r -> TCEnv r -> Var r
 --------------------------------------------------------------------------------
 unifyPhiTypes l γ x t1 t2 θ
   | Left _ <- substE
-  = fatal (errorEnvJoinUnif (srcPos l) x t1 t2) t1
+  = tcError (errorEnvJoinUnif l x t1 t2)
 
   | Right θ' <- substE
   , on (==) (apply θ') t1 t2

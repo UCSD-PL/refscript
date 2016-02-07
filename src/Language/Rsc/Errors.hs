@@ -176,7 +176,10 @@ errorUnboundName l x          = mkErr l $ printf "Name '%s' is unbound." (ppshow
 errorUnboundPath l x          = mkErr l $ printf "Path '%s' is unbound." (ppshow x)
 errorUnboundId l x            = mkErr l $ show $ text "Identifier" <+> ticks (pp x) <+> text "is unbound."
 errorEnvJoin l x t1 t2        = mkErr l $ printf "Variable '%s' has different types ('%s' and '%s') when joining environments." (ppshow x) (ppshow t1) (ppshow t2)
-errorEnvJoinUnif l x t1 t2    = mkErr l $ printf "Error in unifying types '%s' and '%s' for variable '%s' when joining environments." (ppshow t1) (ppshow t2) (ppshow x)
+errorEnvJoinUnif l x t1 t2    = mkErr l $ show $ text "Error in unifying types:" $+$
+                                                 nest 2 (pp t1) $+$ text "and" $+$ nest 2 (pp t2) $+$
+                                                 text "for variable" <+> ticks (pp x) <+> text "when joining environments."
+
 errorArgMismatch l x t n m    = mkErr l $ show $ text "Mismatch in number of arguments passed to function" <+>
                                                  ticks (pp x) <> text ". Signature:" $+$ pp t $+$
                                                  text "expects" <+> pp n <+> text "arguments, but" <+> pp m <+> text "were given."

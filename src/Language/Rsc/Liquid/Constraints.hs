@@ -455,4 +455,6 @@ narrowType :: CGEnv -> RefType-> Type -> RefType
 narrowType g (TOr t1s r) t2
   = tOrR (L.filter (\t1 -> isSubtype g t1 (ofType t2)) t1s) r
 
+narrowType g (TRef (Gen n ts) r) (TRef (Gen n' _) _) = error "TODO: narrowType"
+
 narrowType _ t1 _ = t1

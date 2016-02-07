@@ -136,7 +136,7 @@ castable _ γ c _ (TOr t1s _) t2
 
 -- XXX: Only non generic casting allowed at the moment
 castable _ γ c _ t1@(TRef (Gen _ [_]) _) t2@(TRef (Gen _ [_]) _)
-  | not (mutRelated t1), not (mutRelated t2), isSubtypeC γ c t1 t2
+  | not (mutRelated t1), not (mutRelated t2), isSubtypeC γ c t2 t1
   = ConvWith (toType t2)
 
 castable _ _ _ es _ _ = ConvFail es

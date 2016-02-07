@@ -26,7 +26,7 @@ unitTests = group "Unit"
   , testGroup "pos-scope"  <$> dirTests rscCmd "tests/pos/scope"      [] ExitSuccess
   , testGroup "pos-simple" <$> dirTests rscCmd "tests/pos/simple"     [] ExitSuccess
   , testGroup "pos-union"  <$> dirTests rscCmd "tests/pos/unions"     [] ExitSuccess
---   , testGroup "pos-class"  <$> dirTests rscCmd "tests/pos/classes"    [] ExitSuccess
+  , testGroup "pos-class"  <$> dirTests rscCmd "tests/pos/classes"    [] ExitSuccess
 --   , testGroup "pos-loop"   <$> dirTests rscCmd "tests/pos/loops"      [] ExitSuccess
 --   , testGroup "pos-misc"   <$> dirTests rscCmd "tests/pos/misc"       [] ExitSuccess
 --   , testGroup "pos-alias"  <$> dirTests rscCmd "tests/pos/typealias"  [] ExitSuccess
@@ -38,7 +38,7 @@ unitTests = group "Unit"
   , testGroup "neg-simple" <$> dirTests rscCmd "tests/neg/scope"      [] (ExitFailure 1)
   , testGroup "neg-simple" <$> dirTests rscCmd "tests/neg/simple"     [] (ExitFailure 1)
   , testGroup "neg-union"  <$> dirTests rscCmd "tests/neg/unions"     [] (ExitFailure 1)
---   , testGroup "neg-class"  <$> dirTests rscCmd "tests/neg/classes"    [] (ExitFailure 1)
+  , testGroup "neg-class"  <$> dirTests rscCmd "tests/neg/classes"    [] (ExitFailure 1)
 --   , testGroup "neg-loop"   <$> dirTests rscCmd "tests/neg/loops"      [] (ExitFailure 1)
 --   , testGroup "neg-misc"   <$> dirTests rscCmd "tests/neg/misc"       [] (ExitFailure 1)
 --   , testGroup "neg-alias"  <$> dirTests rscCmd "tests/neg/typealias"  [] (ExitFailure 1)

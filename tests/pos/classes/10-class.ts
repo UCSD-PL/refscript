@@ -1,11 +1,11 @@
-declare class Foo{}
-
-/*@ bar :: () => {void | 0 < 1} */
-function bar() {}
-
-/*@ foo :: /\ (f: Foo<Mutable>) => {()=>void|0 < 1}
-           /\ (f: ()=>void) => {()=>void|0 < 1} */
-function foo(f:any) { 
-  return (typeof f === "function") ? f : bar
+class Foo<M extends ReadOnly>{
+    constructor() { }
 }
 
+export declare function bar(): void;
+
+export function foo(f: Foo<Mutable>): () => void;
+export function foo(f: () => void): () => void;
+export function foo(f: any): () => void {
+    return (typeof f === "function") ? f : bar
+}

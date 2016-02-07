@@ -9,9 +9,5 @@ export function where<T>(values: T[], f: (v: T) => boolean): T[] {
 			result.push(values[i]);
 		}
 	}
-
-	// It would be OK without this line
-	global = result;
-
 	return result;
 }

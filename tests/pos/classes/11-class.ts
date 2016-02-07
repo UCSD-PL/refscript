@@ -5,7 +5,7 @@ class FluidField<M extends Mutable> {
 
     constructor() { }
 
-    /*@ foo :: (x: {number | v = this.size}) : void */
+    /*@ foo(x: {number | v = this.size}) : void */
     foo(x) {
         this.foo(x);
     }

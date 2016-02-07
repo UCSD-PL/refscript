@@ -1,15 +1,16 @@
 //adapted from navier-stokes octane
+/*@ qualif Cmp  (v: int, x: a): v < len x  */
+
 
 class FluidField<R extends ReadOnly> {
 
-    //this should work even if we don't label the field as immutable
-    /*@ size : posint */
+    /*@ (Immutable) size : posint */
     private size = 5;
 
     constructor() { }
 
     /*@ foo({ IArray<number> | len v = this.size }) : void */
     public foo(x) {
-        x[this.size - 1] = 0
+        let y = x[this.size - 1];
     }
 }

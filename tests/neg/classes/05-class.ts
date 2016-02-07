@@ -1,16 +1,14 @@
-class Foo<A> { 
-	public f: A;  
-  /*@ new (x: A) => { Foo<M,A> | 0 < 1 } */
-	constructor(x: A) {
-		this.f = x;
-	}	
+
+class Foo<M extends ReadOnly, A> {
+    public f: A;
+
+    constructor(x: A) {
+        this.f = x;
+    }
 }
 
-/*@ p :: { number | v > 0 } */
-var p: number;
+let p: number = 0;
 
-var a = new Foo(p);
+let a: Foo<Immutable, number> = new Foo(p);
 
-if (a.f > 2) {
-  assert(a.f > 3);
-}
+assert(a.f > 0);

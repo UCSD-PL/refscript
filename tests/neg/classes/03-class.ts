@@ -1,11 +1,16 @@
 
-class Foo<A> { 
-	public f:A;
 
-  /*@ new (x: A) => { Foo<M,A> | 0 < 1 } */
-	constructor(x: A) { this.f = x; }
+class Foo<M extends ReadOnly, A> {
+
+	/*@ (Mutable) ffffff:  A */
+	public ffffff: A;
+
+  	constructor(x: A) {
+		this.ffffff = x;
+	}
+
 }
 
-var a = new Foo(1);
+let aaa = new Foo(1);
 
-assert(a.f === 2);
+assert(aaa.ffffff === 2);

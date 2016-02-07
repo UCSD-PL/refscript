@@ -880,7 +880,7 @@ tcCall γ ef@(DotRef l e f) _
   where
     checkAccess (Right (_, tRcvr))
       | isArrayLen tRcvr = checkArrayLength
-      | otherwise        = checkProp (getProp l γ f tRcvr)
+      | otherwise        = checkProp (ltracePP l ("getting prop " ++ ppshow f ++ " from " ++ ppshow tRcvr) <$> getProp l γ f tRcvr)
     checkAccess (Left er) = fatal er (ef, tBot)
 
     -- `array.length`
@@ -892,7 +892,7 @@ tcCall γ ef@(DotRef l e f) _
 
     -- Normal property access
     checkProp (Left er)   = tcError er
-    checkProp (Right tfs) = adjustOpt tfs . fst <$> tcExprT γ e (rcvrTy tfs)
+    checkProp (Right tfs) = adjustOpt tfs . fst <$> tcExprT γ e (ltracePP l ("Checking " ++ ppshow e) $ rcvrTy tfs)
 
     -- Add `or undef` in case of an optional field access
     adjustOpt tfs e_

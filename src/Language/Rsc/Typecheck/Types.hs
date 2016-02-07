@@ -48,8 +48,9 @@ module Language.Rsc.Typecheck.Types (
 
   --   # Tests
   , isTPrim, isTAny, isTTop, isTUndef, isTUnion, isTStr, isTBool
-  , isBvEnum, isTVar, maybeTObj, isTNull, isTVoid, isTFun
+  , isBvEnum, isTVar, isTNull, isTVoid, isTFun
   , isArrayType, isTBot, isTNum, isBV32
+  , maybeTObj, notNullObj
 
   --   # Predicates
   , isReqMember
@@ -298,6 +299,8 @@ isBV32    = isPrim TBV32
 isTVar   t | TVar _ _ <- t = True | otherwise = False
 isTUnion t | TOr  _ _ <- t = True | otherwise = False
 
+-- Type invariants
+--
 maybeTObj TRef{}     = True
 maybeTObj TObj{}     = True
 maybeTObj TClass{}   = True
@@ -305,6 +308,16 @@ maybeTObj TMod{}     = True
 maybeTObj (TAll _ t) = maybeTObj t
 maybeTObj (TOr ts _) = any maybeTObj ts
 maybeTObj _          = False
+
+notNullObj TRef{}     = True
+notNullObj TObj{}     = True
+notNullObj TClass{}   = True
+notNullObj TMod{}     = True
+notNullObj (TAll _ t) = notNullObj t
+notNullObj (TOr ts _) = all notNullObj ts
+notNullObj _          = False
+
+
 
 isTFun  TFun{}       = True
 isTFun (TAnd ts)     = all isTFun $ snd <$> ts

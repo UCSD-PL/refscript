@@ -357,11 +357,10 @@ addInvariant g t
     typeof t@(TRef{})      _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
     typeof t@(TObj{})      _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
     typeof   (TFun a b _)  _ = TFun a b typeofReft
-    typeof   (TOr ts r)    i = TOr (map (`typeof` i) ts) r
     typeof t               _ = t
 
     -- | Truthy
-    truthy t               | maybeTObj t
+    truthy t               | notNullObj t
                            = t `strengthen` F.reft (vv t) (F.eProp $ vv t)
                            | otherwise          = t
 

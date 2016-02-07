@@ -1,15 +1,11 @@
 //adapted from splay-typed-octane.ts
 
-class ListNode<M extends ReadOnly> {
-
-    /* new () => {ListNode<M> | 0 < 1 } */
-    constructor() { }
-
+interface ListNode<M extends ReadOnly> {
     /*@ right : ListNode<Immutable> + null */
-    public right = null;
-
+    right: ListNode<Immutable>;
 }
 
+/*@ traverse_ :: (x: ListNode<Immutable> + null) => void */
 export function traverse_(x: ListNode<Immutable>) {
 
     /*@ local current :: ListNode<Immutable> + null */

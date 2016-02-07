@@ -243,7 +243,7 @@ voidSym  = "Void"
 unionSym = "Union"
 topSym   = "Top"
 anySym   = "Any"
-nullSym  = "Tull"
+nullSym  = "Null"
 undefSym = "Undefined"
 
 objectSym, selfSym, classSym, moduleSym, enumSym, intersSym:: F.Symbol

@@ -400,9 +400,12 @@ tcVarDecl γ v@(VarDecl l x Nothing)
 
 
 --------------------------------------------------------------------------------
-tcClassElt :: Unif r => TCEnv r -> TypeDecl r -> ClassElt (AnnTc r) -> TCM r (ClassElt (AnnTc r))
+tcClassElt
+  :: Unif r
+  => TCEnv r -> TypeDecl r -> ClassElt (AnnTc r) -> TCM r (ClassElt (AnnTc r))
 --------------------------------------------------------------------------------
 -- | Constructor
+--
 tcClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
   = do  its    <- tcFunTys l ctor xs ctorTy
         body'  <- foldM (tcCallable γ' l ctor xs) body its
@@ -415,36 +418,40 @@ tcClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
            -- TODO: TEST THIS
     ctor   = builtinOpId BICtor
 
-    thisT = TRef (Gen nm (map btVar bs)) fTop
-    cExit = builtinOpId BICtorExit
-    viExit = SI (F.symbol cExit) Local Ambient Initialized $ mkFun (bs, xts, ret)
-    ret   = thisT
-    xts   = sortBy c_sym [ B x t' | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms)
-                                  , let t' = t ] -- unqualifyThis g0 thisT t ]
-    -- out   = [ f | (f, FI _ Final _) <- F.toListSEnv (i_mems ms) ]
-    -- v_sym = F.symbol $ F.vv Nothing
-    c_sym = on compare b_sym
+    thisT   = TRef (Gen nm (map btVar bs)) fTop
+    cExit   = builtinOpId BICtorExit
+    viExit  = SI (F.symbol cExit) Local Ambient Initialized $ mkFun (bs, xts, ret)
+    ret     = thisT
+
+    xts     = sortBy c_sym [ B x t | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
+
+    c_sym = on compare (show . b_sym)     -- XXX: Symbolic compare is on Symbol ID
     ctorTy = fromMaybe (die $ unsupportedNonSingleConsTy (srcPos l)) (tm_ctor ms)
 
 -- | Static field
-tcClassElt γ (TD sig ms) c@(MemberVarDecl l True x (Just e))
-  | Just (FI _ _ _ t) <- F.lookupSEnv (F.symbol x) $ i_mems ms
-  = do  ([e'],_) <- tcNormalCall γ l (builtinOpId BIFieldInit) [(e, Just t)] $ mkInitFldTy t
+--
+tcClassElt γ (TD sig ms) c@(MemberVarDecl l True x (Just e)) =
+  case F.lookupSEnv (F.symbol x) (s_mems ms) of
+    Just MI{} ->
+        tcError $ bugStaticField l x sig
+    Just (FI _ _ _ t) -> do
+        ([e'],_) <- tcNormalCall γ l (builtinOpId BIFieldInit) [(e, Just t)] (mkInitFldTy t)
         return $ MemberVarDecl l True x $ Just e'
-  | otherwise
-  = fatal (errorClassEltAnnot (srcPos l) sig x) c
+    Nothing ->
+        fatal (errorClassEltAnnot (srcPos l) sig x) c
 
 tcClassElt _ _ c@(MemberVarDecl l True x Nothing)
   = fatal (unsupportedStaticNoInit (srcPos l) x) c
 
 -- | Instance variable
+--
 tcClassElt _ _ m@(MemberVarDecl _ False _ Nothing)
   = return m
 tcClassElt _ _ (MemberVarDecl l False x _)
   = die $ bugClassInstVarInit (srcPos l) x
 
--- | Static method: The classes type parameters should not be included in the
--- environment
+-- | Static method: The classes type parameters should not be included in env
+--
 tcClassElt γ (TD sig ms) c@(MemberMethDecl l True x xs body)
   | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) $ s_mems ms
   = do  let t = mkAnd $ map snd mts

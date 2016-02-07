@@ -526,6 +526,8 @@ consExprT g e            t = consCall g l (builtinOpId BIExprT) [(e, Just t)] (i
 --------------------------------------------------------------------------------
 consClassElt :: CGEnv -> TypeDecl F.Reft -> ClassElt AnnLq -> CGM ()
 --------------------------------------------------------------------------------
+-- | Constructor
+--
 consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
   = do  let g = g0
               & initClassInstanceEnv sig
@@ -550,17 +552,20 @@ consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
             ]
     bnd f = F.PAtom F.Eq (mkOffsetSym v_sym $ symbolString f) (F.eVar f)
     v_sym = F.symbol $ F.vv Nothing
-    c_sym = on compare b_sym
+    c_sym = on compare (show . b_sym)
 
     ctorT = fromMaybe (die $ unsupportedNonSingleConsTy (srcPos l)) (tm_ctor ms)
 
 -- | Static field
 --
-consClassElt g (TD sig ms) (MemberVarDecl l True x (Just e))
-  | Just (FI _ _ _ t) <- F.lookupSEnv (F.symbol x) (s_mems ms)
-  = void $ consCall g l (builtinOpId BIFieldInit) [(e, Just t)] (mkInitFldTy t)
-  | otherwise
-  = cgError $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
+consClassElt g (TD sig ms) (MemberVarDecl l True x (Just e)) =
+  case F.lookupSEnv (F.symbol x) (s_mems ms) of
+    Just MI{} ->
+        cgError $ bugStaticField l x sig
+    Just (FI _ _ _ t) ->
+        void $ consCall g l (builtinOpId BIFieldInit) [(e, Just t)] (mkInitFldTy t)
+    Nothing ->
+        cgError $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
 
 consClassElt _ _ (MemberVarDecl l True x Nothing)
   = cgError $ unsupportedStaticNoInit (srcPos l) x

@@ -273,7 +273,7 @@ expandType _ cha (TPrim TString _)
 expandType _ cha (TPrim TBoolean _)
   = mkTObj . typeMemersOfTDecl cha <$> resolveType cha booleanInterface
 
-expandType _ _ t  = Just (TObj tRO mempty fTop)
+expandType _ _ _ = Just (TObj tRO mempty fTop)
 
 
 --------------------------------------------------------------------------------

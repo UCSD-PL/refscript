@@ -5,13 +5,11 @@ class BankAccount<M extends ReadOnly> {
 	/*@ g: { string | v = "a" } */
 	public g = "a";
 
+	/*@ new (x: any): BankAccount<Unique> */
 	constructor(x) {
 		this.g = x;
 	}
 }
 
 let ba = new BankAccount("a");
-
-
-
 ba.g = "b";

@@ -290,6 +290,8 @@ errorArrayLitCtxType l e      = mkErr l $ printf "Cannot type array literal '%s'
 errorNewExprCtxType l e       = mkErr l $ printf "Cannot type new expression '%s' without a contextual type." (ppshow e)
 unimpCondExpCtxType l e       = mkErr l $ show $ text "[Unimplemented] Cannot type conditional expression" $+$
                                                  nest 2 (pp e) $+$ text "without a contextual type."
+
+bugStaticField l f c          = mkErr l $ show $ text "[BUG] Invalid annotation for Static field" <+> ticks (pp f) <+> text "of class" <+> ticks (pp c)
 errorArrayLitType l e t       = mkErr l $ printf "Cannot cast array '%s' with non array type '%s'." (ppshow e) (ppshow t)
 bugArrayBIType l f t          = mkErr l $ printf "[BUG] Inconsistent built-in arrray literal ('%s') type '%s'." (ppshow f) (ppshow t)
 errorBoundSubt l v t          = mkErr l $ printf "Could not find a valid instantiation to satisfy the bound of '%s': '%s'" (ppshow v) (ppshow t)

@@ -466,7 +466,7 @@ ssaClassElt :: (Data r, PPR r) => SsaEnv r -> Statement (AnnSSA r)
             -> ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
 -------------------------------------------------------------------------------------
 ssaClassElt g c (Constructor l xs bd)
-  = do  pre       <- ltracePP l "preM" <$> preM c
+  = do  pre       <- preM c
         fs        <- mapM symToVar fields
         bfs       <- bdM fs
         efs       <- exitM fs

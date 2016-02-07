@@ -862,7 +862,7 @@ tcCall γ e@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3) _
 -- | `new e(e1,...,en)`
 tcCall γ c@(NewExpr l e es) s
   = do (e',t) <- tcExpr γ e Nothing
-       case extractCtor γ t of
+       case ltracePP l "CTOR" $ extractCtor γ t of
          Just ct -> do
             (es', tNew) <- tcNormalCallWD γ l (builtinOpId BICtor) es ct
             tNew'       <- pure (adjustCtxMut tNew s)

@@ -27494,7 +27494,7 @@ var ts;
                         [new ts.ConstructorDeclarationAnnotation(sourceSpan, "new " + checker.methodToRscString(signature, signatureDeclaration))] :
                         binderAnnotations;
                 }));
-                return [new ts.RsConstructor(nodeToSrcSpan(node), constructorDeclarationAnnotations, nodeArrayToRsAST(state, node.parameters, nodeToRsId), nodeArrayToRsAST(state, [], nodeToRsStmt))];
+                return [new ts.RsConstructor(nodeToSrcSpan(node), constructorDeclarationAnnotations, nodeArrayToRsAST(state, node.parameters, nodeToRsId), nodeArrayToRsAST(state, node.body.statements, nodeToRsStmt))];
             }
             function methodDeclarationToRsClassElts(state, node) {
                 var isAmbient = !!(node.flags & 2);

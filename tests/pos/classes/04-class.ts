@@ -29,9 +29,3 @@ class CP<M extends ReadOnly> extends P<M> implements ICPoint<M> {
         this.c = c;
     }
 }
-
-// class RCP<M extends ReadOnly> extends CP<M> {
-//     constructor() {
-//         super("red");
-//     }
-// }

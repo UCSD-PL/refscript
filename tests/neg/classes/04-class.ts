@@ -1,46 +1,32 @@
-interface IPoint {
-  /*@ x : { number | 0 < 1 } */
-  x: number;
-  /*@ y : { number | 0 < 1 } */
-  y: number;
+interface IPoint<M extends ReadOnly> {
+    x: number;
+    y: number;
 }
 
-interface INatPoint {
-  /*@ x : { number | v >= 0 } */
-  x: number;
-  /*@ y : { number | v >= 0 } */
-  y: number;
+interface INatPoint<M extends ReadOnly> {
+    /*@ x : posint */
+    x: number;
+    /*@ y : posint */
+    y: number;
 }
 
-
-interface IColorPoint extends IPoint {
-  c: string;
+interface IColorPoint<M extends ReadOnly> extends IPoint<M> {
+    c: string;
 }
 
+class A<M extends ReadOnly> {
+    /*@ a : { number | v > 0 } */
+    a: number;
 
-class A {
-
-  /*@ a : { number | v > 0 } */
-  a: number; 
-
-	/*@ foo : (): void */
-	private foo(): void {  }
-
-	/*@ bar: (x: #IPoint): void */
-	bar(x: IColorPoint): void {  }
-
-  constructor() {}
+    private foo(): void { }
+    bar(x: IColorPoint<M>): void { }
+    constructor() { }
 }
 
+class B<M extends ReadOnly> extends A<M> {
+    /*@ a : number */
+    a: number;
 
-class B extends A {
-
-  /*@ a : number */
-  a: number; 
-
-	/*@ bar : (x: #IColorPoint): void */
-	bar(x: IPoint): void {  }
-
-  constructor() { super(); }
-
+    bar(x: IPoint<M>): void { }
+    constructor() { super(); }
 }

@@ -384,7 +384,7 @@ tcVarDecl γ v@(VarDecl l x (Just e))
       -- Local (no type annotation)
       Nothing ->
         do  (e', to) <- tcExprW γ e
-            sio      <- pure (SI (F.symbol x) Local WriteLocal Initialized <$> ltracePP l x to)
+            sio      <- pure (SI (F.symbol x) Local WriteLocal Initialized <$> to)
             return (VarDecl l x (Just e'), tcEnvAddo γ x sio)
 
       -- Local (with type annotation)
@@ -440,11 +440,10 @@ tcClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
     viExit  = ltracePP l cExit $ SI (F.symbol cExit) Local Ambient Initialized $ mkFun (bs, xts, ret)
     ret     = thisT
 
-    -- xts     = sortBy c_sym [ B x t | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
-    --
     xts      = case expandType def (envCHA γ) thisT of
                 Just (TObj _ ms _ ) ->
                     sortBy c_sym [ B x t | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
+                _ -> []
 
     c_sym = on compare (show . b_sym)     -- XXX: Symbolic compare is on Symbol ID
     ctorTy = fromMaybe (die $ unsupportedNonSingleConsTy (srcPos l)) (tm_ctor ms)

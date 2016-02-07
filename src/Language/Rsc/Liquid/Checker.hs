@@ -545,8 +545,14 @@ consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
     exitP = [SI sExit Local Ambient Initialized $ mkFun (bs, xts, ret)]
 
     ret   = thisT `strengthen` F.reft (F.vv Nothing) (F.pAnd $ bnd <$> out)
-    xts   = sortBy c_sym [ B x t' | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms)
-                                  , let t' = unqualifyThis g0 thisT t ]
+
+    xts   = case expandType (EConf True False) (envCHA g0) thisT of
+              Just (TObj _ ms _ ) ->
+                  sortBy c_sym [ B x t' | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms)
+                                        , let t' = unqualifyThis g0 thisT t ]
+              _ -> []
+
+
     out   = [ f | (f, FI _ _ m _) <- F.toListSEnv (i_mems ms)
                 ,  isSubtype g0 m tIM
             ]

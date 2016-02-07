@@ -221,6 +221,7 @@ offsetLocSym    = F.dummyLoc offsetName
 undefinedId     = Id (srcPos dummySpan) "undefined"
 thisId l        = Id l "this"
 
+
 offsetName, thisSym, protoSym, argSym, getArgSym :: F.Symbol
 thisSym    = "this"
 protoSym   = "__proto__"

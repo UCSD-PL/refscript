@@ -1,3 +1,6 @@
+
+// Here we are not initializing `a` in contructor.
+
 class Greeter<M extends ReadOnly> {
     /*@ a : string */
     a;
@@ -5,8 +8,8 @@ class Greeter<M extends ReadOnly> {
     /*@ b : number */
     private b;
 
-    /*@ c : string */
-    private c = 1;
+    /*@ (Mutable) c : string */
+    private c = "1";
 
     /*@ d : number */
     public  d ;
@@ -18,7 +21,9 @@ class Greeter<M extends ReadOnly> {
     constructor(message) { }
 
     /*@ greet1(): void */
-    private greet1() { this.c = 1; }
+    private greet1() {
+        this.c = "a";
+    }
 
     /*@ greet2(): void */
     greet2() { }

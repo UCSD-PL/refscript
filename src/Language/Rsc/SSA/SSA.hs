@@ -466,7 +466,7 @@ ssaClassElt :: (Data r, PPR r) => SsaEnv r -> Statement (AnnSSA r)
             -> ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
 -------------------------------------------------------------------------------------
 ssaClassElt g c (Constructor l xs bd)
-  = do  pre       <- preM c
+  = do  pre       <- ltracePP l "preM" <$> preM c
         fs        <- mapM symToVar fields
         bfs       <- bdM fs
         efs       <- exitM fs
@@ -502,13 +502,23 @@ ssaClassElt g _ (MemberMethDecl l s e xs body)
 
 
 preM (ClassStmt _ _ cs)
-  = do  xs'      <- mapM freshenIdSSA xs
-        zipWith3M f ls xs' es
+  = do
+        -- Initialized
+        let (ls , xs , es) = unzip3 [(l, mkCtorId l x, e) | MemberVarDecl l False x (Just e) <- cs]
+        -- Uninitialized
+        let (ls1, xs1)     = unzip  [(l, mkCtorId l x)    | MemberVarDecl l False x Nothing  <- cs]
+
+        -- Initialize the latter with `undefined`
+        us                <- mapM (\l -> VarRef <$> fr l <*> freshenIdSSA undefinedId) ls1
+
+        xs'               <- mapM freshenIdSSA xs
+        xs1'              <- mapM freshenIdSSA xs1
+
+        zipWith3M f (ls ++ ls1) (xs' ++ xs1') (es ++ us)
   where
-    fr            = freshenAnn
-    (ls, xs, es)  = unzip3 [ (l, mkCtorId l x, e) | MemberVarDecl l False x (Just e) <- cs ]
-    f l x e       = VarDeclStmt <$> fr l <*> (single <$> g l x e)
-    g l x e       = VarDecl     <$> fr l <*> freshenIdSSA x <*> (Just <$> pure e)
+    fr              = freshenAnn
+    f l x e         = VarDeclStmt <$> fr l <*> (single <$> g l x e)
+    g l x e         = VarDecl     <$> fr l <*> freshenIdSSA x <*> (Just <$> pure e)
 
 preM _ = return []
 

@@ -35,11 +35,14 @@ module Language.Rsc.AST.Syntax (
   , Consume
   , onlyCtxTyped
 
+  , undefinedVar
+
   ) where
 
 import           Data.Default
-import           Data.Generics      (Data, Typeable)
+import           Data.Generics          (Data, Typeable)
 import           GHC.Generics
+import           Language.Rsc.Locations
 import           Language.Rsc.Names
 
 data JavaScript a   -- | A script in \<script\> ... \</script\> tags.
@@ -328,3 +331,5 @@ instance Consumable (Statement a) where
 onlyCtxTyped :: Expression t -> Bool
 onlyCtxTyped FuncExpr{} = True
 onlyCtxTyped _          = False
+
+undefinedVar    = VarRef (srcPos dummySpan) undefinedId

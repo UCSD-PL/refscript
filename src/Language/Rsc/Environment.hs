@@ -68,7 +68,8 @@ class CheckingEnvironment r t where
   --
   envCHA    :: t r -> ClassHierarchy r
 
-  -- | Class related
+  -- | Class related      --- XXX: Why is this necessary ????
+  --                      --- Just update the binding for `this`
   --
   --   * Method Mutability
   --

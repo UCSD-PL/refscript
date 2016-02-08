@@ -14,6 +14,7 @@ module Language.Rsc.AST.Syntax (
   , Statement(..)
   , ClassElt(..)
   , isIterationStmt
+  , isStaticClassElt
   , CaseClause(..)
   , CatchClause(..)
   , ForInit(..)
@@ -270,6 +271,11 @@ isIterationStmt s = case s of
   ForInStmt {}   -> True
   _              -> False
 
+
+isStaticClassElt :: ClassElt a -> Bool
+isStaticClassElt (Constructor _ _ _)        = False
+isStaticClassElt (MemberVarDecl _ s _ _)    = s
+isStaticClassElt (MemberMethDecl _ s _ _ _) = s
 
 -----------------------------------------------------------------------
 -- | Operators

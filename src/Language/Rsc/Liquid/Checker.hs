@@ -13,7 +13,7 @@ import           Control.Arrow                   (first)
 import           Control.Monad
 import           Data.Function                   (on)
 import qualified Data.HashMap.Strict             as HM
-import           Data.List                       (sortBy)
+import           Data.List                       (partition, sortBy)
 import           Data.Maybe                      (catMaybes, fromMaybe)
 import qualified Data.Text                       as T
 import           Language.Fixpoint.Misc
@@ -444,11 +444,14 @@ consStmt g s@FunctionStmt{}
 --  * Compute type for "this" and add that to the env as well.
 --
 consStmt g (ClassStmt l x ce)
-  = do  d <- resolveTypeM l g nm
-        mapM_ (consClassElt g d) ce
+  = do  d       <- resolveTypeM l g nm
+        gS      <- pure g
+        mapM_ (consStaticClassElt gS d) ceS
+        mapM_ (consInstanceClassElt g d) ceI
         return $ Just g
   where
-    nm = QN (cge_path g) (F.symbol x)
+    nm         = QN (cge_path g) (F.symbol x)
+    (ceS, ceI) = partition isStaticClassElt ce
 
 consStmt g (InterfaceStmt _ _)
   = return $ Just g
@@ -524,17 +527,46 @@ consExprT g e            t = consCall g l (builtinOpId BIExprT) [(e, Just t)] (i
 
 
 --------------------------------------------------------------------------------
-consClassElt :: CGEnv -> TypeDecl F.Reft -> ClassElt AnnLq -> CGM ()
+consStaticClassElt :: CGEnv -> TypeDecl F.Reft -> ClassElt AnnLq -> CGM ()
+--------------------------------------------------------------------------------
+
+-- | Static field
+--
+consStaticClassElt g (TD sig ms) (MemberVarDecl l True x (Just e)) =
+  case F.lookupSEnv (F.symbol x) (s_mems ms) of
+    Just MI{} ->
+        cgError $ bugStaticField l x sig
+    Just (FI _ _ _ t) ->
+        void $ consCall g l (builtinOpId BIFieldInit) [(e, Just t)] (mkInitFldTy t)
+    Nothing ->
+        cgError $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
+
+consStaticClassElt _ _ (MemberVarDecl l _ x Nothing)
+  = cgError $ unsupportedStaticNoInit (srcPos l) x
+
+-- | Static method
+--
+consStaticClassElt g (TD sig ms) (MemberMethDecl l True x xs body)
+  | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) (s_mems ms)
+  = do  let t = mkAnd $ map snd mts
+        its <- cgFunTys l x xs t
+        mapM_ (consCallable l g x xs body) its
+  | otherwise
+  = cgError  $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
+
+consStaticClassElt _ _ c = error (show $ pp "consStaticClassElt - not a static element: " $+$ pp c)
+
+
+--------------------------------------------------------------------------------
+consInstanceClassElt :: CGEnv -> TypeDecl F.Reft -> ClassElt AnnLq -> CGM ()
 --------------------------------------------------------------------------------
 -- | Constructor
 --
-consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
-  = do  let g = g0
-              & initClassInstanceEnv sig
-              & initClassCtorEnv sig
-        g'   <- cgEnvAdds l "ctor" exitP g
-        ts   <- cgFunTys l ctor xs ctorT
-        mapM_ (consCallable l g' ctor xs body) ts
+consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
+  = do  g2    <- initClassCtorEnv l sig g1
+        g3    <- cgEnvAdds l "ctor" (ltracePP l ("exitP") exitP) g2
+        ts    <- cgFunTys l ctor xs ctorT
+        mapM_ (consCallable l g3 ctor xs body) ts
   where
     thisT = TRef (Gen nm (map btVar bs)) fTop
     ctor  = builtinOpId BICtor
@@ -546,53 +578,20 @@ consClassElt g0 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
 
     ret   = thisT `strengthen` F.reft (F.vv Nothing) (F.pAnd $ bnd <$> out)
 
-    xts   = case expandType (EConf True False) (envCHA g0) thisT of
-              Just (TObj _ ms _ ) ->
-                  sortBy c_sym [ B x t' | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms)
-                                        , let t' = unqualifyThis g0 thisT t ]
-              _ -> []
+    xts   = case expandType (EConf True False) (envCHA g1) thisT of
+              Just (TObj _ ms _ ) -> sortBy c_sym (msToBs ms)
+              _                   -> []
 
+    msToBs ms = [ B x (unqualifyThis t) | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
 
-    out   = [ f | (f, FI _ _ m _) <- F.toListSEnv (i_mems ms)
-                ,  isSubtype g0 m tIM
-            ]
+    out       = [ f | (f, FI _ _ m _) <- F.toListSEnv (i_mems ms), isSubtype g1 m tIM ]
+
     bnd f = F.PAtom F.Eq (mkOffsetSym v_sym $ symbolString f) (F.eVar f)
     v_sym = F.symbol $ F.vv Nothing
     c_sym = on compare (show . b_sym)
 
     ctorT = fromMaybe (die $ unsupportedNonSingleConsTy (srcPos l)) (tm_ctor ms)
 
--- | Static field
---
-consClassElt g (TD sig ms) (MemberVarDecl l True x (Just e)) =
-  case F.lookupSEnv (F.symbol x) (s_mems ms) of
-    Just MI{} ->
-        cgError $ bugStaticField l x sig
-    Just (FI _ _ _ t) ->
-        void $ consCall g l (builtinOpId BIFieldInit) [(e, Just t)] (mkInitFldTy t)
-    Nothing ->
-        cgError $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
-
-consClassElt _ _ (MemberVarDecl l True x Nothing)
-  = cgError $ unsupportedStaticNoInit (srcPos l) x
-
--- | Instance variable (checked at constructor check)
---
-consClassElt _ _ (MemberVarDecl _ False _ Nothing)
-  = return ()
-
-consClassElt _ _ (MemberVarDecl l False x _)
-  = die $ bugClassInstVarInit (srcPos l) x
-
--- | Static method
---
-consClassElt g (TD sig ms) (MemberMethDecl l True x xs body)
-  | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) (s_mems ms)
-  = do  let t = mkAnd $ map snd mts
-        its <- cgFunTys l x xs t
-        mapM_ (consCallable l g x xs body) its
-  | otherwise
-  = cgError  $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
 
 -- | Instance method
 --
@@ -600,26 +599,35 @@ consClassElt g (TD sig ms) (MemberMethDecl l True x xs body)
 --         as a binder to this.
 --   TODO: Also might not need 'cge_this'
 --
-consClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
+consInstanceClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
   | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) (i_mems ms)
   = do  let (ms', ts) = unzip mts
         its          <- cgFunTys l x xs $ mkAnd ts
         let mts'      = zip ms' its
         mapM_ (\(m,t) -> do
-            g'   <- cgEnvAdds l "consClassElt-meth" [eThis] (mkEnv m)
-            consCallable l g' x xs body t
+            g1   <- initClassMethEnv l m sig g
+            g2   <- cgEnvAdds l "consInstanceClassElt-meth" [eThis] g1
+            consCallable l g2 x xs body t
           ) mts'
 
   | otherwise
   = cgError $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
   where
-    mkEnv m     = g
-                & initClassInstanceEnv sig
-                & initClassMethEnv m sig
     TS _ bgen _ = sig
     BGen nm bs  = bgen
     tThis       = TRef (Gen nm (map btVar bs)) fTop
     eThis       = SI thisSym Local RdOnly Initialized tThis
+
+-- | Instance variable (checked at constructor check)
+--
+consInstanceClassElt _ _ (MemberVarDecl _ _ _ Nothing)
+  = return ()
+
+consInstanceClassElt _ _ (MemberVarDecl l _ x _)
+  = die $ bugClassInstVarInit (srcPos l) x
+
+consInstanceClassElt _ _ c = error (show $ pp "consInstanceClassElt - not an instance element: " $+$ pp c)
+
 
 -- | `consExpr g e` returns:
 --

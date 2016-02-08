@@ -85,18 +85,9 @@ expandPred p = V.trans vis () ()
   where
     vis      :: V.Visitor () ()
     vis       = V.defaultVisitor { V.txExpr = tExpr }
-    tExpr _ e@(splitEApp -> Just (F.EVar f , es))
+    tExpr _ e@(F.splitEApp -> (F.EVar f , es))
               = maybe e (applyPAlias e f es) (envFindTy f p)
     tExpr _ e = e
-
-
--- TODO: Move to Language.Fixpoint.Types.Refinements
-splitEApp :: F.Expr -> Maybe (F.Expr, [F.Expr])
-splitEApp e@(F.EApp _ _) = Just $ go [] e
-  where
-    go acc (F.EApp f e)  = go (e:acc) f
-    go acc e             = (e, acc)
-splitEApp _              = Nothing
 
 
 applyPAlias p _ es a

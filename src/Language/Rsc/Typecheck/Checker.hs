@@ -18,7 +18,7 @@ import           Data.Default
 import           Data.Function                      (on)
 import           Data.Generics
 import qualified Data.IntMap.Strict                 as I
-import           Data.List                          (find, sortBy)
+import           Data.List                          (find, partition, sortBy)
 import           Data.Maybe                         (catMaybes, fromMaybe)
 import qualified Data.Traversable                   as T
 import           Language.Fixpoint.Misc             as FM
@@ -34,7 +34,7 @@ import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Lookup
-import           Language.Rsc.Misc                  (nths, single, zipWith3M, (&))
+import           Language.Rsc.Misc                  (nths, single, zipWith3M)
 import           Language.Rsc.Names
 import           Language.Rsc.Parser
 import           Language.Rsc.Pretty
@@ -50,6 +50,7 @@ import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Typecheck.Unify
 import           Language.Rsc.Types
 import           Language.Rsc.TypeUtilities
+import           Text.PrettyPrint.HughesPJ          (($+$))
 
 -- import           Debug.Trace                        hiding (traceShow)
 
@@ -358,10 +359,15 @@ tcStmt γ s@FunctionStmt{}
 -- | class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 tcStmt γ (ClassStmt l x ce)
   = do  d  <- resolveTypeM l γ rn
-        ms <- mapM (tcClassElt γ d) ce
-        return $ (ClassStmt l x ms, Just γ)
+        msS <- mapM (tcStaticClassElt γS d) ceS
+        msI <- mapM (tcInstanceClassElt γI d) ceI
+        return $ (ClassStmt l x (msS ++ msI), Just γ)
   where
-    rn = QN (envPath γ) (F.symbol x)
+    γS         = γ
+
+    γI         = γ
+    rn         = QN (envPath γ) (F.symbol x)
+    (ceS, ceI) = partition isStaticClassElt ce
 
 -- | module M { ... }
 tcStmt γ (ModuleStmt l n body)
@@ -417,22 +423,57 @@ tcVarDecl γ v@(VarDecl l x Nothing)
 
 
 --------------------------------------------------------------------------------
-tcClassElt
+tcStaticClassElt
+  :: Unif r
+  => TCEnv r -> TypeDecl r -> ClassElt (AnnTc r) -> TCM r (ClassElt (AnnTc r))
+--------------------------------------------------------------------------------
+
+-- | Static method: The classes type parameters should not be included in env
+--
+tcStaticClassElt γ (TD sig ms) c@(MemberMethDecl l True x xs body) =
+  case F.lookupSEnv (F.symbol x) (s_mems ms) of
+    Just FI{} ->
+        tcError $ bugStaticField l x sig
+    Just (MI _ _ mts) -> do
+        let t = mkAnd $ map snd mts
+        its <- tcFunTys l x xs t
+        body' <- foldM (tcCallable γ l x xs) body its
+        return $ MemberMethDecl l True x xs body'
+    Nothing ->
+        fatal (errorClassEltAnnot (srcPos l) (sig) x) c
+
+-- | Static field
+--
+tcStaticClassElt γ (TD sig ms) c@(MemberVarDecl l True x (Just e)) =
+  case F.lookupSEnv (F.symbol x) (s_mems ms) of
+    Just MI{} ->
+        tcError $ bugStaticField l x sig
+    Just (FI _ _ _ t) -> do
+        ([e'],_) <- tcNormalCall γ l (builtinOpId BIFieldInit) [(e, Just t)] (mkInitFldTy t)
+        return $ MemberVarDecl l True x $ Just e'
+    Nothing ->
+        fatal (errorClassEltAnnot (srcPos l) sig x) c
+
+tcStaticClassElt _ _ c@(MemberVarDecl l True x Nothing)
+  = fatal (unsupportedStaticNoInit (srcPos l) x) c
+
+tcStaticClassElt _ _ c = error (show $ pp "tcStaticClassElt - not a static element: " $+$ pp c)
+
+
+
+--------------------------------------------------------------------------------
+tcInstanceClassElt
   :: Unif r
   => TCEnv r -> TypeDecl r -> ClassElt (AnnTc r) -> TCM r (ClassElt (AnnTc r))
 --------------------------------------------------------------------------------
 -- | Constructor
 --
-tcClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
+tcInstanceClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
   = do  its    <- tcFunTys l ctor xs ctorTy
         body'  <- foldM (tcCallable γ' l ctor xs) body its
         return  $ Constructor l xs body'
   where
-    γ'     = γ
-           & initClassInstanceEnv sig
-           & initClassCtorEnv sig
-           & tcEnvAdd cExit viExit
-           -- TODO: TEST THIS
+    γ'     = tcEnvAdd cExit viExit (initClassCtorEnv sig γ)
     ctor   = builtinOpId BICtor
 
     thisT   = TRef (Gen nm (map btVar bs)) fTop
@@ -448,41 +489,12 @@ tcClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
     c_sym = on compare (show . b_sym)     -- XXX: Symbolic compare is on Symbol ID
     ctorTy = fromMaybe (die $ unsupportedNonSingleConsTy (srcPos l)) (tm_ctor ms)
 
--- | Static field
---
-tcClassElt γ (TD sig ms) c@(MemberVarDecl l True x (Just e)) =
-  case F.lookupSEnv (F.symbol x) (s_mems ms) of
-    Just MI{} ->
-        tcError $ bugStaticField l x sig
-    Just (FI _ _ _ t) -> do
-        ([e'],_) <- tcNormalCall γ l (builtinOpId BIFieldInit) [(e, Just t)] (mkInitFldTy t)
-        return $ MemberVarDecl l True x $ Just e'
-    Nothing ->
-        fatal (errorClassEltAnnot (srcPos l) sig x) c
-
-tcClassElt _ _ c@(MemberVarDecl l True x Nothing)
-  = fatal (unsupportedStaticNoInit (srcPos l) x) c
-
 -- | Instance variable
 --
-tcClassElt _ _ m@(MemberVarDecl _ False _ Nothing)
+tcInstanceClassElt _ _ m@(MemberVarDecl _ False _ Nothing)
   = return m
-tcClassElt _ _ (MemberVarDecl l False x _)
+tcInstanceClassElt _ _ (MemberVarDecl l False x _)
   = die $ bugClassInstVarInit (srcPos l) x
-
--- | Static method: The classes type parameters should not be included in env
---
-tcClassElt γ (TD sig ms) c@(MemberMethDecl l True x xs body) =
-  case F.lookupSEnv (F.symbol x) (s_mems ms) of
-    Just FI{} ->
-        tcError $ bugStaticField l x sig
-    Just (MI _ _ mts) -> do
-        let t = mkAnd $ map snd mts
-        its <- tcFunTys l x xs t
-        body' <- foldM (tcCallable γ l x xs) body its
-        return $ MemberMethDecl l True x xs body'
-    Nothing ->
-        fatal (errorClassEltAnnot (srcPos l) (sig) x) c
 
 -- | Instance method
 --
@@ -491,7 +503,7 @@ tcClassElt γ (TD sig ms) c@(MemberMethDecl l True x xs body) =
 --         as a binder to this.
 --   TODO: Also might not need 'tce_this'
 --
-tcClassElt γ (TD sig ms) c@(MemberMethDecl l False x xs bd)
+tcInstanceClassElt γ (TD sig ms) c@(MemberMethDecl l False x xs bd)
   | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) (i_mems ms)
   = do  let (ms', ts) = unzip mts
         its          <- tcFunTys l x xs $ mkAnd ts
@@ -501,15 +513,9 @@ tcClassElt γ (TD sig ms) c@(MemberMethDecl l False x xs bd)
   | otherwise
   = fatal (errorClassEltAnnot (srcPos l) (sig) x) c
   where
-    mkEnv m     = γ
-                & initClassInstanceEnv sig
-                & initClassMethEnv m sig
-                & tcEnvAdds [eThis]
-    TS _ bgen _ = sig
-    BGen nm bs  = bgen
-    tThis       = TRef (Gen nm (map btVar bs)) fTop
-    idThis      = Id l "this"
-    eThis       = (idThis, SI thisSym Local RdOnly Initialized tThis)
+    mkEnv m     = initClassMethEnv m sig γ
+
+tcInstanceClassElt _ _ c = error (show $ pp "tcInstanceClassElt - not an instance element: " $+$ pp c)
 
 
 -- | `tcExprT l fn γ e t` checks expression `e`

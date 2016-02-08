@@ -12,8 +12,7 @@
 module Language.Rsc.Liquid.Environment (
 
   -- * Initializers
-    initClassInstanceEnv
-  , initClassCtorEnv
+    initClassCtorEnv
   , initClassMethEnv
 
   -- * Fresh Templates for Unknown Refinement Types
@@ -155,32 +154,45 @@ checkSyms l m g ok x t = efoldRType h f F.emptySEnv [] t
     --                                   pp "errors"
 
 
--------------------------------------------------------------------------------
-initClassInstanceEnv :: TypeSig F.Reft -> CGEnv -> CGEnv
--------------------------------------------------------------------------------
-initClassInstanceEnv (TS _ (BGen _ bs) _) γ =
-  γ { cge_bounds = envAdds bts (cge_bounds γ) }
-  where
-    bts = [(s,t) | BTV s _ (Just t) <- bs]
 
--- Initializes mutability and type of 'this'
+-- | `initClassCtorEnv` makes `this` a Unique & Uninitialized binding
 -------------------------------------------------------------------------------
-initClassCtorEnv :: TypeSig F.Reft -> CGEnv -> CGEnv
+initClassCtorEnv :: IsLocated l => l -> TypeSig F.Reft -> CGEnv -> CGM CGEnv
 -------------------------------------------------------------------------------
-initClassCtorEnv (TS _ (BGen nm bs) _) γ
-  = γ { cge_mut   = Just tAF
-      , cge_this  = Just $ TRef (Gen nm (map btVar bs)) fTop }
+initClassCtorEnv l  (TS _ (BGen nm bs) _) g =
+    cgEnvAdds l "initClassCtorEnv" [eThis] g'
+  where
+    g'    = g { cge_bounds = envAdds bts (cge_bounds g)
+              , cge_this   = Just tThis
+              , cge_mut    = Just tUQ
+              }
+    bts   = [(s,t) | BTV s _ (Just t) <- bs]
+    tThis = adjUQ (TRef (Gen nm (map btVar bs)) fTop)
+    eThis = SI thisSym Local RdOnly Uninitialized tThis
+    adjUQ (TRef (Gen n (_:ps)) r) = TRef (Gen n (tUQ:ps)) r
+    adjUQ t                       = t
+
 
 -------------------------------------------------------------------------------
-initClassMethEnv :: Mutability -> TypeSig F.Reft -> CGEnv -> CGEnv
+initClassMethEnv
+  :: IsLocated l => l -> Mutability -> TypeSig F.Reft -> CGEnv -> CGM CGEnv
 -------------------------------------------------------------------------------
-initClassMethEnv m (TS _ (BGen nm bs) _) γ
-  = γ { cge_mut  = Just m
-      , cge_this = Just tThis
-      }
+initClassMethEnv l m (TS _ (BGen nm bs) _) g = do
+    cgEnvAdds l "initClassMethEnv" [eThis] g'
   where
+    g'    = g { cge_bounds  = envAdds bts (cge_bounds g)
+              , cge_this    = Just $ TRef (Gen nm (map btVar bs)) fTop
+              , cge_mut     = Just m
+              }
+    bts   = [(s,t) | BTV s _ (Just t) <- bs]
     tThis = TRef (Gen nm (map btVar bs)) fTop
+    eThis = SI thisSym Local RdOnly Initialized tThis
 
+
+
+--------------------------------------------------------------------------------
+-- | Cast access
+--------------------------------------------------------------------------------
 
 data Cast = CNo | CDead [Error] | CType Type
 

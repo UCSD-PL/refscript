@@ -73,7 +73,7 @@ module Language.Rsc.Names (
   , enumSym
   , extendsClassSym
   , extendsInterfaceSym
-  , offsetName
+  , offsetSym
 
   ) where
 
@@ -214,7 +214,7 @@ emptyPath = mkAbsPath []
 -- toLocSym        = F.dummyLoc . F.symbol
 extClassSym     = F.dummyLoc extendsClassSym     -- "extends_class"
 extInterfaceSym = F.dummyLoc extendsInterfaceSym --  "extends_interface"
-offsetLocSym    = F.dummyLoc offsetName
+offsetLocSym    = F.dummyLoc offsetSym
 
 -- ttagSym         = F.dummyLoc "ttag"
 -- hasPropertySym  = F.dummyLoc "hasProperty"
@@ -223,12 +223,12 @@ undefinedId     = Id (srcPos dummySpan) "undefined"
 thisId l        = Id l "this"
 
 
-offsetName, thisSym, protoSym, argSym, getArgSym :: F.Symbol
+offsetSym, thisSym, protoSym, argSym, getArgSym :: F.Symbol
 thisSym    = "this"
 protoSym   = "__proto__"
 argSym     = "arguments"
 getArgSym  = F.symbol getArgName
-offsetName = "offset"
+offsetSym  = "offset"
 
 ----------------------------------------------------------------------
 -- | Global Names

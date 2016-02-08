@@ -11,7 +11,6 @@ module Language.Rsc.Typecheck.Environment
     , initModuleEnv, initGlobalEnv
     , initClassCtorEnv, initClassMethEnv
     , initCallableEnv
-    , initClassInstanceEnv
     , tcEnvFindTy, resolveTypeM, tcEnvFindTyForAsgn
     , tcEnvFindReturn, tcEnvAdd, tcEnvAdds
     , tcEnvAddBounds
@@ -19,9 +18,6 @@ module Language.Rsc.Typecheck.Environment
     ) where
 
 import           Data.Data
-import           Data.Default
-import           Data.Function                  (on)
-import           Data.List                      (sortBy)
 import           Language.Fixpoint.Misc         (safeZip)
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors (die)
@@ -107,6 +103,9 @@ initGlobalEnv (Rsc { code = Src ss }) cha
 
 -- This will be called *last* on every contructor, method, function.
 -- It is transparent to the incoming environment's: path, cha, mut, this
+--
+-- TODO: Shadow `this` binding (in case this is a class context)
+--
 --------------------------------------------------------------------------------
 initCallableEnv :: (IsLocated l, Unif r)
                 => AnnTc r -> TCEnv r -> l
@@ -139,20 +138,38 @@ initCallableEnv l γ f fty xs s
     ts    = map b_type xts
     αs    = map btvToTV bs
 
+
+-- | `initClassCtorEnv` makes `this` a Unique & Uninitialized binding
 --------------------------------------------------------------------------------
-initClassInstanceEnv :: TypeSig r -> TCEnv r -> TCEnv r
+initClassCtorEnv :: Unif r => TypeSigQ AK r -> TCEnv r -> TCEnv r
 --------------------------------------------------------------------------------
-initClassInstanceEnv (TS _ (BGen _ bs) _) γ =
-  γ { tce_bounds = envAdds bts (tce_bounds γ) }
+initClassCtorEnv (TS _ (BGen nm bs) _) γ =
+    tcEnvAdd thisSym eThis γ'
   where
-    bts = [(s,t) | BTV s _ (Just t) <- bs]
+    γ'    = γ { tce_mut    = Just tUQ
+              , tce_this   = Just tThis
+              , tce_bounds = envAdds bts (tce_bounds γ)
+              }
+    bts   = [(s,t) | BTV s _ (Just t) <- bs]
+    tThis = adjUQ (TRef (Gen nm (map btVar bs)) fTop)
+    eThis = SI thisSym Local RdOnly Uninitialized tThis
+    adjUQ (TRef (Gen n (_:ps)) r) = TRef (Gen n (tUQ:ps)) r
+    adjUQ t                       = t
+
 
 --------------------------------------------------------------------------------
 initClassMethEnv :: Unif r => MutabilityR r -> TypeSig r -> TCEnv r -> TCEnv r
 --------------------------------------------------------------------------------
-initClassMethEnv m (TS _ (BGen nm bs) _) γ
-  = γ { tce_mut  = Just m
-      , tce_this = Just $ TRef (Gen nm (map btVar bs)) fTop }
+initClassMethEnv m (TS _ (BGen nm bs) _) γ =
+    tcEnvAdd thisSym eThis γ'
+  where
+    γ'    = γ { tce_bounds = envAdds bts (tce_bounds γ)
+              , tce_mut    = Just m
+              }
+    bts   = [(s,t) | BTV s _ (Just t) <- bs]
+    tThis = TRef (Gen nm (map btVar bs)) fTop
+    eThis = SI thisSym Local RdOnly Initialized tThis
+
 
 --------------------------------------------------------------------------------
 initModuleEnv :: (Unif r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnTc r)] -> TCEnv r
@@ -168,29 +185,6 @@ initModuleEnv γ n s = TCE nms bnds ctx pth cha mut tThis fnId
     tThis = Nothing
     fnId  = envFnId γ
 
--- initCallable will be called later on the result
---------------------------------------------------------------------------------
-initClassCtorEnv :: Unif r => TypeSigQ AK r -> TCEnv r -> TCEnv r
---------------------------------------------------------------------------------
-initClassCtorEnv (TS _ (BGen nm bs) _) γ
-  = γ { tce_names = envNames γ
-      , tce_mut   = Just tAF
-      , tce_this  = Just tThis
-      }
-  &  tcEnvAdd ctorExit ctorExitVI
-  where
-    ctorExitVI = SI (F.symbol "exit") Local Ambient Initialized exitTy
-    ctorExit = builtinOpId BICtorExit
-    -- XXX: * Keep the right order of fields
-    --      * Make the return object immutable to avoid contra-variance
-    --        checks at the return from the constructor.
-    exitTy   = mkFun (bs, xts, tThis)
-    xts      | Just (TObj _ ms _) <- expandType def (envCHA γ) tThis
-             = sortBy c_sym [ B x t | (x, FI _ _ _ t) <- F.toListSEnv $ i_mems ms ]
-             | otherwise
-             = []
-    c_sym    = on compare b_sym
-    tThis    = TRef (Gen nm (map btVar bs)) fTop
 
 
 --------------------------------------------------------------------------------

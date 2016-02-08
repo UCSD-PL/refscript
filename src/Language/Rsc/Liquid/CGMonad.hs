@@ -6,6 +6,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE ViewPatterns              #-}
 
 -- | Operations pertaining to Constraint Generation
 
@@ -57,7 +58,6 @@ import           Control.Arrow                   ((***))
 import           Control.Exception               (throw)
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
-import           Data.Default
 import qualified Data.HashMap.Strict             as HM
 import qualified Data.List                       as L
 import           Language.Fixpoint.Misc
@@ -65,9 +65,8 @@ import qualified Language.Fixpoint.Types         as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Types.Names   (symbolString)
 import           Language.Fixpoint.Types.Visitor (SymConsts (..))
+import qualified Language.Fixpoint.Types.Visitor as V
 import           Language.Rsc.Annotations
-import           Language.Rsc.AST
-import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.CmdLine
 import           Language.Rsc.Constraints
 import           Language.Rsc.Core.Env
@@ -75,12 +74,12 @@ import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
+import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.Symbols
 import qualified Language.Rsc.SystemUtils        as S
 import           Language.Rsc.Transformations
-import           Language.Rsc.Typecheck.Sub
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
@@ -421,20 +420,19 @@ substNoCapture xs (yts, rt)
     fSub                  = curry $ (***) b_sym F.eVar
     onT f (B s t)         = B s <$> f t
 
--- | Substitute occurences of 'this.f' in type @t'@, with 'f'
+
+-- | Substitute occurences of `offset(this, "f")` in type @t'@, with 'f'
 --------------------------------------------------------------------------------
-unqualifyThis :: CGEnv -> RefType -> RefType -> RefType
+unqualifyThis :: RefType -> RefType
 --------------------------------------------------------------------------------
-unqualifyThis g t = F.subst $ F.mkSubst fieldSu
+unqualifyThis = emapReft (\_ -> V.trans vis () ()) []
   where
-    fieldSu | Just (TObj _ fs _) <- expandType def (envCHA g) t
-            = [ subPair f | (f, FI _ _ m _) <- F.toListSEnv (i_mems fs)
-                          , isSubtype g m tIM ]
-            | otherwise
-            = []
-    this      = F.symbol $ builtinOpId BIThis
-    qFld x f  = qualifySymbol (F.symbol x) f
-    subPair f = (qFld this f, F.expr f)
+    vis      :: V.Visitor () ()
+    vis       = V.defaultVisitor { V.txExpr = tExpr }
+    tExpr _ (F.splitEApp -> (F.EVar o , [F.EVar th, F.ESym (F.SL c)]))
+              | o == offsetSym, th == thisSym = F.eVar c
+    tExpr _ e = e
+
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

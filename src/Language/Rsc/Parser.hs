@@ -36,7 +36,7 @@ import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Parser.Annotations
 import           Language.Rsc.Parser.Declarations ()
-import           Language.Rsc.Parser.Types        (pCtxFromList)
+import           Language.Rsc.Parser.Types
 import           Language.Rsc.Program
 import           Language.Rsc.Transformations
 import           Language.Rsc.Typecheck.Types
@@ -169,9 +169,12 @@ parseAnnotations ss
     h (FunctionDeclarationSpec t) = pCtxFromList (fst (bkAll (snd t)))
     h (FunctionExpressionSpec t)  = pCtxFromList (fst (bkAll t))
     h (InterfaceSpec t)           = pCtxFromList (b_args (sigTRef (typeSig t)))
-    h (ClassSpec t)               = pCtxFromList (b_args (sigTRef t))
+    h (ClassSpec t)               = classCtx (sigTRef t)
     h (MethodSpec t)              = mconcat (pCtxFromList . fst . bkAll . snd <$> m_ty t)
     h _                           = mempty
+
+    classCtx (BGen _ (b:bs)) = PContext (map btvToTV (b:bs)) (Just (btVar b))
+    classCtx (BGen _ _     ) = PContext [] Nothing
 
 
 --------------------------------------------------------------------------------

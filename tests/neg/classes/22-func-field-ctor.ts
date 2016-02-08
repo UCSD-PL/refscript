@@ -6,7 +6,7 @@ class Foo<M extends ReadOnly> {
     constructor() {
         /*@ _bar :: () => number */
         function _bar() {
-            return 3;
+            return -3;
         }
 
         this.bar = _bar;

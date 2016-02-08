@@ -1,15 +1,15 @@
 
 class A<M extends ReadOnly> {
 
-    /*@ (Immutable) x: number */
+    /*@  (Immutable) x: number */
     public x: number;
 
-    /*@ (Mutable) y: { number | v = x } */
+    /*@  (Mutable) y: { number | v = this.x } */
     public y: number;
 
     constructor(a: number) {
         this.x = a;
-        this.y = a + 1;
+        this.y = a;
     }
 
 }
@@ -17,6 +17,7 @@ class A<M extends ReadOnly> {
 export function foo(): void {
     let r = new A(29);
     let p = r.x;
+    r.y = 5;
     let q = r.y;
     assert(p === q);
 }

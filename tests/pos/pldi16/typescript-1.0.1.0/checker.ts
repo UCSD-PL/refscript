@@ -131,13 +131,19 @@ module ts {
             if (!node_id) {
                 node_id = nextNodeId++;
                 node.id = node_id;
-                /*@ local node_id_0 :: number + undefined */
-                var node_id_0 = node_id;
-                node_id = node_id_0;
+            }
+            else {
+                node_id = <number>node_id;
             }
             var n = nodeLinks[node_id];
-            if(n) { return n; }
-            else { var o = {}; nodeLinks[<number>node_id] = o; return o; }
+            if(n) {
+                return n;
+            }
+            else {
+                var o = {};
+                nodeLinks[<number>node_id] = o;
+                return o;
+            }
         }
 
         /*@ getSourceFile :: (node: INode + undefined) => undefined + { SourceFile<Immutable> | 0 < 1 } */

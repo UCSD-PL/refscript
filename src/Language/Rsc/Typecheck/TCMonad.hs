@@ -47,8 +47,6 @@ module Language.Rsc.Typecheck.TCMonad (
   -- * Verbosity / Options
   , whenLoud', whenLoud, whenQuiet', whenQuiet, getOpts, getAstCount
 
-  -- * Uniqueness
-  , isUniqueEnabled, enableUnique
 
   )  where
 
@@ -365,20 +363,6 @@ typecastM γ e t  = addAnn i fact >> wrapCast loc fact e
     loc          = fSrc (getAnnotation e)
     fact         = TypeCast ξ t
     ξ            = tce_ctx γ
-
-
---------------------------------------------------------------------------------
-enableUnique :: ExprSSAR r -> ExprSSAR r
---------------------------------------------------------------------------------
-enableUnique    = fmap (\a -> a { fFact = BypassUnique : fFact a })
-
---------------------------------------------------------------------------------
-isUniqueEnabled :: ExprSSAR r -> Bool
---------------------------------------------------------------------------------
-isUniqueEnabled = any isBypassUnique . fFact . getAnnotation
-  where
-    isBypassUnique BypassUnique = True
-    isBypassUnique _            = False
 
 
 -- | For the expression @e@, check the subtyping relation between the type @t1@

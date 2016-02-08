@@ -993,10 +993,13 @@ phiAsgn l g (x, (x1, x2))
         let s2 = mkPhiAsgn l x' x2                      -- for both branches
         return (s1, s2)
 
+
+-- XXX: Allowing the phi-var assignment to hold a unique reference, since we
+--      know this will not be escaping.
 -------------------------------------------------------------------------------------
 mkPhiAsgn :: AnnSSA r -> Id (AnnSSA r) -> Id (AnnSSA r) -> Statement (AnnSSA r)
 -------------------------------------------------------------------------------------
-mkPhiAsgn l x y = VarDeclStmt l [VarDecl l x (Just $ VarRef l y)]
+mkPhiAsgn l x y = VarDeclStmt l [VarDecl l x (Just $ enableUnique $ VarRef l y)]
 
 
 -- | `getLoopPhis g b` returns a list with the Φ-vars of the body @b@ of the

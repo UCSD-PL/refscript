@@ -21,6 +21,9 @@ module Language.Rsc.Annotations (
 
   , UAnnBare, UAnnSSA, UAnnTc, AnnInfo, UAnnInfo
 
+  -- * Uniqueness
+  , enableUnique, isUniqueEnabled
+
 ) where
 
 import           Data.Default
@@ -146,4 +149,19 @@ scrapeVarDecl (VarDecl l _ _)
   = [ (loc, VarDeclKind, a, t)                | VarAnn loc a t         <- fFact l ]
  ++ [ (Local, FieldDeclKind, Ambient, Just t) | MemberAnn (FI _ _ _ t) <- fFact l ]
  -- PV: Assignability & Locality values are default for the field case
+
+
+--------------------------------------------------------------------------------
+enableUnique :: Functor f => f (FAnnQ q r) -> f (FAnnQ q r)
+--------------------------------------------------------------------------------
+enableUnique e   = fmap (\a -> a { fFact = BypassUnique : fFact a }) e
+
+--------------------------------------------------------------------------------
+isUniqueEnabled :: Annotated a => a (FAnnQ q r) -> Bool
+--------------------------------------------------------------------------------
+isUniqueEnabled e = any isBypassUnique $ fFact $ getAnnotation e
+  where
+    isBypassUnique BypassUnique = True
+    isBypassUnique _            = False
+
 

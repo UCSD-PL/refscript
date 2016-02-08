@@ -127,17 +127,17 @@ module ts {
 
         /*@ getNodeLinks :: (node: INode) => { NodeLinks<Immutable> | 0 < 1 } */
         function getNodeLinks(node: Node): NodeLinks {
-            var node_id = node.id;
-            if (!node_id) {
-                node_id = nextNodeId++;
-                node.id = node_id;
-                /*@ local node_id_0 :: number + undefined */
-                var node_id_0 = node_id;
-                node_id = node_id_0;
-            }
+            var node_id = 0;
+            var tmp     = node.id;
+            if (tmp){ 
+              node_id = <number>tmp;
+            } else { 
+              node_id = nextNodeId++; 
+            } 
+            node.id = node_id;
             var n = nodeLinks[node_id];
             if(n) { return n; }
-            else { var o = {}; nodeLinks[<number>node_id] = o; return o; }
+            else { var o = {}; nodeLinks[node_id] = o; return o; }
         }
 
         /*@ getSourceFile :: (node: INode + undefined) => undefined + { SourceFile<Immutable> | 0 < 1 } */
@@ -152,7 +152,7 @@ module ts {
 
         /*@ createType :: (flags: bitvector32) => { Type<UniqueMutable> | type_flags(flags,v) } */
         function createType(flags: TypeFlags): Type {
-            /*@ result :: Type<UniqueMutable> */
+        /*@ result :: { Type<UniqueMutable> | type_flags(flags,v) } */ 
             var result = newType(checker, flags);
             result.id = typeCount++;
             return result;

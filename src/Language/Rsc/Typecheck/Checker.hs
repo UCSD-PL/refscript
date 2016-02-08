@@ -531,7 +531,7 @@ tcExprT :: Unif r => TCEnv r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RTyp
 --------------------------------------------------------------------------------
 tcExprT γ e t
   | onlyCtxTyped e
-  = tcExprWD γ (ltracePP e t e) (Just t)
+  = tcExprWD γ e (Just t)
   | otherwise
   = do  ([e'], _) <- tcNormalCall γ l (builtinOpId BIExprT) [(e, Just t)] (idTy t)
         return (e', t)
@@ -649,7 +649,7 @@ tcExpr _ e@(NullLit _) _
   = return (e, tNull)
 
 tcExpr γ e@(ThisRef l) _
-  = case tcEnvFindTy (F.symbol "this") γ of
+  = case tcEnvFindTy thisSym γ of
       Just t  -> return (e, t)
       Nothing -> fatal (errorUnboundId (fSrc l) "this") (e, tBot)
 

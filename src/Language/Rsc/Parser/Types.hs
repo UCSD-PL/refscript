@@ -148,7 +148,7 @@ optionP   = string "REALS" >> return RealOption
 
 interfaceP :: Parser (TypeDeclQ RK F.Reft)
 interfaceP
-  = do  _     <- reserved "interface"
+  = do  _     <- withinSpacesP (reserved "interface")
         s     <- typeSignatureP mempty InterfaceTDK
         bd    <- typeBodyP (pCtxFromSig s)
         return $ TD s bd

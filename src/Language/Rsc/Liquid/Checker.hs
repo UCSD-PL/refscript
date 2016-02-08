@@ -445,8 +445,7 @@ consStmt g s@FunctionStmt{}
 --
 consStmt g (ClassStmt l x ce)
   = do  d       <- resolveTypeM l g nm
-        gS      <- pure g
-        mapM_ (consStaticClassElt gS d) ceS
+        mapM_ (consStaticClassElt g d) ceS
         mapM_ (consInstanceClassElt g d) ceI
         return $ Just g
   where
@@ -609,17 +608,11 @@ consInstanceClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
         let mts'      = zip ms' its
         mapM_ (\(m,t) -> do
             g1   <- initClassMethEnv l m sig g
-            g2   <- cgEnvAdds l "consInstanceClassElt-meth" [eThis] g1
-            consCallable l g2 x xs body t
+            consCallable l g1 x xs body t
           ) mts'
 
   | otherwise
   = cgError $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
-  where
-    TS _ bgen _ = sig
-    BGen nm bs  = bgen
-    tThis       = TRef (Gen nm (map btVar bs)) fTop
-    eThis       = SI thisSym Local RdOnly Initialized tThis
 
 -- | Instance variable (checked at constructor check)
 --
@@ -901,8 +894,6 @@ consExpr g (NewExpr l e es) s
               Just   <$> cgEnvAddFresh "18" l tNew'' g2
         Nothing ->
             cgError $ errorConstrMissing (srcPos l) t
-  where
-    vv t = rTypeValueVar t
 
 -- | super
 --

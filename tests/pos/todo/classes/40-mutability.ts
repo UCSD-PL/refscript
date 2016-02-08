@@ -1,15 +1,12 @@
 // adapted from transducers
-declare class Foo<T> {}
-declare class Super<T> {}
 
-/*@ class Sub<M> extends Super<M, Foo<Mutable, number>> */
-declare class Sub extends Super<Foo<number>> {}
+class Foo<M extends ReadOnly, T> { constructor() {}}
+class Super<M extends ReadOnly, T> { constructor() {} }
 
-/*@ x :: Super<Immutable, Foo<Mutable, number>> */
-var x = new Sub();
+class Sub<M extends ReadOnly> extends Super<M, Foo<Mutable, number>> { constructor() { super(); } }
 
-/*@ class Sub2<M> extends Super<M, Array<Immutable, number>> */
-declare class Sub2 implements Super<Array<number>> {}
+let x: Super<Immutable, Foo<Mutable, number>> = new Sub();
 
-/*@ y :: Super<Immutable, Array<Immutable, number>> */
-var y = new Sub2();
+class Sub2<M extends ReadOnly> extends Super<M, Array<Immutable, number>> { constructor() { super(); }}
+
+let y: Super<Immutable, Array<Immutable, number>> = new Sub2<Immutable>();

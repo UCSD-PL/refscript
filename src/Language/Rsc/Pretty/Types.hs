@@ -166,12 +166,12 @@ instance (PP r, F.Reftable r) => PP (Rsc a r) where
                                 $+$ text "\n// CODE"
                                 $+$ pp s
     where
-      extras =  text "\nCONSTANTS"          $+$ nest 4 (pp (consts pgm))
-            $+$ text "\nPREDICATE ALIASES"  $+$ nest 4 (pp (pAlias pgm))
+      extras =  -- text "\nCONSTANTS"          $+$ nest 4 (pp (consts pgm)) $+$
+                text "\nPREDICATE ALIASES"  $+$ nest 4 (pp (pAlias pgm))
             $+$ text "\nTYPE ALIASES"       $+$ nest 4 (pp (tAlias pgm))
             -- $+$ text "\nQUALIFIERS"         $+$ nest 4 (vcat (F.toFix <$> take 3 (pQuals pgm)))
-            $+$ text "\nQUALIFIERS"         $+$ nest 4 (vcat (F.toFix <$> pQuals pgm))
-            $+$ text "..."
+            -- $+$ text "\nQUALIFIERS"         $+$ nest 4 (vcat (F.toFix <$> pQuals pgm))
+            -- $+$ text "..."
             $+$ text "\nINVARIANTS"         $+$ nest 4 (vcat (pp <$> invts pgm))
 
 instance (F.Reftable r, PP r) => PP (RSubst r) where

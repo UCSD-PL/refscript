@@ -185,8 +185,11 @@ initClassMethEnv l m (TS _ (BGen nm bs) _) g = do
               , cge_mut     = Just m
               }
     bts   = [(s,t) | BTV s _ (Just t) <- bs]
-    tThis = TRef (Gen nm (map btVar bs)) fTop
+    tThis = adjMut $ TRef (Gen nm (map btVar bs)) fTop
     eThis = SI thisSym Local RdOnly Initialized tThis
+
+    adjMut (TRef (Gen n (_:ps)) r) = TRef (Gen n (m:ps)) r
+    adjMut t                       = t
 
 
 

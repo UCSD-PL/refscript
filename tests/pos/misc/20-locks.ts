@@ -1,5 +1,5 @@
-/*@ qualif Locked(v:number): v != 0    */    
-/*@ qualif Unlocked(v:number): v = 0  */    
+/*@ qualif Locked(v: int): v != 0    */
+/*@ qualif Unlocked(v: int): v = 0  */    
 
 /*@ create :: () => number */
 function create():number{
@@ -25,16 +25,16 @@ function work():void{
 
 /*@ loop :: (number, number) => number */
 function loop(n:number, l:number) {
-  
+
 	let flag :number= random();
 	if (n <= 0) {
 		return l;
 	}
-	
-	l = acquire(l); 
+
+	l = acquire(l);
 	work();
 	l = release(l);
-	
+
 	return loop(n-1, l);
 }
 
@@ -45,4 +45,3 @@ function main(n){
 	loop(n, l);
 	assert(l === 0);
 }
-

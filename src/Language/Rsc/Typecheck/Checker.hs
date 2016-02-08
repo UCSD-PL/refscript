@@ -1053,14 +1053,21 @@ tcCallCaseTry γ l fn ts ((i,ft):fts)
       (βs, its1, _)  <- instantiateFTy l (tce_ctx γ) fn ft
       ts1            <- zipWithM (instantiateTy l $ tce_ctx γ) [1..] ts
       θ              <- unifyTypesM (srcPos l) γ ts1 its1
-      (ts2, its2)    <- pure (apply θ (ts1, its1))
-      (ts', cs)      <- pure (unzip [(t, c) | (t, BTV _ _ (Just c)) <- zip ts2 βs])
-      if ts' <:: cs && ts2 <:: its2 then
+
+      let (ts2, its2) = apply θ (ts1, its1)
+
+      --  1. Pick the type variables (V) that have a bound (B).
+      --  2. Find the binding that the unification braught to them (T := V θ).
+      let (appVs, cs) = unzip [(apply θ (btVar bv), c) | bv@(BTV _ _ (Just c)) <- βs]
+
+      --  3. Use that to check against the bound B.
+      --  4. Also check the argument types.
+      if appVs <:: cs && ts2 <:: its2 then
           return $ Just θ
       else
           return Nothing
 
-    ts1 <:: ts2 = and (zipWith (isSubtype γ) ts1 ts2)
+    (<::) ts1 ts2 = and (zipWith (isSubtype γ) ts1 ts2)
 
 --------------------------------------------------------------------------------
 tcCallCase :: (PP a, Unif r)
@@ -1070,11 +1077,19 @@ tcCallCase γ@(tce_ctx -> ξ) l fn es ts ft
   = do  (βs, rhs, ot)   <- instantiateFTy l ξ fn ft
         lhs             <- zipWithM (instantiateTy l ξ) [1..] ts
         θ               <- unifyTypesM (srcPos l) γ lhs rhs
-        θβ              <- pure $ fromList [ (TV s l_, t) | BTV s l_ (Just t) <- βs ]
-        θ'              <- pure $ θ `mappend` θβ
-        (lhs', rhs')    <- pure (apply θ' (lhs, rhs))
+
+        let (vs, appVs, cs)  = unzip3 [ (s, apply θ (btVar bv), c) | bv@(BTV s l (Just c)) <- βs
+                                                            , not (unassigned (TV s l) θ) ]
+
+        unless (appVs <:: cs) (tcError (errorBoundsInvalid l vs appVs cs))
+
+        let (lhs', rhs') = apply θ (lhs, rhs)
+
         es'             <- zipWith3M (castMC γ) es lhs' rhs'
         return           $ (es', apply θ ot)
+
+  where
+    (<::) ts1 ts2 = and (zipWith (isSubtype γ) ts1 ts2)
 
 --------------------------------------------------------------------------------
 instantiateTy :: Unif r => AnnTc r -> IContext -> Int -> RType r -> TCM r (RType r)

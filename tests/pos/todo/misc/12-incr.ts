@@ -25,4 +25,3 @@ function bar(x:number):number{
     z = incrBy(x++, x++);
     return x;
 }
-

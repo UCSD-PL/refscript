@@ -28,6 +28,7 @@ unitTests = group "Unit"
   , testGroup "pos-union"      <$> dirTests rscCmd "tests/pos/unions"       [] ExitSuccess
   , testGroup "pos-class"      <$> dirTests rscCmd "tests/pos/classes"      [] ExitSuccess
   , testGroup "pos-loop"       <$> dirTests rscCmd "tests/pos/loops"        [] ExitSuccess
+  , testGroup "pos-misc"       <$> dirTests rscCmd "tests/pos/misc"         [] ExitSuccess
 
   , testGroup "pos-operators"  <$> dirTests rscCmd "tests/pos/operators"    [] ExitSuccess
   , testGroup "neg-object"     <$> dirTests rscCmd "tests/neg/objects"      [] (ExitFailure 1)

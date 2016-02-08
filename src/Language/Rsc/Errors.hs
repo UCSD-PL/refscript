@@ -149,6 +149,13 @@ errorObjSubtype l t t' fs     = mkErr l $ show $ text "Object type:"         $+$
                                                  text "The former is missing field(s):" <+>
                                                  intersperse comma (map (ticks . pp) fs)
 
+errorBoundsInvalid l vs ts cs  = mkErr l $ show $ text "The inferred types:" $+$
+                                                 nest 2 (intersperse comma (map pp ts))  $+$
+                                                 text "for the type variables:" $+$
+                                                 nest 2 (intersperse comma (map pp vs))  $+$
+                                                 text "are not subtypes of the bounds:" $+$
+                                                 nest 2 (intersperse comma (map pp cs))
+
 -- Typechecking
 ppBind (a,b) = pp a <+> dcolon <+> pp b
 

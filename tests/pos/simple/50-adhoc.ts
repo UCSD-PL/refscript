@@ -7,7 +7,7 @@ interface NumberGenerator<M extends ReadOnly> {
 
 export function foo(): NumberGenerator<Immutable> {
     return {
-        generate: function() /*@ <anonymous>  () => { number | true } */ {
+        generate: function() {
             return 3;
         }
     }

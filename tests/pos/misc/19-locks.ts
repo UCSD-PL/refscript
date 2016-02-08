@@ -1,4 +1,4 @@
-/*@ qualif CondLock1(v:number,x:number): v = (if (0 <= x) then 1 else 0)  */    
+/*@ qualif CondLock1(v: int, x: int): v = (if (0 <= x) then 1 else 0)  */    
 
 /*@ create :: () => number */
 function create():number{
@@ -30,4 +30,3 @@ function main():void{
 	if (0 <= x){ l = release(l); }
 	assert(l === 0);
 }
-

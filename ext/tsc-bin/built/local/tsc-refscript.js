@@ -27207,6 +27207,7 @@ var ts;
                     case ts.SyntaxKind.PlusToken:
                     case ts.SyntaxKind.MinusToken:
                     case ts.SyntaxKind.EqualsEqualsEqualsToken:
+                    case ts.SyntaxKind.ExclamationEqualsEqualsToken:
                     case ts.SyntaxKind.AmpersandAmpersandToken:
                     case ts.SyntaxKind.BarBarToken:
                     case ts.SyntaxKind.AsteriskToken:

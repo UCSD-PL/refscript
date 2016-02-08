@@ -4,7 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
-module Language.Rsc.Typecheck.Unify (unifys) where
+module Language.Rsc.Typecheck.Unify (unifys, unassigned) where
 
 import           Control.Monad                      (foldM)
 import           Data.Function                      (on)

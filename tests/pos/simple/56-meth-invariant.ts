@@ -4,7 +4,7 @@
 //adapted from navier-stokes
 export class Foo<M extends ReadOnly> {
 
-    /*@ @Final size: {number | v > 0} */
+    /*@ (Immutable) size: {number | v > 0} */
     size = 5;
 
     constructor() { }
@@ -13,7 +13,7 @@ export class Foo<M extends ReadOnly> {
     bar(x) {
         assert(this.size - 1 >= 0);
         assert(this.size - 1 < x.length);
-        x[this.size - 1] = 0;
+        let a = x[this.size - 1]; //  = 0;
     }
 
 }

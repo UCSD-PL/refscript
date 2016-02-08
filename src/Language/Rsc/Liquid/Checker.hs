@@ -303,8 +303,9 @@ consFun _ (FunctionStmt _ _ _ Nothing)
   = return ()
 consFun g (FunctionStmt l f xs (Just body))
   = case envFindTy f (cge_names g) of
-      Just s  -> cgFunTys l f xs (v_type s)
-             >>= mapM_ (consCallable l g f xs body)
+      Just s  -> do
+          ft <- cgFunTys l f xs (v_type s)
+          mapM_ (consCallable l g f xs body) ft
       Nothing -> cgError $ errorMissingSpec (srcPos l) f
 
 consFun _ s
@@ -947,6 +948,10 @@ consCall g l fn ets ft@(validOverloads g l fn -> fts)
 
 -- | `consCheckArgs` does the subtyping between the types of the arguments
 --   @xes@ and the formal paramaters of @ft@.
+--
+--
+--    TODO: check bounds ??? (like in TC)
+--
 --------------------------------------------------------------------------------
 consCheckArgs :: PP a => AnnLq -> CGEnv -> a
                       -> RefType                          -- Function spec

@@ -120,7 +120,7 @@ mkRelRsc ss = Rsc {
     anns              = concatMap (FO.foldMap snd) ss
 
 --------------------------------------------------------------------------------
-scrapeQuals :: RelRefScript -> RelRefScript
+scrapeQuals :: Rsc (FAnnQ q F.Reft) r -> Rsc (FAnnQ q F.Reft) r
 --------------------------------------------------------------------------------
 scrapeQuals p@(Rsc { code = Src c }) = p { pQuals = pQuals p ++ Q.scrapeQuals c }
 

@@ -372,7 +372,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
               Left e -> cgError e
               Right (unzip -> (ts, fs)) -> do
                   subType l Nothing g1 t1 (tOr ts)
-                  tus <- pure [ (t,()) | FI _ _ _ t <- fs ]
+                  tus <- pure [ ( substThis x1 t, ()) | FI _ _ _ t <- fs ]
                   z   <- consScan (\g_ -> const . consExprT g_ e2) g1 tus
                   return (fmap snd z)
 
@@ -564,7 +564,7 @@ consInstanceClassElt :: CGEnv -> TypeDecl F.Reft -> ClassElt AnnLq -> CGM ()
 --
 consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
   = do  g2    <- initClassCtorEnv l sig g1
-        g3    <- cgEnvAdds l "ctor" (ltracePP l ("exitP") exitP) g2
+        g3    <- cgEnvAdds l "ctor" exitP g2
         ts    <- cgFunTys l ctor xs ctorT
         mapM_ (consCallable l g3 ctor xs body) ts
   where
@@ -576,17 +576,20 @@ consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body
     -- substOffsetThis exitTy ???
     exitP = [SI sExit Local Ambient Initialized $ mkFun (bs, xts, ret)]
 
-    ret   = thisT `strengthen` F.reft (F.vv Nothing) (F.pAnd $ bnd <$> out)
+    ret   = unqualifyThis $ thisT `strengthen` F.reft (F.vv Nothing) (F.pAnd $ bnd <$> out)
+                                  `strengthen` F.exprReft thisSym
 
     xts   = case expandType (EConf True False) (envCHA g1) thisT of
               Just (TObj _ ms _ ) -> sortBy c_sym (msToBs ms)
               _                   -> []
 
+    -- unqualifyThis :: offset(this, "f") ==> f
     msToBs ms = [ B x (unqualifyThis t) | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
 
     out       = [ f | (f, FI _ _ m _) <- F.toListSEnv (i_mems ms), isSubtype g1 m tIM ]
 
     bnd f = F.PAtom F.Eq (mkOffsetSym v_sym $ symbolString f) (F.eVar f)
+
     v_sym = F.symbol $ F.vv Nothing
     c_sym = on compare (show . b_sym)
 

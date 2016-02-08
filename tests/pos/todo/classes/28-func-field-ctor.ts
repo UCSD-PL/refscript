@@ -1,11 +1,11 @@
 
-class Foo {
+class Foo<M extends ReadOnly> {
 
-  public bar: () => number;
-  /*@ new () => { Foo<M> | 0 < 1 } */
-  constructor() {
-    this.bar = function() 
-    /*@ <anonymous> () => number */
-    { return -3; }
-  }
+    public bar: () => number;
+
+    constructor() {
+        this.bar = function() {
+            return -3;
+        }
+    }
 }

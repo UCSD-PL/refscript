@@ -2,7 +2,7 @@
 
 /*@ qualif CmpZ(v:number): v = 1  */
 
-class A {
+class A<M extends ReadOnly> {
   /*@ x : { number | v = 1 } */
   public x = 1;
   /*@ y : { number | v = 1 } */
@@ -10,11 +10,9 @@ class A {
   constructor() {  }
 }
 
-/*@ foo :: () => {void | 0 < 1} */
-function foo(){
-  var r = new A();
-  var p = r.x;
-  var q = r.y;
-  assert (p === q); 
+export function foo(): void {
+  let r = new A();
+  let p = r.x;
+  let q = r.y;
+  assert (p === q);
 }
-

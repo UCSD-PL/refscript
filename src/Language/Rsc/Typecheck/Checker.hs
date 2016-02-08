@@ -531,7 +531,7 @@ tcExprT :: Unif r => TCEnv r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RTyp
 --------------------------------------------------------------------------------
 tcExprT γ e t
   | onlyCtxTyped e
-  = tcExprWD γ e (Just t)
+  = tcExprWD γ (ltracePP e t e) (Just t)
   | otherwise
   = do  ([e'], _) <- tcNormalCall γ l (builtinOpId BIExprT) [(e, Just t)] (idTy t)
         return (e', t)

@@ -1,24 +1,22 @@
 
-class A {
-  
-  /*@ x: [Immutable] number */
-  public x: number;
+class A<M extends ReadOnly> {
 
-  /*@ y : [Mutable] { number | v = x } */
-  public y: number;
+    /*@ (Immutable) x: number */
+    public x: number;
 
-  constructor(a: number) {
-    this.x = a;
-    this.y = a + 1;
-  }
+    /*@ (Mutable) y: { number | v = x } */
+    public y: number;
+
+    constructor(a: number) {
+        this.x = a;
+        this.y = a + 1;
+    }
 
 }
 
-/*@ foo :: () => {void | 0 < 1} */
-function foo(){
-  var r = new A(29);
-  var p = r.x;
-  var q = r.y;
-  assert (p === q); 
+export function foo(): void {
+    let r = new A(29);
+    let p = r.x;
+    let q = r.y;
+    assert(p === q);
 }
-

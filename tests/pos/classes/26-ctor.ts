@@ -16,5 +16,5 @@ class Foo<M extends ReadOnly> {
     }
 }
 
-// let z = new Foo(5);
-// z.bar(5);
+let z = new Foo(5);
+z.bar(5);

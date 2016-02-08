@@ -782,8 +782,9 @@ consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
     isVariadicCall f_ = F.symbol f_ == F.symbol "call"
 
     checkNonVariadic =
-      mseq (consExpr g e Nothing) $ \(xR, g') ->
-        cgSafeEnvFindTyM xR g' >>= checkWithProp xR g' . getProp l g' f
+      mseq (consExpr g e Nothing) $ \(xR, g') -> do
+        tR  <- cgSafeEnvFindTyM xR g'
+        checkWithProp xR g' (getProp l g' f tR)
 
     -- Only support single members at the moment
     checkWithProp xR g_ (Right [(tR, m)]) = checkTM xR g_ tR m
@@ -890,15 +891,18 @@ consExpr g (ObjectLit l pes) to
 --
 consExpr g (NewExpr l e es) s
   = mseq (consExpr g e Nothing) $ \(x,g1) -> do
-      t <- cgSafeEnvFindTyM x g1
+      t <-  cgSafeEnvFindTyM x g1
       case extractCtor g1 t of
         Just ct ->
             mseq (consCall g1 l (builtinOpId BICtor) (es `zip` nths) ct) $ \(x, g2) -> do
               tNew    <- cgSafeEnvFindTyM x g2
               tNew'   <- pure (adjustCtxMut tNew s)
-              Just   <$> cgEnvAddFresh "18" l tNew' g2
+              tNew''  <- pure (substThis (rTypeValueVar tNew') tNew')
+              Just   <$> cgEnvAddFresh "18" l tNew'' g2
         Nothing ->
             cgError $ errorConstrMissing (srcPos l) t
+  where
+    vv t = rTypeValueVar t
 
 -- | super
 --

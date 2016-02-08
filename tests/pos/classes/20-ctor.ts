@@ -9,5 +9,5 @@ class AA<M extends ReadOnly> {
     constructor() { }
 }
 
-// let aa = new AA();
-// assert(aa.x === aa.y);
+let aa = new AA();
+assert(aa.x === aa.y);

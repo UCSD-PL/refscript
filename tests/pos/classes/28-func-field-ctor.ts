@@ -4,8 +4,8 @@ class Foo<M extends ReadOnly> {
     public bar: () => number;
 
     constructor() {
-        this.bar = function() {
-            return -3;
+        this.bar = <() => number> function() {
+            return 3;
         }
     }
 }

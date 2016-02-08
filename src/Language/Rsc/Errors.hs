@@ -128,7 +128,9 @@ errorUniqueRef l x            = mkErr l $ show $ text "Cannot have a unique refe
 errorUniqueAsgn l x           = mkErr l $ show $ text "Cannot re-assign unique reference:" <+> ticks (pp x) <> pp "." $+$
                                                  text "Try casting" <+> ticks (pp x) <+> text "to a non-unique type."
 errorMutUnknown l t           = mkErr l $ show $ sep [text "Unknown mutability modifier:", nest 2 (pp t)]
-bugMutPartInvalid l t         = mkErr l $ show $ sep [text "[BUG] Invalid mutability part of types:", nest 2 (pp t)]
+bugMutPartInvalid l t t'      = mkErr l $ show $ text "[BUG] Invalid mutability part of types:" $+$
+                                                 nest 2 (pp t) $+$ text "and" $+$
+                                                 nest 2 (pp t')
 errorMutInvalid l t t'        = mkErr l $ show $ sep [text "Invalid mutability type(s):", nest 2 (pp t), text "or", nest 2 (pp t')]
 
 errorIncompCallSigs l t t'    = mkErr l $ printf "Types '%s' and '%s' have incompatible call signatures." (ppshow t) (ppshow t')

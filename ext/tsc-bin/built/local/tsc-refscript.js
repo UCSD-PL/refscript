@@ -12417,7 +12417,7 @@ var ts;
                 }
                 function writeTypeReference(type, flags) {
                     var typeArguments = type.typeArguments;
-                    if (type.target === globalArrayType && !(flags & 1)) {
+                    if (type.target === globalArrayType && !(flags & 1) && !refscript) {
                         writeType(typeArguments[0], 64);
                         writePunctuation(writer, ts.SyntaxKind.OpenBracketToken);
                         writePunctuation(writer, ts.SyntaxKind.CloseBracketToken);
@@ -12709,6 +12709,9 @@ var ts;
                 buildTypeDisplay(returnType, writer, enclosingDeclaration, flags, symbolStack);
             }
             function buildSignatureDisplay(signature, writer, enclosingDeclaration, flags, symbolStack) {
+                // if (refscript) {
+                //    flags = TypeFormatFlags.NoTruncation | TypeFormatFlags.WriteArrayAsGenericType | TypeFormatFlags.UseFullyQualifiedType;
+                // }
                 if (signature.target && (flags & 32)) {
                     buildDisplayForTypeArgumentsAndDelimiters(signature.target.typeParameters, signature.mapper, writer, enclosingDeclaration);
                 }
@@ -27173,7 +27176,7 @@ var ts;
             }
             function typeAssertionExpressionToRsExp(state, node) {
                 var type = checker.getTypeAtLocation(node.type);
-                var annotation = new ts.CastAnnotation(nodeToSrcSpan(node.type), checker.typeToString(type, node.type));
+                var annotation = new ts.CastAnnotation(nodeToSrcSpan(node.type), checker.typeToString(type, node.type, 1));
                 return new ts.RsCast(nodeToSrcSpan(node), [annotation], nodeToRsExp(state, node.expression));
             }
             function conditionalExpressionToRsExp(state, node) {
@@ -27238,7 +27241,7 @@ var ts;
                     throw new Error("[refscript] Object and array binding patterns are not supported.");
                 }
                 var name = ts.getTextOfNode(declaration.name);
-                var typeStr = checker.typeToString(checker.getTypeAtLocation(declaration), declaration);
+                var typeStr = checker.typeToString(checker.getTypeAtLocation(declaration), declaration, 4 | 1);
                 var mkVarDeclAnn = function (rawContent, srcSpan, node) {
                     return ts.makeVariableDeclarationAnnotation(rawContent, srcSpan, node, name, typeStr);
                 };
@@ -27289,7 +27292,7 @@ var ts;
                         var s = ts.getTextOfNode(typeParameter.name);
                         if (typeParameter.constraint) {
                             s += " extends ";
-                            s += checker.typeToString(checker.getTypeAtLocation(typeParameter.constraint), typeParameter.constraint);
+                            s += checker.typeToString(checker.getTypeAtLocation(typeParameter.constraint), typeParameter.constraint, 1);
                         }
                         return s;
                     }).join(", "));
@@ -27359,7 +27362,7 @@ var ts;
                                 else {
                                     var propertyType = checker.getTypeAtLocation(member);
                                     var optionText = (member.questionToken) ? "?" : "";
-                                    return [ts.getTextOfNode(member.name) + ": " + checker.typeToString(propertyType, member)];
+                                    return [ts.getTextOfNode(member.name) + ": " + checker.typeToString(propertyType, member, 1)];
                                 }
                             case ts.SyntaxKind.CallSignature:
                                 var callAnnotations = nodeAnnotations(member, ts.makeCallAnnotations);
@@ -27388,7 +27391,7 @@ var ts;
                         annotationText += ts.angles(node.typeParameters.map(function (a) { return a.name.text; }).join(", "));
                     }
                     annotationText += " = ";
-                    annotationText += checker.typeToString(checker.getTypeAtLocation(node.type), node);
+                    annotationText += checker.typeToString(checker.getTypeAtLocation(node.type), node, 1);
                     annotations = ts.makeTypeAliasAnnotations(annotationText, nodeToSrcSpan(node));
                 }
                 return new ts.RsEmptyStmt(nodeToSrcSpan(node), annotations);
@@ -27523,7 +27526,7 @@ var ts;
                 var annotations = nodeAnnotations(node, ts.makePropertyAnnotations);
                 if (annotations.length === 0) {
                     var type = checker.getTypeAtLocation(node);
-                    annotations = ts.concatenate(annotations, [new ts.PropertyAnnotation(nodeToSrcSpan(node), nameText + ": " + checker.typeToString(type, node))]);
+                    annotations = ts.concatenate(annotations, [new ts.PropertyAnnotation(nodeToSrcSpan(node), nameText + ": " + checker.typeToString(type, node, 1))]);
                 }
                 var static = !!(node.flags & 128);
                 return [new ts.RsMemberVarDecl(nodeToSrcSpan(node), annotations, static, new ts.RsId(nodeToSrcSpan(node.name), [], nameText), (node.initializer) ? (new ts.RsJust(nodeToRsExp(state, node.initializer))) : new ts.RsNothing())];

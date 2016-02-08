@@ -124,7 +124,6 @@ convert
   => l -> g r -> SubConf r -> RType r -> RType r -> ConversionResult
 --------------------------------------------------------------------------------
 convert l g c t1 t2
-  -- = case ltracePP l (ppshow t1 ++ " <: " ++ ppshow t2) $ subtype l g t1 t2 of
   = case subtype l g c t1 t2 of
     EqT      -> ConvOK
     SubT     -> ConvOK -- ConvWith (toType t2)
@@ -227,11 +226,11 @@ subtypeObj l γ c t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
 
     a <: b = isAncestorOf (envCHA γ) b a
 
-subtypeObj l _ _ t1@(TRef (Gen _ []) _) _
-  = NoSub [bugMutPartInvalid l t1]
+subtypeObj l _ _ t1@(TRef (Gen _ []) _) t2
+  = NoSub [bugMutPartInvalid l t1 t2]
 
-subtypeObj l _ _ _ t2@(TRef (Gen _ []) _)
-  = NoSub [bugMutPartInvalid l t2]
+subtypeObj l _ _ t1 t2@(TRef (Gen _ []) _)
+  = NoSub [bugMutPartInvalid l t1 t2]
 
 -- | Type Reference subtyping
 subtypeObj l γ c (TRef g1@(Gen x1 (m1:t1s)) _) (TRef (Gen x2 (m2:t2s)) _)
@@ -243,8 +242,10 @@ subtypeObj l γ c (TRef g1@(Gen x1 (m1:t1s)) _) (TRef (Gen x2 (m2:t2s)) _)
     checkBaseType
       | x1 == x2
       = checkTypArgs
+
       | Just (Gen _ (_:t1s')) <- weaken (envCHA γ) g1 x2
       = mconcat $ SubT : zipWith (subtype' l γ) t1s' t2s
+
       | otherwise
       = NoSub [errorSubtype l x1 x2]
 

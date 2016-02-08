@@ -27438,6 +27438,10 @@ var ts;
                         });
                         init = new ts.RsVarInit(nodeToSrcSpan(node), [], new ts.RsList(vds));
                     }
+                    else if (node.initializer.kind === ts.SyntaxKind.BinaryExpression) {
+                        var initializer = node.initializer;
+                        init = new ts.RsExprInit(nodeToRsExp(state, initializer));
+                    }
                     else {
                         throw new Error(ts.Diagnostics.refscript_Unsupported_for_loop_initialization_expression_0.key);
                     }

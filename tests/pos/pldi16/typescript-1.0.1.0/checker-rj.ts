@@ -152,7 +152,7 @@ module ts {
 
         /*@ createType :: (flags: bitvector32) => { Type<UniqueMutable> | type_flags(flags,v) } */
         function createType(flags: TypeFlags): Type {
-            /*@ result :: { Type<UniqueMutable> | type_flags(flags,v) } */
+        /*@ result :: { Type<UniqueMutable> | type_flags(flags,v) } */ 
             var result = newType(checker, flags);
             result.id = typeCount++;
             return result;

@@ -667,7 +667,7 @@ consExpr g (Cast_ l e) _ =
 -- | < t > e
 consExpr g ex@(Cast l e) _ =
   case [ ct | UserCast ct <- ann_fact l ] of
-    [t] -> consCast g l e t
+    [t] -> consUserCast g l e t
     _   -> die $ bugNoCasts (srcPos l) ex
 
 consExpr g (IntLit l i) _
@@ -891,9 +891,30 @@ consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> RefType -> CGM (Maybe (I
 -- | Only freshen if TFun, otherwise the K-var will be instantiated with false
 consCast g l e tc
   = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
+        tc'     <- freshTyFun g l (rType  tc)
+        (x,g')  <- envAddFresh "3" l (tc', WriteLocal, Initialized) g
+        consCall g' l "user-cast" (FI Nothing [(VarRef l x, Nothing),(e, Just tc')]) opTy
+
+
+--------------------------------------------------------------------------------
+consUserCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> RefType -> CGM (Maybe (Id AnnTypeR, CGEnv))
+--------------------------------------------------------------------------------
+-- | Only freshen if TFun, otherwise the K-var will be instantiated with false
+consUserCast g l e tc
+  | isTFun tc 
+  = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
         tc'     <- freshTyFun g l (rType tc)
         (x,g')  <- envAddFresh "3" l (tc', WriteLocal, Initialized) g
         consCall g' l "user-cast" (FI Nothing [(VarRef l x, Nothing),(e, Just tc')]) opTy
+
+  | otherwise
+  = let (αs, t) = bkAll tc in 
+    let xSym    = F.symbol "x" in
+    let ft      = mkFun (αs, Nothing, [B xSym t], t `eSingleton` xSym) in
+    consCall g l "user-cast" (FI Nothing [(e, Just tc)]) ft
+
+            
+          
 
 -- | Dead code
 --   Only prove the top-level false.

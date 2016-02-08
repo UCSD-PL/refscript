@@ -150,7 +150,7 @@ module ts {
         function getSourceFile(node: Node): SourceFile {
             var ancestor = getAncestor(node, SyntaxKind.SourceFile);
             if (ancestor) {
-                return <SourceFile> (<Node>ancestor);
+                return undefined // PV: TODO: <SourceFile> (<Node>ancestor);
             } else {
                 return undefined;
             }

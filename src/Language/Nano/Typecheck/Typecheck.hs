@@ -805,7 +805,7 @@ tcExpr γ e@(ObjectLit _ _) _
 -- | < t > e
 tcExpr γ ex@(Cast l e) _
   = case [ ct | UserCast ct <- ann_fact l ] of
-      [t] -> first (Cast l) <$> tcCast γ l e t
+      [t] -> first (Cast l) <$> tcUserCast γ l e t
       _   -> die $  bugNoCasts (srcPos l) ex
 
 -- | Subtyping induced cast
@@ -882,8 +882,30 @@ tcCast γ l e tc
   = do  opTy             <- safeTcEnvFindTy l γ (builtinOpId BICastExpr)
         cid              <- freshCastId l
         let γ'            = tcEnvAdd (F.symbol cid) (EE WriteLocal Initialized tc) γ
-        -- (FI _ [_,e'],t') <- tcNormalCall γ' l "user-cast" (FI Nothing [(VarRef l cid, Nothing),(e, Nothing)]) opTy
-        (FI _ [_,e'],t') <- tcNormalCall γ' l "user-cast" (FI Nothing [(VarRef l cid, Nothing),(e, Just tc)]) opTy
+        -- (FI _ [_,e'],t') <- tcNormalCall γ' l "user-cast" 
+        --    (FI Nothing [(VarRef l cid, Nothing),(e, Nothing)]) opTy
+        (FI _ [_,e'],t') <- tcNormalCall γ' l "user-cast-fun" 
+              (FI Nothing [(VarRef l cid, Nothing),(e, Just tc)]) opTy
+        return            $ (e', t')
+
+
+---------------------------------------------------------------------------------------
+tcUserCast :: PPRSF r => TCEnv r -> AnnSSA r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
+---------------------------------------------------------------------------------------
+tcUserCast γ l e tc
+  | isTFun tc
+  = do  opTy             <- safeTcEnvFindTy l γ (builtinOpId BICastExpr)
+        cid              <- freshCastId l
+        let γ'            = tcEnvAdd (F.symbol cid) (EE WriteLocal Initialized tc) γ
+        (FI _ [_,e'],t') <- tcNormalCall γ' l "user-cast-fun" 
+                              (FI Nothing [(VarRef l cid, Nothing),(e, Just tc)]) opTy
+        return            $ (e', t')
+
+  | otherwise
+  = do  let (αs, t)       = bkAll tc
+        let xSym          = F.symbol "x" 
+        let ft            = mkFun (αs, Nothing, [B xSym t], t) 
+        (FI _ [e'], t')  <- tcNormalCall γ l "user-cast" (FI Nothing [(e, Just tc)]) ft
         return            $ (e', t')
 
 

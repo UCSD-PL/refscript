@@ -6,7 +6,7 @@ export function foo(x: any): any {
     return x;
 }
 
-let aaaaaaaaa = foo("");
+let a = foo("");
 
 
 assert(typeof foo(1) === "string");

@@ -1,4 +1,6 @@
 
+/* option "--real" */
+
 /*@ incr :: (x:number) => {number|v = x + 1} */
 function incr(x:number):number{
     return ++x;
@@ -14,9 +16,17 @@ function efoo(x:number):number{
     return x += 7;
 }
 
-/*@ foo :: (x:number) => {number|v = 3*x + 3} */
+/*@ foo :: (x:number) => {number|v = x + x + x + 3} */
 function foo(x:number):number{
-    return x += incr(x++) + incr(x++);
+/* x1 = x0 + 1
+   x2 = x0 + 2
+   t1 = x0 + 1
+   t2 = x1 + 1 = x0 + 2
+  t3 = x0 + 2 + x0 + 1 + x0 +2
+  = 3*x + 5
+  */
+
+  return x += incr(x++) + incr(x++);
 }
 
 /*@ bar :: (x:number) => {number|v = x + 4} */

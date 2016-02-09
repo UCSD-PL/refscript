@@ -1,5 +1,5 @@
 
-/*@ a :: IArray<number> */
+/*@ a :: { IArray<number> | len v = 3 } */
 var a = [1, 2, 3];
 
 /*@ b :: { IArray<number> | len v = 4 } */

@@ -1,7 +1,9 @@
 
 var junk = 0;
 
-/*@ readonly arr :: # */
+/* readonly arr :: # */
+
+/*@  arr :: {a : Array<Immutable, { number | v < 3}> | len a > 0 } */
 var arr =  [1, 2];
 
 /*@ foo :: () => { number | v < 4 } */

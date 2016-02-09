@@ -2460,7 +2460,8 @@ var ts;
         refscript_Only_supports_block_scoped_variables_let_or_const: { code: 10047, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Only supports block-scoped variables (let or const)." },
         refscript_Unsupported_postfix_operator_0: { code: 10048, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Unsupported postfix operator '{0}'." },
         refscript_Unsupported_for_loop_initialization_expression_0: { code: 10049, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Unsupported for loop initialization expression '{0}'." },
-        refscript_Only_support_single_variable_initialization_at_ForIn_statement: { code: 10050, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Only support single variable initialization at ForIn statement." }
+        refscript_Only_support_single_variable_initialization_at_ForIn_statement: { code: 10050, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Only support single variable initialization at ForIn statement." },
+        refscript_New_expressions_need_to_have_arguments: { code: 10051, category: ts.DiagnosticCategory.Error, key: "[refscript] 'New' expressions need to have arguments." }
     };
 })(ts || (ts = {}));
 /// <reference path="core.ts"/>
@@ -26813,18 +26814,6 @@ var ts;
         return FRUnsafe;
     })(FixResult);
     ts.FRUnsafe = FRUnsafe;
-    var FRUnknownError = (function (_super) {
-        __extends(FRUnknownError, _super);
-        function FRUnknownError(msg) {
-            _super.call(this);
-            this.msg = msg;
-        }
-        FRUnknownError.prototype.serialize = function () {
-            return ts.aesonEncode("UnknownError", this.msg);
-        };
-        return FRUnknownError;
-    })(FixResult);
-    ts.FRUnknownError = FRUnknownError;
     function nodeToSrcSpan(node) {
         var file = ts.getSourceFileOfNode(node);
         var start = ts.getLineAndCharacterOfPosition(file, node.pos);
@@ -27127,6 +27116,10 @@ var ts;
                 return new ts.RsStringLit(nodeToSrcSpan(node), [], node.text);
             }
             function newExpressionToRsExp(state, node) {
+                if (!node.arguments) {
+                    state.error(node, ts.Diagnostics.refscript_New_expressions_need_to_have_arguments);
+                    return new ts.RsNewExpr(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression), new ts.RsList([]));
+                }
                 return new ts.RsNewExpr(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression), nodeArrayToRsAST(state, node.arguments, nodeToRsExp));
             }
             function prefixUnaryExpressionToRsExp(state, node) {
@@ -34950,7 +34943,7 @@ var ts;
                     return ts.ExitStatus.Success;
                 }
                 catch (e) {
-                    dumpRefScriptUnknownError(e.stack);
+                    dumpRefScriptCrash(e.stack);
                     throw e;
                 }
             }
@@ -34981,9 +34974,9 @@ var ts;
                 ts.sys.write("\n");
             }
         }
-        function dumpRefScriptUnknownError(msg) {
-            var unknownError = new ts.FRUnknownError(msg);
-            ts.sys.write(PrettyJSON.stringify(unknownError.serialize(), { maxLength: Number.POSITIVE_INFINITY, indent: 2 }));
+        function dumpRefScriptCrash(msg) {
+            var crash = new ts.FRCrash([], msg);
+            ts.sys.write(PrettyJSON.stringify(crash.serialize(), { maxLength: Number.POSITIVE_INFINITY, indent: 2 }));
             ts.sys.write("\n");
         }
     }

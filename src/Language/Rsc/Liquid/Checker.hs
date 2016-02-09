@@ -572,7 +572,6 @@ consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body
     cExit = builtinOpId BICtorExit
     sExit = F.symbol cExit
 
-    -- substOffsetThis exitTy ???
     exitP = [SI sExit Local Ambient Initialized $ mkFun (bs, xts, ret)]
 
     ret   = unqualifyThis $ thisT `strengthen` F.reft (F.vv Nothing) (F.pAnd $ bnd <$> out)

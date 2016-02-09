@@ -129,11 +129,11 @@ module ts {
         function getNodeLinks(node: Node): NodeLinks {
             var node_id = 0;
             var tmp     = node.id;
-            if (tmp){ 
+            if (tmp){
               node_id = <number>tmp;
-            } else { 
-              node_id = nextNodeId++; 
-            } 
+            } else {
+              node_id = nextNodeId++;
+            }
             node.id = node_id;
             var n = nodeLinks[node_id];
             if(n) { return n; }
@@ -144,7 +144,9 @@ module ts {
         function getSourceFile(node: Node): SourceFile {
             var ancestor = getAncestor(node, SyntaxKind.SourceFile);
             if (ancestor) {
-                return <SourceFile> (<Node>ancestor);
+                var anc = (<Node>ancestor);
+                // assert(false);       // PV: This shouldn't pass !!!
+                return <SourceFile> anc;
             } else {
                 return undefined;
             }
@@ -152,7 +154,7 @@ module ts {
 
         /*@ createType :: (flags: bitvector32) => { Type<UniqueMutable> | type_flags(flags,v) } */
         function createType(flags: TypeFlags): Type {
-        /*@ result :: { Type<UniqueMutable> | type_flags(flags,v) } */ 
+        /*@ result :: { Type<UniqueMutable> | type_flags(flags,v) } */
             var result = newType(checker, flags);
             result.id = typeCount++;
             return result;

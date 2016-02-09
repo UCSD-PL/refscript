@@ -3,9 +3,8 @@
 
 function negate(x):any {
   if (typeof(x) === "number") {
-    return 0 - x;
-  } 
+    return 0 - <number>x;
+  }
   return -1 ;
-  
-}
 
+}

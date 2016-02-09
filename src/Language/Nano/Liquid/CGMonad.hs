@@ -56,6 +56,8 @@ module Language.Nano.Liquid.CGMonad (
 
   , checkSyms
 
+  , traceTypePP
+
   ) where
 
 import           Control.Applicative
@@ -99,7 +101,7 @@ import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Syntax
 import           Language.Nano.Syntax.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -887,6 +889,7 @@ splitC (Sub g i@(Ci _ l) t1@(TCons _ e1s r1) t2@(TCons _ e2s _))
   | otherwise
   = do  cs     <- bsplitC g i t1 t2
         (x,g') <- envAddFresh "" l (t1,ReadOnly,Initialized) g
+        ty     <- safeEnvFindTy x g'
         cs'    <- splitEs g' (F.symbol x) i e1s e2s
         return $ cs ++ cs'
 
@@ -1136,6 +1139,17 @@ zipTypeDownM g x t1 t2
   = return $ f r
   | otherwise
   = cgError $ bugZipType (srcPos x) t1 t2
+
+traceTypePP l msg act
+  = act >>= \case
+      Just (x,g) ->
+          do  t <- safeEnvFindTy x g
+              return $ Just $ trace (ppshow (srcPos l) ++
+                                     " " ++ msg ++
+                                     ": " ++ ppshow x ++
+                                     " :: " ++ ppshow t) (x,g)
+      Nothing ->  return Nothing
+
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

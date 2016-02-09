@@ -1262,16 +1262,6 @@ globals ts = [(x,s1,s2) | (x, s1@(EE WriteGlobal Initialized _),
 
 errorLiquid' = errorLiquid . srcPos
 
-traceTypePP l msg act
-  = act >>= \case
-      Just (x,g) ->
-          do  t <- safeEnvFindTy x g
-              return $ Just $ trace (ppshow (srcPos l) ++
-                                     " " ++ msg ++
-                                     ": " ++ ppshow x ++
-                                     " :: " ++ ppshow t) (x,g)
-      Nothing ->  return Nothing
-
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

@@ -360,13 +360,14 @@ replaceAbsolute pgm@(Rsc { code = Src ss }) = (pgm { code = Src ss' }, sOut)
     (ns, ps)        = accumNamesAndPaths ss
 
     safeAbsName l a@(absAct (absoluteName ns) l -> n)
-      | Just a' <- n            = return a'
-      | Nothing <- n, isAlias a = return $ toAbsoluteName a
-      | otherwise               = modify (errorUnboundName (srcPos l) a:) >> pure (mkAbsName [] a)
+      | Just a' <- n = return a'
+      | Nothing <- n
+      , isAlias a    = return $ toAbsoluteName a
+      | otherwise    = modify (errorUnboundName (srcPos l) a:) >> pure (mkAbsName [] a)
 
     safeAbsPath l a@(absAct (absolutePath ps) l -> n)
-      | Just a' <- n            = return a'
-      | otherwise               = modify (errorUnboundPath (srcPos l) a:) >> pure (mkAbsPath [])
+      | Just a' <- n = return a'
+      | otherwise    = modify (errorUnboundPath (srcPos l) a:) >> pure (mkAbsPath [])
 
     isAlias (QN (QP RK_ _ []) s) = envMem s $ tAlias pgm
     isAlias (QN _ _) = False

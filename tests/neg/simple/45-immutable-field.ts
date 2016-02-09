@@ -2,13 +2,15 @@
 
 class FluidField<R extends ReadOnly> {
 
-    /*@ size : {number | v > 0} */ //this should work even if we don't label the field as immutable
+    //this should work even if we don't label the field as immutable
+
+    /*@ size: {number | v > 0} */
     private size = 5;
 
     constructor() { }
 
-    /*@ foo({ IArray<number> | len v = this.size }) : void */
+    /*@ foo(x: { IArray<posint> | len v = this.size }) : void */
     public foo(x) {
-        x[this.size] = 0
+        x[this.size] = -1
     }
 }

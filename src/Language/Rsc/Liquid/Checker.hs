@@ -206,8 +206,7 @@ consRsc p@(Rsc {code = Src fs}) cha
 -- | Initialize environment
 --------------------------------------------------------------------------------
 
--- TODO: 1. Split the freshening part
---       2. checkSyms?
+-- TODO: checkSyms?
 --------------------------------------------------------------------------------
 initGlobalEnv :: RefScript -> ClassHierarchy F.Reft -> CGM CGEnv
 --------------------------------------------------------------------------------

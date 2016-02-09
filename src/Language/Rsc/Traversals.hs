@@ -263,7 +263,8 @@ accumNamesAndPaths stmts = (namesSet, modulesSet)
   where
     allModStmts = accumModuleStmts stmts
     modulesSet  = H.fromList [ ap | (ap, _) <- allModStmts ]
-    namesSet    = H.fromList [ nm | (ap,ss) <- allModStmts, nm <- accumAbsNames ap ss ]
+    namesSet    = H.fromList [ nm | (ap,ss) <- allModStmts
+                                  , nm      <- accumAbsNames ap ss ]
 
 --------------------------------------------------------------------------------
 accumAbsNames :: IsLocated a => AbsPath -> [Statement a] -> [AbsName]

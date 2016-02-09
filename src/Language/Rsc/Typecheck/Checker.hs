@@ -1067,7 +1067,7 @@ tcCallCaseTry γ l fn ts ((i,ft):fts)
       else
           return Nothing
 
-    (<::) ts1 ts2 = and (zipWith (isSubtype γ) ts1 ts2)
+    (<::) ts1 ts2 = and (zipWith (isSubtypeWithUq γ) ts1 ts2)
 
 --------------------------------------------------------------------------------
 tcCallCase :: (PP a, Unif r)
@@ -1089,7 +1089,7 @@ tcCallCase γ@(tce_ctx -> ξ) l fn es ts ft
         return           $ (es', apply θ ot)
 
   where
-    (<::) ts1 ts2 = and (zipWith (isSubtype γ) ts1 ts2)
+    (<::) ts1 ts2 = and (zipWith (isSubtypeWithUq γ) ts1 ts2)
 
 --------------------------------------------------------------------------------
 instantiateTy :: Unif r => AnnTc r -> IContext -> Int -> RType r -> TCM r (RType r)

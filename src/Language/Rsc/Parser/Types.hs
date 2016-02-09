@@ -385,9 +385,17 @@ tPrimP0  =  try (reserved "number"      >> return TNumber)
         <|> try (reserved "any"         >> return TAny)
 
 
+-- <A, B extends A> --> Each bounded type can reference type
+--                      variables appearing to its left only.
+--
 allP :: PContext -> (PContext -> Parser RRType) -> Parser RRType
 allP c p
-  = do tvs   <- optionMaybe $ angles $ btvarP c `sepBy1` comma
+  = do tvs   <- try ( do  bsTry <- lookAhead (angles $ btvarP c `sepBy1` comma)
+                          let c' = c `mappend` pCtxFromList bsTry
+                          bs    <- angles $ btvarP c' `sepBy1` comma
+                          return (Just bs))
+            <|> return Nothing
+
        t     <- p $ c `mappend` pCtxFromList (concat tvs)
        return $ maybe t (`tAll` t) tvs
     where

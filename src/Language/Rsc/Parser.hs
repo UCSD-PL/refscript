@@ -88,7 +88,7 @@ parseIdFromJSON filename = decodeOrDie <$> getJSON filename
 mkRsc :: [Statement (SrcSpan, [Spec])] -> Either FError RefScript
 --------------------------------------------------------------------------------
 mkRsc ss = let p1          = mkRelRsc        ss
-               p2          = expandAliases   p1
+               p2          = expandAliases   p1     -- Expand type and predicate aliases
                p3          = scrapeQuals     p2     -- Scrape quals after expanding aliases
                (p4, errs)  = replaceAbsolute p3
                p5          = replaceDotRef   p4

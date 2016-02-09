@@ -1,5 +1,5 @@
 
-var a = 0.5;
-var b = 0.5;
+let a = 0.5;
+let b = 0.5;
 
 assert(a + b === 1.0);

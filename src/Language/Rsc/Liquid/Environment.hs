@@ -41,6 +41,8 @@ module Language.Rsc.Liquid.Environment (
   , Cast(..)
   , envGetContextCast
 
+  -- * Aux
+  , traceTypePP
 
 ) where
 
@@ -49,6 +51,7 @@ import           Data.Default
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.List                      as L
 import           Data.Maybe                     (catMaybes, fromMaybe)
+import           Debug.Trace                    hiding (traceShow)
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
@@ -72,6 +75,7 @@ import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
+import           Text.Printf
 
 type EnvKey x = (IsLocated x, F.Symbolic x, PP x, F.Expression x)
 
@@ -560,3 +564,15 @@ envTyAdds msg l xts g = cgEnvAdds l msg' sis g
   where
     sis  = [ SI x Local WriteLocal Initialized t | B x t <- xts ]
     msg' = msg ++ " - envTyAdds " ++ ppshow (srcPos l)
+
+traceTypePP l msg act
+  = do  z <- act
+        case z of
+          Just (x,g) -> do  t <- cgSafeEnvFindTyM x g
+                            return $ Just $ trace (str x t) (x,g)
+          Nothing -> return Nothing
+  where
+    str x t = boldBlue (printf "\nTrace: [%s] %s\n" (ppshow (srcPos l)) (ppshow msg)) ++
+              printf "%s: %s" (ppshow x) (ppshow t)
+
+

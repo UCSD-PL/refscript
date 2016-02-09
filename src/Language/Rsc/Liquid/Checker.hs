@@ -11,6 +11,7 @@ module Language.Rsc.Liquid.Checker (verifyFile) where
 
 import           Control.Arrow                   (first)
 import           Control.Monad
+import qualified Data.Foldable                   as FO
 import           Data.Function                   (on)
 import qualified Data.HashMap.Strict             as HM
 import           Data.List                       (partition, sortBy)
@@ -54,12 +55,7 @@ import           Language.Rsc.Types
 import           Language.Rsc.TypeUtilities
 import           System.Console.CmdArgs.Default
 import           System.FilePath.Posix           (dropExtension)
-import           Text.Printf
-
-import qualified Data.Foldable                   as FO
 import           Text.PrettyPrint.HughesPJ       hiding (first)
-
-import           Debug.Trace                     hiding (traceShow)
 
 type Result = (A.UAnnSol RefType, F.FixResult Error)
 
@@ -1135,16 +1131,6 @@ locals  ts = [(x,s1,s2) | (x, s1@(SI _ Local WriteLocal _ _),
 globals ts = [(x,s1,s2) | (x, s1@(SI _ Local WriteGlobal Initialized _),
                               s2@(SI _ Local WriteGlobal Initialized _)) <- ts ]
 
-
-traceTypePP l msg act
-  = do  z <- act
-        case z of
-          Just (x,g) -> do  t <- cgSafeEnvFindTyM x g
-                            return $ Just $ trace (str x t) (x,g)
-          Nothing -> return Nothing
-  where
-    str x t = boldBlue (printf "\nTrace: [%s] %s\n" (ppshow (srcPos l)) (ppshow msg)) ++
-              printf "%s: %s" (ppshow x) (ppshow t)
 
 
 -- Local Variables:

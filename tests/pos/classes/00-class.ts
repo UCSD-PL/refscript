@@ -4,7 +4,7 @@ class BankAccount<M extends ReadOnly> {
 	public f : number = 1;
 
 	/*@  g : { string | v = "a" } */
-	public g : string = "a";
+	public g: string = "a";
 
   /*@ new (x: posint): BankAccount<M> */
 	constructor(x : number) {

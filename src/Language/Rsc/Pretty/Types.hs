@@ -91,7 +91,7 @@ instance (F.Reftable r, PP r) => PP (BTGenQ q r) where
   pp (BGen x ts) = pp x <> ppArgs angles comma ts
 
 instance PP TVar where
-  pp v = pprint (F.symbol v) <> pp "&&&"
+  pp = pprint . F.symbol
 
 instance (F.Reftable r, PP r) => PP (BTVarQ q r) where
   pp (BTV v _ (Just t)) = pprint v <+> text "<:" <+> pp t

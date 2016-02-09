@@ -127,30 +127,26 @@ module ts {
 
         /*@ getNodeLinks :: (node: INode) => { NodeLinks<Immutable> | 0 < 1 } */
         function getNodeLinks(node: Node): NodeLinks {
-            var node_id = node.id;
-            if (!node_id) {
-                node_id = nextNodeId++;
-                node.id = node_id;
+            var node_id = 0;
+            var tmp     = node.id;
+            if (tmp){
+              node_id = <number>tmp;
+            } else {
+              node_id = nextNodeId++;
             }
-            else {
-                node_id = <number>node_id;
-            }
+            node.id = node_id;
             var n = nodeLinks[node_id];
-            if(n) {
-                return n;
-            }
-            else {
-                var o = {};
-                nodeLinks[<number>node_id] = o;
-                return o;
-            }
+            if(n) { return n; }
+            else { var o = {}; nodeLinks[node_id] = o; return o; }
         }
 
         /*@ getSourceFile :: (node: INode + undefined) => undefined + { SourceFile<Immutable> | 0 < 1 } */
         function getSourceFile(node: Node): SourceFile {
             var ancestor = getAncestor(node, SyntaxKind.SourceFile);
             if (ancestor) {
-                return undefined // PV: TODO: <SourceFile> (<Node>ancestor);
+                var anc = (<Node>ancestor);
+                // assert(false);       // PV: This shouldn't pass !!!
+                return <SourceFile> anc;
             } else {
                 return undefined;
             }
@@ -158,7 +154,7 @@ module ts {
 
         /*@ createType :: (flags: bitvector32) => { Type<UniqueMutable> | type_flags(flags,v) } */
         function createType(flags: TypeFlags): Type {
-            /*@ result :: Type<UniqueMutable> */
+        /*@ result :: { Type<UniqueMutable> | type_flags(flags,v) } */
             var result = newType(checker, flags);
             result.id = typeCount++;
             return result;

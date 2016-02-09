@@ -58,8 +58,13 @@ type TestCmd = FilePath -> FilePath -> FilePath -> String
 rscCmd :: TestCmd
 rscCmd bin dir file = printf "cd %s && %s %s" dir bin file
 
+-- extra invariants
 eCmd :: TestCmd
 eCmd bin dir file   = printf "cd %s && %s --extrainvs %s" dir bin file
+
+-- reals
+rCmd :: TestCmd
+rCmd bin dir file   = printf "cd %s && %s --real %s" dir bin file
 
 
 ---------------------------------------------------------------------------

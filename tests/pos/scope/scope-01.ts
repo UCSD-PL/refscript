@@ -1,5 +1,5 @@
 
-/*@ g :: number */
+/*@ local g :: number */
 var g = 1;
 
 /*@ inc :: (xxx: number) => { number | v = xxx + 1 } */
@@ -8,4 +8,3 @@ function inc(xxx: number): number {
 }
 
 assert(inc(g) === inc(g));
-

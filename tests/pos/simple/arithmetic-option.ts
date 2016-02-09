@@ -1,6 +1,14 @@
+/* option "--real" */
 
-var a = 10;
+/*@ foo :: () => {number | v = 0} */
+function foo():number{
 
-var b = 20;
+  var a = 10;
 
-assert(a*a + b*b > 499);
+  var b = 20;
+
+  assert(a*a + b*b > 499);
+  
+  return 0;
+
+}

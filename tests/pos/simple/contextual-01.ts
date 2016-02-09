@@ -3,4 +3,11 @@
                 => { IArray<T> | (len v) = (len indexes) } */
 declare function foo<T>(array: T[], indexes:number[]) : T[];
 
-assert(foo([1,2,3],[2,1,0]).length === 3);
+/*@ as :: {IArray<number> | len v = 3} */
+var as = [1,2,3];
+
+/*@ is :: {IArray<{number | 0 <= v && v < 3}> | len v = 3} */
+var is = [2,1,0];
+
+
+assert(foo(as, is).length === 3);

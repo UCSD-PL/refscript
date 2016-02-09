@@ -1,5 +1,7 @@
 
-/*@ qualif Length(v:number): (len v) = 4 */
+
+/*@ arr :: {IArray<number> | len v = 4} */
+var arr = [1,2,3,4];
 
 var a = 
   (function () 
@@ -7,7 +9,7 @@ var a =
   {
     return this;
 
-  }).call([1,2,3,4]);
+  }).call(arr);
 
 assert(a.length === 4);
 

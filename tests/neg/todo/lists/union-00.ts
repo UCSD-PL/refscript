@@ -1,18 +1,18 @@
-/*@ qualif Len1(v:a)               : 0 <= (len xs)                 */
-/*@ qualif Len2(v:a)               : 0 <  (len xs)                 */
+/*@ qualif Len1(v:a)               : 0 <= (len v)                 */
+/*@ qualif Len2(v:a)               : 0 <  (len v)                 */
 
-/*@ foo :: forall A. (#List[A] + null) => number */
+/*@ foo :: <A,M extends ReadOnly> ({LList<M,A> | LLlen(v) > 0}) => number */
 function foo(xs){
-    assert(0 == 1);
-    var zs = xs;
+    assert(false);
+    let zs = xs;
     return 12;
 }
 
-/*@ main :: () => {void | 0 < 1} */
+/*@ main :: () => void */
 function main(){
-    var a = nil();
-    var b = cons(1, a);
+    let a = nil();
+    let b = cons(1, a);
     foo(b);
 }
 
-
+main();

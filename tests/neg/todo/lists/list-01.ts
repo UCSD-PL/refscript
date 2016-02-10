@@ -3,7 +3,7 @@ function listsum(xs){
   if (empty(xs)) {
     return 0;
   }
-  var h = head(xs);
-  var t = tail(xs);
+  let h = head(xs);
+  let t = tail(xs);
   return h + listsum(t);
 }

@@ -1,7 +1,7 @@
 
-/*@ listsum :: <M extends ReadOnly> (LList<M,number>) => number */
-function listsum(xs:number[]):number {
-	let t :List<number> = tail(xs);
+/*@ listsum :: <M extends ReadOnly> (List<M,number>) => number */
+function listsum<M extends ReadOnly>(xs:List<M,number>):number {
+	let t = tail(xs);
 	return listsum(t);
 }
 

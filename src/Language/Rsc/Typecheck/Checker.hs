@@ -483,7 +483,7 @@ tcInstanceClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
 
     xts      = case expandType def (envCHA γ) thisT of
                 Just (TObj _ ms _ ) ->
-                    sortBy c_sym [ B x t | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
+                    sortBy c_sym [ B x Req t | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
                 _ -> []
 
     c_sym = on compare (show . b_sym)     -- XXX: Symbolic compare is on Symbol ID

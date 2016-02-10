@@ -112,7 +112,7 @@ instance PP TPrim where
   pp TFPBool     = text "_bool_"
 
 instance (PP r, F.Reftable r) => PP (BindQ q r) where
-  pp (B x t) = pp x <> colon <> pp t
+  pp (B x o t) = pp x <> pp o <> colon <+> pp t
 
 instance (PP s, PP t) => PP (M.Map s t) where
   pp m = vcat $ pp <$> M.toList m

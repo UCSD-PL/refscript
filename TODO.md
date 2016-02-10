@@ -2,13 +2,17 @@
 Tool/Implementation
 -------------------
 
+  - Validity check for function types: 
+    
+    * Optional arguments should only occupy the end part of a type.
+
+    * Refinements should not reference optional arguments.
+
   - Get rid of syb
 
   - Implement Sort checker for refinements
   
   - Add script compilation in stack build script
-
-  - Optional arguments
 
   - fixEnums has been disabled -- handle at typechecking
 
@@ -39,7 +43,4 @@ Tool/Implementation
     Note use of lower-case which gets translated into tyvars in fixpoint. sigh.
 
   - Check polarity of type parameter in type
-
-  - Array literal checks are quite slow.
-      E.g.: typescript/pos/arrays/arr-07.js
 

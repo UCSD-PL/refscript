@@ -578,7 +578,7 @@ consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body
               _                   -> []
 
     -- unqualifyThis :: offset(this, "f") ==> f
-    msToBs ms = [ B x (unqualifyThis t) | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
+    msToBs ms = [ B x Req (unqualifyThis t) | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
 
     out       = [ f | (f, FI _ _ m _) <- F.toListSEnv (i_mems ms), isSubtype g1 m tIM ]
 

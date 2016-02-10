@@ -59,7 +59,7 @@ import           Language.Rsc.Types
 idTy  :: (ExprReftable F.Symbol r, F.Reftable r) => RTypeQ q r -> RTypeQ q r
 idTys :: (ExprReftable F.Symbol r, F.Reftable r) => [RTypeQ q r] -> RTypeQ q r
 ---------------------------------------------------------------------------------
-idTy t = mkFun ([], [B sx t], t `strengthen` uexprReft sx)
+idTy t = mkFun ([], [B sx Req t], t `strengthen` uexprReft sx)
   where
     sx    = F.symbol "x_"
 
@@ -68,7 +68,7 @@ idTys = mkAnd . map idTy
 ---------------------------------------------------------------------------------
 castTy :: (ExprReftable F.Symbol r, F.Reftable r) => RType r -> RType r
 ---------------------------------------------------------------------------------
-castTy t = TFun [B sx t] (t `eSingleton` sx) fTop
+castTy t = TFun [B sx Req t] (t `eSingleton` sx) fTop
   where
     sx    = F.symbol "x"
 
@@ -98,36 +98,36 @@ arrayLitTy l g _ Nothing n = mkUniqueArrTy l g n
 mkImmArrTy l g t n = safeEnvFindTy l g ial >>= go
   where
     ial = builtinOpId BIImmArrayLit
-    go (TAll (BTV s l _) (TFun [B x_ t_] tOut r))
-         = return $ Right $ mkAll [BTV s l (Just t)] (TFun (bs x_ t_) (rt tOut) r)
+    go (TAll (BTV s l _) (TFun [B x_ o_ t_] tOut r))
+         = return $ Right $ mkAll [BTV s l (Just t)] (TFun (bs x_ o_ t_) (rt tOut) r)
     go _ = return $ Left  $ bugArrayBIType l ial t
 
-    bs x_ t_ = [ B (tox x_ i) t_ | i <- [1..n] ]
-    rt t_    = F.subst1 t_ (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
-    tox x    = F.symbol . ((symbolString x) ++) . show
+    bs x_ o_ t_ = [ B (tox x_ i) o_ t_ | i <- [1..n] ]
+    rt t_       = F.subst1 t_ (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
+    tox x       = F.symbol . ((symbolString x) ++) . show
 
 -- | mkUArray :: <A>(a: A): Array<Unique, A>
 --
 mkUniqueArrTy l g n = safeEnvFindTy l g ual >>= go
   where
     ual = builtinOpId BIUniqueArrayLit
-    go (TAll α (TFun [B x_ t_] rt r))
-         = return $ Right $ mkAll [α] (TFun (bs x_ t_) rt r)
+    go (TAll α (TFun [B x_ o_ t_] rt r))
+         = return $ Right $ mkAll [α] (TFun (bs x_ o_ t_) rt r)
     go t = return $ Left  $ bugArrayBIType l ual t
 
-    bs x_ t_ = [ B (tox x_ i) t_ | i <- [1..n] ]
-    tox x    = F.symbol . ((symbolString x) ++) . show
+    bs x_ o_ t_ = [ B (tox x_ i) o_ t_ | i <- [1..n] ]
+    tox x       = F.symbol . ((symbolString x) ++) . show
 
 -- | mkArray :: <M,A>(a: A): Array<M,A>
 --
 mkArrTy l g n = safeEnvFindTy l g al >>= go
   where
     al = builtinOpId BIArrayLit
-    go (TAll μ (TAll α (TFun [B x_ t_] rt r)))
+    go (TAll μ (TAll α (TFun [B x_ Req t_] rt r)))
         = return $ Right $ mkAll [μ,α] (TFun (bs x_ t_) rt r)
     go t = return $ Left  $ bugArrayBIType l al t
 
-    bs x_ t_ = [ B (tox x_ i) t_ | i <- [1..n] ]
+    bs x_ t_ = [ B (tox x_ i) Req t_ | i <- [1..n] ]
     tox x    = F.symbol . ((symbolString x) ++) . show
 
 -- --------------------------------------------------------------------------------
@@ -178,9 +178,9 @@ mkArrTy l g n = safeEnvFindTy l g al >>= go
 mkCondExprTy l g t
   = do  opTy <- safeEnvFindTy l g (builtinOpId BICondExpr)
         case bkAll opTy of
-          ([c, BTV α la _, BTV β lb _], TFun [B c_ tc_, B a_ ta_, B b_ tb_] rt r') ->
+          ([c, BTV α la _, BTV β lb _], TFun [B c_ oc_ tc_, B a_ oa_ ta_, B b_ ob_ tb_] rt r') ->
             return $ mkAll [c, BTV α la (Just t), BTV β lb (Just t)]
-                           (TFun [B c_ tc_, B a_ ta_, B b_ tb_] (t `strengthen` rTypeR rt) r')
+                           (TFun [B c_ oc_ tc_, B a_ oa_ ta_, B b_ ob_ tb_] (t `strengthen` rTypeR rt) r')
           _ -> error "[BUG] mkCondExprTy"
 
 

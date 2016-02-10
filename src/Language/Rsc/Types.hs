@@ -101,6 +101,7 @@ data BTGenQ q r       = BGen { b_name :: QN q
                         deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 data BindQ q r        = B { b_sym  :: F.Symbol
+                          , b_opt  :: Optionality
                           , b_type :: RTypeQ q r
                           }
                         deriving (Data, Typeable, Functor, Foldable, Traversable)

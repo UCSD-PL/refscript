@@ -153,7 +153,7 @@ instance F.Reftable r => SubstitutableQ q r (RTypeQ q r) where
   apply θ t                 = appTy θ t
 
 instance F.Reftable r => SubstitutableQ q r (BindQ q r) where
-  apply θ (B z t)           = B z $ appTy θ t
+  apply θ (B z o t)         = B z o $ appTy θ t
 
 instance SubstitutableQ q r t => SubstitutableQ q r (Located t) where
   apply θ (Loc s v)         = Loc s $ apply θ v
@@ -271,7 +271,7 @@ instance (F.Reftable r) => Eq (TypeMember r) where
   _          == _              = False
 
 instance (F.Reftable r) => Eq (Bind r) where
-  B x t == B x' t' = x == x' && t == t'
+  B x o t == B x' o' t' = (x, o, t) == (x', o', t')
 
 instance F.Reftable r => Eq (BTGen r) where
   BGen n1 b1s == BGen n2 b2s = n1 == n2 && b1s == b2s

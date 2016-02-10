@@ -418,7 +418,7 @@ substNoCapture xs (yts, rt)
     xss                   = F.symbol <$> xs
     su                    = F.mkSubst $ safeZipWith "substNoCapture" fSub yts xs
     fSub                  = curry $ (***) b_sym F.eVar
-    onT f (B s t)         = B s <$> f t
+    onT f (B s o t)       = B s o <$> f t
 
 
 -- | Substitute occurences of `offset(this, "f")` in type @t'@, with 'f'

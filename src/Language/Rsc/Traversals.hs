@@ -68,7 +68,7 @@ efold f g h                  = go
                                where γ' = foldr ext γ xts
     go γ z t@(TExp _)        = g γ t z
     gos γ z ts               = L.foldl' (go γ) z ts
-    ext (B x t)              = x `F.insertSEnv` f t
+    ext (B x _ t)            = x `F.insertSEnv` f t
 
 --------------------------------------------------------------------------------
 efoldTypeMembers' :: F.Reftable r => (            RTypeQ q r -> b)         -- f

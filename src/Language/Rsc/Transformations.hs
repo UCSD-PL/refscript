@@ -170,7 +170,7 @@ instance NameTransformable RTypeQ where
   ntrans = ntransRType
 
 instance NameTransformable BindQ where
-  ntrans f g (B s t) = B s <$> ntrans f g t
+  ntrans f g (B s o t) = B s o <$> ntrans f g t
 
 instance NameTransformable FactQ where
   ntrans = ntransFact
@@ -286,7 +286,7 @@ emapReft _ _ _              = error "Not supported in emapReft"
 emapReftBTV f γ (BTV s l c) = BTV s l $ emapReft f γ <$> c
 emapReftGen f γ (Gen n ts)  = Gen n $ emapReft f γ <$> ts
 emapReftBGen f γ (BGen n ts) = BGen n $ emapReftBTV f γ <$> ts
-emapReftBind f γ (B x t)    = B x $ emapReft f γ t
+emapReftBind f γ (B x o t)  = B x o $ emapReft f γ t
 emapReftTM f γ (TM m sm c k s n)
   = TM (fmap (emapReftElt f γ) m)
        (fmap (emapReftElt f γ) sm)
@@ -318,7 +318,7 @@ mapReftM _ t               = error $ "Not supported in mapReftM: " ++ ppshow t
 mapReftBTV   f (BTV s l c) = BTV s l <$> T.mapM (mapReftM f)   c
 mapReftGenM  f (Gen n ts)  = Gen n   <$>   mapM (mapReftM f)   ts
 mapReftBGenM f (BGen n ts) = BGen n  <$>   mapM (mapReftBTV f) ts
-mapReftBindM f (B x t)     = B x     <$>         mapReftM f    t
+mapReftBindM f (B x o t)   = B x o   <$>         mapReftM f    t
 
 mapTypeMembers f (TM m sm c k s n)
   = TM <$> T.mapM (mapReftElt f) m
@@ -451,13 +451,13 @@ fixFunBinders p@(Rsc { code = Src ss }) = p'
 
 fixFunBindersInType _ bs = go
   where
-    ks               = [ y | B y _ <- bs ]
+    ks               = [ y | B y _ _ <- bs ]
     ss               = (`suffixSymbol` F.symbol "")
     ks'              = map (F.eVar . ss) ks
     sub             :: F.Subable a => a -> a
     sub              = F.subst (F.mkSubst (zip ks ks'))
 
-    go (TFun bs t r) = TFun [B (ss s) ts | B s ts <- bs] t (sub r)
+    go (TFun bs t r) = TFun [B (ss s) o ts | B s o ts <- bs] t (sub r)
     go t             = toplevel sub t
 
 -- When costructing the substitution haskmap, if the list contains duplicate

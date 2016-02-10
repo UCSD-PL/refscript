@@ -434,7 +434,7 @@ tcFunTys l f xs ft = either tcError return sigs
                        | otherwise
                        = Left  $ errorArgMismatch (srcPos l) f ft (length yts) (length xs)
 
-    renameBinds yts = (su, [B x $ F.subst su ty | B x ty <- yts])
+    renameBinds yts = (su, [B x o $ F.subst su ty | B x o ty <- yts])
       where
         su          = F.mkSubst suL
         suL         = safeZipWith "renameBinds" fSub yts xs

@@ -313,17 +313,16 @@ bareArgP :: PContext -> Parser (BindQ RK F.Reft)
 bareArgP c   =  try (boundTypeP c)
             <|> try (argBind <$> typeP1 c)
 
--- TODO: Take the optional argument into account
 boundTypeP :: PContext -> Parser (BindQ RK F.Reft)
 boundTypeP c
-  = do  s <- symbol <$> identifierP
-        optional (char '?')
+  = do  s     <- symbol <$> identifierP
+        opt   <- option Req (char '?' >> pure Opt)
         withinSpacesP colon
-        t <- typeP1 c
-        return $ B s t
+        t     <- typeP1 c
+        return $ B s opt t
 
 argBind :: RRType -> BindQ RK F.Reft
-argBind t = B (rTypeValueVar t) t
+argBind t = B (rTypeValueVar t) Req t
 
 tObjP c = do  m   <- option trRO (parens (dummyP (typeP3 c)))
               c'  <- pure (c { pctx_mut = Just m })

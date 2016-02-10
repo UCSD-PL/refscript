@@ -409,7 +409,7 @@ splitW :: WfC -> CGM [FixWfC]
 splitW (W g i ft@(TFun ts t _))
   = do let bws = bsplitW g ft i
        g'    <- envTyAdds "splitW" i ts g
-       ws    <- concatMapM splitW [W g' i ti | B _ ti <- ts]
+       ws    <- concatMapM splitW [W g' i ti | B _ _ ti <- ts]
        ws'   <-            splitW (W g' i t)
        return  $ bws ++ ws ++ ws'
 

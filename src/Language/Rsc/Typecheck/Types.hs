@@ -173,7 +173,7 @@ padUndefineds xs yts
   where
     nyts        = length yts
     nxs         = length xs
-    xundefs     = [B (F.symbol x') tUndef | x' <- snd $ splitAt nyts xs ]
+    xundefs     = [ B (F.symbol x') Req tUndef | x' <- snd $ splitAt nyts xs ]
 
 bkFuns :: RTypeQ q r -> Maybe [([BTVarQ q r], [BindQ q r], RTypeQ q r)]
 bkFuns = sequence . fmap bkFun . bkAnd
@@ -243,7 +243,7 @@ stripNull      = tOr . filter (not . isTNull)  . bkUnion
 stripUndefined = tOr . filter (not . isTUndef) . bkUnion
 
 ----------------------------------------------------------------------------------------
-orUndef :: F.Reftable r => RType r -> RType r
+orUndef :: F.Reftable r => RTypeQ q r -> RTypeQ q r
 ----------------------------------------------------------------------------------------
 orUndef t  | any isTUndef ts = t
            | otherwise = tOr (tUndef:ts)
@@ -493,9 +493,9 @@ isReqMember _              = False
 finalizeTy :: (F.Reftable r, ExprReftable F.Symbol r) => RType r -> RType r
 --------------------------------------------------------------------------------
 finalizeTy t  | TRef (Gen x (m:ts)) _ <- t, isUQ m
-              = mkFun ([mOut], [B sx t], TRef (Gen x (tOut:ts)) (uexprReft sx))
+              = mkFun ([mOut], [B sx Req t], TRef (Gen x (tOut:ts)) (uexprReft sx))
               | otherwise
-              = mkFun ([mV], [B (F.symbol "x") tV], tV)
+              = mkFun ([mV], [B (F.symbol "x") Req tV], tV)
   where
     sx        = F.symbol "x_"
     tOut      = tVar $ btvToTV mOut
@@ -503,7 +503,7 @@ finalizeTy t  | TRef (Gen x (m:ts)) _ <- t, isUQ m
     tV        = tVar $ btvToTV mV
     mV        = BTV (F.symbol "V") def Nothing
 
-mkInitFldTy t = mkFun ([], [B (F.symbol "f") t], tVoid)
+mkInitFldTy t = mkFun ([], [B (F.symbol "f") Req t], tVoid)
 
 type Identifier = Id F.SrcSpan
 

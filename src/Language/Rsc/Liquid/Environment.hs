@@ -562,7 +562,7 @@ freshenModuleDefM g (a, m)
 
 envTyAdds msg l xts g = cgEnvAdds l msg' sis g
   where
-    sis  = [ SI x Local WriteLocal Initialized t | B x t <- xts ]
+    sis  = [ SI x Local WriteLocal Initialized t | B x _ t <- xts ]
     msg' = msg ++ " - envTyAdds " ++ ppshow (srcPos l)
 
 traceTypePP l msg act

@@ -24,6 +24,8 @@ module Language.Rsc.Typecheck.Sub (
   , SubConfA(..), allowUniqueCfg, disallowUniqueCfg
   , SubtypingResult (..)
   , ConversionResult (..)
+
+  , PPRE
   ) where
 
 import           Data.Monoid

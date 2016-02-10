@@ -16,12 +16,16 @@ module Language.Rsc.TypeUtilities (
     idTy, idTys
   , castTy
   , arrayLitTy
-  -- , objLitTy
   , mkCondExprTy
   , adjustCtxMut
 
+  , overloads
+  , expandOpts
+
   ) where
 
+import           Data.Default
+import           Data.List                     (partition)
 import qualified Language.Fixpoint.Types       as F
 import           Language.Fixpoint.Types.Names (symbolString)
 import           Language.Rsc.AST
@@ -32,8 +36,11 @@ import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
+import           Language.Rsc.Typecheck.Sub    (PPRE)
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
+
+type CEnv r t = (CheckingEnvironment r t , Functor t)
 
 -- type PPRE r = (ExprReftable F.Expr r, ExprReftable Int r, PPR r)
 
@@ -199,4 +206,34 @@ adjustCtxMut t Nothing
   = TRef (Gen n (tUQ:ts)) r
 
 adjustCtxMut t _ = t
+
+
+-- | Expands (x1: T1, x2?: T2) => T to
+--
+--          [ (x1: T1        ) => T
+--          , (x1: T1, x2: T2) => T ]
+--
+--------------------------------------------------------------------------------
+overloads :: (CEnv r g, PPRE r) => g r -> RType r -> [IOverloadSig r]
+--------------------------------------------------------------------------------
+overloads γ             = zip [0..] . go []
+  where
+    go αs   (TFun ts t _) = expandOpts (αs, ts, t)
+    go αs   (TAnd ts)     = concatMap (go αs) (map snd ts)
+    go αs   (TAll α t)    = go (αs ++ [α]) t
+    go αs t@(TRef _ _)    | Just t' <- expandType def (envCHA γ) t
+                          = go αs t'
+    go αs   (TObj _ ms _) | Just t <- tm_call ms
+                          = go αs t
+    go _  _               = []
+
+--------------------------------------------------------------------------------
+expandOpts :: ([v], [Bind r], t) -> [([v], [Bind r], t)]
+--------------------------------------------------------------------------------
+expandOpts (αs, ts, t) = [(αs, args, t) | args <- argss]
+  where
+    (reqs, opts)       = partition (( == Req) . b_opt) ts
+    opts'              = map toReq opts
+    argss              = [reqs ++ take n opts' | n <- [0 .. length opts]]
+    toReq (B s _ t)    = B s Req t
 

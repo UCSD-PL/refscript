@@ -81,6 +81,7 @@ import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Typecheck.Unify
 import           Language.Rsc.Types
+import           Language.Rsc.TypeUtilities
 import qualified System.Console.CmdArgs.Verbosity   as V
 
 
@@ -422,7 +423,7 @@ tcFunTys :: (Unif r, F.Subable (RType r), F.Symbolic s, PP a)
 tcFunTys l f xs ft = either tcError return sigs
   where
     sigs | Just ts <- bkFuns ft
-         = case partitionEithers [funTy t | t <- ts] of
+         = case partitionEithers [funTy t | o <- ts, t <- expandOpts o] of
              ([] , fts) -> Right (zip ([0..] :: [Int]) fts)
              (e:_, _  ) -> Left e
          | otherwise

@@ -196,6 +196,8 @@ type TypeMember r     = TypeMemberQ AK r
 
 type Type             = RType ()
 
+-- XXX: Binds here are all Req
+--
 type OverloadSig r    = ([BTVar r], [Bind r], RType r)
 type IOverloadSig r   = (IntCallSite, OverloadSig r)
 
@@ -351,12 +353,12 @@ instance Monoid Initialization where
 --   a single conjunct.)
 
 class CallSite a where
-  siteIndex :: a -> Int
+  siteIndex :: a -> IntCallSite
 
 instance CallSite Int where
   siteIndex i = i
 
-newtype IContext = IC [Int] deriving (Eq, Ord, Show, Data, Typeable)
+newtype IContext = IC [IntCallSite] deriving (Eq, Ord, Show, Data, Typeable)
 
 emptyContext :: IContext
 emptyContext = IC []

@@ -1023,7 +1023,7 @@ resolveOverload γ l fn es ft =
     [(i,t)] -> Just . (i,,t) <$> getSubst
     _       -> tcCallCaseTry γ l fn (snd <$> es) validOverloads
   where
-    validOverloads = [ (i, mkFun s) | (i, s@(_, bs, _)) <- extractCall γ ft
+    validOverloads = [ (i, mkFun s) | (i, s@(_, bs, _)) <- overloads γ ft
                                     , length bs == length es ]
 
 --------------------------------------------------------------------------------

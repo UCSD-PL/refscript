@@ -8,6 +8,8 @@ Tool/Implementation
 
     * Refinements should not reference optional arguments.
 
+  - Better error message for `errorCallNotSup`.
+
   - Get rid of syb
 
   - Implement Sort checker for refinements

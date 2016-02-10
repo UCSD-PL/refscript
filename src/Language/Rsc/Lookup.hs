@@ -9,7 +9,6 @@
 module Language.Rsc.Lookup (
     getProp
   , getFieldMutability
-  , extractCall
   , extractCtor
   ) where
 
@@ -30,8 +29,6 @@ import           Language.Rsc.Symbols
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 
--- import           Debug.Trace
-
 type PPRE r = (ExprReftable Int r, PPR r)
 
 -- | Excluded fields from string index lookup
@@ -39,7 +36,7 @@ type PPRE r = (ExprReftable Int r, PPR r)
 excludedFieldSymbols = F.symbol <$> [ "hasOwnProperty", "prototype", "__proto__" ]
 
 type PPRD r   = (ExprReftable Int r, PP r, F.Reftable r)
-type CEnv r t = (CheckingEnvironment () t, CheckingEnvironment r t , Functor t)
+type CEnv r t = (CheckingEnvironment r t , Functor t)
 
 -- | `getProp γ b x s t` performs the access `x.f`, where `x: t` and returns a
 --   list of pairs `(tBase, tMember)` where
@@ -92,9 +89,8 @@ getProp l _ f t = Left (errorGenericLookup l f t)
 
 
 --------------------------------------------------------------------------------
-getPropPrim ::
-  (CEnv r t, PP f, PP r, ExprReftable Int r, IsLocated l, F.Symbolic f, F.Reftable r) =>
-  l -> t r -> f -> RType r -> Either Error [(RType r, TypeMember r)]
+getPropPrim :: (CEnv r t, PP f, PPRD r, IsLocated l, F.Symbolic f)
+  => l -> t r -> f -> RType r -> Either Error [(RType r, TypeMember r)]
 --------------------------------------------------------------------------------
 getPropPrim l γ f t@(TPrim c _) =
   case c of
@@ -110,7 +106,7 @@ getPropPrim _ _ _ _ = error "getPropPrim should only be applied to TApp"
 -- | `extractCtor γ t` extracts a contructor signature from a type @t@
 --
 --------------------------------------------------------------------------------
-extractCtor :: (PPRD r, CheckingEnvironment r g) => g r -> RType r -> Maybe (RType r)
+extractCtor :: (PPRD r, CEnv r g) => g r -> RType r -> Maybe (RType r)
 --------------------------------------------------------------------------------
 extractCtor γ t = go t
   where
@@ -122,22 +118,8 @@ extractCtor γ t = go t
 
 
 --------------------------------------------------------------------------------
-extractCall :: (CheckingEnvironment r g, PPRD r) => g r -> RType r -> [IOverloadSig r]
---------------------------------------------------------------------------------
-extractCall γ             = zip [0..] . go []
-  where
-    go αs   (TFun ts t _) = [(αs, ts, t)]
-    go αs   (TAnd ts)     = concatMap (go αs) (map snd ts)
-    go αs   (TAll α t)    = go (αs ++ [α]) t
-    go αs t@(TRef _ _)    | Just t' <- expandType def (envCHA γ) t
-                          = go αs t'
-    go αs   (TObj _ ms _) | Just t <- tm_call ms
-                          = go αs t
-    go _  _               = []
-
---------------------------------------------------------------------------------
 accessMember :: (CEnv r t, PPRE r, PP f, IsLocated l, F.Symbolic f)
-             => l -> t r -> StaticKind -> f -> RType r -> Either Error [TypeMember r]
+  => l -> t r -> StaticKind -> f -> RType r -> Either Error [TypeMember r]
 --------------------------------------------------------------------------------
 accessMember l γ static m t
   | Just (TObj _ es _) <- expandType econf (envCHA γ) t
@@ -163,7 +145,7 @@ validFieldName f = F.symbol f `notElem` excludedFieldSymbols
 
 --------------------------------------------------------------------------------
 lookupAmbientType ::
-  (CEnv r t, PP f, PP r, PP b, ExprReftable Int r, IsLocated l, F.Symbolic f, F.Symbolic b, F.Reftable r) =>
+  (CEnv r t, PP f, PPRD r, PP b, IsLocated l, F.Symbolic f, F.Symbolic b) =>
   l -> t r -> b -> f -> Either Error [TypeMemberQ AK r]
 --------------------------------------------------------------------------------
 lookupAmbientType l γ f amb
@@ -175,12 +157,11 @@ lookupAmbientType l γ f amb
     nm = mkAbsName [] (F.symbol amb)
 
 -- | Accessing the @f@ field of the union type with @ts@ as its parts, returns
--- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
--- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
+--   "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
+--   accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 --------------------------------------------------------------------------------
-getPropUnion ::
-  (CEnv r t, PP r, PP f, ExprReftable Int r, IsLocated l, F.Symbolic f, F.Reftable r) =>
-  l -> t r -> f -> [RType r] -> Either Error [(RType r, TypeMember r)]
+getPropUnion :: (CEnv r t, PPRD r, PP f, IsLocated l, F.Symbolic f)
+  => l -> t r -> f -> [RType r] -> Either Error [(RType r, TypeMember r)]
 --------------------------------------------------------------------------------
 getPropUnion l γ f ts =
   case rights (map (getProp l γ f) ts) of
@@ -188,9 +169,8 @@ getPropUnion l γ f ts =
     tfs -> Right (concat tfs)
 
 --------------------------------------------------------------------------------
-getFieldMutability ::
-  (ExprReftable Int r, PPR r, F.Symbolic s) =>
-  ClassHierarchy r -> RType r -> s -> Maybe (MutabilityR r)
+getFieldMutability :: (PPRD r, F.Symbolic s)
+  => ClassHierarchy r -> RType r -> s -> Maybe (MutabilityR r)
 --------------------------------------------------------------------------------
 getFieldMutability cha t f
   | Just (TObj _ ms _i) <- expandType def cha t

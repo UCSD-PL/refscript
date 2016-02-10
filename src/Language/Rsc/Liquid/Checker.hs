@@ -257,7 +257,7 @@ initCallableEnv :: (PP x, IsLocated x)
 initCallableEnv l g f fty xs s
   = do  g1 <- freshenCGEnvM g0
         g2 <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-0") params g1
-        g3 <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-1") arg g2
+        g3 <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-1") [arg] g2
         return g3
   where
     g0     = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
@@ -280,7 +280,7 @@ initCallableEnv l g f fty xs s
     tyBs   = [(Loc (srcPos l) α, SI (F.symbol α) Local Ambient Initialized $ tVar α) | α <- αs]
     params = [ SI (F.symbol x) Local WriteLocal Initialized t_ |
                (x, t_) <- safeZip "initCallableEnv" xs ts ]
-    arg    = [ mkArgumentsSI l ts ]
+    arg    = ltracePP l "args" $ mkArgumentsSI l ts
     ts     = map b_type xts
     αs     = map btvToTV bs
     (i, (bs,xts,t)) = fty
@@ -926,7 +926,7 @@ validOverloads g l fn ft0
   = [ mkFun t | Overload cx fn0 i <- fFact l          -- all overloads
               , cge_ctx g == cx                       -- right context
               , F.symbol fn0 == F.symbol fn
-              , (j, t) <- extractCall g ft0           -- extract callables
+              , (j, t) <- overloads g ft0             -- extract overloads
               , i == j ]                              -- pick the one resolved at TC
 
 --------------------------------------------------------------------------------

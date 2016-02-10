@@ -82,6 +82,7 @@ import qualified Language.Rsc.SystemUtils        as S
 import           Language.Rsc.Transformations
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
+import           Language.Rsc.TypeUtilities
 import           Text.PrettyPrint.HughesPJ
 
 
@@ -380,10 +381,10 @@ trueRefType    = mapReftM true
 
 --------------------------------------------------------------------------------
 cgFunTys :: (IsLocated l, F.Symbolic b, PP x, PP [b])
-         => l -> x -> [b] -> RefType -> CGM [(Int, ([BTVar F.Reft], [Bind F.Reft], RefType))]
+  => l -> x -> [b] -> RefType -> CGM [(Int, ([BTVar F.Reft], [Bind F.Reft], RefType))]
 --------------------------------------------------------------------------------
 cgFunTys l f xs ft   | Just ts <- bkFuns ft
-                     = zip ([0..] :: [Int]) <$> mapM fTy ts
+                     = zip ([0..] :: [Int]) <$> mapM fTy (concatMap expandOpts ts)
                      | otherwise
                      = cgError $ errorNonFunction (srcPos l) f ft
   where

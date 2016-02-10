@@ -1,4 +1,4 @@
-/*@ listsum :: (#List [{v:number | 0 <= v}]) => {v:number | 0 < v} */
+/*@ listsum :: <M extends ReadOnly> (LList<M,{v:number | 0 <= v}>) => {v:number | 0 < v} */
 function listsum(xs){
   if (empty(xs)) {
     return 0;
@@ -7,4 +7,3 @@ function listsum(xs){
   var t = tail(xs);
   return h + listsum(t);
 }
-

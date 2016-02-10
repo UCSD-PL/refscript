@@ -1,11 +1,10 @@
-/*@ hop :: (#List [{v:number| 0 <= v}]?) => void */
-function hop(as : number[]) : void {
+/*@ hop :: <M extends ReadOnly> (LList<M,{v: number | v >= 0}>) => void */
+function hop<M extends ReadOnly>(as? : List<M,number>) : void {
   if (empty(as)) {
     return;
   }
-  var h = head(as);
+  let h = head(as);
   assert(0 <= h);
-  var t = tail(as);
+  let t = tail(as);
   return hop(t);
 }
-

@@ -1,23 +1,22 @@
-/*@ qualif Len(v:a)               : 0 <= (len xs)                 */
-/*@ qualif EqLen(v:a, xs:b)       : (len v) = (len xs)            */
-/*@ qualif SumLen(v:a, xs:b, ys:c): (len v) = (len xs) + (len ys) */
+/*@ qualif Len(v:a)               : 0 <= (LLlen v)                 */
+/*@ qualif EqLen(v:a, xs:b)       : (LLlen v) = (LLlen xs)            */
+/*@ qualif SumLen(v:a, xs:b, ys:c): (LLlen v) = (LLlen xs) + (LLlen ys) */
 
-/*@ reverse :: forall A. (xs: #List [A]?) => {v: #List [A]? | (len v) = (len xs)} */
+/*@ reverse :: <A,M extends ReadOnly> (xs: LList<M,A>) => {v: LList<M,A> | (LLlen v) = (LLlen xs)} */
 function reverse(xs){
 
-  /*@ go :: (#List[A]?, #List[A]?) => #List[A]? */ 
+  /*@ go :: (acc: LList<M,A>, ys: LList<M,A>) => {LList<M,A> | (LLlen v) = (LLlen acc) + (LLlen ys)} */ 
   function go(acc, ys){
     if (empty(ys)){
       return acc;
     }
     
-    var y    = safehead(ys);
-    var ys_  = safetail(ys);
-    var acc_ = cons(y, acc);
+    let y    = safehead(ys);
+    let ys_  = safetail(ys);
+    let acc_ = cons(y, acc);
     
     return go(acc_, ys_);
   }
-  var b = nil();
+  let b = nil();
   return go(b, xs);
 }
-

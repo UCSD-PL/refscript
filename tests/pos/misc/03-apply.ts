@@ -18,6 +18,3 @@ function main(x:number,y:boolean) : number {
 
 	return xr;
 }
- 
-
-

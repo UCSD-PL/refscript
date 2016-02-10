@@ -1,29 +1,28 @@
-class Animal {
+class Animal<M extends ReadOnly> {
   public kind = "";
   constructor() { }
 }
-class Horse extends Animal { 
+class Horse<M extends ReadOnly> extends Animal<M> { 
   public kind = "horse";
   public gallop() {} 
   constructor() { super(); }
 }
-class Snake extends Animal { 
+class Snake<M extends ReadOnly> extends Animal<M> { 
   public kind = "snake";
   public sneak() {} 
   constructor() { super(); }
 }
 
-/*@ move :: (a: Animal) => { void | 0 < 1} */
-function move(a: Animal) {
+/*@ move :: (a: Animal<Immutable>) => { void | 0 < 1} */
+function move(a: Animal<Immutable>) {
 
   if (a.kind === "snake") {
-    var h = <Horse>a;
+    let h = <Horse<Immutable>>a;
     h.gallop();
   }
   else if (a.kind === "horse") {
-    var s = <Snake>a;
+    let s = <Snake<Immutable>>a;
     s.sneak();
   }
 
 }
-

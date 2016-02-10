@@ -18,7 +18,7 @@ function loop(n, m){
     n = n + 1;
     m = m + 1;
   } 
-
+  
   if (random() > 0){
     n = n - 1;
     // m = m - 1;
@@ -28,6 +28,6 @@ function loop(n, m){
 }
 
 /*@ main :: ({n:number| n > 0}) => void */
-function main(n){
-   loop(n, n); 
+function main(n) {
+  loop(n, n); 
 }

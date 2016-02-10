@@ -1,17 +1,15 @@
-/*@ idt :: forall A. (A) => A */
-function idt(x) { return x;}
+function idt<A>(x:A): A { return x;}
 
-/*@ apply :: forall A B. ((A) => B, A) => B */
-function apply(f, x0){
-  var x1 = f(x0);
-  return x1;
+function apply<A,B>(f: (a: A) => B, x: A): B {
+  return f(x);
 }
 
 /*@ main :: (x:number, boolean) => { v:number |v > x} */
 function main(x,y){
-  var yr = idt(y);
-  var xr = idt(x);
-  var z  = 0;
+  let yr = idt(y);
+  let xr = idt(x);
+  /*@ z :: number */
+  let z  = 0;
   if (yr) {
     z = 10;
   }
@@ -24,6 +22,3 @@ function main(x,y){
 
   return xr;
 }
- 
-
-

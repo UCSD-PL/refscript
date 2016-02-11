@@ -33,6 +33,7 @@ import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.AST.Annotations
 import           Language.Rsc.AST.Syntax
+import           Language.Rsc.Core.Env
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Types
@@ -45,9 +46,14 @@ import           Language.Rsc.Types
 data FactQ q r
   -- ** ANALYSIS **
   -- SSA
-  = PhiVar        [Var r]
+  = PhiVar        (F.Symbol, F.Symbol)  -- Source level Φ-var & SSA-ed version
+                                        -- at the end of each if-branch
+
   | PhiVarTC      (Var r)
   | PhiVarTy      (Var r, RTypeQ q r)
+
+  | PhiLoop       !(Env (Var r, Var r))
+
   | PhiPost       [(Var r, Var r, Var r)]
 
   -- Unification
@@ -134,11 +140,9 @@ type UAnnSSA   = AnnSSA  ()
 type UAnnTc    = AnnTc ()
 type UAnnInfo  = AnnInfo ()
 
-
 type Var r = Id (AnnSSA r)
 
-
-phiVarsAnnot l = concat [xs | PhiVar xs <- fFact l]
+phiVarsAnnot l = [ x | PhiVar (x, _) <- fFact l]
 
 
 -- | scrapeVarDecl: Scrape a variable declaration for annotations

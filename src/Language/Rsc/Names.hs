@@ -26,7 +26,6 @@ module Language.Rsc.Names (
   , returnId
   , lenId
   , argId
-  , argIdInit
   , getArgId
 
   -- * Path operations
@@ -152,9 +151,6 @@ nameInPath l (QP _ _ ps) s = QN (QP AK_ (srcPos l) ps) (F.symbol s)
 pathInPath  :: (IsLocated l, F.Symbolic s) => l -> AbsPath -> s -> AbsPath
 pathInPath l (QP _ _ ps) s = QP AK_ (srcPos l) $ ps ++ [F.symbol s]
 
-returnName :: String
-returnName = "$result"
-
 data Id a = Id a String
           deriving (Show,Data,Typeable,Functor,Foldable,Traversable, Generic)
 
@@ -170,18 +166,17 @@ instance {-# OVERLAPPING #-} IsLocated a => IsLocated (Id a) where
 symbolId :: (IsLocated l, F.Symbolic x) => l -> x -> Id l
 symbolId l x = Id l $ symbolString $ F.symbol x
 
-returnId   :: a -> Id a
-returnId x  = Id x returnName
-lenId l     = Id l "length"
+returnName, lenName, argName, getArgName :: String
+returnName = "$result"
+lenName    = "length"
+argName    = "arguments"
+getArgName = "__getArguments"
 
-argName     = "arguments"
-argIdInit l = Id l argName
-
-getArgName  = "__getArguments"
-getArgId  l = Id l getArgName
-
--- Use the following to distinguish argument vars from nested functions.
-argId l i   = Id l $ "arguments_" ++ show i
+returnId, lenId, argId, getArgId :: a -> Id a
+returnId l = Id l returnName
+lenId    l = Id l lenName
+argId    l = Id l argName
+getArgId l = Id l getArgName
 
 
 instance Eq (Id a) where

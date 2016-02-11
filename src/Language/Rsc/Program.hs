@@ -132,8 +132,8 @@ instance Functor Source where
 mkSSAId :: (F.Symbolic x, IsLocated a) => a -> x -> Int -> Id a
 mkSSAId l x n = Id l (symbolString (F.symbol x) ++ ssaStr ++ show n)
 
-mkNextId :: Id a -> Id a
-mkNextId (Id a x) =  Id a $ nextStr ++ x
+mkNextId :: F.Symbolic x => a -> x -> Id a
+mkNextId a x = Id a $ nextStr ++ (F.symbolString (F.symbol x))
 
 isNextId :: Id a -> Maybe (Id a)
 isNextId (Id a s) = Id a <$> stripPrefix nextStr s

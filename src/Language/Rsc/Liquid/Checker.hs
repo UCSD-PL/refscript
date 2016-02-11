@@ -1049,7 +1049,7 @@ consWhileStep l xs tIs gI''
         zipWithM_ (subType l Nothing gI'') stepTs tIs'                       -- (f)
   where
     tIs' = F.subst su <$> tIs
-    xs'  = mkNextId   <$> xs
+    xs'  = mkNextId l <$> xs
     su   = F.mkSubst   $  safeZip "consWhileStep" (F.symbol <$> xs) (F.eVar <$> xs')
 
 whenJustM Nothing  _ = return ()

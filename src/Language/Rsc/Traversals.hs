@@ -10,7 +10,8 @@ module Language.Rsc.Traversals (
     foldReft, efoldReft, efoldRType
 
   -- * Accumulators
-  , accumNamesAndPaths, accumModuleStmts -- , accumVars, accumVars'
+  , accumNamesAndPaths
+  , accumModuleStmts
   , hoistBindings
 
   -- * Check well-formedness

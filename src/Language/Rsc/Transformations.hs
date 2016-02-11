@@ -214,6 +214,7 @@ ntransFact f g = go
     go (PhiVar v)          = pure $ PhiVar v
     go (PhiVarTC v)        = pure $ PhiVarTC v
     go (PhiPost v)         = pure $ PhiPost v
+    go (PhiLoop γ)         = pure $ PhiLoop γ
     go (Overload x m i)    = pure $ Overload x m i
     go (EnumAnn e)         = pure $ EnumAnn e
     go (BypassUnique)      = pure $ BypassUnique

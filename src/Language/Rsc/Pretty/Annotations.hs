@@ -24,6 +24,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVarTy x)        = text "phi-ty"       <+> pp x
   pp (PhiVarTC x)        = text "phi-tc"       <+> pp x
   pp (PhiPost _)         = text "phi-post"
+  pp (PhiLoop γ)         = text "PHI-Loop"     $+$ pp γ
   pp (TypInst i ξ ts)    = text "inst"         <+> pp i <+> pp ξ <+> pp ts
   pp (Overload ξ f i)    = text "overload"     <+> pp ξ <+> pp f <+> pp i
   pp (EltOverload ξ m t) = text "elt_overload" <+> pp ξ <+> pp m <+> pp t

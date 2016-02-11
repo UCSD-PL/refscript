@@ -16,7 +16,7 @@ module Language.Rsc.Symbols (
   , symToField
 
   -- * Symbol list
-  , SymList (..), symbols, symbols'
+  , SymList (..), symbols
 
   -- * Symbol environment
   , SymEnv, symEnv, symEnv'
@@ -121,11 +121,6 @@ symbols s = SL [ (fSrc <$> n, k, SI (F.symbol n) loc a i t)
     annToType (VarAnn     l _ (Just t)) = [(l, t)]              -- Variables
     annToType (ModuleAnn  l q         ) = [(l, TMod q)]         -- Modules
     annToType _                         = [ ]
-
---------------------------------------------------------------------------------
-symbols' :: F.Reftable r => [Statement (AnnR r)] -> [(Id SrcSpan, Assignability)]
---------------------------------------------------------------------------------
-symbols' s = [ (fSrc <$> n, a) | (n,_,_,a,_) <- hoistBindings s ]
 
 
 --------------------------------------------------------------------------------

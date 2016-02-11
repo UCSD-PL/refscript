@@ -21,12 +21,14 @@ module Language.Rsc.Core.Env (
   , envFilter
   , envFindLoc
   , envMem
-  , envMap
+  , envMap, envMapWithKey
   , envLefts
   , envRights
+  , envJusts
   , envUnionList
   , envDiff
   , envIntersectWith
+  , envUnionWith
   , envSEnv
   , envIds
   , envKeys
@@ -67,6 +69,7 @@ newtype QEnv t = QE (M.HashMap AbsPath (Located t)) deriving (Eq, Functor, Data,
 
 envIds             = map fst . envToList
 envMap    f        = fmap (fmap f)
+envMapWithKey      = F.mapSEnvWithKey
 envFilter f        = F.filterSEnv (f . val)
 envMem i γ         = isJust $ envFind i γ
 envFind    i γ     = F.lookupSEnv (F.symbol i) γ
@@ -101,14 +104,6 @@ envFromList           = envFromList_ f
     f γ x (l,_) (l', _) | l /= l'   = error $ "Duplicate specification: " ++ ppshow (F.symbol x)
                         | otherwise = γ
 
--- envFromListWithConflict
---   :: (IsLocated x, F.Symbolic x)
---   => ((SrcSpan, t) -> (SrcSpan, t) -> t) -> [(x, t)] -> Env t
--- envFromListWithConflict g = envFromList_ f
---   where
---     f γ x a a' = envAdd x (g a a') γ
-
-
 envFromListConcat :: (Monoid t, F.Symbolic a, IsLocated a)
                   => [(a, t)] -> F.SEnv (Located t)
 envFromListConcat  = envFromList_ f
@@ -131,6 +126,9 @@ envFromListWithKey merge = L.foldl' step mempty
 envIntersectWith  :: (a -> b -> c) -> Env a -> Env b -> Env c
 envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))
 
+envUnionWith  :: (a -> b -> c) -> Env a -> Env b -> Env c
+envUnionWith = undefined -- TODO
+
 envUnionList l     = go mempty l
   where
     go acc (y:ys)  = go (mappend acc y) ys
@@ -141,6 +139,8 @@ envRights          = envMap (\(Right z) -> z) . envFilter isRight
 
 envLefts          :: Env (Either a b) -> Env a
 envLefts           = envMap (\(Left z) -> z) . envFilter isLeft
+
+envJusts           = envMap (\(Just z) -> z) . envFilter isJust
 
 envDiff           :: Env a -> Env b -> Env a
 envDiff m1 m2      = envFromList [(x, t) | (x, t) <- envToList m1, not (x `envMem` m2)]

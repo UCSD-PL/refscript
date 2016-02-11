@@ -300,12 +300,13 @@ tcStmt γ s@(IfStmt l e s1 s2)
     check e' (s1', γ1) (s2', γ2) = do
         z1 <- envJoin l γ γ1 γ2
         case z1 of
-          Just (γ3', s1s, s2s) ->
-              do  l1 <- freshenAnn l
-                  l2 <- freshenAnn l
-                  return (IfStmt l e' (postfixStmt l1 s1s s1')
-                                      (postfixStmt l2 s2s s2')
-                         , Just γ3')
+          Just γ3' -> return (IfStmt l e' s1' s2', Just γ3')
+          -- Just (γ3', s1s, s2s) ->
+          --     do  l1 <- freshenAnn l
+          --         l2 <- freshenAnn l
+          --         return (IfStmt l e' (postfixStmt l1 s1s s1')
+          --                             (postfixStmt l2 s2s s2')
+          --                , Just γ3')
           Nothing ->
               return (IfStmt l e' s1' s2', Nothing)
 
@@ -323,7 +324,7 @@ tcStmt γ (WhileStmt l c b)
   where
     xsi (x,t)     = (x, SI (F.symbol x) Local WriteLocal Initialized t)
     dummyExpr     = StringLit l "DUMMY_LOOP_REPLACEMENT"
-    xs            = [ mkNextId x | x <- phis ]
+    xs            = [ mkNextId l x | x <- phis ]
     phis          = phiVarsAnnot l
 
 -- | var x1 [ = e1 ]; ... ; var xn [= en];
@@ -1119,45 +1120,61 @@ instantiateFTy l ξ fn ft@(bkAll -> (bs, t))
 envJoin :: Unif r
         => AnnTc r -> TCEnv r
         -> TCEnvO r -> TCEnvO r
-        -> TCM r (Maybe (TCEnv r, [Statement (AnnSSA r)], [Statement (AnnSSA r)]))
+        -> TCM r (Maybe (TCEnv r)) -- , [Statement (AnnSSA r)], [Statement (AnnSSA r)]))
 --------------------------------------------------------------------------------
-envJoin _ _ Nothing x           = return $ fmap (,[],[]) x
-envJoin _ _ x Nothing           = return $ fmap (,[],[]) x
-envJoin l γ (Just γ1) (Just γ2) =
-  do  xts     <- catMaybes <$> mapM phiType xs
-      r       <- foldM (envJoinStep l γ1 γ2 next) (γ,[],[]) xts
-      return   $ Just r
-  where
-    phiType x = fmap (x,) <$> getPhiType l γ1 γ2 x
-    xs        = concat [ xs_ | PhiVar xs_ <- fFact l ] -- The PHI vars as reported by SSA - no casted vars
-    next      = concat [ vs  | PhiPost vs <- fFact l ] -- These need to be added to each branch
+envJoin _ _ Nothing x           = return x
+envJoin _ _ x Nothing           = return x
+envJoin l γ (Just γ1) (Just γ2) = do
 
-envJoinStep l γ1 γ2 next (γ, st01, st02) xt =
-  case xt of
-    (v, ta@(SI _ _ WriteLocal _ t)) ->
-      case find ((v ==) . snd3) next of
-        Just (_,va, vb) -> do
-            st1     <- mkVdStmt l γ1 va vb t          -- FIRST BRANCH
-            st2     <- mkVdStmt l γ2 va vb t          -- SECOND BRANCH
-            θ       <- getSubst
-            addAnn (fId l) $ PhiVarTC vb
-            return   $ (tcEnvAdd vb ta $ γ { tce_names = apply θ (tce_names γ) }, st1:st01, st2:st02)
-        Nothing -> error $ "Couldn't find " ++ ppshow v ++ " in " ++ ppshow next
-    (v, ta) ->
-          do  addAnn (fId l) $ PhiVarTC v
-              return   $ (tcEnvAdd v ta $ γ { tce_names = tce_names γ }, [], [])
+    ss    <- mapM (safeEnvFindSI l γ ) xs     -- SI entry before the conditional
+    s1s   <- mapM (safeEnvFindSI l γ1) xs'    -- SI entry at the end of the 1st branch
+    s2s   <- mapM (safeEnvFindSI l γ2) xs'    -- SI entry at the end of the 2nd branch
 
-mkVdStmt l γ va vb t1 =
-  do  t0           <- safeEnvFindTy l γ va
-      rhs          <- VarRef <$> freshenAnn l <*> return va
-      θ            <- unifyTypeM (srcPos l) γ t0 t1
-      setSubst θ
-      let (t0',t1') = apply θ (t0,t1)
-      c1s          <- castMC γ rhs t0' t1'
-      vd1          <- mkVds vb c1s
-      VarDeclStmt <$> freshenAnn l <*> return [vd1]
+    Just <$> foldM
+      (\γ' (s, s1, s2) -> do
+        if isSubtype γ1 (v_type s1) (v_type s2) then      -- T1 <: T2
+            return (tcEnvAdd (v_name s2) s2 γ')
+        else if isSubtype γ1 (v_type s2) (v_type s1) then -- T2 <: T1
+            return (tcEnvAdd (v_name s1) s1 γ')
+        else
+            error "envjoin-nosub"
+      )
+      γ (zip3 ss s1s s2s)
+
   where
-    mkVds v e = VarDecl <$> freshenAnn l <*> return v <*> return (Just e)
+    phiType x      = fmap (x,) <$> getPhiType l γ1 γ2 x
+
+    (xs, xs') = unzip [xs_ | PhiVar xs_ <- fFact l]
+
+    -- next      = concat [ vs  | PhiPost vs <- fFact l ]
+    -- -- These need to be added to each branch
+
+-- envJoinStep l γ1 γ2 next (γ, st01, st02) xt =
+--   case xt of
+--     (v, ta@(SI _ _ WriteLocal _ t)) ->
+--       case find ((v ==) . snd3) next of
+--         Just (_,va, vb) -> do
+--             st1     <- mkVdStmt l γ1 va vb t          -- FIRST BRANCH
+--             st2     <- mkVdStmt l γ2 va vb t          -- SECOND BRANCH
+--             θ       <- getSubst
+--             addAnn (fId l) $ PhiVarTC vb
+--             return   $ (tcEnvAdd vb ta $ γ { tce_names = apply θ (tce_names γ) }, st1:st01, st2:st02)
+--         Nothing -> error $ "Couldn't find " ++ ppshow v ++ " in " ++ ppshow next
+--     (v, ta) ->
+--           do  addAnn (fId l) $ PhiVarTC v
+--               return   $ (tcEnvAdd v ta $ γ { tce_names = tce_names γ }, [], [])
+--
+-- mkVdStmt l γ va vb t1 =
+--   do  t0           <- safeEnvFindTy l γ va
+--       rhs          <- VarRef <$> freshenAnn l <*> return va
+--       θ            <- unifyTypeM (srcPos l) γ t0 t1
+--       setSubst θ
+--       let (t0',t1') = apply θ (t0,t1)
+--       c1s          <- castMC γ rhs t0' t1'
+--       vd1          <- mkVds vb c1s
+--       VarDeclStmt <$> freshenAnn l <*> return [vd1]
+--   where
+--     mkVds v e = VarDecl <$> freshenAnn l <*> return v <*> return (Just e)
 
 
 --------------------------------------------------------------------------------
@@ -1165,14 +1182,22 @@ envLoopJoin :: Unif r => AnnTc r -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
 --------------------------------------------------------------------------------
 envLoopJoin _ γ Nothing   = return $ Just γ
 envLoopJoin l γ (Just γl) =
-  do  xts      <- toXts <$> mapM (getLoopNextPhiType l γ γl) xs
-      _        <- mapM_ mkPhiAnn (second v_type <$> xts)
-      Just . tcEnvAdds xts . (`substNames` γ) <$> getSubst
+  do  -- xts      <- toXts <$> mapM (getLoopNextPhiType l γ γl) xs
+
+      -- TODO: replace below ???
+
+      -- _        <- mapM_ mkPhiAnn (second v_type <$> xts)
+      -- Just . tcEnvAdds xts . (`substNames` γ) <$> getSubst
+      return undefined
   where
       xs              = phiVarsAnnot l
       substNames θ γ_ = γ_ { tce_names = apply θ (tce_names γ) }
       toXts ts        = [ (x,t) | (x, Just t) <- zip xs ts ]
-      mkPhiAnn        = addAnn (fId l) . PhiVarTy
+
+      -- TODO: Replace the below ???
+
+
+      -- mkPhiAnn        = addAnn (fId l) . PhiVarTy
 
 --
 -- Using @tcEnvFindTyForAsgn@ here as the initialization status is
@@ -1191,10 +1216,10 @@ getPhiType l γ1 γ2 x =
     -- bindings that are not in both environments are discarded
 
 --------------------------------------------------------------------------------
-getLoopNextPhiType :: Unif r => AnnTc r -> TCEnv r -> TCEnv r -> Var r -> TCM r (Maybe (SymInfo r))
+getLoopNextPhiType :: (F.Symbolic x,  Unif r) => AnnTc r -> TCEnv r -> TCEnv r -> x -> TCM r (Maybe (SymInfo r))
 --------------------------------------------------------------------------------
 getLoopNextPhiType l γ γl x =
-  case (tcEnvFindTyForAsgn x γ, tcEnvFindTyForAsgn (mkNextId x) γl) of
+  case (tcEnvFindTyForAsgn x γ, tcEnvFindTyForAsgn (mkNextId l x) γl) of
     (Just (SI x1 l1 a1 i1 t1), Just (SI _ _ _ i2 t2)) ->
         do  θ <- getSubst
             t <- unifyPhiTypes l γ x t1 t2 θ
@@ -1206,12 +1231,13 @@ getLoopNextPhiType l γ γl x =
 --
 --   * Special casing the situation where one the types in undefined.
 --------------------------------------------------------------------------------
-unifyPhiTypes :: Unif r => AnnTc r -> TCEnv r -> Var r
-                       -> RType r -> RType r -> RSubst r -> TCM r (RType r)
+unifyPhiTypes
+  :: (F.Symbolic x, Unif r)
+  => AnnTc r -> TCEnv r -> x -> RType r -> RType r -> RSubst r -> TCM r (RType r)
 --------------------------------------------------------------------------------
 unifyPhiTypes l γ x t1 t2 θ
   | Left _ <- substE
-  = tcError (errorEnvJoinUnif l x t1 t2)
+  = tcError (errorEnvJoinUnif l (F.symbol x) t1 t2)
 
   | Right θ' <- substE
   , on (==) (apply θ') t1 t2
@@ -1227,7 +1253,7 @@ unifyPhiTypes l γ x t1 t2 θ
           Left  e -> tcError e
 
   | otherwise
-  = fatal (errorEnvJoin (srcPos l) x (toType t1) (toType t2)) t1
+  = fatal (errorEnvJoin (srcPos l) (F.symbol x) (toType t1) (toType t2)) t1
   where
     go a b  | isTUndef a   = Right $ orUndef b
             | isTUndef b   = Right $ orUndef a
@@ -1238,7 +1264,7 @@ unifyPhiTypes l γ x t1 t2 θ
             | maybeUndef a = orUndef <$> go (stripUndefined a) b
             | maybeUndef b = orUndef <$> go a (stripUndefined b)
             | a `equiv` b  = Right a
-            | otherwise    = Left $ errorEnvJoin (srcPos l) x (toType t1) (toType t2)
+            | otherwise    = Left $ errorEnvJoin (srcPos l) (F.symbol x) (toType t1) (toType t2)
 
     substE      = unifys (srcPos l) γ θ [t1] [t2]
     equiv a b   = isSubtype γ a b && isSubtype γ b a

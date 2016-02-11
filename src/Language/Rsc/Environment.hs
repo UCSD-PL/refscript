@@ -16,7 +16,7 @@ module Language.Rsc.Environment (
 
   -- * Operations
   , chkEnvFindTy, chkEnvFindTy'
-  , safeEnvFindTy
+  , safeEnvFindTy, safeEnvFindSI
   , envFindBound, envFindBoundOpt
   , resolveModuleInEnv, resolveTypeInEnv, resolveEnumInEnv
   , toFgn
@@ -167,4 +167,13 @@ safeEnvFindTy :: (CheckingEnvironment r t, IsLocated l, Symbolic x, Monad m)
 safeEnvFindTy l γ x | Just t <- chkEnvFindTy x γ = return t
                     | otherwise = die $ bugEnvFindTy (srcPos l) (F.symbol x)
 
+--------------------------------------------------------------------------------
+safeEnvFindSI :: (CheckingEnvironment r t, IsLocated l, Symbolic x, Monad m)
+              => l -> t r -> x -> m (SymInfo r)
+--------------------------------------------------------------------------------
+safeEnvFindSI l γ x | Just t <- chkEnvFindTy' x γ = return t
+                    | otherwise = die $ bugEnvFindTy (srcPos l) (F.symbol x)
+
+
 globalLengthType γ = safeEnvFindTy (def::SrcSpan) γ "builtin_getLength"
+

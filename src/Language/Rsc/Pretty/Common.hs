@@ -71,9 +71,6 @@ instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
 instance (PP a, PP b, PP c, PP d, PP e) => PP (a,b,c,d,e) where
   pp (a,b,c,d,e) = pp a <+> text ":" <+>  pp b <+> text ":" <+> pp c <+> text ":" <+> pp d <+> text ":" <+> pp e
 
-instance PP t => PP (I.IntMap t) where
-  pp m = vcat (pp <$> I.toList m)
-
 instance (PP t) => PP (F.SEnv t) where
   pp m = vcat (
            map (\(x,t) -> pp x $$ nest 20 (dcolon <> text " " <> pp t)) $

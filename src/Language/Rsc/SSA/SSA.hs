@@ -55,7 +55,7 @@ ssaRsc :: PPR r => ClassHierarchy r -> BareRsc r -> SSAM r (SsaRsc r)
 ssaRsc cha p@(Rsc { code = Src fs })
   = do  setMeas   $ S.fromList $ F.symbol <$> envIds (consts p)
         (_,fs')  <- ssaStmts g fs
-        ssaAnns  <- tracePP "ANNS" <$> getAnns
+        ssaAnns  <- getAnns
         ast_cnt  <- getCounter
         return    $ p { code  = Src $ (patch ssaAnns <$>) <$> fs'
                       , maxId = ast_cnt }

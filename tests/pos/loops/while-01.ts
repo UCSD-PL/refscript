@@ -12,9 +12,9 @@
 
 
 function loop() {
-    let x = 1;
-    if (x <= 5) {
-        x = x + 5;
+    let x;
+    if (0 < 5) {
+        x = 6;
     }
     return x;
 }

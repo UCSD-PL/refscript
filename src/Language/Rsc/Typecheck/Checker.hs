@@ -298,17 +298,8 @@ tcStmt γ s@(IfStmt l e s1 s2)
          Nothing -> return (IfStmt l e' s1 s2, Nothing)
   where
     check e' (s1', γ1) (s2', γ2) = do
-        z1 <- envJoin l γ γ1 γ2
-        case z1 of
-          Just γ3' -> return (IfStmt l e' s1' s2', Just γ3')
-          -- Just (γ3', s1s, s2s) ->
-          --     do  l1 <- freshenAnn l
-          --         l2 <- freshenAnn l
-          --         return (IfStmt l e' (postfixStmt l1 s1s s1')
-          --                             (postfixStmt l2 s2s s2')
-          --                , Just γ3')
-          Nothing ->
-              return (IfStmt l e' s1' s2', Nothing)
+        z <- envJoin l γ γ1 γ2
+        return (IfStmt l e' s1' s2', z)
 
 -- | while c { b }
 tcStmt γ (WhileStmt l c b)
@@ -1143,39 +1134,6 @@ envJoin l γ (Just γ1) (Just γ2) = do
 
   where
     (xs, xs') = unzip [xs_ | PhiVar xs_ <- fFact l]
-
-
-
-    -- phiType x = fmap (x,) <$> getPhiType l γ1 γ2 x
-    -- next      = concat [ vs  | PhiPost vs <- fFact l ]
-    -- -- These need to be added to each branch
-
--- envJoinStep l γ1 γ2 next (γ, st01, st02) xt =
---   case xt of
---     (v, ta@(SI _ _ WriteLocal _ t)) ->
---       case find ((v ==) . snd3) next of
---         Just (_,va, vb) -> do
---             st1     <- mkVdStmt l γ1 va vb t          -- FIRST BRANCH
---             st2     <- mkVdStmt l γ2 va vb t          -- SECOND BRANCH
---             θ       <- getSubst
---             addAnn (fId l) $ PhiVarTC vb
---             return   $ (tcEnvAdd vb ta $ γ { tce_names = apply θ (tce_names γ) }, st1:st01, st2:st02)
---         Nothing -> error $ "Couldn't find " ++ ppshow v ++ " in " ++ ppshow next
---     (v, ta) ->
---           do  addAnn (fId l) $ PhiVarTC v
---               return   $ (tcEnvAdd v ta $ γ { tce_names = tce_names γ }, [], [])
---
--- mkVdStmt l γ va vb t1 =
---   do  t0           <- safeEnvFindTy l γ va
---       rhs          <- VarRef <$> freshenAnn l <*> return va
---       θ            <- unifyTypeM (srcPos l) γ t0 t1
---       setSubst θ
---       let (t0',t1') = apply θ (t0,t1)
---       c1s          <- castMC γ rhs t0' t1'
---       vd1          <- mkVds vb c1s
---       VarDeclStmt <$> freshenAnn l <*> return [vd1]
---   where
---     mkVds v e = VarDecl <$> freshenAnn l <*> return v <*> return (Just e)
 
 
 --------------------------------------------------------------------------------

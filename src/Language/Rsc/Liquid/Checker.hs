@@ -1079,19 +1079,18 @@ envJoin :: AnnLq -> CGEnv -> Maybe CGEnv -> Maybe CGEnv -> CGM (Maybe CGEnv)
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
 envJoin l g (Just g1) (Just g2) = do
-    ss    <- ltracePP l "ss"  <$> mapM (safeEnvFindSI l g ) xs     -- SI entry before the conditional
-    s1s   <- ltracePP l "s1s" <$> mapM (safeEnvFindSI l g1) xs'    -- SI entry at the end of the 1st branch
-    s2s   <- ltracePP l "s2s" <$> mapM (safeEnvFindSI l g2) xs'    -- SI entry at the end of the 2nd branch
-    g'    <- foldM (\g_ (s, s1, s2) -> do
-                if isSubtype g1 (v_type s1) (v_type s2) then      -- T1 <: T2
-                    checkPhi g_ s1 s2
-                else if isSubtype g1 (v_type s2) (v_type s1) then -- T2 <: T1
-                    checkPhi g_ s2 s1
-                else
-                    error "envjoin-nosub"
-                   )
-             g (zip3 ss s1s s2s)
-    return $ tracePP "FOLDED" $ Just g'
+    ss    <-  mapM (safeEnvFindSI l g ) xs     -- SI entry before the conditional
+    s1s   <-  mapM (safeEnvFindSI l g1) xs'    -- SI entry at the end of the 1st branch
+    s2s   <-  mapM (safeEnvFindSI l g2) xs'    -- SI entry at the end of the 2nd branch
+    Just <$> foldM (\g_ (s, s1, s2) -> do
+        if isSubtype g1 (v_type s1) (v_type s2) then      -- T1 <: T2
+            checkPhi g_ s1 s2
+        else if isSubtype g1 (v_type s2) (v_type s1) then -- T2 <: T1
+            checkPhi g_ s2 s1
+        else
+            error "envjoin-nosub"
+           )
+     g (zip3 ss s1s s2s)
 
   where
 
@@ -1103,59 +1102,6 @@ envJoin l g (Just g1) (Just g2) = do
         ts        <- zipWithM (cgSafeEnvFindTyM . v_name) [sSubT,sSupT] [g1,g2]
         zipWithM_ (\l_ g_ -> subType l Nothing g_ l_ r_) ts [g1,g2]
         return g'
-
-    -- -- LOCALS: as usual
-    -- --
-    -- g1'       <- cgEnvAdds l "envJoin-0" l1s g1
-    -- g2'       <- cgEnvAdds l "envJoin-1" l2s g2
-    -- --
-    -- -- t1s and t2s should have the same raw type, otherwise they wouldn't
-    -- -- pass TC (we don't need to pad / fix them before joining).
-    -- -- So we can use the raw type from one of the two branches and freshen
-    -- -- up that one.
-    -- -- TODO: Add a raw type check on t1 and t2
-    -- --
-    -- (g',ls)   <- freshTyPhis' l g $ (\(SI x loc a i t) -> SI x loc a i (toType t)) <$> l1s
-    -- l1s'      <- mapM (`cgSafeEnvFindTyM` g1') xls
-    -- l2s'      <- mapM (`cgSafeEnvFindTyM` g2') xls
-    -- _         <- zipWithM_ (subType l Nothing g1') l1s' ls
-    -- _         <- zipWithM_ (subType l Nothing g2') l2s' ls
-    -- --
-    -- -- GLOBALS:
-    -- --
-    -- let (xgs, gl1s, _) = unzip3 $ globals (zip3 xs t1s t2s)
-    -- (g'',gls) <- freshTyPhis' l g' $ (\(SI x loc a i t) -> SI x loc a i (toType t)) <$> gl1s
-    -- gl1s'     <- mapM (`cgSafeEnvFindTyM` g1') xgs
-    -- gl2s'     <- mapM (`cgSafeEnvFindTyM` g2') xgs
-    -- _         <- zipWithM_ (subType l Nothing g1') gl1s' gls
-    -- _         <- zipWithM_ (subType l Nothing g2') gl2s' gls
-    -- --
-    -- -- PARTIALLY UNINITIALIZED
-    -- --
-    -- -- let (xps, ps) = unzip $ partial $ zip3 xs t1s t2s<F2>
-    -- -- If the variable was previously uninitialized, it will continue to be
-    -- -- so; we don't have to update the environment in this case.
-    -- where
-
-    -- (t1s, t2s) = unzip $ catMaybes $ getPhiTypes l g1 g2 <$> xs
-    -- -- t1s : the types of the phi vars in the 1st branch
-    -- -- t2s : the types of the phi vars in the 2nd branch
-    -- (xls, l1s, l2s) = unzip3 $ locals (zip3 xs t1s t2s)
-    -- xs    = [ xs | PhiVarTC xs <- fFact l]
-
-
-getPhiTypes _ g1 g2 x =
-  case (envFindTyWithAsgn x g1, envFindTyWithAsgn x g2) of
-    (Just t1, Just t2) -> Just (t1,t2)
-    (_      , _      ) -> Nothing
-
-
-locals  ts = [(x,s1,s2) | (x, s1@(SI _ Local WriteLocal _ _),
-                              s2@(SI _ Local WriteLocal _ _)) <- ts ]
-
-globals ts = [(x,s1,s2) | (x, s1@(SI _ Local WriteGlobal Initialized _),
-                              s2@(SI _ Local WriteGlobal Initialized _)) <- ts ]
-
 
 
 -- Local Variables:

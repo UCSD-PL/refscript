@@ -14,7 +14,7 @@
 function loop() {
     let x = 1;
     if (x <= 5) {
-        x = x + 1;
+        x = x + 5;
     }
     return x;
 }

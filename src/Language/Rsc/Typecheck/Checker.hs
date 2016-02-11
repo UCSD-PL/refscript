@@ -1142,10 +1142,11 @@ envJoin l γ (Just γ1) (Just γ2) = do
       γ (zip3 ss s1s s2s)
 
   where
-    phiType x      = fmap (x,) <$> getPhiType l γ1 γ2 x
-
     (xs, xs') = unzip [xs_ | PhiVar xs_ <- fFact l]
 
+
+
+    -- phiType x = fmap (x,) <$> getPhiType l γ1 γ2 x
     -- next      = concat [ vs  | PhiPost vs <- fFact l ]
     -- -- These need to be added to each branch
 

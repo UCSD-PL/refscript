@@ -129,10 +129,7 @@ bop o     = convertError "F.Bop" o
 class RefTypable a where
   rType :: a -> RefType
 
-instance RefTypable Type where
-  rType = ofType
-
-instance RefTypable RefType where
+instance F.Reftable r => RefTypable (RType r) where
   rType = ofType . toType           -- removes all refinements
 
 eSingleton      :: (F.Reftable r, F.Expression e, ExprReftable e r) => RType r -> e -> RType r

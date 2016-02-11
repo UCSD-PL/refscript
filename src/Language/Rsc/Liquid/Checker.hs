@@ -280,7 +280,7 @@ initCallableEnv l g f fty xs s
     tyBs   = [(Loc (srcPos l) α, SI (F.symbol α) Local Ambient Initialized $ tVar α) | α <- αs]
     params = [ SI (F.symbol x) Local WriteLocal Initialized t_ |
                (x, t_) <- safeZip "initCallableEnv" xs ts ]
-    arg    = ltracePP l "args" $ mkArgumentsSI l ts
+    arg    = mkArgumentsSI l ts
     ts     = map b_type xts
     αs     = map btvToTV bs
     (i, (bs,xts,t)) = fty
@@ -1055,68 +1055,93 @@ consWhileStep l xs tIs gI''
 whenJustM Nothing  _ = return ()
 whenJustM (Just x) f = f x
 
+--
+--    // G0 --> x0
+--    if (cond) []{
+--        ...
+--        // G1   --> x'
+--    } else {
+--        ...
+--        // G2   --> x'
+--    }
+--    // G'
+--
+--    G0 |- fresh T
+--
+--    G1[x'] = T1, G2[x'] = T2
+--
+--    G1 |- x': T1 <: T
+--    G2 |- x': T2 <: T
+--
 ----------------------------------------------------------------------------------
 envJoin :: AnnLq -> CGEnv -> Maybe CGEnv -> Maybe CGEnv -> CGM (Maybe CGEnv)
 ----------------------------------------------------------------------------------
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
-envJoin l g (Just g1) (Just g2) = Just <$> envJoin' l g g1 g2
+envJoin l g (Just g1) (Just g2) = do
+    ss    <- ltracePP l "ss"  <$> mapM (safeEnvFindSI l g ) xs     -- SI entry before the conditional
+    s1s   <- ltracePP l "s1s" <$> mapM (safeEnvFindSI l g1) xs'    -- SI entry at the end of the 1st branch
+    s2s   <- ltracePP l "s2s" <$> mapM (safeEnvFindSI l g2) xs'    -- SI entry at the end of the 2nd branch
+    g'    <- foldM (\g_ (s, s1, s2) -> do
+                if isSubtype g1 (v_type s1) (v_type s2) then      -- T1 <: T2
+                    checkPhi g_ s1 s2
+                else if isSubtype g1 (v_type s2) (v_type s1) then -- T2 <: T1
+                    checkPhi g_ s2 s1
+                else
+                    error "envjoin-nosub"
+                   )
+             g (zip3 ss s1s s2s)
+    return $ tracePP "FOLDED" $ Just g'
 
-----------------------------------------------------------------------------------
-envJoin' :: AnnLq -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
-----------------------------------------------------------------------------------
+  where
 
--- 1. use @envFindTy@ to get types for the phi-var x in environments g1 AND g2
---
--- 2. use @freshTyPhis@ to generate fresh types (and an extended environment with
---    the fresh-type bindings) for all the phi-vars using the unrefined types
---    from step 1
---
--- 3. generate subtyping constraints between the types from step 1 and the fresh
---    types
---
--- 4. return the extended environment
---
-envJoin' l g g1 g2
-  = do  --
-        -- LOCALS: as usual
-        --
-        g1'       <- cgEnvAdds l "envJoin-0" l1s g1
-        g2'       <- cgEnvAdds l "envJoin-1" l2s g2
-        --
-        -- t1s and t2s should have the same raw type, otherwise they wouldn't
-        -- pass TC (we don't need to pad / fix them before joining).
-        -- So we can use the raw type from one of the two branches and freshen
-        -- up that one.
-        -- TODO: Add a raw type check on t1 and t2
-        --
-        (g',ls)   <- freshTyPhis' l g $ (\(SI x loc a i t) -> SI x loc a i (toType t)) <$> l1s
-        l1s'      <- mapM (`cgSafeEnvFindTyM` g1') xls
-        l2s'      <- mapM (`cgSafeEnvFindTyM` g2') xls
-        _         <- zipWithM_ (subType l Nothing g1') l1s' ls
-        _         <- zipWithM_ (subType l Nothing g2') l2s' ls
-        --
-        -- GLOBALS:
-        --
-        let (xgs, gl1s, _) = unzip3 $ globals (zip3 xs t1s t2s)
-        (g'',gls) <- freshTyPhis' l g' $ (\(SI x loc a i t) -> SI x loc a i (toType t)) <$> gl1s
-        gl1s'     <- mapM (`cgSafeEnvFindTyM` g1') xgs
-        gl2s'     <- mapM (`cgSafeEnvFindTyM` g2') xgs
-        _         <- zipWithM_ (subType l Nothing g1') gl1s' gls
-        _         <- zipWithM_ (subType l Nothing g2') gl2s' gls
-        --
-        -- PARTIALLY UNINITIALIZED
-        --
-        -- let (xps, ps) = unzip $ partial $ zip3 xs t1s t2s
-        -- If the variable was previously uninitialized, it will continue to be
-        -- so; we don't have to update the environment in this case.
-        return     $ g''
-    where
-        (t1s, t2s) = unzip $ catMaybes $ getPhiTypes l g1 g2 <$> xs
-        -- t1s : the types of the phi vars in the 1st branch
-        -- t2s : the types of the phi vars in the 2nd branch
-        (xls, l1s, l2s) = unzip3 $ locals (zip3 xs t1s t2s)
-        xs    = [ xs | PhiVarTC xs <- fFact l]
+    -- SSAed Φ-vars before the conditional and at the end of the branches
+    (xs, xs') = unzip [xs_ | PhiVar xs_ <- fFact l]
+
+    checkPhi g_ sSubT sSupT = do
+        (g', r_)  <- freshTyPhi l g_ sSupT
+        ts        <- zipWithM (cgSafeEnvFindTyM . v_name) [sSubT,sSupT] [g1,g2]
+        zipWithM_ (\l_ g_ -> subType l Nothing g_ l_ r_) ts [g1,g2]
+        return g'
+
+    -- -- LOCALS: as usual
+    -- --
+    -- g1'       <- cgEnvAdds l "envJoin-0" l1s g1
+    -- g2'       <- cgEnvAdds l "envJoin-1" l2s g2
+    -- --
+    -- -- t1s and t2s should have the same raw type, otherwise they wouldn't
+    -- -- pass TC (we don't need to pad / fix them before joining).
+    -- -- So we can use the raw type from one of the two branches and freshen
+    -- -- up that one.
+    -- -- TODO: Add a raw type check on t1 and t2
+    -- --
+    -- (g',ls)   <- freshTyPhis' l g $ (\(SI x loc a i t) -> SI x loc a i (toType t)) <$> l1s
+    -- l1s'      <- mapM (`cgSafeEnvFindTyM` g1') xls
+    -- l2s'      <- mapM (`cgSafeEnvFindTyM` g2') xls
+    -- _         <- zipWithM_ (subType l Nothing g1') l1s' ls
+    -- _         <- zipWithM_ (subType l Nothing g2') l2s' ls
+    -- --
+    -- -- GLOBALS:
+    -- --
+    -- let (xgs, gl1s, _) = unzip3 $ globals (zip3 xs t1s t2s)
+    -- (g'',gls) <- freshTyPhis' l g' $ (\(SI x loc a i t) -> SI x loc a i (toType t)) <$> gl1s
+    -- gl1s'     <- mapM (`cgSafeEnvFindTyM` g1') xgs
+    -- gl2s'     <- mapM (`cgSafeEnvFindTyM` g2') xgs
+    -- _         <- zipWithM_ (subType l Nothing g1') gl1s' gls
+    -- _         <- zipWithM_ (subType l Nothing g2') gl2s' gls
+    -- --
+    -- -- PARTIALLY UNINITIALIZED
+    -- --
+    -- -- let (xps, ps) = unzip $ partial $ zip3 xs t1s t2s<F2>
+    -- -- If the variable was previously uninitialized, it will continue to be
+    -- -- so; we don't have to update the environment in this case.
+    -- where
+
+    -- (t1s, t2s) = unzip $ catMaybes $ getPhiTypes l g1 g2 <$> xs
+    -- -- t1s : the types of the phi vars in the 1st branch
+    -- -- t2s : the types of the phi vars in the 2nd branch
+    -- (xls, l1s, l2s) = unzip3 $ locals (zip3 xs t1s t2s)
+    -- xs    = [ xs | PhiVarTC xs <- fFact l]
 
 
 getPhiTypes _ g1 g2 x =

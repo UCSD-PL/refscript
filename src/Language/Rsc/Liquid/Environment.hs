@@ -19,6 +19,7 @@ module Language.Rsc.Liquid.Environment (
   , freshTyFun
   , freshenTypeOpt, freshenType
   , freshTyInst
+  , freshTyPhi
   , freshTyPhis
   , freshTyPhis'
   , freshTyCondExpr
@@ -78,6 +79,11 @@ import           Text.PrettyPrint.HughesPJ
 import           Text.Printf
 
 type EnvKey x = (IsLocated x, F.Symbolic x, PP x, F.Expression x)
+
+
+instance PP CGEnv where
+  pp = pp . cge_names
+
 
 
 -- Only include the "singleton" refinement in the case where Assignability is
@@ -502,7 +508,7 @@ freshTyPhis l g xs τs
 
 -- | Instantiate Fresh Type (at Phi-site)
 --------------------------------------------------------------------------------
-freshTyPhis' :: AnnLq -> CGEnv -> [SymInfo ()] -> CGM (CGEnv, [RefType])
+freshTyPhis' :: F.Reftable r => AnnLq -> CGEnv -> [SymInfo r] -> CGM (CGEnv, [RefType])
 --------------------------------------------------------------------------------
 freshTyPhis' l g es
   = do  ts' <- mapM (freshTy "freshTyPhis") ts
@@ -511,6 +517,15 @@ freshTyPhis' l g es
         return (g', ts')
   where
     (xs,ls,as,is,ts) = L.unzip5 [ (F.symbol x,l,a,i,t) | SI x l a i t <- es ]
+
+--------------------------------------------------------------------------------
+freshTyPhi :: F.Reftable r => AnnLq -> CGEnv -> SymInfo r -> CGM (CGEnv, RefType)
+--------------------------------------------------------------------------------
+freshTyPhi l g s = do
+    (g, ts) <- freshTyPhis' l g [s]
+    case ts of
+      [t] -> return (g, t)
+      _   -> error "freshTyPhi impossible"
 
 -- | Instantiate Fresh Type at conditional expression
 --------------------------------------------------------------------------------

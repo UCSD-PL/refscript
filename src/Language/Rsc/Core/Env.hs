@@ -32,6 +32,7 @@ module Language.Rsc.Core.Env (
   , envSEnv
   , envIds
   , envKeys
+  , envValues
   , envAddWith
 
   , qenvToList
@@ -146,6 +147,7 @@ envDiff           :: Env a -> Env b -> Env a
 envDiff m1 m2      = envFromList [(x, t) | (x, t) <- envToList m1, not (x `envMem` m2)]
 
 envKeys γ          = fst <$> envToList γ
+envValues γ        = snd <$> envToList γ
 
 isRight (Right _)  = True
 isRight (_)        = False

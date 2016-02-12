@@ -113,7 +113,7 @@ transFact :: F.Reftable r => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
                           -> [TVar] -> [BindQ q r] -> FactQ q r -> FactQ q r
 transFact f = go
   where
-    go αs xs (PhiVarTy (v,t))    = PhiVarTy      $ (v, trans f αs xs t)
+    -- go αs xs (PhiVarTy (v,t))    = PhiVarTy      $ (v, trans f αs xs t)
     go αs xs (TypInst x y ts)    = TypInst x y   $ trans f αs xs <$> ts
     go αs xs (EltOverload x m t) = EltOverload x (trans f αs xs m) (trans f αs xs t)
     go αs xs (VarAnn l a t)      = VarAnn l a    $ trans f αs xs <$> t
@@ -212,16 +212,14 @@ ntransFmap f g x = T.mapM (ntrans f g) x
 ntransFact f g = go
   where
     go (PhiVar v)          = pure $ PhiVar v
-    go (PhiVarTC v)        = pure $ PhiVarTC v
-    go (PhiPost v)         = pure $ PhiPost v
-    go (PhiLoop γ)         = pure $ PhiLoop γ
+    go (PhiLoopTC v)       = pure $ PhiLoopTC v
+    go (PhiLoop xs)        = pure $ PhiLoop xs
     go (Overload x m i)    = pure $ Overload x m i
     go (EnumAnn e)         = pure $ EnumAnn e
     go (BypassUnique)      = pure $ BypassUnique
     go (DeadCast x es)     = pure $ DeadCast x es
     go (TypeCast x t)      = pure $ TypeCast x t -- TODO: transform this?
     go (ModuleAnn l m)     = ModuleAnn l   <$> g m
-    go (PhiVarTy (v,t))    = PhiVarTy      <$> (v,) <$>  ntrans f g t
     go (TypInst x y ts)    = TypInst x y   <$> mapM (ntrans f g) ts
     go (EltOverload x m t) = EltOverload x <$> ntrans f g m <*> ntrans f g t
     go (VarAnn l a t)      = VarAnn l a    <$> T.mapM (ntrans f g) t

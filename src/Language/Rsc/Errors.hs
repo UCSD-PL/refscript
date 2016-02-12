@@ -227,6 +227,11 @@ errorAmbientLookup l t f      = mkErr l $ printf "Cannot find member '%s' in amb
 errorUnionLookup l t f        = mkErr l $ printf "Cannot find member '%s' in any part of the union '%s'" (ppshow f) (ppshow t)
 
 errorExprTyping l e t         = mkErr l $ show $ text "Could not type expression" <+> ticks (pp e) <+> text "at type:" $+$ nest 2 (pp t)
+errorLoopWiden l _ x' t t'    = mkErr l $ show $ text "The type bound to variable" <+> ticks (pp x') <> pp ":" $+$
+                                                 nest 2 (pp t') $+$
+                                                 text "needs to be a subtype of the type" $+$
+                                                 nest 2 (pp t) $+$
+                                                 text "bound to the same variable before the loop."
 
 ---------------------------------------------------------------------------
 -- | LIQUID

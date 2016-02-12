@@ -229,22 +229,22 @@ freshTyArgs a n ξ bs t
         return   $ (βs, apply θ t)
 
 --------------------------------------------------------------------------------
-freshSubst :: Unif r => AnnSSA r -> Int -> IContext -> [BTVar r] -> TCM r ([BTVar r], RSubst r)
+freshSubst :: Unif r => AnnTc r -> Int -> IContext -> [BTVar r] -> TCM r ([BTVar r], RSubst r)
 --------------------------------------------------------------------------------
-freshSubst (FA i l _) n ξ bs
+freshSubst a@(FA _ l _) n ξ bs
   = do when (not $ uniqueBy (on (==) btv_sym) bs) $ fatal (errorUniqueTypeParams l) ()
        fbs       <- mapM (freshTVar l) bs
-       _         <- setTyArgs l i n ξ fbs
+       _         <- setTyArgs a n ξ fbs
        _         <- extSubst fbs
        return     $ (fbs, fromList $ map btvToTV bs `zip` map btVar fbs)
 
 --------------------------------------------------------------------------------
-setTyArgs :: (IsLocated l, Unif r) => l -> NodeId -> Int -> IContext -> [BTVar r] -> TCM r ()
+setTyArgs :: (Unif r) => AnnTc r -> Int -> IContext -> [BTVar r] -> TCM r ()
 --------------------------------------------------------------------------------
-setTyArgs _  i n ξ bs
+setTyArgs a n ξ bs
   = case map btVar bs of
       [] -> return ()
-      vs -> addAnn i $ TypInst n ξ vs
+      vs -> addAnn a (TypInst n ξ vs)
 
 
 --------------------------------------------------------------------------------
@@ -261,9 +261,11 @@ getAnns = do θ     <- tc_subst <$> get
              return m'
 
 --------------------------------------------------------------------------------
-addAnn :: Unif r => NodeId -> Fact r -> TCM r ()
+addAnn :: Unif r => AnnTc r -> Fact r -> TCM r ()
 --------------------------------------------------------------------------------
-addAnn i f = modify $ \st -> st { tc_anns = I.insertWith (++) i [f] $ tc_anns st }
+addAnn l f = modify $ \st -> st {
+      tc_anns = I.insertWith (++) (fId l) [f] $ tc_anns st
+    }
 
 -------------------------------------------------------------------------------
 execute ::  Unif r => Config -> V.Verbosity -> TcRsc r -> TCM r a -> Either (F.FixResult Error) a
@@ -346,9 +348,9 @@ unifyTypeM l γ t t' = unifyTypesM l γ [t] [t']
 deadcastM :: Unif r => TCEnv r -> [Error] -> Expression (AnnSSA r)
                     -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-deadcastM γ es e = addAnn i fact >> wrapCast loc fact e
+deadcastM γ es e = addAnn l fact >> wrapCast loc fact e
   where
-    i            = fId (getAnnotation e)
+    l            = getAnnotation e
     loc          = fSrc (getAnnotation e)
     fact         = DeadCast ξ es
     ξ            = tce_ctx γ
@@ -358,9 +360,9 @@ deadcastM γ es e = addAnn i fact >> wrapCast loc fact e
 typecastM :: Unif r => TCEnv r -> Expression (AnnSSA r) -> Type
                     -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-typecastM γ e t  = addAnn i fact >> wrapCast loc fact e
+typecastM γ e t  = addAnn l fact >> wrapCast loc fact e
   where
-    i            = fId (getAnnotation e)
+    l            = getAnnotation e
     loc          = fSrc (getAnnotation e)
     fact         = TypeCast ξ t
     ξ            = tce_ctx γ

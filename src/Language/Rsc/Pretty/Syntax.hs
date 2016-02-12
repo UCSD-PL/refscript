@@ -121,7 +121,9 @@ ppStatement s = case s of
                                       headerWithBlock (text "else") (inBlock alt)
   SwitchStmt _ e cases      -> Just $ text "switch" <+> parens (ppExpression True e) $$
                                       braces (nest indentationLevel (vcat (map caseClause cases)))
-  WhileStmt _ test body     -> Just $ text "while" <+> parens (ppExpression True test) $$ pp body
+  WhileStmt _ test body     -> Just $ text "while" <+> parens (ppExpression True test) <+> lbrace $+$
+                                      nest indentationLevel (pp body) $+$ rbrace
+
   ReturnStmt _ Nothing      -> Just $ text "return" <> semi
   ReturnStmt _ (Just e)     -> Just $ text "return" <+> ppExpression True e <> semi
   DoWhileStmt _ s e         -> Just $ text "do" $$ pp s <+> text "while" <+>

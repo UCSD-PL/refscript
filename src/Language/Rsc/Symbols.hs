@@ -14,6 +14,7 @@ module Language.Rsc.Symbols (
 
   -- * Conversions
   , symToField
+  , setSiType
 
   -- * Symbol list
   , SymList (..), symbols
@@ -67,6 +68,7 @@ instance F.Symbolic (SymInfoQ q r) where
 symToField (SI n _ WriteGlobal _ t) = FI n Req tMU t
 symToField (SI n _ _           _ t) = FI n Req tIM t
 
+setSiType s t = s { v_type = t }
 
 -- | @argBind@ returns a dummy type binding `arguments :: T `
 --   where T is an object literal containing the non-undefined `ts`.

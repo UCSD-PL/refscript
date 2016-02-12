@@ -67,7 +67,6 @@ import           Language.Rsc.Misc
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
-import           Language.Rsc.Symbols
 import           Language.Rsc.Traversals
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ      (($+$))

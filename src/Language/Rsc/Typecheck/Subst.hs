@@ -100,7 +100,7 @@ instance Free a => Free [a] where
   free                      = S.unions . map free
 
 instance Free (Fact r) where
-  free (PhiVarTy (_,t))     = free t
+  -- free (PhiVarTy (_,t))     = free t
   free (TypInst _ _ ts)     = free ts
   free (EltOverload _ t t') = free [t, t']
   free (VarAnn _ _ t )      = free t
@@ -159,7 +159,7 @@ instance SubstitutableQ q r t => SubstitutableQ q r (Located t) where
   apply θ (Loc s v)         = Loc s $ apply θ v
 
 instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
-  apply θ (PhiVarTy (v,t))     = PhiVarTy . (v,) $ apply θ t
+  -- apply θ (PhiVarTy (v,t))     = PhiVarTy . (v,) $ apply θ t
   apply θ (TypInst i ξ ts)     = TypInst i ξ     $ apply θ ts
   apply θ (EltOverload ξ t t') = EltOverload ξ (apply θ t) (apply θ t')
   apply θ (VarAnn l a t)       = VarAnn l a      $ apply θ t

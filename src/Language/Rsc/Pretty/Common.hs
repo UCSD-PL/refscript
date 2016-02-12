@@ -17,7 +17,6 @@ module Language.Rsc.Pretty.Common (
 import           Control.Exception.Base
 import           Data.Data
 import           Data.Function                       (on)
-import qualified Data.IntMap                         as I
 import           Data.List                           (isPrefixOf, sortBy)
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types             as F

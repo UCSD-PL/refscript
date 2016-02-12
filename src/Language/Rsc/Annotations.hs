@@ -46,15 +46,16 @@ import           Language.Rsc.Types
 data FactQ q r
   -- ** ANALYSIS **
   -- SSA
-  = PhiVar        (F.Symbol, F.Symbol)  -- Source level Φ-var & SSA-ed version
-                                        -- at the end of each if-branch
+  = PhiVar        (Var r)            -- Φ-var (SSA version) at end of if-stmt
+  | PhiLoop       (Var r, Var r)     -- Φ-var (SSA version) before loop and at
+                                     -- end of loop body
+                                     --
+  | PhiLoopTC     (Var r, Var r, Type)
 
-  | PhiVarTC      (Var r)
-  | PhiVarTy      (Var r, RTypeQ q r)
-
-  | PhiLoop       !(Env (Var r, Var r))
-
-  | PhiPost       [(Var r, Var r, Var r)]
+  -- | PhiVarTC      (Var r)
+  -- | PhiVarTy      (Var r, RTypeQ q r)
+  -- | PhiLoop       !(Env (Var r, Var r))
+  -- | PhiPost       [(Var r, Var r, Var r)]
 
   -- Unification
   | TypInst       Int IContext [RTypeQ q r]
@@ -142,7 +143,7 @@ type UAnnInfo  = AnnInfo ()
 
 type Var r = Id (AnnSSA r)
 
-phiVarsAnnot l = [ x | PhiVar (x, _) <- fFact l]
+phiVarsAnnot l = [ x | PhiVar x <- fFact l]
 
 
 -- | scrapeVarDecl: Scrape a variable declaration for annotations

@@ -18,8 +18,8 @@ import           Data.Default
 import           Data.Function                      (on)
 import           Data.Generics
 import qualified Data.IntMap.Strict                 as I
-import           Data.List                          (find, partition, sortBy)
-import           Data.Maybe                         (catMaybes, fromMaybe)
+import           Data.List                          (partition, sortBy)
+import           Data.Maybe                         (fromMaybe)
 import qualified Data.Traversable                   as T
 import           Language.Fixpoint.Misc             as FM
 import qualified Language.Fixpoint.Types            as F
@@ -128,9 +128,10 @@ patch fs
     vld TypInst{}     = True
     vld Overload{}    = True
     vld EltOverload{} = True
-    vld PhiVarTy{}    = True
-    vld PhiVarTC{}    = True
+    -- vld PhiVarTy{}    = True
+    -- vld PhiVarTC{}    = True
     vld PhiVar{}      = True
+    vld PhiLoopTC{}   = True
     vld TypeCast{}    = True
     vld DeadCast{}    = True
     vld _             = False
@@ -305,18 +306,11 @@ tcStmt γ s@(IfStmt l e s1 s2)
 tcStmt γ (WhileStmt l c b)
   = tcExprW γ c >>= \case
       (c', Nothing) -> return (WhileStmt l c' b, Nothing)
-      (c', Just t)  ->
-          do  _ <- unifyTypeM (srcPos l) γ t tBool
-              phiTys   <- mapM (safeEnvFindTy l γ) phis
-              (b', γl) <- tcStmt (tcEnvAdds (map xsi (zip xs phiTys)) γ) b
-              tcWA γ dummyExpr (envLoopJoin l γ γl) >>= \case
-                Left e     -> return (ExprStmt  l e    , γl)
-                Right γout -> return (WhileStmt l c' b', γout)
-  where
-    xsi (x,t)     = (x, SI (F.symbol x) Local WriteLocal Initialized t)
-    dummyExpr     = StringLit l "DUMMY_LOOP_REPLACEMENT"
-    xs            = [ mkNextId l x | x <- phis ]
-    phis          = phiVarsAnnot l
+      (c', Just t)  -> do
+          _         <- unifyTypeM (srcPos l) γ t tBool  -- meh ..
+          (b', γ')  <- tcStmt γ b
+          γ'        <- envLoopJoin l γ γ'
+          return       (WhileStmt l c' b', Just γ')
 
 -- | var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt γ (VarDeclStmt l ds)
@@ -609,16 +603,6 @@ tcSW γ s (Left  e)      = do
     dc    <- deadcastM γ [e] (NullLit l1)
     return   (ExprStmt l2 dc, Nothing)
   where l = getAnnotation s
-
-
--- | Execute a and if it fails wrap e in a deadcast
---
---------------------------------------------------------------------------------
-tcWA :: Unif r => TCEnv r -> ExprSSAR r -> TCM r b -> TCM r (Either (ExprSSAR r) b)
---------------------------------------------------------------------------------
-tcWA γ e a = tcWrap a >>= \case
-  Right r -> return (Right r)
-  Left  l -> Left <$> deadcastM γ [l] e
 
 
 --------------------------------------------------------------------------------
@@ -974,7 +958,7 @@ tcNormalCall γ l fn etos ft0
               resolveOverload γ l fn ets ft0
        case z of
          Just (i, θ, ft) ->
-             do addAnn (fId l) (Overload (tce_ctx γ) (F.symbol fn) i)
+             do addAnn l (Overload (tce_ctx γ) (F.symbol fn) i)
                 addSubst l θ
                 (es, ts) <- pure (unzip ets)
                 tcWrap (tcCallCase γ l fn es ts ft) >>= \case
@@ -1117,132 +1101,50 @@ envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
 envJoin l γ (Just γ1) (Just γ2) = do
 
-    ss    <- mapM (safeEnvFindSI l γ ) xs     -- SI entry before the conditional
-    s1s   <- mapM (safeEnvFindSI l γ1) xs'    -- SI entry at the end of the 1st branch
-    s2s   <- mapM (safeEnvFindSI l γ2) xs'    -- SI entry at the end of the 2nd branch
+    s1s   <- mapM (safeEnvFindSI l γ1) xs    -- SI entry at the end of the 1st branch
+    s2s   <- mapM (safeEnvFindSI l γ2) xs    -- SI entry at the end of the 2nd branch
 
-    Just <$> foldM
-      (\γ' (s, s1, s2) -> do
-        if isSubtype γ1 (v_type s1) (v_type s2) then      -- T1 <: T2
-            return (tcEnvAdd (v_name s2) s2 γ')
-        else if isSubtype γ1 (v_type s2) (v_type s1) then -- T2 <: T1
-            return (tcEnvAdd (v_name s1) s1 γ')
-        else
-            error "envjoin-nosub"
-      )
-      γ (zip3 ss s1s s2s)
+    return $ Just $ foldl (\γ' (s1, s2) ->
+        if isSubtype γ1 (v_type s1) (v_type s2) then      -- T1 <: T2 ==> T2
+            tcEnvAdd (v_name s2) s2 γ'
+        else if isSubtype γ1 (v_type s2) (v_type s1) then -- T2 <: T1 ==> T1
+            tcEnvAdd (v_name s1) s1 γ'
+        else                                              -- o.w.     ==> T1 \/ T2
+            tcEnvAdd (v_name s1) (sOr s1 s2) γ'
+      ) γ (zip s1s s2s)
 
   where
-    (xs, xs') = unzip [xs_ | PhiVar xs_ <- fFact l]
+    xs        = [ x | PhiVar x <- fFact l ]
+    sOr s1 s2 = s1 { v_type = tOr [v_type s1, v_type s2] }
 
 
 --------------------------------------------------------------------------------
-envLoopJoin :: Unif r => AnnTc r -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
+envLoopJoin :: Unif r => AnnTc r -> TCEnv r -> TCEnvO r -> TCM r (TCEnv r)
 --------------------------------------------------------------------------------
-envLoopJoin _ γ Nothing   = return $ Just γ
-envLoopJoin l γ (Just γl) =
-  do  -- xts      <- toXts <$> mapM (getLoopNextPhiType l γ γl) xs
+envLoopJoin _ γ Nothing   = return γ
 
-      -- TODO: replace below ???
-
-      -- _        <- mapM_ mkPhiAnn (second v_type <$> xts)
-      -- Just . tcEnvAdds xts . (`substNames` γ) <$> getSubst
-      return undefined
-  where
-      xs              = phiVarsAnnot l
-      substNames θ γ_ = γ_ { tce_names = apply θ (tce_names γ) }
-      toXts ts        = [ (x,t) | (x, Just t) <- zip xs ts ]
-
-      -- TODO: Replace the below ???
-
-
-      -- mkPhiAnn        = addAnn (fId l) . PhiVarTy
-
+--  XXX: use the "next" name for the Φ-var in the propagated env γ_
 --
--- Using @tcEnvFindTyForAsgn@ here as the initialization status is
--- recorded in the initialization part of the output.
---
---------------------------------------------------------------------------------
-getPhiType :: Unif r => AnnTc r -> TCEnv r -> TCEnv r -> Var r -> TCM r (Maybe (SymInfo r))
---------------------------------------------------------------------------------
-getPhiType l γ1 γ2 x =
-  case (tcEnvFindTyForAsgn x γ1, tcEnvFindTyForAsgn x γ2) of
-    (Just (SI x1 l1 a1 i1 t1), Just (SI _ _ _ i2 t2)) ->
-        do  θ     <- getSubst
-            t     <- unifyPhiTypes l γ1 x t1 t2 θ
-            return $ Just $ SI x1 l1 a1 (i1 `mappend` i2) t
-    (_, _) -> return Nothing
-    -- bindings that are not in both environments are discarded
+envLoopJoin l γ (Just γ') = foldM (\γ_ (x, x') -> do
+      s    <- safeEnvFindSI l γ  x
+      s'   <- safeEnvFindSI l γ' x'
 
---------------------------------------------------------------------------------
-getLoopNextPhiType :: (F.Symbolic x,  Unif r) => AnnTc r -> TCEnv r -> TCEnv r -> x -> TCM r (Maybe (SymInfo r))
---------------------------------------------------------------------------------
-getLoopNextPhiType l γ γl x =
-  case (tcEnvFindTyForAsgn x γ, tcEnvFindTyForAsgn (mkNextId l x) γl) of
-    (Just (SI x1 l1 a1 i1 t1), Just (SI _ _ _ i2 t2)) ->
-        do  θ <- getSubst
-            t <- unifyPhiTypes l γ x t1 t2 θ
-            return $ Just $ SI x1 l1 a1 (i1 `mappend` i2) t
-    _ -> return Nothing
-    -- bindings that are not in both environments are discarded
+      -- [ T2 <: T1 ==> T1 ]
+      --
+      -- Lift uniqueness restriction since we are not allowing the loop SSA var
+      -- to escape (any more than the original variable).
+      --
+      if isSubtypeWithUq γ_ (v_type s') (v_type s) then do
+          addAnn l (PhiLoopTC (x, x', toType $ v_type s))
+          return   (tcEnvAdd (v_name s') s γ_)
 
--- | `unifyPhiTypes`
---
---   * Special casing the situation where one the types in undefined.
---------------------------------------------------------------------------------
-unifyPhiTypes
-  :: (F.Symbolic x, Unif r)
-  => AnnTc r -> TCEnv r -> x -> RType r -> RType r -> RSubst r -> TCM r (RType r)
---------------------------------------------------------------------------------
-unifyPhiTypes l γ x t1 t2 θ
-  | Left _ <- substE
-  = tcError (errorEnvJoinUnif l (F.symbol x) t1 t2)
+      -- This would require a fixpoint computation, so it's not allowed
+      else
+          tcError (errorLoopWiden l x x' (v_type s) (v_type s'))
+    ) γ (zip xs xs')
 
-  | Right θ' <- substE
-  , on (==) (apply θ') t1 t2
-  = setSubst θ' >> return (apply θ' t1)
-
-  | Right θ' <- substE
-  = do  setSubst θ'
-        let t1' = apply θ' t1
-            t2' = apply θ' t2
-            to  = go t1' t2'
-        case to of
-          Right t -> return t
-          Left  e -> tcError e
-
-  | otherwise
-  = fatal (errorEnvJoin (srcPos l) (F.symbol x) (toType t1) (toType t2)) t1
   where
-    go a b  | isTUndef a   = Right $ orUndef b
-            | isTUndef b   = Right $ orUndef a
-            | isTNull a    = Right $ orNull b
-            | isTNull b    = Right $ orNull a
-            | maybeNull a  = orNull  <$> go (stripNull a) b
-            | maybeNull b  = orNull  <$> go a (stripNull b)
-            | maybeUndef a = orUndef <$> go (stripUndefined a) b
-            | maybeUndef b = orUndef <$> go a (stripUndefined b)
-            | a `equiv` b  = Right a
-            | otherwise    = Left $ errorEnvJoin (srcPos l) (F.symbol x) (toType t1) (toType t2)
-
-    substE      = unifys (srcPos l) γ θ [t1] [t2]
-    equiv a b   = isSubtype γ a b && isSubtype γ b a
-    maybeNull   = any isTNull . bkUnion
-    maybeUndef  = any isTNull . bkUnion
-
---------------------------------------------------------------------------------
-postfixStmt :: a -> [Statement a] -> Statement a -> Statement a
---------------------------------------------------------------------------------
-postfixStmt _ [] s = s
-postfixStmt l ss s = BlockStmt l $ expandBlock $ [s] ++ ss
-
---------------------------------------------------------------------------------
-expandBlock :: [Statement t] -> [Statement t]
---------------------------------------------------------------------------------
-expandBlock = concatMap f
-  where
-    f (BlockStmt _ ss) = ss
-    f s                = [s ]
+    (xs, xs') = unzip [ x | PhiLoop x <- fFact l ]
 
 
 --------------------------------------------------------------------------------

@@ -82,7 +82,10 @@ type EnvKey x = (IsLocated x, F.Symbolic x, PP x, F.Expression x)
 
 
 instance PP CGEnv where
-  pp = pp . cge_names
+  pp g = pp "GUARDS:" $+$
+         nest 2 (pp (cge_guards g)) $+$
+         pp "VARIABLES" $+$
+         pp (cge_names g)
 
 
 

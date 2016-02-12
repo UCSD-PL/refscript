@@ -15,7 +15,7 @@ import qualified Data.Foldable                   as FO
 import           Data.Function                   (on)
 import qualified Data.HashMap.Strict             as HM
 import           Data.List                       (partition, sortBy)
-import           Data.Maybe                      (catMaybes, fromMaybe)
+import           Data.Maybe                      (fromMaybe)
 import qualified Data.Text                       as T
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Solver        (solve)
@@ -303,6 +303,7 @@ consFun g (FunctionStmt l f xs (Just body))
           mapM_ (consCallable l g f xs body) ft
       Nothing -> cgError $ errorMissingSpec (srcPos l) f
 
+
 consFun _ s
   = die $ bug (srcPos s) "consFun called not with FunctionStmt"
 
@@ -419,7 +420,7 @@ consStmt g (ReturnStmt l Nothing)
 consStmt g (ReturnStmt l (Just e))
   = mseq (consExpr g e (Just rt)) $ \(y,gy) -> do
       eT  <- cgSafeEnvFindTyM y gy
-      _   <- subType l Nothing gy eT rt
+      _   <- subType l Nothing gy (ltracePP l "RET-LHS" eT) (ltracePP l "RET-RHS" rt)
       return Nothing
   where
     rt = cgEnvFindReturn g
@@ -998,62 +999,67 @@ consFold f          = foldM step . Just
     step (Just g) x = f g x
 
 ---------------------------------------------------------------------------------
-consWhile :: CGEnv -> AnnLq -> Expression AnnLq -> Statement AnnLq -> CGM (Maybe CGEnv)
+consWhile
+  :: CGEnv -> AnnLq -> Expression AnnLq -> Statement AnnLq -> CGM (Maybe CGEnv)
 ---------------------------------------------------------------------------------
+--
+--    Typing Rule for `while (cond) {body}`
+--
+--       (a) xtIs         <- fresh G [ G(x) | x <- Φ]
+--       (b) GI            = G, xtIs
+--       (c) G            |- G(x)  <: GI(x)  , ∀x∈Φ      [base]
+--       (d) GI           |- cond : (xc, GI')
+--       (e) GI', xc:true |- body : GI''
+--       (f) GI''         |- GI''(x') <: GI(x)[Φ'/Φ]     [step]
+--       ---------------------------------------------------------
+--           G            |- while[Φ] (cond) body :: GI', xc:false
+--
+--    The above rule assumes that phi-assignments have already been inserted. That is,
+--
+--       i = 0;
+--       while (i < n){
+--         i = i + 1;
+--       }
+--
+--    Has been SSA-transformed to
+--
+--       i_0 = 0;
+--       i_2 = i_0;
+--       while [i_2] (i_2 < n) {
+--         i_1  = i_2 + 1;
+--         i_2' = i_1;
+--       }
+--
+consWhile g l cond body = do
+    (gI, tIs) <- freshTyPhis l g xs ts                      -- (a) (b)
+    _         <- consWhileBase l xs tIs g                   -- (c)
+    mseq (consExpr gI cond Nothing) $ \(xc, gc) -> do       -- (d)
+      z     <- consStmt (envAddGuard xc True gc) body       -- (e)
+      ss'   <- whenJustM z (consWhileStep l xs xs' tIs)     -- (f)
+      gc'   <- cgEnvAdds l "consWhile" ss' gc
+      return $ Just (envAddGuard xc False gc')
+  where
+      (xs, xs', ts) = unzip3 [ x_ | PhiLoopTC x_ <- fFact l ]
 
-{- Typing Rule for `while (cond) {body}`
+consWhileBase l xs tIs g = do
+    baseT <- ltracePP l ("got base " ++ ppshow xs) <$> mapM (`cgSafeEnvFindTyM` g) xs
+    zipWithM_ (subType l Nothing g) baseT tIs
 
-      (a) xtIs         <- fresh G [ G(x) | x <- Φ]
-      (b) GI            = G, xtIs
-      (c) G            |- G(x)  <: GI(x)  , ∀x∈Φ      [base]
-      (d) GI           |- cond : (xc, GI')
-      (e) GI', xc:true |- body : GI''
-      (f) GI''         |- GI''(x') <: GI(x)[Φ'/Φ]     [step]
-      ---------------------------------------------------------
-          G            |- while[Φ] (cond) body :: GI', xc:false
+-- Return the type binding that should be propagated. The var is the output
+-- SSAed variable from the loop body, and the bound type is the invariant type.
+--
+consWhileStep l xs xs' tIs gI'' = do
+    stepTs <- mapM (safeEnvFindSI l gI'') xs'
+    zipWithM_ (subType l Nothing gI'') (map v_type stepTs) tIs'                       -- (f)
+    return    (zipWith setSiType stepTs tIs)
 
-   The above rule assumes that phi-assignments have already been inserted. That is,
-
-      i = 0;
-      while (i < n){
-        i = i + 1;
-      }
-
-   Has been SSA-transformed to
-
-      i_0 = 0;
-      i_2 = i_0;
-      while [i_2] (i_2 < n) {
-        i_1  = i_2 + 1;
-        i_2' = i_1;
-      }
-
--}
-consWhile g l cond body
--- XXX: The RHS ty comes from PhiVarTy
-  = do  (gI,tIs)         <- freshTyPhis l g xs (map toType ts)               -- (a) (b)
-        _                <- consWhileBase l xs tIs g                         -- (c)
-        mseq (consExpr gI cond Nothing) $ \(xc, gI') ->                      -- (d)
-          do  z          <- consStmt (envAddGuard xc True gI') body          -- (e)
-              whenJustM z $ consWhileStep l xs tIs                           -- (f)
-              return      $ Just $ envAddGuard xc False gI'
-    where
-        (xs,ts) = unzip [xts | PhiVarTy xts <- fFact l]
-
-consWhileBase l xs tIs g
-  = do  baseT <- mapM (`cgSafeEnvFindTyM` g) xs
-        zipWithM_ (subType l Nothing g) baseT tIs
-
-consWhileStep l xs tIs gI''
-  = do  stepTs <- mapM (`cgSafeEnvFindTyM` gI'') xs'
-        zipWithM_ (subType l Nothing gI'') stepTs tIs'                       -- (f)
   where
     tIs' = F.subst su <$> tIs
-    xs'  = mkNextId l <$> xs
     su   = F.mkSubst   $  safeZip "consWhileStep" (F.symbol <$> xs) (F.eVar <$> xs')
 
-whenJustM Nothing  _ = return ()
+whenJustM Nothing  _ = return []
 whenJustM (Just x) f = f x
+
 
 --
 --    // G0 --> x0
@@ -1079,30 +1085,30 @@ envJoin :: AnnLq -> CGEnv -> Maybe CGEnv -> Maybe CGEnv -> CGM (Maybe CGEnv)
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
 envJoin l g (Just g1) (Just g2) = do
-    ss    <-  mapM (safeEnvFindSI l g ) xs     -- SI entry before the conditional
-    s1s   <-  mapM (safeEnvFindSI l g1) xs'    -- SI entry at the end of the 1st branch
-    s2s   <-  mapM (safeEnvFindSI l g2) xs'    -- SI entry at the end of the 2nd branch
-    Just <$> foldM (\g_ (s, s1, s2) -> do
+
+    s1s   <-  mapM (safeEnvFindSI l g1) xs    -- SI entry at the end of the 1st branch
+    s2s   <-  mapM (safeEnvFindSI l g2) xs    -- SI entry at the end of the 2nd branch
+
+    Just <$> foldM (\g_ (s1, s2) -> do
         if isSubtype g1 (v_type s1) (v_type s2) then      -- T1 <: T2
-            checkPhi g_ s1 s2
+            checkPhi g_ s2 s1 s2
         else if isSubtype g1 (v_type s2) (v_type s1) then -- T2 <: T1
-            checkPhi g_ s2 s1
+            checkPhi g_ s1 s1 s2
         else
-            error "envjoin-nosub"
-           )
-     g (zip3 ss s1s s2s)
+            checkPhi g_ (sOr s1 s2) s1 s2
+      ) g (zip s1s s2s)
 
   where
 
     -- SSAed Φ-vars before the conditional and at the end of the branches
-    (xs, xs') = unzip [xs_ | PhiVar xs_ <- fFact l]
+    xs        = [ x | PhiVar x <- fFact l]
+    sOr s1 s2 = s1 { v_type = tOr [v_type s1, v_type s2] }
 
-    checkPhi g_ sSubT sSupT = do
-        (g', r_)  <- freshTyPhi l g_ sSupT
-        ts        <- zipWithM (cgSafeEnvFindTyM . v_name) [sSubT,sSupT] [g1,g2]
+    checkPhi g_ s_ s1 s2 = do
+        (g', r_)  <- freshTyPhi l g_ s_
+        ts        <- zipWithM (cgSafeEnvFindTyM . v_name) [s1,s2] [g1,g2]
         zipWithM_ (\l_ g_ -> subType l Nothing g_ l_ r_) ts [g1,g2]
         return g'
-
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

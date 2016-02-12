@@ -687,7 +687,7 @@ tcExpr γ e@(ArrayLit l es) to
 tcExpr γ (ObjectLit l pes) to
   = do  (es', ts) <- unzip <$> T.mapM (uncurry (tcExprWD γ)) ets
         t         <- pure (TObj tUQ (tmsFromList (zipWith toFI ps ts)) fTop)
-        return       (ObjectLit l (zip ps es'), t)
+        return       $ ltracePP l "OBJ" (ObjectLit l (zip ps es'), t)
   where
     (ps , _)       = unzip pes
     toFI p t       = FI (F.symbol p) Req tUQ t

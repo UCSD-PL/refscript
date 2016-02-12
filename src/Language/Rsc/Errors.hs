@@ -124,10 +124,9 @@ errorIncompMutTy l m m' t t' fo = mkErr l $ show $ text "Immutability modifier" 
                                                  maybe empty (\f -> text "of field" <+> ticks (pp f)) fo <+>
                                                  text "of type:" $+$ nest 2 (pp t')
 
-errorUniqueRef l x            = mkErr l $ show $ text "Cannot have a unique reference" <+>
-                                                 maybe empty (ticks . pp) x <+>
-                                                 text "in this context." $+$
-                                                 text "Try casting" <+> ticks (pp x) <+> text "to a non-unique type."
+errorUniqueRef l x            = mkErr l $ show $ text "Cannot have a unique reference in this context." $+$
+                                                 maybe empty (\x' -> ticks (pp x') <+> text "seems to be unique.") x $+$
+                                                 text "Hint: Try casting subexpressions to non-unique permissions."
 errorUniqueAsgn l x           = mkErr l $ show $ text "Cannot re-assign unique reference:" <+> ticks (pp x) <> pp "." $+$
                                                  text "Try casting" <+> ticks (pp x) <+> text "to a non-unique type."
 errorMutUnknown l t           = mkErr l $ show $ sep [text "Unknown mutability modifier:", nest 2 (pp t)]

@@ -20,7 +20,8 @@ main = defaultMain =<< group "Tests" [unitTests]
 
 -- unitTests = group "Unit"
 --   [
---     testGroup "pos-lists"       <$> dirTests rscCmd "tests/pos/todo/lists"      [] ExitSuccess
+--     testGroup "pos-lists"       <$> dirTests rscCmd "tests/pos/lists"      [] ExitSuccess
+--   , testGroup "neg-lists"       <$> dirTests rscCmd "tests/neg/todo/lists"      [] (ExitFailure 1)
 --   ]
 
 unitTests = group "Unit"
@@ -47,6 +48,7 @@ unitTests = group "Unit"
   , testGroup "neg-loop"         <$> dirTests rscCmd "tests/neg/loops"        [] (ExitFailure 1)
   , testGroup "neg-misc"         <$> dirTests rscCmd "tests/neg/misc"         [] (ExitFailure 1)
   , testGroup "neg-bounded-poly" <$> dirTests rscCmd "tests/neg/bounded-poly" [] (ExitFailure 1)
+  , testGroup "neg-list"         <$> dirTests rscCmd "tests/neg/lists"        [] (ExitFailure 1)
 
 --   , testGroup "pos-alias"  <$> dirTests rscCmd "tests/pos/typealias"  [] ExitSuccess
 --   , testGroup "pos-fb"     <$> dirTests rscCmd "tests/pos/fb"         [] ExitSuccess

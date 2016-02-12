@@ -14,6 +14,7 @@ var files = [
     "./ambient/undefined.d.ts",
     "./ambient/object.d.ts",
     "./ambient/array.d.ts",
+    "./ambient/list.d.ts",
     "./ambient/boolean.d.ts",
     "./ambient/function.d.ts",
     "./ambient/string.d.ts",

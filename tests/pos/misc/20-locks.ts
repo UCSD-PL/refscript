@@ -26,22 +26,22 @@ function work():void{
 /*@ loop :: (number, number) => number */
 function loop(n:number, l:number) {
 
-	let flag :number= random();
-	if (n <= 0) {
-		return l;
-	}
+  let flag :number= random();
+  if (n <= 0) {
+    return l;
+  }
 
-	l = acquire(l);
-	work();
-	l = release(l);
+  l = acquire(l);
+  work();
+  l = release(l);
 
-	return loop(n-1, l);
+  return loop(n-1, l);
 }
 
 
 /*@ main :: ({n:number|n > 0}) => void */
 function main(n){
-	let l :number= create();
-	loop(n, l);
-	assert(l === 0);
+  let l :number= create();
+  l = loop(n, l);
+  assert(l === 0);
 }

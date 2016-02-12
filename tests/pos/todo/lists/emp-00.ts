@@ -1,6 +1,6 @@
 
-/*@ boop :: (#List[number]) => {v:boolean | 0 < 1} */
-function boop(xs : number[]) : boolean{
-	var r = empty(xs);
+/*@ boop :: <M extends ReadOnly>(List<M, number>) => {v:boolean | 0 < 1} */
+function boop<M extends ReadOnly>(xs : List<M,number>) : boolean{
+	let r = empty(xs);
 	return r;
 }

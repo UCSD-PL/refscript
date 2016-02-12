@@ -1,4 +1,4 @@
-/*@ map :: <A,B,M extends ReadOnly> ((A) => B, LList<M,A>) => LList<M,B> */
+/*@ map :: <A,B,M extends ReadOnly> ((A) => B, List<M,A>) => List<M,B> */
 function map(f, xs){
   if (empty(xs)) {
     return nil();
@@ -14,7 +14,7 @@ function abs(x){
   return x;
 }
 
-/*@ listsum :: <A,B,M extends ReadOnly> (LList<M,number>) => number */
+/*@ listsum :: <A,B,M extends ReadOnly> (List<M,number>) => number */
 function listsum(xs){
   if (empty(xs)) {
     return 0;

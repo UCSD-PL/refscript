@@ -1,14 +1,14 @@
-/*@ map :: forall A B. ((A) => B, #List[A]?) => #List[B]? */
+/*@ map :: <A,B,M extends ReadOnly> ((A) => B, LList<M,A>) => LList<M,B> */
 function map(f, xs){
 	if (empty(xs)) {
 		return nil();
 	}
 	// return cons(f(head(xs)), map(f, tail(xs)));
 	
-	var x0  = head(xs);
-	var xs_ = tail(xs);
-	var y   = f(x0);
-	var ys_ = map(f, xs_);
+	let x0  = head(xs);
+	let xs_ = tail(xs);
+	let y   = f(x0);
+	let ys_ = map(f, xs_);
 	return cons(y, ys_);
 
 }
@@ -21,8 +21,8 @@ function abs(x){
   return x;
 }
 
-/*@ main :: (#List[number]?) => #List[{v:number | 0 <= v}]? */
+/*@ main :: <M extends ReadOnly> (LList<M,number>) => LList<M,{v:number | 0 <= v}> */
 function main(xs){
-  var bs = map(abs, xs);
+  let bs = map(abs, xs);
   return bs;
 }

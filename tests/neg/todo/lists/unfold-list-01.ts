@@ -1,17 +1,17 @@
 
-interface NumList {
+interface NumList<M extends ReadOnly> {
   d: number;
-  /*@ n :: #NumList */
-  n: NumList;
+  /*@ n : NumList<M> + null */
+  n: NumList<M>;
 }
 
 /*@ foo :: () => number */
 function foo() {
-  /*@ a :: #NumList */
-  var a =  { d: 1, n: { d: 2, n: null } };
+  /*@ a :: NumList<Unique> */
+  let a =  { d: 1, n: { d: 2, n: null } };
 
   return a.n;
 
 }
 
-var aa = foo();
+let aa = foo();

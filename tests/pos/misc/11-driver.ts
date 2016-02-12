@@ -16,6 +16,7 @@ function acquire(l: number): number {
 }
 
 function release(l: number): number {
+    assert(l !== 0);
     return 0;
 }
 

@@ -1,5 +1,5 @@
 /*@ foo :: forall T . (a: IArray<T>, 
-                     indexes: IArray<{v: number | (0 <= v && v < (len a)) }>) 
+                     indexes: IArray<{v: number | (0 <= v && v < (len a)) }>)
                 => { IArray<T> | (len v) = (len indexes) } */
 declare function foo<T>(array: T[], indexes:number[]) : T[];
 

@@ -7,15 +7,14 @@ Refinement Types for TypeScript
 ### Dependencies
 
 * [stack](https://github.com/commercialhaskell/stack) The Haskell Tool Stack
-* [Node.js](http://nodejs.org/) (tested version v4.2.1)
-* [Ocaml](http://caml.inria.fr/ocaml/release.en.html)
-* [Z3 Binary](http://z3.codeplex.com/) version >= 4.3.2
+* [Node.js](http://nodejs.org/) (tested version v4.2.1) (You must get an executable called 'node' on your PATH - some versions may only create a 'nodejs' in which case you can rename/symlink)
+* [Z3 Binary](https://github.com/Z3Prover/z3/releases) version >= 4.3.2
 
 ### Download and Build
 
-    git clone https://github.com/UCSD-PL/refscript
+    git clone --recursive https://github.com/UCSD-PL/refscript
     cd refscript
-    git submodule init
+    git checkout pldi16
     git submodule update
     stack setup
     stack build
@@ -29,8 +28,16 @@ Refinement Types for TypeScript
 
 ### Regression testing
 
-    cd tests; ./regrtest.py; cd -
+    stack test refscript
 
+For each of the 571 regression tests, this should output a line looking like 'obj-07.ts: OK (0.65s)'. It should take ~8 minutes.
+
+### PLDI16 Benchmarks
+
+    cd tests/pos/pldi16
+    python regrtest.py
+
+For each of the 26 files in the benchmark suite, this should output a line looking like 'SUCCESS! d3/entries.ts 1.608330 seconds'. It should take ~10-15 minutes; the vast majority of that time it will appear to be doing nothing as it handles our most expensive test, 'navier-stokes-typed-octane.ts'.
 
 ## Advanced
 

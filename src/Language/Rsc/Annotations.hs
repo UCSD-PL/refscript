@@ -33,7 +33,6 @@ import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.AST.Annotations
 import           Language.Rsc.AST.Syntax
-import           Language.Rsc.Core.Env
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Types

@@ -166,17 +166,29 @@ subtype _ _ _ (TPrim c1 _) (TPrim c2 _)
   | c2 == TTop = SubT
 
 -- | Unions
-subtype _ γ c (TOr ts1 _) t2
-  | all (\t1 -> isSubtypeC γ c t1 t2) ts1
-  = SubT
+subtype l γ c (TOr ts1 _) t2
+--   | all (\t1 -> isSubtypeC γ c t1 t2) ts1
+--   = SubT
+  = mconcat (map (\t1 -> subtype l γ c t1 t2) ts1)
 
-subtype _ γ c t1 (TOr ts2 _)
-  | any (\t2 -> isSubtypeC γ c t1 t2) ts2
-  = SubT
+subtype l γ c t1 (TOr ts2 _)
+--   | any (\t2 -> isSubtypeC γ c t1 t2) ts2
+--   = SubT
+  = subOrs (map (subtype l γ c t1) ts2)
+
+  where
+    subOrs [] = EqT
+    subOrs (x:xs) = subOr x (subOrs xs)
+
+    subOr EqT     _       = EqT
+    subOr _       EqT     = EqT
+    subOr SubT    _       = SubT
+    subOr _       SubT    = SubT
+    subOr x       _       = x     -- both NoSub
 
 -- | Objects
 subtype l γ c t1 t2
-  | maybeTObj t1, maybeTObj t2 = subtypeObj l γ c t1 t2
+  | maybeTObj t1, maybeTObj t2 = subtypeObj' l γ c t1 t2
 
 -- | Functions
 subtype l γ _ t1 t2
@@ -190,6 +202,10 @@ subtype l _ _ t1 t2
 -- | subtype with default configuration
 subtype' l g t1 t2 = subtype l g (SC False t1 t2 Nothing Nothing) t1 t2
 
+
+subtypeObj' l γ x t1 t2
+  = -- ltracePP l (ppshow t1 ++ " VS " ++ ppshow t2) $
+    subtypeObj l γ x t1 t2
 
 --------------------------------------------------------------------------------
 subtypeObj :: (PPRE r, FE g r, IsLocated l)
@@ -280,8 +296,10 @@ subtypeObj l _ _ (TMod m1) (TMod m2)
 -- Structural subtyping (fall-back)
 --
 subtypeObj l γ c t1 t2 =
+  -- case (ltracePP l ("expand " ++ ppshow t1) $ expandType econf (envCHA γ) t1, ltracePP l ("expand " ++ ppshow t2) $ expandType econf (envCHA γ) t2) of
+  -- case ltracePP l ("EXPANING " ++ ppshow t1 ++ " VS " ++ ppshow t2)  (expandType econf (envCHA γ) t1, expandType econf (envCHA γ) t2) of
   case (expandType econf (envCHA γ) t1, expandType econf (envCHA γ) t2) of
-    (Just ft1, Just ft2) -> subtypeObj l γ c ft1 ft2
+    (Just ft1, Just ft2) -> subtypeObj' l γ c ft1 ft2
     (Nothing , Nothing ) -> NoSub [errorUnresolvedTypes l t1 t2]
     (Nothing , _       ) -> NoSub [errorNonObjectType l t1]
     (_       , Nothing ) -> NoSub [errorNonObjectType l t2]

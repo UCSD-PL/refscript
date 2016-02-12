@@ -128,8 +128,6 @@ patch fs
     vld TypInst{}     = True
     vld Overload{}    = True
     vld EltOverload{} = True
-    -- vld PhiVarTy{}    = True
-    -- vld PhiVarTC{}    = True
     vld PhiVar{}      = True
     vld PhiLoopTC{}   = True
     vld TypeCast{}    = True

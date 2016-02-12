@@ -18,6 +18,11 @@ import           Text.Printf
 main :: IO ()
 main = defaultMain =<< group "Tests" [unitTests]
 
+-- unitTests = group "Unit"
+--   [
+--     testGroup "pos-lists"       <$> dirTests rscCmd "tests/pos/todo/lists"      [] ExitSuccess
+--   ]
+
 unitTests = group "Unit"
   [
     testGroup "pos-object"       <$> dirTests rscCmd "tests/pos/objects"      [] ExitSuccess
@@ -30,6 +35,7 @@ unitTests = group "Unit"
   , testGroup "pos-loop"         <$> dirTests rscCmd "tests/pos/loops"        [] ExitSuccess
   , testGroup "pos-misc"         <$> dirTests rscCmd "tests/pos/misc"         [] ExitSuccess
   , testGroup "pos-bounded-poly" <$> dirTests rscCmd "tests/pos/bounded-poly" [] ExitSuccess
+  , testGroup "pos-list"         <$> dirTests rscCmd "tests/pos/lists"        [] ExitSuccess
 
   , testGroup "neg-object"       <$> dirTests rscCmd "tests/neg/objects"      [] (ExitFailure 1)
   , testGroup "neg-array"        <$> dirTests rscCmd "tests/neg/arrays"       [] (ExitFailure 1)

@@ -679,8 +679,9 @@ splice_ _ (Just s) Nothing   = s
 splice_ _ Nothing (Just s)   = s
 splice_ _ (Just s) (Just s') = seqStmt (getAnnotation s) s s'
 
-
-seqStmt _ (BlockStmt l s) (BlockStmt _ s') = maybeBlock l (s ++ s')
+seqStmt _ (BlockStmt l s) (BlockStmt _ s') = maybeBlock l (s   ++ s'  )
+seqStmt l (BlockStmt _ s) s'               = maybeBlock l (s   ++ [s'])
+seqStmt l s               (BlockStmt _ s') = maybeBlock l ([s] ++ s'  )
 seqStmt l s s'                             = maybeBlock l [s, s']
 
 -------------------------------------------------------------------------------------

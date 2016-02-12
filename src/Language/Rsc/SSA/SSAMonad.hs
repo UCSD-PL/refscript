@@ -138,8 +138,8 @@ initGlobSsaEnv fs cha =
 
 --------------------------------------------------------------------------------
 initCallableSsaEnv
-  :: (F.Reftable r, F.Symbolic x, IsLocated x)
-  => SsaEnv r -> [x] -> [Statement (AnnR r)] -> SsaEnv r
+  :: (F.Reftable r)
+  => SsaEnv r -> [Var r] -> [Statement (AnnR r)] -> SsaEnv r
 --------------------------------------------------------------------------------
 initCallableSsaEnv g xs bd = g { mAsgn = mA, mSSA = mS }
   where
@@ -148,7 +148,7 @@ initCallableSsaEnv g xs bd = g { mAsgn = mA, mSSA = mS }
           $ envAdds (map (,WriteLocal) xs)    -- function arguments
           $ envAdds (visibleSyms bd)          -- lifted visible vars
           $ envMap toFgn (mAsgn g)            -- outer scope vars (as foreign)
-    mS    = mempty
+    mS    = envFromList $ zip xs xs
     arg   = argId dummySpan
     ret   = returnId dummySpan
 

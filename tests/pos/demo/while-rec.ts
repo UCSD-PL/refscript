@@ -1,4 +1,4 @@
-/*@ loop :: ({x:number|x <= 6}) => {v:number| v=6} */ // loop :: (number) => number
+/*@ loop :: ({x:number|x <= 6}) => {v:number| v = 6} */
 function loop(x : number) : number {
   if (x <= 5) {
     var r = loop(x + 1);

@@ -1,3 +1,4 @@
+// run with "rsc --real"
 
 var a = 0.5;
 var b = 0.5;

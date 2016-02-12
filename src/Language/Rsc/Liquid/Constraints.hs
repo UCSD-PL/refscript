@@ -128,7 +128,7 @@ splitC s@(Sub g i (TAll α1 t1) (TAll α2 t2))
 --
 splitC s@(Sub g i t1@(TOr t1s r) t2)
   = do  m1      <- bsplitC g i t1 t2
-        ms      <- concatMapM (\t -> splitC (Sub g i' (t `strengthen` r) t2)) t1s
+        ms      <- concatMapM (\t -> splitC (Sub g i' (t `strengthen` noKVars r) t2)) t1s
         return   $ m1 ++ ms
   where
     i' = addHist i s

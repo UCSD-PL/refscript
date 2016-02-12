@@ -420,7 +420,7 @@ consStmt g (ReturnStmt l Nothing)
 consStmt g (ReturnStmt l (Just e))
   = mseq (consExpr g e (Just rt)) $ \(y,gy) -> do
       eT  <- cgSafeEnvFindTyM y gy
-      _   <- subType l Nothing gy (ltracePP l "RET-LHS" eT) (ltracePP l "RET-RHS" rt)
+      _   <- subType l Nothing gy eT rt
       return Nothing
   where
     rt = cgEnvFindReturn g
@@ -1042,7 +1042,7 @@ consWhile g l cond body = do
       (xs, xs', ts) = unzip3 [ x_ | PhiLoopTC x_ <- fFact l ]
 
 consWhileBase l xs tIs g = do
-    baseT <- ltracePP l ("got base " ++ ppshow xs) <$> mapM (`cgSafeEnvFindTyM` g) xs
+    baseT <-  mapM (`cgSafeEnvFindTyM` g) xs
     zipWithM_ (subType l Nothing g) baseT tIs
 
 -- Return the type binding that should be propagated. The var is the output

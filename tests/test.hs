@@ -38,8 +38,8 @@ unitTests = group "Unit"
   , testGroup "neg-simple"       <$> dirTests rscCmd "tests/neg/simple"       [] (ExitFailure 1)
   , testGroup "neg-union"        <$> dirTests rscCmd "tests/neg/unions"       [] (ExitFailure 1)
   , testGroup "neg-class"        <$> dirTests rscCmd "tests/neg/classes"      [] (ExitFailure 1)
-  -- , testGroup "neg-loop"       <$> dirTests rscCmd "tests/neg/loops"         [] (ExitFailure 1)
-  -- , testGroup "pos-misc"       <$> dirTests rscCmd "tests/pos/misc"          [] (ExitFailure 1)
+  , testGroup "neg-loop"         <$> dirTests rscCmd "tests/neg/loops"        [] (ExitFailure 1)
+  , testGroup "neg-misc"         <$> dirTests rscCmd "tests/neg/misc"         [] (ExitFailure 1)
   , testGroup "neg-bounded-poly" <$> dirTests rscCmd "tests/neg/bounded-poly" [] (ExitFailure 1)
 
 --   , testGroup "pos-alias"  <$> dirTests rscCmd "tests/pos/typealias"  [] ExitSuccess

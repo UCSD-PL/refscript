@@ -11,7 +11,7 @@ export function create(): number {
 }
 
 function acquire(l: number): number {
-    assert(l === 0);        // toggle to improve speed. Why???
+    assert(l === 0);
     return 1;
 }
 

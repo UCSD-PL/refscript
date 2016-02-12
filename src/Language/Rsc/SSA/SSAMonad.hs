@@ -32,6 +32,7 @@ module Language.Rsc.SSA.SSAMonad (
    , freshenAnn
    , freshenIdSSA
    , findSsaEnv
+   , safeFindSsaEnv
 
    , getCounter
    , ssaEnvIds
@@ -246,6 +247,11 @@ freshenIdSSA (Id l x) = Id <$> freshenAnn l <*> return x
 findSsaEnv   :: F.Symbolic x => SsaEnv r -> x -> Maybe (Var r)
 -------------------------------------------------------------------------------------
 findSsaEnv g x = envFindTy x (mSSA g)
+
+safeFindSsaEnv l g x = case findSsaEnv g x of
+  Just t  -> return t
+  Nothing -> ssaError (errorSSAUnboundId l x)
+
 
 -------------------------------------------------------------------------------------
 insertSsaEnv :: SsaEnv r -> Var r -> Var r -> SsaEnv r

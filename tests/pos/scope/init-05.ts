@@ -1,13 +1,10 @@
 
-/*@ foo :: (cnd: boolean) => { number | v > 0 } */
+/*@ foo :: (cnd: boolean) => number + undefined */
 export function foo(cnd: boolean): number {
-    /*@ r :: number */
+    /*@ local r :: number + undefined */
     let r;
     if (cnd) {
         r = 1;
-    }
-    else {
-        r = 2;
     }
     return r;
 }

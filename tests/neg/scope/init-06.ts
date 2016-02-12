@@ -1,7 +1,6 @@
 
-/*@ foo :: (n: number) => { number | true } + undefined */
 export function foo(n: number): number {
-    /*@ r :: number */
+    /*@ local r :: number + undefined */
     let r;
     while (n < 10) {
         r = 1;

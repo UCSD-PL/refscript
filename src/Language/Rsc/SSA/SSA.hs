@@ -138,14 +138,6 @@ ssaStmt g (IfStmt l e s1 s2)
         let stmt'       = prefixStmt l se ifStmt
         return            (go, stmt')
 
-
--- TODO: What is this for?
---
--- latest       <- catMaybes <$> mapM findSsaEnv phis
--- new          <- mapM (updSsaEnv g l) phis
--- addAnn l      $ PhiPost $ zip3 phis latest new
-
-
 --
 --   while (i <- f(i) ; cond(i)) { <BODY> }
 --
@@ -762,7 +754,7 @@ ssaExpr _ e@(InfixExpr l OpLOr _ _)
 ssaExpr g (InfixExpr l o e1 e2) = do
     (g1, s1, e1') <- ssaExpr g e1
     (g2, s2, e2') <- ssaExpr g1 e2
-    return (g2, s1 ++ s2, InfixExpr l o e1' e2')
+    return $ (g2, s1 ++ s2, InfixExpr l o e1' e2')
 
 ssaExpr _ e@(CallExpr _ (SuperRef _) _)
   = ssaError $ bugSuperNotHandled (srcPos e) e
@@ -800,12 +792,11 @@ ssaExpr g (FuncExpr l fo xs bd) = do
     bd' <- ssaFun g xs bd
     return (g, [], FuncExpr l fo xs bd')
 
--- XXX: Is this used? -- Cause it duplicates `e'`.
--- -- x = e
--- ssaExpr g (AssignExpr l OpAssign (LVar lv v) e) = do
---     let x            = Id lv v
---     (g', s, x', e') <- ssaAsgn g l x e
---     return             (g', [ssaAsgnStmt l lv x x' e'], e')
+-- x = e
+ssaExpr g (AssignExpr l OpAssign (LVar lv v) e) = do
+    let x            = Id lv v
+    (g', s, x', e') <- ssaAsgn g l x e
+    return             (g', [ssaAsgnStmt l lv x x' e'], e')
 
 -- e1.f = e2
 ssaExpr g (AssignExpr l OpAssign (LDot ll e1 f) e2) = do
@@ -821,10 +812,15 @@ ssaExpr g (AssignExpr l OpAssign (LBracket ll e1 e2) e3) = do
     return (g3, s1 ++ s2 ++ s3, AssignExpr l OpAssign (LBracket ll e1' e2') e3')
 
 -- lv += e
-ssaExpr g (AssignExpr l op lv e)
-  = ssaExpr g (AssignExpr l OpAssign lv rhs)
+--
+-- XXX: only allow vars on the LHS to avoid side-effects
+--
+ssaExpr g (AssignExpr l op x@(LVar lv _) e) = do
+    (g', s, _) <- ssaExpr g (AssignExpr l OpAssign x rhs)
+    x'         <- safeFindSsaEnv lv g x
+    return (g', s, ltracePP l "e'" $ VarRef lv x')
   where
-    rhs = InfixExpr l (assignInfix op) (lvalExp lv) e
+    rhs = InfixExpr l (assignInfix op) (lvalExp x) e
 
 -- x++ ==> [x1 = x0 + 1], x1
 ssaExpr g (UnaryAssignExpr l uop (LVar lv v))

@@ -1,8 +1,8 @@
 
 /*@ foo :: (cnd: boolean) => { number | v > 0 } */
 export function foo(cnd: boolean): number {
-    /*@ r :: number */
-    let r;
+    /*@ local r :: number */
+    let r = 0;
     if (cnd) {
         r = 1;
     }
@@ -10,7 +10,7 @@ export function foo(cnd: boolean): number {
         if (r > 5) {
             r = 10;
         }
-        if (r > 7) {
+        else {
             r = -2;
         }
     }

@@ -27208,6 +27208,8 @@ var ts;
                         return new ts.RsInfixExpr(nodeToSrcSpan(node), [], new ts.RsInfixOp(ts.getTextOfNode(node.operatorToken)), nodeToRsExp(state, node.left), nodeToRsExp(state, node.right));
                     case ts.SyntaxKind.EqualsToken:
                         return new ts.RsAssignExpr(nodeToSrcSpan(node), [], new ts.RsAssignOp(ts.getTextOfNode(node.operatorToken)), nodeToRsLval(state, node.left), nodeToRsExp(state, node.right));
+                    case ts.SyntaxKind.PlusEqualsToken:
+                        return new ts.RsAssignExpr(nodeToSrcSpan(node), [], new ts.RsAssignOp("+="), nodeToRsLval(state, node.left), nodeToRsExp(state, node.right));
                     default:
                         state.error(node, ts.Diagnostics.refscript_0_SyntaxKind_1_not_supported_yet, "nodeToRsExp", ts.SyntaxKind[node.kind]);
                 }

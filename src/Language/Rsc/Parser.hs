@@ -98,6 +98,10 @@ mkRsc ss = let p1          = mkRelRsc        ss
               [] -> Right p6
               _  -> Left $ F.Unsafe errs
 
+
+-- XXX: Type aliases might appear twice as part of a TS annotation and an RSC
+--      annotation. But that's fine, since they're gonna be the same.
+--
 --------------------------------------------------------------------------------
 mkRelRsc :: [Statement (SrcSpan, [Spec])] -> RelRefScript
 --------------------------------------------------------------------------------

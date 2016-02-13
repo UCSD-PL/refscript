@@ -26268,13 +26268,15 @@ var ts;
                     return [new GlobalAnnotation(srcSpan, AnnotationKind.InvariantRawSpec, content)];
                 case "option":
                     return [new GlobalAnnotation(srcSpan, AnnotationKind.OptionRawSpec, content)];
+                case "type":
+                    return makeTypeAliasAnnotations(s, srcSpan);
             }
         }
         return [];
     }
     ts.makeGlobalAnnotations = makeGlobalAnnotations;
     function isReservedAnnotationPrefix(s) {
-        return (ts.indexOfEq(["measure", "qualif", "interface", "alias", "class", "predicate", "invariant", "cast", "<anonymous>", "option"], s) !== -1);
+        return (ts.indexOfEq(["measure", "qualif", "interface", "type", "class", "predicate", "invariant", "cast", "<anonymous>", "option"], s) !== -1);
     }
     function stringTokens(s) {
         return s.split(" ").filter(function (s) { return s.length > 0; });

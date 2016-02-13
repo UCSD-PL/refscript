@@ -1,5 +1,7 @@
 TOP PRIORITY
 
+- Bit Vectors
+
 -  Check variance of type parameters
 
 - W-F checks:
@@ -8,6 +10,9 @@ TOP PRIORITY
 - Validity check for function types:
     * Optional arguments should only occupy the end part of a type.
     * Refinements should not reference optional arguments.
+
+
+--------------------------------------------------------------------------------
 
 - Better error message for `errorCallNotSup`.
 

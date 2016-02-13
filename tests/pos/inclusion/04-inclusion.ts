@@ -1,3 +1,4 @@
+/*@ option --extrainvs */
 
 // Arrays
 let trees: IArray<string> = ["redwood", "bay", "cedar", "oak", "maple"];

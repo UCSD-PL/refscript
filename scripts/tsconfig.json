@@ -12,16 +12,19 @@
         "./typings/**/*.d.ts"
     ],
     "files": [
-        "build-prelude.ts",
-        "cleanup.ts",
-        "runtests.ts",
-        "typings/bluebird/bluebird.d.ts",
-        "typings/colors/colors.d.ts",
-        "typings/glob/glob.d.ts",
-        "typings/minimatch/minimatch.d.ts",
-        "typings/node/node.d.ts",
-        "typings/tsd.d.ts",
-        "typings/underscore/underscore.d.ts"
+        "./build-prelude.ts",
+        "./cleanup.ts",
+        "./runtests.ts",
+        "./typings/bluebird/bluebird.d.ts",
+        "./typings/colors/colors.d.ts",
+        "./typings/glob/glob.d.ts",
+        "./typings/minimatch/minimatch.d.ts",
+        "./typings/node/node.d.ts",
+        "./typings/tsd.d.ts",
+        "./typings/underscore/underscore.d.ts"
     ],
-    "exclude": []
+    "exclude": [],
+    "atom": {
+        "rewriteTsconfig": true
+    }
 }

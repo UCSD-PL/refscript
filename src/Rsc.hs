@@ -33,11 +33,9 @@ main :: IO a
 main = do cfg  <- cmdArgs config
           run (verifier cfg) cfg
 
-top invs s = run (verifier cfg) cfg
+top s = run (verifier cfg) cfg
   where
-    cfg = def { extraInvs = invs
-              , files     = [s]
-              }
+    cfg = def { files = [s] }
 
 
 -------------------------------------------------------------------------------

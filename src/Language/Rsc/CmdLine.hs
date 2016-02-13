@@ -3,13 +3,10 @@
 
 module Language.Rsc.CmdLine (Config(..), config, withPragmas) where
 
-import           System.Console.CmdArgs
-import           System.Console.CmdArgs.Explicit (modeValue)
--- import System.Console.CmdArgs.Implicit     hiding (Loud)
--- import System.Console.CmdArgs.Text
--- import Language.Fixpoint.Types
 import           Control.Monad                   (foldM)
 import           Language.Rsc.Locations
+import           System.Console.CmdArgs
+import           System.Console.CmdArgs.Explicit (modeValue)
 import           System.Environment              (withArgs)
 
 ---------------------------------------------------------------------
@@ -81,7 +78,6 @@ config = modes [ liquid &= auto
             &= program "rsc"
             &= summary "rsc © Copyright 2013-15 Regents of the University of California."
             &= verbosity
-
 
 ---------------------------------------------------------------------------------------
 withPragmas :: Config -> [Located String] -> IO Config

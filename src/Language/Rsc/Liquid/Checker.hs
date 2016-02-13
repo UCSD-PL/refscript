@@ -63,20 +63,20 @@ type Result = (A.UAnnSol RefType, F.FixResult Error)
 verifyFile :: Config -> FilePath -> [FilePath] -> IO Result
 --------------------------------------------------------------------------------
 verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
-  do  p     <- announce "Parse" $ EitherIO   $ parseRscFromFiles fs
-      cfg'  <- liftIO           $ withPragmas cfg (pOptions p)
-      -- _     <- pure             $ checkTypeWF p
-      cha   <- liftEither       $ mkCHA p
-      ssa   <- announce "SSA"   $ EitherIO (ssaTransform p cha)
+  do  p         <- announce "Parse" $ EitherIO   $ parseRscFromFiles fs
+      cfg'      <- liftIO           $ withPragmas cfg (pOptions p)
+      -- _         <- pure             $ checkTypeWF p
+      cha       <- liftEither       $ mkCHA p
+      ssa       <- announce "SSA"   $ EitherIO (ssaTransform p cha)
 
-      cha0  <- liftEither       $ mkCHA ssa
-      _     <- liftIO           $ dumpJS f cha0 "-ssa" ssa
-      tc    <- announce "TC"    $ EitherIO (typeCheck cfg ssa cha)
+      cha0      <- liftEither       $ mkCHA ssa
+      _         <- liftIO           $ dumpJS f cha0 "-ssa" ssa
+      tc        <- announce "TC"    $ EitherIO (typeCheck cfg' ssa cha)
 
-      cha1  <- liftEither       $ mkCHA tc
-      _     <- liftIO           $ dumpJS f cha1 "-tc" tc
-      cgi   <- announce "CG"    $ pure (generateConstraints cfg f tc cha)
-      res   <- announce "Solve" $ liftIO (solveConstraints cfg' f cgi)
+      cha1      <- liftEither       $ mkCHA tc
+      _         <- liftIO           $ dumpJS f cha1 "-tc" tc
+      cgi       <- announce "CG"    $ pure (generateConstraints cfg' f tc cha)
+      res       <- announce "Solve" $ liftIO (solveConstraints cfg' f cgi)
       return   res
 
 announce s a = liftIO (startPhase Loud s) >> a

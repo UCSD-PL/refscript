@@ -29,6 +29,7 @@ import           Language.Rsc.Parser.Types
 import           Language.Rsc.Pretty
 import           Language.Rsc.Types
 import           Prelude                   hiding (mapM)
+import           Text.Parsec.Combinator    (anyToken, many1)
 import           Text.PrettyPrint.HughesPJ (text)
 
 
@@ -125,7 +126,7 @@ parseRawSpec ctx = go
     go (QualifierRawSpec           (_ , _)) = QualifierSpec           <$> qualifierP sortP
     go (InvariantRawSpec           (ss, _)) = InvariantSpec ss        <$> typeP1 ctx
     go (ExportRawSpec              (_ , _)) = return ExportedSpec
-    go (OptionRawSpec              (ss, o)) = return $ OptionSpec (Loc ss o)
+    go (OptionRawSpec              (ss, _)) = OptionSpec . Loc ss     <$> many1 anyToken
 
     patch2 ss (i,t)   = (fmap (const ss) i,t)
     patch3 ss (i,a,t) = (fmap (const ss) i,a,t)

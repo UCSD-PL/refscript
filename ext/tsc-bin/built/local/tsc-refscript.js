@@ -2451,7 +2451,7 @@ var ts;
         RefScript_does_not_support_the_cast_Colon_0: { code: 10037, category: ts.DiagnosticCategory.Unimplemented, key: "RefScript does not support the cast: '{0}'." },
         The_first_type_parameter_of_named_type_0_needs_to_extend_a_mutability_type: { code: 10038, category: ts.DiagnosticCategory.Error, key: "The first type parameter of named type '{0}' needs to extend a mutability type." },
         refscript_Class_declaration_needs_to_contain_a_constructor: { code: 10040, category: ts.DiagnosticCategory.Error, key: "[refscript] Class declaration needs to contain a constructor." },
-        refscript_Only_support_ModuleBlocks_inside_a_Module_s_body: { code: 10041, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Only support ModuleBlocks inside a Module's body." },
+        refscript_Qualfied_module_name_0_is_not_supported: { code: 10041, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Qualfied module name '{0}' is not supported." },
         refscript_0_SyntaxKind_1_not_supported_yet: { code: 10042, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript - {0}] SyntaxKind '{1}' not supported yet." },
         Specify_use_of_refscript_Colon_editor_or_cmdline: { code: 10043, category: ts.DiagnosticCategory.Message, key: "Specify use of refscript: 'editor' or 'cmdline'" },
         Argument_for_refscript_option_must_be_editor_or_cmdline: { code: 10044, category: ts.DiagnosticCategory.Error, key: "Argument for '--refscript' option must be 'editor' or 'cmdline'." },
@@ -21138,7 +21138,7 @@ var ts;
                 }
             }
             if (node.body.kind !== ts.SyntaxKind.ModuleBlock) {
-                error(node.body, ts.Diagnostics.refscript_Only_support_ModuleBlocks_inside_a_Module_s_body);
+                error(node.body, ts.Diagnostics.refscript_Qualfied_module_name_0_is_not_supported, node.name.text);
             }
             checkSourceElement(node.body);
         }
@@ -27417,7 +27417,7 @@ var ts;
                 if (node.body.kind === ts.SyntaxKind.ModuleBlock) {
                     return new ts.RsModuleStmt(nodeToSrcSpan(node), annotations, nodeToRsId(state, node.name), new ts.RsList(node.body.statements.map(function (n) { return nodeToRsStmt(state, n); })));
                 }
-                throw new Error(ts.Diagnostics.refscript_Only_support_ModuleBlocks_inside_a_Module_s_body.key);
+                state.error(node, ts.Diagnostics.refscript_Qualfied_module_name_0_is_not_supported, node.name.text);
             }
             function whileStatementToRsStmt(state, node) {
                 return new ts.RsWhileStmt(nodeToSrcSpan(node), [], nodeToRsExp(state, node.expression), nodeToRsStmt(state, node.statement));

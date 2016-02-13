@@ -661,6 +661,9 @@ consExpr g ex@(Cast l e) _
 consExpr g (IntLit l i) _
   = Just <$> cgEnvAddFresh "8" l (tNum `eSingleton` i) g
 
+consExpr g (NumLit l i) _
+  = Just <$> cgEnvAddFresh "8" l (tReal `eSingleton` i) g
+
 -- Assuming by default 32-bit BitVector
 consExpr g (HexLit l x) _
   | Just e <- bitVectorValue x

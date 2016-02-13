@@ -373,6 +373,7 @@ tPrimP _ = fmap TPrim tPrimP0
 
 tPrimP0 :: Parser TPrim
 tPrimP0  =  try (reserved "number"      >> return TNumber)
+        <|> try (reserved "real"        >> return TReal)
         <|> try (reserved "bitvector32" >> return TBV32)
         <|> try (reserved "boolean"     >> return TBoolean)
         <|> try (reserved "undefined"   >> return TUndefined)

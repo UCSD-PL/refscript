@@ -610,6 +610,9 @@ tcExpr :: Unif r
 tcExpr _ e@(IntLit _ _) _
   = return (e, tNum)
 
+tcExpr _ e@(NumLit _ _) _
+  = return (e, tReal)
+
 tcExpr _ e@(HexLit _ _) _
   = return (e, tBV32)
 

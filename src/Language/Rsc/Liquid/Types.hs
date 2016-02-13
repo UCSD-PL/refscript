@@ -168,6 +168,7 @@ rTypeSort _                   = error $ render $ text "BUG: Unsupported in rType
 
 rTypeSortPrim TBV32      = BV.mkSort BV.S32
 rTypeSortPrim TNumber    = F.intSort
+rTypeSortPrim TReal      = F.realSort
 rTypeSortPrim TString    = F.strSort
 rTypeSortPrim TBoolean   = F.fAppTC (rawStringFTycon boolSym ) []
 rTypeSortPrim TVoid      = F.fAppTC (rawStringFTycon voidSym ) []

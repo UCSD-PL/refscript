@@ -40,6 +40,7 @@ declare function builtin_OpGT(a: any, b: any): boolean;
 declare function builtin_OpGEq(a: any, b: any): boolean;
 
 /*@ builtin_OpAdd :: (x: number     , y: number     ) => {number | v = x + y} */
+/*@ builtin_OpAdd :: (x: real       , y: real       ) => {real   | v = x + y} */
 /*@ builtin_OpAdd :: (x: bitvector32, y: bitvector32) => bitvector32          */
 /*@ builtin_OpAdd :: (x: number     , y: string     ) => string               */
 /*@ builtin_OpAdd :: (x: string     , y: number     ) => string               */
@@ -50,6 +51,9 @@ declare function builtin_OpAdd(a: any, b: any): any;
 
 /*@ builtin_OpSub :: (x:number, y:number)  => {v:number | v ~~ x - y} */
 declare function builtin_OpSub(a: number, b: number): number;
+
+/*@ builtin_OpMul ::
+    (x: real, y: real) => { v: real | v = x * y } */
 
 /*@ builtin_OpMul ::
     (x: number, y: number) => { v:number | [ v = x * y ;

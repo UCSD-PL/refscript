@@ -218,6 +218,7 @@ visitExpr v = vE
                                                                 acc = accExpr v c' e
      step _ e@(BoolLit {})           = return e
      step _ e@(IntLit {})            = return e
+     step _ e@(NumLit {})            = return e
      step _ e@(HexLit {})            = return e
      step _ e@(NullLit {})           = return e
      step _ e@(StringLit {})         = return e

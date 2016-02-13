@@ -35,11 +35,22 @@ data BTVarQ q r   = BTV { btv_sym    :: F.Symbol              -- Parameter symbo
                     deriving (Data, Typeable, Functor, Foldable, Traversable)
 
 
-data TPrim        = TString | TStrLit String | TNumber | TBoolean
-                  | TBV32 | TVoid | TUndefined | TNull | TAny
-                  {- Internal -}
-                  | TTop | TBot | TFPBool
-                  deriving (Eq, Show, Data, Typeable)
+data TPrim
+  = TString
+  | TStrLit String
+  | TNumber
+  | TReal
+  | TBoolean
+  | TBV32
+  | TVoid
+  | TUndefined
+  | TNull
+  | TAny
+  {- Internal -}
+  | TTop
+  | TBot
+  | TFPBool
+  deriving (Eq, Show, Data, Typeable)
 
 
 -- | Refined Types
@@ -288,15 +299,16 @@ instance Hashable TPrim where
   hashWithSalt i TString     = i `hashWithSalt` (0 :: Int)
   hashWithSalt i (TStrLit s) = i `hashWithSalt` (1 :: Int) `hashWithSalt` s
   hashWithSalt i TNumber     = i `hashWithSalt` (2 :: Int)
-  hashWithSalt i TBoolean    = i `hashWithSalt` (3 :: Int)
-  hashWithSalt i TBV32       = i `hashWithSalt` (4 :: Int)
-  hashWithSalt i TVoid       = i `hashWithSalt` (5 :: Int)
-  hashWithSalt i TUndefined  = i `hashWithSalt` (6 :: Int)
-  hashWithSalt i TNull       = i `hashWithSalt` (7 :: Int)
-  hashWithSalt i TTop        = i `hashWithSalt` (8 :: Int)
-  hashWithSalt i TBot        = i `hashWithSalt` (9 :: Int)
-  hashWithSalt i TFPBool     = i `hashWithSalt` (10 :: Int)
-  hashWithSalt i TAny        = i `hashWithSalt` (11 :: Int)
+  hashWithSalt i TReal       = i `hashWithSalt` (3 :: Int)
+  hashWithSalt i TBoolean    = i `hashWithSalt` (4 :: Int)
+  hashWithSalt i TBV32       = i `hashWithSalt` (5 :: Int)
+  hashWithSalt i TVoid       = i `hashWithSalt` (6 :: Int)
+  hashWithSalt i TUndefined  = i `hashWithSalt` (7 :: Int)
+  hashWithSalt i TNull       = i `hashWithSalt` (8 :: Int)
+  hashWithSalt i TTop        = i `hashWithSalt` (9 :: Int)
+  hashWithSalt i TBot        = i `hashWithSalt` (10 :: Int)
+  hashWithSalt i TFPBool     = i `hashWithSalt` (11 :: Int)
+  hashWithSalt i TAny        = i `hashWithSalt` (12 :: Int)
 
 -- | Symbolic
 

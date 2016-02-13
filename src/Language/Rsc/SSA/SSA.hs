@@ -704,6 +704,9 @@ ssaExpr :: PPR r => SsaEnv r -> Expression (AnnSSA r)
 ssaExpr g e@(IntLit _ _)
   = return (g, [], e)
 
+ssaExpr g e@(NumLit _ _)
+  = return (g, [], e)
+
 ssaExpr g e@(HexLit _ _)
   = return (g, [], e)
 

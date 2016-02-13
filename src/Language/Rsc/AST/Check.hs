@@ -69,6 +69,7 @@ instance IsRsc (VarDecl a) where
 instance IsRsc (Expression a) where
   isRsc (BoolLit _ _)           = True
   isRsc (IntLit _ _)            = True
+  isRsc (NumLit _ _)            = True
   isRsc (HexLit _ _)            = True
   isRsc (NullLit _ )            = True
   isRsc (ArrayLit _ es)         = all isRsc es

@@ -101,6 +101,7 @@ instance PP TPrim where
   pp TString     = text "string"
   pp (TStrLit s) = text "\"" <> text s <> text "\""
   pp TNumber     = text "number"
+  pp TReal       = text "real"
   pp TBoolean    = text "boolean"
   pp TBV32       = text "bitvector32"
   pp TVoid       = text "void"

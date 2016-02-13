@@ -43,13 +43,13 @@ module Language.Rsc.Typecheck.Types (
   -- * Primitive Types
 
   --   # Constructors
-  , tNum, tBV32, tBool, tString, tTop, tVoid, tErr, tVar
+  , tNum, tReal, tBV32, tBool, tString, tTop, tVoid, tErr, tVar
   , btVar, tUndef, tNull, tBot, tAny
 
   --   # Tests
   , isTPrim, isTAny, isTTop, isTUndef, isTUnion, isTStr, isTBool
   , isBvEnum, isTVar, isTNull, isTVoid, isTFun
-  , isArrayType, isTBot, isTNum, isBV32
+  , isArrayType, isTBot, isTNum, isTReal, isBV32
   , maybeTObj, notNullObj
 
   --   # Predicates
@@ -297,6 +297,7 @@ isTAny    = isPrim TAny
 isTVoid   = isPrim TVoid
 isTStr    = isPrim TString
 isTNum    = isPrim TNumber
+isTReal   = isPrim TReal
 isTBool   = isPrim TBoolean
 isBV32    = isPrim TBV32
 
@@ -393,6 +394,7 @@ btVar = tVar . btvToTV
 tNum, tBV32, tBool, tString, tTop, tVoid, tBot, tUndef, tNull, tAny, tErr :: F.Reftable r => RTypeQ q r
 tPrim   = (`TPrim` fTop)
 tNum    = tPrim TNumber
+tReal   = tPrim TReal
 tBV32   = tPrim TBV32
 tBool   = tPrim TBoolean
 tString = tPrim TString

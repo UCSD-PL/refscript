@@ -332,15 +332,18 @@ envAddGroup l msg ks g0 xts
   where
     errors           = concat (zipWith (checkSyms l msg g0 ks) xs ts)
 
-    (xs,ls,as,is,ts) = L.unzip5 [(x, loc, a, i, t `strOr` x) | SI x loc a i t <- xts ]
+    (xs,ls,as,is,ts) = L.unzip5 [(x, loc, a, i, strOr a x t) | SI x loc a i t <- xts ]
 
     -- Invariant strengthening
     inv Initialized  = addInvariant g0
     inv _            = return
 
     -- Union strengthening
-    strOr (TOr ts r) x = TOr (map (`eSingleton` x) ts) r
-    strOr t          _ = t
+    strOr a x t@(TOr ts r) | a `elem` [WriteGlobal, ReturnVar]
+                           = t
+                           | otherwise
+                           = TOr (map (`eSingleton` x) ts) r
+    strOr _ _ t            = t
 
 
 

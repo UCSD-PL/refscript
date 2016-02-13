@@ -479,7 +479,7 @@ consVarDecl g (VarDecl l x (Just e))
       Just s@(SI _ _ RdOnly      _ _) -> go s
       Just   (SI _ _ _           _ _) -> cgError $ errorVarDeclAnnot (srcPos l) x
   where
-  go (SI n lc a _ t) = freshenTypeOpt g l t >>= \case
+  go (SI n lc a _ t) = (freshenTypeOpt g l t) >>= \case
       Just fta ->
         if onlyCtxTyped e then
             fmap snd <$> consExpr g e (Just t)

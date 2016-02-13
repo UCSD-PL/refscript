@@ -700,8 +700,7 @@ tcExpr γ (ObjectLit l pes) to
 -- | <T>e
 tcExpr γ ex@(Cast l e) _
   | [t] <- [ ct | UserCast ct <- fFact l ]
-  -- = first (Cast l) <$> tcCast l γ e t
-  = tcCast l γ e t
+  = first (Cast l) <$> tcCast l γ e t
   | otherwise
   = die $  bugNoCasts (srcPos l) ex
 

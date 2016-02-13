@@ -79,6 +79,7 @@ module Language.Rsc.Names (
 import           Data.Data
 import           Data.Default
 import           Data.Hashable
+import           Data.List                     (intersperse)
 import           GHC.Generics                  (Generic ())
 import qualified Language.Fixpoint.Types       as F
 import           Language.Fixpoint.Types.Names (symbolString)
@@ -116,7 +117,12 @@ instance Eq l => Eq (QP l) where
   QP k1 _ n1 == QP k2 _ n2 = (k1,n1) == (k2,n2)
 
 instance F.Symbolic (QN l) where
-  symbol (QN _ s) = s
+  symbol (QN (QP _ _ xs) s) = intersperseDots (xs ++ [s])
+
+instance F.Symbolic (QP l) where
+  symbol (QP _ _ xs) = intersperseDots xs
+
+intersperseDots = F.symbol . mconcat . intersperse "." . map F.symbolString
 
 instance Hashable (QN l) where
   hashWithSalt i (QN p s) = hashWithSalt i (p,s)

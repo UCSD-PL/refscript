@@ -1,5 +1,7 @@
 TOP PRIORITY
 
+- Disallow use of `len v` for mutable arrays.
+
 - Bit Vectors
 
 -  Check variance of type parameters

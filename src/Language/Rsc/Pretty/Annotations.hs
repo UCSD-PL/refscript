@@ -19,7 +19,7 @@ import           Text.PrettyPrint.HughesPJ
 --   pp SubT       = text "UP"
 --   pp SupT       = text "DN"
 
-instance (F.Reftable r, PP r) => PP (Fact r) where
+instance (F.Reftable r, PP r) => PP (FactQ q r) where
   pp (PhiVar x)          = text "phi"          <+> pp x
   pp (PhiLoop xs)        = text "PHI-Loop"     $+$ pp xs
   pp (PhiLoopTC xs)      = text "PHI-Loop-TC"  $+$ pp xs

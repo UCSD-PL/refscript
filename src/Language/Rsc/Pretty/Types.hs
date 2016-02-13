@@ -41,7 +41,7 @@ instance PP Char where
 instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp (TPrim c r)     = F.ppTy r $ pp c
   pp (TVar α r)      = F.ppTy r $ pp α
-  pp (TOr [] r)      = pp (TPrim TBot ())
+  pp (TOr [] _)      = pp (TPrim TBot ())
   pp (TOr (t:ts) r)  = F.ppTy r $ sep $ pp t : map ((text "+" <+>) . pp) ts
   pp (TAnd ts)       = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TRef t r)      = F.ppTy r (pp t)
@@ -159,7 +159,11 @@ instance PP Initialization where
   pp InitUnknown   = text "init-unknown"
 
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
-  pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body
+  pp (Alias n αs xs body) = text "alias" <+> pp n <> withnull angles comma αs <>
+                            withnull brackets comma xs <+> text "=" <+> pp body
+    where
+      withnull _ _ [] = empty
+      withnull s p xs = s $ intersperse p (map pp xs)
 
 instance (PP r, F.Reftable r) => PP (Rsc a r) where
   pp pgm@(Rsc {code = (Src s) }) =  extras

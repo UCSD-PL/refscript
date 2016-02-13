@@ -16,7 +16,10 @@ import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
+
+-- import           Language.Rsc.Pretty.Common
 -- import           Language.Rsc.Pretty.Errors
+
 import           Language.Rsc.Program
 import           Language.Rsc.Transformations
 import qualified Language.Rsc.Typecheck.Subst    as S
@@ -33,7 +36,7 @@ expandAliases   :: RelRefScript -> RelRefScript
 expandAliases p =  expandCodePred pe'
                 $  expandCodeTAlias te'
                 $  expandPred pe'
-               <$> expandRefType te'
+               -- <$> expandRefType te'   -- there are no RefTypes in Reft
                <$> p'
   where
     p'          = p { pAlias = pe' } {tAlias = te'}
@@ -122,12 +125,15 @@ expandTAlias te a = a {al_body = expandRefType te $ al_body a}
 expandRefType :: Data a => TAliasEnv RRType -> a -> a
 expandRefType te = everywhere $ mkT tx
   where
-    tx t@(TRef (Gen (QN (QP RK_ l []) c) ts) r) = maybe t (applyTAlias l t c ts r) $ envFindTy c te
+    tx t@(TRef (Gen (QN (QP RK_ l []) c) ts) r) =
+        maybe t (applyTAlias l t c ts r) (envFindTy c te)
     tx t = t
 
 applyTAlias l t _ ts_ r a
-  | (nt, ne) == (nα, nx) = {- tracePP "applyTAlias" $ -} F.subst su (S.apply θ $ al_body a) `strengthen` r
-  | otherwise = die $ errorBadTAlias l t nt ne nα nx
+  | (nt, ne) == (nα, nx)
+  = F.subst su (S.apply θ $ al_body a) `strengthen` r
+  | otherwise
+  = die $ errorBadTAlias l t nt ne nα nx
   where
     xs        = al_syvars a
     αs        = al_tyvars a
@@ -141,14 +147,14 @@ applyTAlias l t _ ts_ r a
 
 splitTsEs l t na nx ts_
   | na + nx /= n = die $ errorTAliasNumArgs l t na nx n
-  | otherwise    = (ts, rTypeExp l t <$> tes)
+  | otherwise    = (ts, map (rTypeExp l t) tes)
   where
     n            = length ts_
     (ts, tes)    = splitAt na ts_
 
-rTypeExp _ _ (TExp e) = e
-rTypeExp _ _(TRef (Gen r []) _) = F.expr $ F.symbol r
-rTypeExp l t a = die $ errorTAliasMismatch l t a
+rTypeExp _ _ (TExp e)            = e
+rTypeExp _ _ (TRef (Gen r []) _) = F.expr (F.symbol r)
+rTypeExp l t a                   = die $ errorTAliasMismatch l t a
 
 -----------------------------------------------------------------------------
 -- | A Generic Solver for Expanding Definitions -----------------------------

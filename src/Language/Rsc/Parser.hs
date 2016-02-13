@@ -37,7 +37,7 @@ import           Language.Rsc.Names
 import           Language.Rsc.Parser.Annotations
 import           Language.Rsc.Parser.Declarations ()
 import           Language.Rsc.Parser.Types
-import           Language.Rsc.Pretty.Errors
+-- import           Language.Rsc.Pretty.Errors
 import           Language.Rsc.Program
 import           Language.Rsc.Transformations
 import           Language.Rsc.Typecheck.Types

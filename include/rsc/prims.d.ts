@@ -2,8 +2,8 @@
 /*@ builtin_BIBracketRef :: <A>(x: UArray<A> , n: idx<x>)  => A */
 /*@ builtin_BIBracketRef :: <A>(x: IArray<A> , n: idx<x>)  => A */
 /*@ builtin_BIBracketRef :: <A>(x: MArray<A> , n: number)  => A + undefined */
-/*@ builtin_BIBracketRef :: <A>(o: {[y: string]: A }, s: string)
-    => { A + undefined | (hasProperty o s) => (Prop v) } */
+/*@ builtin_BIBracketRef :: <A>(x: {[y: string]: A }, s: string)
+    => { A + undefined | (hasProperty x s) => (Prop v) } */
 declare function builtin_BIBracketRef(a: any, n: any): any;
 
 // TODO : add case for A<AssignsFields> or A<Unique>

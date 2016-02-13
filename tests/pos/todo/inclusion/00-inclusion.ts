@@ -10,15 +10,12 @@ export function values<T>(m: { [k: string]: T }): void {
         hp(m, k);
 
         let mk = m[k];
-        assert(mk);
-        let a: T = mk
+        let a = <T>mk;
 
-        // TODO
-        let b = <T>m[k];
-
+        let b = <T>(m[k]);
     }
 }
-//
+
 // /*@ bracketRef :: <A>(x: IArray<A> , n: idx<x>)  => A */
 // declare function bracketRef<A>(x: IArray<A>, n: number): A;
 //

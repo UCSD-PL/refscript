@@ -1,5 +1,5 @@
 /*@ loop :: ({x:number|x <= 6}) => {v:number| v = 6} */
-function loop(x : number) : number {
+function loop(x) {
   if (x <= 5) {
     var r = loop(x + 1);
     return r;

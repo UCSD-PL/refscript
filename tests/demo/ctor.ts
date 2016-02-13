@@ -1,6 +1,7 @@
 
 class A {
-  
+  // Try changing Immutable to Mutable - it will fail because
+  // the refinement on y can't refer to a mutable field
   /*@ x: [Immutable] number */
   public x: number;
 

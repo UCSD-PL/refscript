@@ -7,7 +7,7 @@ function bar(): number {
 
   var x = foo();
 
-  if (x) {
+  if (x) { // Try removing this undefined check
 
     return 1 + <number>x;
 

@@ -13,6 +13,7 @@ var gobj = {
   f: inc
 };
 
+// Try changing the refinement, e.g. to v < 0
 /*@ foo :: () => { number | v = 6 } */
 function foo () {
   var ff = gobj.f;

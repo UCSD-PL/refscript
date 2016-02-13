@@ -1,5 +1,4 @@
 
-
 /*@ arr :: {IArray<number> | len v = 4} */
 var arr = [1,2,3,4];
 
@@ -12,4 +11,3 @@ var a =
   }).call(arr);
 
 assert(a.length === 4);
-

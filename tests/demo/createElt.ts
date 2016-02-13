@@ -41,6 +41,6 @@ function createElt(tagName) {
 
 }
 
-var elt = createElt("div");
+var elt = createElt("div"); // Try changing "div"
 
 assert(elt instanceof DivElt);

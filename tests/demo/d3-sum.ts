@@ -4,27 +4,27 @@
               /\ forall T. (a: IArray<T>, f: (T, ix<a>) => number) => number  */ 
        
 function d3_sum (array: any, f?:any): number {
-    var s:number = 0;
-    var n:number = array.length;
-    var i:number = 0;
+  var s:number = 0;
+  var n:number = array.length;
+  var i:number = 0;
 
-    if (arguments.length === 1) {
-      while (i < n) {
-          var a1 = array[i]; 
-          if (!isNaN(a1)) { 
- 	      s += a1;
- 	  }
- 	  i++;
+  if (arguments.length === 1) {
+    while (i < n) {
+      var a1 = array[i]; 
+      if (!isNaN(a1)) { 
+        s += a1;
       }
-    } else {
-      while (i < n) { 
-	  var a2 = f.call(array, array[i], i);
-          if (!isNaN(a2)) { 
-      	      s += a2;
-      	  }
-      	  i++;
-      }
+      i++;
     }
+  } else {
+    while (i < n) { 
+      var a2 = f.call(array, array[i], i);
+      if (!isNaN(a2)) { 
+        s += a2;
+      }
+      i++;
+    }
+  }
 
   return s;
 };

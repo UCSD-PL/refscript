@@ -58,67 +58,67 @@ unJavaScript :: JavaScript a -> [Statement a]
 unJavaScript (Script _ stmts) = stmts
 
 -- | Infix operators: see spec 11.5-11.11
-data InfixOp = OpLT -- ^ @<@
-             | OpLEq -- ^ @<=@
-             | OpGT -- ^ @>@
-             | OpGEq -- ^ @>=@
-             | OpIn -- ^ @in@
+data InfixOp = OpLT         -- ^ @<@
+             | OpLEq        -- ^ @<=@
+             | OpGT         -- ^ @>@
+             | OpGEq        -- ^ @>=@
+             | OpIn         -- ^ @in@
              | OpInstanceof -- ^ @instanceof@
-             | OpEq -- ^ @==@
-             | OpNEq -- ^ @!=@
-             | OpStrictEq -- ^ @===@
-             | OpStrictNEq -- ^ @!===@
-             | OpLAnd -- ^ @&&@
-             | OpLOr -- ^ @||@
-             | OpMul -- ^ @*@
-             | OpDiv -- ^ @/@
-             | OpMod -- ^ @%@
-             | OpSub -- ^ @-@
-             | OpLShift -- ^ @<<@
-             | OpSpRShift -- ^ @>>@
-             | OpZfRShift -- ^ @>>>@
-             | OpBAnd -- ^ @&@
-             | OpBXor -- ^ @^@
-             | OpBOr -- ^ @|@
-             | OpAdd -- ^ @+@
+             | OpEq         -- ^ @==@
+             | OpNEq        -- ^ @!=@
+             | OpStrictEq   -- ^ @===@
+             | OpStrictNEq  -- ^ @!===@
+             | OpLAnd       -- ^ @&&@
+             | OpLOr        -- ^ @||@
+             | OpMul        -- ^ @*@
+             | OpDiv        -- ^ @/@
+             | OpMod        -- ^ @%@
+             | OpSub        -- ^ @-@
+             | OpLShift     -- ^ @<<@
+             | OpSpRShift   -- ^ @>>@
+             | OpZfRShift   -- ^ @>>>@
+             | OpBAnd       -- ^ @&@
+             | OpBXor       -- ^ @^@
+             | OpBOr        -- ^ @|@
+             | OpAdd        -- ^ @+@
     deriving (Show,Data,Typeable,Eq,Ord,Enum,Generic)
 
 -- | Assignment operators: see spec 11.13
-data AssignOp = OpAssign -- ^ simple assignment, @=@
-              | OpAssignAdd -- ^ @+=@
-              | OpAssignSub -- ^ @-=@
-              | OpAssignMul -- ^ @*=@
-              | OpAssignDiv -- ^ @/=@
-              | OpAssignMod -- ^ @%=@
-              | OpAssignLShift -- ^ @<<=@
+data AssignOp = OpAssign         -- ^ simple assignment, @=@
+              | OpAssignAdd      -- ^ @+=@
+              | OpAssignSub      -- ^ @-=@
+              | OpAssignMul      -- ^ @*=@
+              | OpAssignDiv      -- ^ @/=@
+              | OpAssignMod      -- ^ @%=@
+              | OpAssignLShift   -- ^ @<<=@
               | OpAssignSpRShift -- ^ @>>=@
               | OpAssignZfRShift -- ^ @>>>=@
-              | OpAssignBAnd -- ^ @&=@
-              | OpAssignBXor -- ^ @^=@
-              | OpAssignBOr -- ^ @|=@
+              | OpAssignBAnd     -- ^ @&=@
+              | OpAssignBXor     -- ^ @^=@
+              | OpAssignBOr      -- ^ @|=@
   deriving (Show,Data,Typeable,Eq,Ord,Generic)
 
 -- | Unary assignment operators: see spec 11.3, 11.4.4, 11.4.5
-data UnaryAssignOp = PrefixInc -- ^ @++x@
-                   | PrefixDec -- ^ @--x@
+data UnaryAssignOp = PrefixInc  -- ^ @++x@
+                   | PrefixDec  -- ^ @--x@
                    | PostfixInc -- ^ @x++@
-                   | PostfixDec -- ^ @x--@
+                   | PostfixDec -- ^ @x-- @
   deriving (Show, Data, Typeable, Eq, Ord, Generic)
 
 -- | Prefix operators: see spec 11.4 (excluding 11.4.4, 11.4.5)
-data PrefixOp = PrefixLNot -- ^ @!@
-              | PrefixBNot -- ^ @~@
-              | PrefixPlus -- ^ @+@
-              | PrefixMinus -- ^ @-@
+data PrefixOp = PrefixLNot   -- ^ @!@
+              | PrefixBNot   -- ^ @~@
+              | PrefixPlus   -- ^ @+@
+              | PrefixMinus  -- ^ @-@
               | PrefixTypeof -- ^ @typeof@
-              | PrefixVoid -- ^ @void@
+              | PrefixVoid   -- ^ @void@
               | PrefixDelete -- ^ @delete@
   deriving (Show,Data,Typeable,Eq,Ord,Generic)
 
 -- | Property names in an object initializer: see spec 11.1.5
-data Prop a = PropId a (Id a) -- ^ property name is an identifier, @foo@
+data Prop a = PropId a (Id a)     -- ^ property name is an identifier, @foo@
             | PropString a String -- ^ property name is a string, @\"foo\"@
-            | PropNum a Integer -- ^ property name is an integer, @42@
+            | PropNum a Integer   -- ^ property name is an integer, @42@
   deriving (Show,Data,Typeable,Eq,Ord,Functor,Foldable,Traversable, Generic)
 
 -- | Left-hand side expressions: see spec 11.2
@@ -130,48 +130,55 @@ data LValue a
 
 -- | Expressions, see spec 11
 data Expression a
-  = StringLit a String -- ^ @\"foo\"@, spec 11.1.3, 7.8
+  = StringLit a String                        -- ^ @\"foo\"@, spec 11.1.3, 7.8
   | RegexpLit a String Bool Bool
-    -- ^ @RegexpLit a regexp global?  case_insensitive?@ -- regular
-    -- expression, see spec 11.1.3, 7.8
-  | NumLit a Double -- ^ @41.99999@, spec 11.1.3, 7.8
-  | IntLit a Int -- ^ @42@, spec 11.1.3, 7.8
-  | BoolLit a Bool -- ^ @true@, spec 11.1.3, 7.8
-  | NullLit a -- ^ @null@, spec 11.1.3, 7.8
-  | ArrayLit a [Expression a] -- ^ @[1,2,3]@, spec 11.1.4
-  | ObjectLit a [(Prop a, Expression a)] -- ^ @{foo:\"bar\", baz: 42}@, spec 11.1.5
+                                              -- ^ @RegexpLit a regexp global?  case_insensitive?@
+                                              --   (regular expression, see spec 11.1.3, 7.8)
+  | NumLit a Double                           -- ^ @41.99999@, spec 11.1.3, 7.8
+  | IntLit a Int                              -- ^ @42@, spec 11.1.3, 7.8
+  | BoolLit a Bool                            -- ^ @true@, spec 11.1.3, 7.8
+  | NullLit a                                 -- ^ @null@, spec 11.1.3, 7.8
+  | ArrayLit a [Expression a]                 -- ^ @[1,2,3]@, spec 11.1.4
+  | ObjectLit a [(Prop a, Expression a)]      -- ^ @{foo:\"bar\", baz: 42}@, spec 11.1.5
 
-  | HexLit a String -- ^ RefScript Hex literal -- Used as BitVector
+  | HexLit a String                           -- ^ RefScript Hex literal (Used as BitVector)
 
-  | ThisRef a -- ^ @this@, spec 11.1.1
-  | VarRef a (Id a) -- ^ @foo@, spec 11.1.2
-  | DotRef a (Expression a) (Id a) -- ^ @foo.bar@, spec 11.2.1
-  | BracketRef a (Expression a) {- container -} (Expression a) {- key -}
-    -- ^ @foo[bar]@, spec 11.2.1
-  | NewExpr a (Expression a) {- constructor -} [Expression a]
-    -- ^ @new foo(bar)@, spec 11.2.2
+  | ThisRef a                                 -- ^ @this@, spec 11.1.1
+  | VarRef a (Id a)                           -- ^ @foo@, spec 11.1.2
+  | DotRef a (Expression a) (Id a)            -- ^ @foo.bar@, spec 11.2.1
+  | BracketRef a (Expression a)
+                 (Expression a)
+                                              -- ^ @foo[bar]@, spec 11.2.1
+  | NewExpr a (Expression a)
+              [Expression a]
+                                              -- ^ @new foo(bar)@, spec 11.2.2
   | PrefixExpr a PrefixOp (Expression a)
-    -- ^ @\@e@, spec 11.4 (excluding 11.4.4, 111.4.5)
-  | UnaryAssignExpr a UnaryAssignOp (LValue a)
-    -- ^ @++x@, @x--@ etc., spec 11.3, 11.4.4, 11.4.5
-  | InfixExpr a InfixOp (Expression a) (Expression a)
-    -- ^ @e1\@e2@, spec 11.5, 11.6, 11.7, 11.8, 11.9, 11.10, 11.11
-  | CondExpr a (Expression a) (Expression a) (Expression a)
-    -- ^ @e1 ? e2 : e3@, spec 11.12
-  | AssignExpr a AssignOp (LValue a) (Expression a)
-    -- ^ @e1 \@=e2@, spec 11.13
-  | ListExpr a [Expression a] -- ^ @e1, e2@, spec 11.14
-  | CallExpr a (Expression a) [Expression a] -- ^ @f(x,y,z)@, spec 11.2.3
-  | SuperRef a -- ^ @super@, TS spec
-  --funcexprs are optionally named
-  | FuncExpr a (Maybe (Id a)) [Id a] [Statement a]
-    -- ^ @function f (x,y,z) {...}@, spec 11.2.5, 13
+                                              -- ^ @\@e@, spec 11.4 (excluding 11.4.4, 111.4.5)
+  | UnaryAssignExpr a UnaryAssignOp
+                      (LValue a)
+                                              -- ^ @++x@, @x-- @ etc., spec 11.3, 11.4.4, 11.4.5
+  | InfixExpr a InfixOp (Expression a)
+                        (Expression a)
+                                              -- ^ @e1\@e2@, spec 11.5, 11.6, 11.7, 11.8, 11.9, 11.10, 11.11
+  | CondExpr a (Expression a)
+      (Expression a) (Expression a)
+                                              -- ^ @e1 ? e2 : e3@, spec 11.12
+  | AssignExpr a AssignOp (LValue a)
+                          (Expression a)
+                                              -- ^ @e1 \@=e2@, spec 11.13
+  | ListExpr a [Expression a]                 -- ^ @e1, e2@, spec 11.14
+  | CallExpr a (Expression a) [Expression a]  -- ^ @f(x,y,z)@, spec 11.2.3
+  | SuperRef a                                -- ^ @super@, TS spec
+                                              -- funcexprs are optionally named
+  | FuncExpr a (Maybe (Id a)) [Id a]
+               [Statement a]
+                                              -- ^ @function f (x,y,z) {...}@, spec 11.2.5, 13
 
   --
   -- RefScript Cast expressions
   --
-  | Cast  a (Expression a)    -- ^ User inserted cast
-  | Cast_ a (Expression a)    -- ^ Implicitly created cast
+  | Cast  a (Expression a)                    -- ^ User inserted cast
+  | Cast_ a (Expression a)                    -- ^ Implicitly created cast
   deriving (Show,Data,Typeable,Eq,Ord,Functor,Foldable,Traversable,Generic)
 
 -- | Case clauses, spec 12.11
@@ -192,14 +199,14 @@ data VarDecl a = VarDecl a (Id a) (Maybe (Expression a))
   deriving (Show,Data,Typeable,Eq,Ord,Functor,Foldable,Traversable, Generic)
 
 -- | for initializer, spec 12.6
-data ForInit a = NoInit -- ^ empty
-               | VarInit [VarDecl a] -- ^ @var x, y=42@
-               | ExprInit (Expression a) -- ^ @expr@
+data ForInit a = NoInit                   -- ^ empty
+               | VarInit [VarDecl a]      -- ^ @var x, y=42@
+               | ExprInit (Expression a)  -- ^ @expr@
   deriving (Show,Data,Typeable,Eq,Ord,Functor,Foldable,Traversable, Generic)
 
 -- | for..in initializer, spec 12.6
-data ForInInit a = ForInVar (Id a) -- ^ @var x@
-                 | ForInLVal (LValue a) -- ^ @foo.baz@, @foo[bar]@, @z@
+data ForInInit a = ForInVar (Id a)        -- ^ @var x@
+                 | ForInLVal (LValue a)   -- ^ @foo.baz@, @foo[bar]@, @z@
  deriving (Show,Data,Typeable,Eq,Ord,Functor,Foldable,Traversable, Generic)
 
 -- | Statements, spec 12.

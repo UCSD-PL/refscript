@@ -97,10 +97,9 @@ declare function builtin_OpLAnd(x: any, y: any): any;
 //  */
 // declare function builtin_PrefixBNot(n: number): number;
 //
-// /*@ builtin_OpBOr ::
-//     (a: bitvector32, b: bitvector32) => { v: bitvector32 | v = bvor(a,b) }
-//  */
-// declare function builtin_OpBOr(a: number, b: number): number;
+/*@ builtin_OpBOr :: (a: bitvector32, b: bitvector32) => { v: bitvector32 | v = bvor a b } */
+declare function builtin_OpBOr(a: number, b: number): number;
+
 // declare function builtin_OpBXor(a: number, b: number): number;
 //
 // /*@ builtin_OpBAnd ::

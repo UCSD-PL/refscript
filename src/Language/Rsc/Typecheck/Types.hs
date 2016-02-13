@@ -224,9 +224,9 @@ tOrR :: F.Reftable r => [RTypeQ q r] -> r -> RTypeQ q r
 ----------------------------------------------------------------------------------------
 tOrR ts r = tOr ts `strengthen` r
 
-tOr2 (TOr t1s _) (TOr t2s _) = TOr ( t1s ++  t2s) fTop
-tOr2 (TOr t1s _) t            = TOr ( t1s ++ [t]) fTop
-tOr2 t            (TOr t2s _) = TOr ([t]  ++  t2s) fTop
+tOr2 (TOr t1s r1) (TOr t2s r2) = TOr (map (`strengthen` r1) t1s ++ map (`strengthen` r2) t2s) fTop
+tOr2 (TOr t1s r1) t            = TOr (map (`strengthen` r1) t1s ++ [t]) fTop
+tOr2 t            (TOr t2s r2) = TOr ([t] ++ map (`strengthen` r2) t2s) fTop
 tOr2 t1           t2           = TOr [t1, t2] fTop
 
 tOr [] = TPrim TBot fTop

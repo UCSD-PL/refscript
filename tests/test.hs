@@ -37,7 +37,7 @@ unitTests = group "Unit"
   , testGroup "pos-misc"         <$> dirTests rscCmd "tests/pos/misc"         [] ExitSuccess
   , testGroup "pos-bounded-poly" <$> dirTests rscCmd "tests/pos/bounded-poly" [] ExitSuccess
   , testGroup "pos-list"         <$> dirTests rscCmd "tests/pos/lists"        [] ExitSuccess
-  , testGroup "pos-inclusion"    <$> dirTests rscCmd "tests/pos/inclusion"    [] ExitSuccess
+  , testGroup "pos-inclusion"    <$> dirTests eCmd   "tests/pos/inclusion"    [] ExitSuccess
 
   , testGroup "neg-object"       <$> dirTests rscCmd "tests/neg/objects"      [] (ExitFailure 1)
   , testGroup "neg-array"        <$> dirTests rscCmd "tests/neg/arrays"       [] (ExitFailure 1)
@@ -50,7 +50,7 @@ unitTests = group "Unit"
   , testGroup "neg-misc"         <$> dirTests rscCmd "tests/neg/misc"         [] (ExitFailure 1)
   , testGroup "neg-bounded-poly" <$> dirTests rscCmd "tests/neg/bounded-poly" [] (ExitFailure 1)
   , testGroup "neg-list"         <$> dirTests rscCmd "tests/neg/lists"        [] (ExitFailure 1)
-  , testGroup "neg-inclusion"    <$> dirTests rscCmd "tests/neg/inclusion"    [] (ExitFailure 1)
+  , testGroup "neg-inclusion"    <$> dirTests eCmd   "tests/neg/inclusion"    [] (ExitFailure 1)
 
 --   , testGroup "pos-alias"  <$> dirTests rscCmd "tests/pos/typealias"  [] ExitSuccess
 --   , testGroup "pos-fb"     <$> dirTests rscCmd "tests/pos/fb"         [] ExitSuccess

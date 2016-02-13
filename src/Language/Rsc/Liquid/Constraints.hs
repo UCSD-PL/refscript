@@ -464,7 +464,8 @@ bsplitW g t i
 --------------------------------------------------------------------------------
 sameTag _ (TPrim c1 _) (TPrim c2 _) = c1 == c2
 sameTag _ (TVar  v1 _) (TVar  v2 _) = v1 == v2
-sameTag g t1@TRef{}    t2@TRef{}    = isSubtype g t1 t2 || isSubtype g t2 t1
+-- Allow unique since this should have been resolved by now ...
+sameTag g t1@TRef{}    t2@TRef{}    = isSubtypeWithUq g t1 t2 || isSubtypeWithUq g t2 t1
 sameTag _ TObj{}       TObj{}       = True
 sameTag _ TObj{}       TRef{}       = True
 sameTag _ TRef{}       TObj{}       = True

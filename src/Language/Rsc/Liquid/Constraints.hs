@@ -270,9 +270,8 @@ mkBot t = t `strengthen` F.bot (rTypeR t)
 -- | Substitute occurences of `this` in the parts of the object members
 --   Do not substiute static members and constructors.
 --------------------------------------------------------------------------------
-splitTM
-  :: CGEnv -> Cinfo -> Mutability -> RefTypeMembers -> F.Reft
-  -> RefTypeMembers -> CGM [FixSubC]
+splitTM :: CGEnv -> Cinfo -> Mutability -> RefTypeMembers -> F.Reft
+        -> RefTypeMembers -> CGM [FixSubC]
 --------------------------------------------------------------------------------
 splitTM g i m1_ (TM p1 sp1 c1 k1 s1 n1) r1 (TM p2 sp2 c2 k2 s2 n2)
   = do

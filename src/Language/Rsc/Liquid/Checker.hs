@@ -640,7 +640,7 @@ consExpr g (Cast_ l e) s
       -- Type-cast
       CType s  -> mseq (consExpr g e (Just $ ofType s)) $ \(x, g') -> do
                     t   <- cgSafeEnvFindTyM x g'
-                    _   <- subType l Nothing g t (ofType s)
+                    _   <- subType l Nothing g' t (ofType s)
                     case narrowType g' t s of
                       Just t' -> Just <$> cgEnvAddFresh "cast_" l t' g'
                       Nothing -> return (Just (x, g'))
@@ -701,12 +701,14 @@ consExpr g (VarRef l x) _
   | Just (SI _ _ WriteGlobal _ t) <- tInfo
   = Just <$> cgEnvAddFresh "0" l t g
 
-  | Just (SI s _ _ _ t) <- tInfo
+  | Just (SI _ _ _ _ t) <- tInfo
 
-  = if F.tempPrefix `F.isPrefixOfSym` s then
-        return $ Just (x, g)
-    else do
-        addAnnot (srcPos l) x t
+  -- XXX: enable this??
+
+  = --  if F.tempPrefix `F.isPrefixOfSym` s then
+    --      return $ Just (x, g)
+    --  else do
+    --      addAnnot (srcPos l) x t
         Just <$> cgEnvAddFresh "cons VarRef" l t g
 
   | otherwise

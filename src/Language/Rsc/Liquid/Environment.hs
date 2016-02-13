@@ -286,10 +286,13 @@ freshenAnn l = FA <$> cgTickAST <*> pure (srcPos l) <*> pure []
 --------------------------------------------------------------------------------
 cgEnvAdds :: IsLocated l => l -> String -> [CGEnvEntry] -> CGEnv -> CGM CGEnv
 --------------------------------------------------------------------------------
-cgEnvAdds l msg xts g = foldM (envAddGroup l msg ks) g es
+cgEnvAdds l msg xts g = foldM step g es
   where
-    es = objFields g <$> xts
-    ks = F.symbol    <$> xts
+
+    step g_ es_ = envAddGroup l msg ks g_ es_
+
+    es = map (objFields g) xts
+    ks = map F.symbol      xts
 
 
 -- | Bindings for IMMUTABLE fields
@@ -320,18 +323,25 @@ envAddGroup
   :: IsLocated l
   => l -> String -> [F.Symbol] -> CGEnv -> [CGEnvEntry] -> CGM CGEnv
 --------------------------------------------------------------------------------
-envAddGroup l msg ks g xts
+envAddGroup l msg ks g0 xts
   = do  -- Flag any errors
         _           <- mapM_ cgError errors
         es          <- L.zipWith5 SI xs ls as is <$> zipWithM inv is ts
-        g'          <- foldM addFixpointBind g es
-        return       $ g' { cge_names = envAdds (zip xs es) (cge_names g) }
+        g1          <- foldM addFixpointBind g0 es
+        return       $ g1 { cge_names = envAdds (zip xs es) (cge_names g1) }
   where
-    errors           = concat (zipWith (checkSyms l msg g ks) xs ts)
-    (xs,ls,as,is,ts) = L.unzip5 [(x,loc,a,i,t) | SI x loc a i t <- xts ]
+    errors           = concat (zipWith (checkSyms l msg g0 ks) xs ts)
 
-    inv Initialized  = addInvariant g
+    (xs,ls,as,is,ts) = L.unzip5 [(x, loc, a, i, t `strOr` x) | SI x loc a i t <- xts ]
+
+    -- Invariant strengthening
+    inv Initialized  = addInvariant g0
     inv _            = return
+
+    -- Union strengthening
+    strOr (TOr ts r) x = TOr (map (`eSingleton` x) ts) r
+    strOr t          _ = t
+
 
 
 -- | Adds a fixpoint binding to g's cge_fenv, updating the relevant
@@ -363,8 +373,8 @@ addFixpointBind g (SI x _ _           _ t)
         let rbs'      = F.insertSEnv x i rbs
 
         -- Set the Monad' envs
-        _            <- setCgBinds    bs'
-        _            <- setCgRevBinds rbs'
+        setCgBinds    bs'
+        setCgRevBinds rbs'
 
         -- Update the CGEnv's IBindEnv
         let ibs2      = F.insertsIBindEnv [i] ibs1

@@ -414,11 +414,11 @@ addInvariant g t
 
     ofRef (F.Reft (s, ra))    = F.reft s <$> F.conjuncts ra
 
-    -- | { f: T } --> hasProperty("f", v)
+    -- | { f: T } --> hasProperty(v, "f")
     hasProp ty             = t `strengthen` keyReft (boundKeys cha ty)
     keyReft ks             = F.reft (vv t) $ F.pAnd (hasPropExpr <$> ks)
     hasPropExpr s          = F.mkEApp (F.dummyLoc (F.symbol "hasProperty"))
-                                [F.expr (F.symbolSafeText s), F.eVar $ vv t]
+                                [F.eVar (vv t), F.expr (F.symbolSafeText s)]
 
     -- | extends class / interface
     hierarchy t@(TRef c _)

@@ -731,7 +731,7 @@ consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
     l2 = getAnnotation e2
     cc (BGen (QN _ s) _) = symbolString s
 
-consExpr g (InfixExpr l o e1 e2) _
+consExpr g e@(InfixExpr l o e1 e2) _
   = do opTy <- cgSafeEnvFindTyM (infixOpId o) g
        consCall g l (infixOpId o) (zwNth [e1, e2]) opTy
 

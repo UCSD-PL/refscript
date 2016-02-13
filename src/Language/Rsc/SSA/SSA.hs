@@ -795,7 +795,7 @@ ssaExpr g (FuncExpr l fo xs bd) = do
 -- x = e
 ssaExpr g (AssignExpr l OpAssign (LVar lv v) e) = do
     let x            = Id lv v
-    (g', s, x', e') <- ssaAsgn g l x e
+    (g', _, x', e') <- ssaAsgn g l x e
     return             (g', [ssaAsgnStmt l lv x x' e'], e')
 
 -- e1.f = e2
@@ -818,7 +818,7 @@ ssaExpr g (AssignExpr l OpAssign (LBracket ll e1 e2) e3) = do
 ssaExpr g (AssignExpr l op x@(LVar lv _) e) = do
     (g', s, _) <- ssaExpr g (AssignExpr l OpAssign x rhs)
     x'         <- safeFindSsaEnv lv g x
-    return (g', s, ltracePP l "e'" $ VarRef lv x')
+    return (g', s, VarRef lv x')
   where
     rhs = InfixExpr l (assignInfix op) (lvalExp x) e
 

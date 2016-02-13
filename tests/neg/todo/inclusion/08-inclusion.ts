@@ -1,15 +1,15 @@
 
-/*@ qualif HasP<A>(v:string, s:A): hasProperty(v,s) */
-/*@ qualif EnumP<A>(v:string, s:A): enumProp(v,s)    */
+/*@ qualif HasP (p: Str, x: a): hasProperty x p */
+/*@ qualif EnumP (p: Str, x: a): enumProp x p */
 
-/*@ values :: (map: [Immutable]{[k:string]: { number | v >= 0 }}) => MArray<{ number | v > 0 }> */
-function values(map:{[k:string]: number}): number[] {
+/*@ values :: (map: (Immutable) { [k:string]: { number | v >= 0 }}) => MArray<{ number | v > 0 }> */
+function values(map: {[k:string]: number}): IArray<number> {
 
-  var values = [];
+    /*@ local value :: MArray<posint> */
+    let values: MArray<number> = [];
 
-  for (var key in map) {
-    values.push(map[key]);
-  }
-
-  return values;
+    for (let key in map) {
+      values.push(<number>map[key]);
+    }
+    return values;
 };

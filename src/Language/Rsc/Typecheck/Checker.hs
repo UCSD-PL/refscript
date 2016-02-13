@@ -953,10 +953,8 @@ tcNormalCall :: Unif r
              -> RType r -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
 tcNormalCall γ l fn etos ft0
-  -- = do ets <- ltracePP l fn <$> T.mapM (uncurry (tcExprWD γ)) etos
   = do ets <- T.mapM (uncurry (tcExpr γ)) etos
-       z   <- -- ltracePP l ("overload reolution " ++ ppshow fn ++ " :: " ++ ppshow etos) <$>
-              resolveOverload γ l fn ets ft0
+       z   <- resolveOverload γ l fn ets ft0
        case z of
          Just (i, θ, ft) ->
              do addAnn l (Overload (tce_ctx γ) (F.symbol fn) i)

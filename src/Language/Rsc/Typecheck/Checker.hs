@@ -805,10 +805,13 @@ tcCall γ c@(InfixExpr l o@OpInstanceof e1 e2) _
 
 tcCall γ c@(InfixExpr l o e1 e2) _
   = do opTy <- safeEnvFindTy l γ (infixOpId o)
-       z    <- tcNormalCallWD γ l (infixOpId o) [e1,e2] opTy
+       z    <- tcNormalCallWD γ l (infixOpId o) [e1, e2'] opTy
        case z of
          ([e1', e2'], t) -> return (InfixExpr l o e1' e2', t)
          _ -> fatal (impossible (srcPos l) "tcCall InfixExpr") (c, tBot)
+  where
+    e2' | o `elem` [OpIn] = enableUnique e2
+        | otherwise          = e2
 
 -- | `e1[e2]` Special case for Enumeration, and object literals with numeric
 -- or string arguments.

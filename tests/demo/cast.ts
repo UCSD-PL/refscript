@@ -1,5 +1,5 @@
 
-/*@ foo :: () => { number | v > 0 } + undefined */ 
+/*@ foo :: () => number + undefined */ 
 declare function foo(): any;
 
 /*@ bar :: () => { number | 0 < 1 } */
@@ -16,4 +16,3 @@ function bar(): number {
   return 0;
 
 }
-

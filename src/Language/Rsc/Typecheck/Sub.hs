@@ -132,7 +132,7 @@ convert l g c t1 t2
     NoSub es -> castable l g c es t1 t2
 
 castable _ γ c _ (TOr t1s _) t2
-  | any (\t1 -> isSubtypeC γ c t1 t2) t1s
+  | any (\t1_ -> isSubtypeC γ c t1_ t2) t1s
   = ConvWith (toType t2)
 
 -- XXX: Only non generic casting allowed at the moment

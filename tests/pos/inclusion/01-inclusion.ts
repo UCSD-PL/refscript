@@ -1,12 +1,12 @@
 // Taken from strobe
 
-/*@ qualif HasP<A>(x: string, y: A): hasProperty(x, y) */
-/*@ qualif EnumP<A>(x: string, y: A): enumProp(x, y) */
+/*@ qualif HasP (p: Str, x: a): hasProperty x p */
+/*@ qualif EnumP (p: Str, x: a): enumProp x p */
 
 /*@ foo :: (o: { [x:string]: string + number }) => string */
 export function foo(o) {
-    for (var x in o) {
-        var r = o[x];
+    for (let x in o) {
+        let r = o[x];
         if (typeof r === "string") {
             return r;
         }

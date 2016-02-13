@@ -27205,6 +27205,7 @@ var ts;
                     case ts.SyntaxKind.BarBarToken:
                     case ts.SyntaxKind.AsteriskToken:
                     case ts.SyntaxKind.InstanceOfKeyword:
+                    case ts.SyntaxKind.InKeyword:
                         return new ts.RsInfixExpr(nodeToSrcSpan(node), [], new ts.RsInfixOp(ts.getTextOfNode(node.operatorToken)), nodeToRsExp(state, node.left), nodeToRsExp(state, node.right));
                     case ts.SyntaxKind.EqualsToken:
                         return new ts.RsAssignExpr(nodeToSrcSpan(node), [], new ts.RsAssignOp(ts.getTextOfNode(node.operatorToken)), nodeToRsLval(state, node.left), nodeToRsExp(state, node.right));

@@ -243,7 +243,7 @@ appTy :: F.Reftable r => RSubstQ q r -> RTypeQ q r -> RTypeQ q r
 ---------------------------------------------------------------------------------
 appTy _        (TPrim p r)   = TPrim p r
 appTy (Su m) t@(TVar α r)    = (HM.lookupDefault t α m) `strengthen` r
-appTy θ        (TOr ts r)    = TOr (apply θ ts) r
+appTy θ        (TOr ts r)    = tOrR (apply θ ts) r
 appTy θ        (TAnd ts)     = TAnd (mapSnd (apply θ) <$> ts)
 appTy θ        (TRef n r)    = TRef (apply θ n) r
 appTy θ        (TObj m es r) = TObj (appTy θ m) (apply θ es) r

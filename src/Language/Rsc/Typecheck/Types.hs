@@ -221,13 +221,17 @@ instance F.Reftable r => Monoid (RTypeQ q r) where
 
 ----------------------------------------------------------------------------------------
 tOrR :: F.Reftable r => [RTypeQ q r] -> r -> RTypeQ q r
-tOr  :: F.Reftable r => [RTypeQ q r] -> RTypeQ q r
 ----------------------------------------------------------------------------------------
-tOrR [ ] = TPrim TBot
-tOrR [t] = (t `strengthen`)
-tOrR ts  = TOr (concatMap bkUnion ts)
+tOrR ts r = tOr ts `strengthen` r
 
-tOr  ts  = tOrR ts fTop
+tOr2 (TOr t1s _) (TOr t2s _) = TOr ( t1s ++  t2s) fTop
+tOr2 (TOr t1s _) t            = TOr ( t1s ++ [t]) fTop
+tOr2 t            (TOr t2s _) = TOr ([t]  ++  t2s) fTop
+tOr2 t1           t2           = TOr [t1, t2] fTop
+
+tOr [] = TPrim TBot fTop
+tOr ts = foldl1 tOr2 ts
+
 
 ----------------------------------------------------------------------------------------
 bkUnion :: F.Reftable r => RTypeQ q r -> [RTypeQ q r]
@@ -330,9 +334,9 @@ isArrayType t | TRef (Gen x _) _ <- t
               = False
 
 orNull t@(TOr ts r) | any isTNull ts = t
-                    | otherwise      = TOr (tNull:ts) r
+                    | otherwise      = tOrR (tNull:ts) r
 orNull t            | isTNull t      = t
-                    | otherwise      = TOr [tNull,t] fTop
+                    | otherwise      = tOrR [tNull,t] fTop
 
 ---------------------------------------------------------------------------------
 eqV :: RType r -> RType r -> Bool

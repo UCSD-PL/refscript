@@ -45,20 +45,3 @@ interface PropertyDescriptor<M extends ReadOnly> {
 interface PropertyDescriptorMap<M extends ReadOnly> {
     [s: string]: PropertyDescriptor<ReadOnly>;
 }
-
-// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for...in
-//TODO: remove the last overload once {[s:string]:A} extends { } PV: ???
-
-/*@ builtin_BIForInKeys :: <A>(a: IArray<A>)         => IArray<{ number | 0 <= v && v < len a }> */
-/*@ builtin_BIForInKeys ::    (o: Object<Immutable>) => IArray<{ string | hasProperty v o && enumProp v o }> */
-/*@ builtin_BIForInKeys ::    (o: (Immutable) { })   => IArray<{ string | hasProperty v o && enumProp v o }> */
-/*@ builtin_BIForInKeys :: <A>(o: (Immutable) { [s:string]:A }) => IArray<{ string | hasProperty v o && enumProp v o }> */
-declare function builtin_BIForInKeys(obj: Object): string[];
-
-/*@ builtin_OpInstanceof :: <A>(x:A, s: string) => { v: boolean | Prop v <=> extends_class(x, s) } */
-declare function builtin_OpInstanceof<A>(x: A, s: string): boolean;
-
-// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/in
-/*@ builtin_OpIn :: <A>(i: number, a: IArray<A>) => { v: boolean | Prop v <=> (0 <= i && i < len a) } */
-/*@ builtin_OpIn ::    (s: string, o: { }      ) => { v: boolean | Prop v <=> hasProperty s o }        */
-declare function builtin_OpIn(s: string, obj: Object): boolean;

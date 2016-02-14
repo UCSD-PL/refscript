@@ -18,6 +18,11 @@ TOP PRIORITY
 
        Perhaps the same with TC phase.
 
+- Better error message for the ill-formed annotation:
+
+    /*@ readonly a */
+    let a = 1;
+
 --------------------------------------------------------------------------------
 
 - Better error message for `errorCallNotSup`.

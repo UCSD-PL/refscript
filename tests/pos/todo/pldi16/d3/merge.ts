@@ -1,9 +1,9 @@
 /// <reference path="include/d3.d.ts" />
 
-/*@ d3_merge :: forall T . (map: IArray<IArray<T>>) => {v: IArray<T> | 0 < 1}*/
+/*@ d3_merge :: <T> (map: IArray<IArray<T>>) => {v: IArray<T> | 0 < 1}*/
 
 function d3_merge<T>(arrays: T[][]): T[] {
-  var n = arrays.length,
+  let n = arrays.length,
       i = -1,
       j = 0;
 
@@ -15,13 +15,13 @@ function d3_merge<T>(arrays: T[][]): T[] {
     i++;
   }
 
-  var merged:T[] = new Array<T>(j);
+  let merged:T[] = new Array<T>(j);
 
   //while (--n >= 0) {
   n--;
   while (n >= 0) {
-    var array:T[] = arrays[n];
-    var m = array.length;
+    let array:T[] = arrays[n];
+    let m = array.length;
     //while (--m >= 0) {
     m--;
     while (m >= 0 && j > 0) {

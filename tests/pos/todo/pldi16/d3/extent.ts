@@ -6,9 +6,9 @@
 
 /*@ alias NonEmptyIArray<T> = {IArray<T> | 0 < len v} */
 
-/*@ d3_extent_1 :: forall T . (NonEmptyIArray<T>) => #pair[T] */
+/*@ d3_extent_1 :: <T> (NonEmptyIArray<T>) => #pair[T] */
 function d3_extent_1<T>(array: T[]): T[]{
-  var i = 0,
+  let i = 0,
       n = array.length,
       b = array[0],
       a = b,
@@ -26,9 +26,9 @@ function d3_extent_1<T>(array: T[]): T[]{
 
 };
 
-/*@ d3_extent_2 :: forall T U . (NonEmptyIArray<T>, f: (x:T, i:number) => U) => #pair[U] */
+/*@ d3_extent_2 :: <T,U> (NonEmptyIArray<T>, f: (x:T, i:number) => U) => #pair[U] */
 function d3_extent_2<T, U>(array: T[], f:(T, number) => U): U[] {
-  var i = 0,
+  let i = 0,
       n = array.length,
       b = f.call(array, array[0], 0),
       a = b,
@@ -46,8 +46,8 @@ function d3_extent_2<T, U>(array: T[], f:(T, number) => U): U[] {
 };
 
 d3.extent = function(array: any, f?:any):any 
-/*@ <anonymous> /\ forall T U . (NonEmptyIArray<T>, f: (x:T, i:number) => U) => #pair[U] 
-                /\ forall T   . (NonEmptyIArray<T>) => #pair[T] 
+/*@ <anonymous> /\ <T,U> (NonEmptyIArray<T>, f: (x:T, i:number) => U) => #pair[U] 
+                /\ <T>   (NonEmptyIArray<T>) => #pair[T] 
  */
 {
   if (arguments.length === 1) {

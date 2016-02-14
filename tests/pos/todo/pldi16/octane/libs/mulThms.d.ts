@@ -1,6 +1,6 @@
 
-/*@ alias pos = {number | v >  0 } */
-/*@ alias nat = {number | v >= 0 } */
+/*@ type pos = {number | v >  0 } */
+/*@ type nat = {number | v >= 0 } */
 
 /*@ mulThm130 :: (a:{number | v = 130}) => {boolean | a * a > 7100} */
 declare function mulThm130(a);

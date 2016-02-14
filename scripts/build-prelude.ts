@@ -21,7 +21,9 @@ var files = [
     "./ambient/number.d.ts",
     "./ambient/iarguments.d.ts",
     "./ambient/regexp.d.ts",
-    "./ambient/error.d.ts"
+    "./ambient/error.d.ts",
+    "./ambient/console.d.ts",
+    "./ambient/math.d.ts"
 ].map(f => path.join(includeDir, f));
 
 var fileString = files.join(" ");

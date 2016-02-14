@@ -4,8 +4,8 @@
 
 /*@ keys :: (map: [Immutable]{ }) => MArray<{string | hasProperty(v, map) && enumProp(v, map)}> */
 function keys(map: any): any[] {
-    var keys: string[] = [];
-    for (var key in map) {
+    let keys: string[] = [];
+    for (let key in map) {
         keys.push(key);
     }
     return keys;

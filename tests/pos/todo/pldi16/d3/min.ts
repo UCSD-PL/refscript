@@ -1,19 +1,19 @@
 /// <reference path="include/d3.d.ts" />
 /// <reference path="include/d3.rsc.ts" />
 
-/* d3_min_1 :: forall T . (arr: IArray<T>) => { T + undefined | 0 < 1 } */
-/*@ d3_min_1 :: forall T . (arr: IArray<T>) => { T | 0 < 1 } */
+/* d3_min_1 :: <T> (arr: IArray<T>) => { T + undefined | 0 < 1 } */
+/*@ d3_min_1 :: <T> (arr: IArray<T>) => { T | 0 < 1 } */
 function d3_min_1<T>(array: T[]) : any {
-  var i = 0,
+  let i = 0,
       n = array.length;
   /*@ a :: T + undefined */
-  var a;
+  let a;
   /*@ b :: T + undefined */
-  var b;
+  let b;
 
   //ORIG: while (++i < n && !((a = array[i]) != null && a <= a)) a = undefined;
   //PV: skip over null or undefined values
-  var cnt = true;
+  let cnt = true;
   while (i < n && cnt) {
     a = array[i];
     if (!(a !== null && a <= a)) { a = undefined; i++; }
@@ -33,14 +33,14 @@ function d3_min_1<T>(array: T[]) : any {
 }
 
 
-/*@ d3_min_2 :: forall T U . (arr: IArray<T>, f: (x:T, i:number) => U) => { U | 0 < 1 } */
+/*@ d3_min_2 :: <T,U> (arr: IArray<T>, f: (x:T, i:number) => U) => { U | 0 < 1 } */
 function d3_min_2 <T, U>(array:T[], f:(x:T, i:number) => U) : any {
-  var i = 0,
+  let i = 0,
       n = array.length;
   /*@ a :: U + undefined */
-  var a;
+  let a;
   /*@ b :: U + undefined */
-  var b;
+  let b;
 
   //ORIG: while (++i < n && !((a = f.call(array, array[i], i)) != null && a <= a)) a = undefined;
   while (i < n) {
@@ -61,7 +61,7 @@ function d3_min_2 <T, U>(array:T[], f:(x:T, i:number) => U) : any {
 }
 
 d3.min = function(array:any, f?:any) 
-/*@ <anonymous> /\ forall T U . (arr: IArray<T>, f: (T, number) => U) => { U | 0 < 1 }
+/*@ <anonymous> /\ <T,U> (arr: IArray<T>, f: (T, number) => U) => { U | 0 < 1 }
                 /\ forall T   . (arr: IArray<T>) => { T | 0 < 1 } 
  */
 {

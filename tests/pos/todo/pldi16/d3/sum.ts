@@ -4,11 +4,11 @@
 /*@ d3_sum :: /\ (array : IArray<number>) => {number | 0 < 1} 
               /\ forall T. (array : IArray<T>, f: (T, idx[array]) => number) => {number | 0 < 1} */ 
 function d3_sum(array: any, f?:any): number {
-  var s = 0;
-  var n = array.length;
-  var i = 0;
+  let s = 0;
+  let n = array.length;
+  let i = 0;
   /*@ a :: number + undefined */
-  var a;
+  let a;
 
   if (arguments.length === 1) {
     while (i < n) {

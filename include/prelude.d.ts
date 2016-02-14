@@ -341,7 +341,10 @@ interface Array<M extends ReadOnly, T> {
     filter(callbackfn: (value: T, index: number, array: T[]) => boolean, thisArg?: any): T[];
 
     // reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
-    // reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
+
+    /*@ @Immutable reduce<U>(callback: (x: U, y: T, n: idx<this>) => U, init: U): U */
+    reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
+
     // reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
     // reduceRight<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 

@@ -496,7 +496,7 @@ ssaClassElt g c (Constructor l xs bd0) = do
 
     g'           = initCallableSsaEnv g xs bd0
 
-    symToVar     = freshenIdSSA . mkId . F.symbolSafeString
+    symToVar     = freshenIdSSA . mkId . F.symbolString -- F.symbolSafeString
     cha          = ssaCHA g
     fields       | Just n <- curClass g
                  = sortBy c_sym (nonStaticFields cha n)   -- Sort alphabetically

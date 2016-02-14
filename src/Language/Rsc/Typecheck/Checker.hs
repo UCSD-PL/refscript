@@ -785,8 +785,8 @@ tcExpr _ e _
 tcCast :: Unif r => AnnTc r -> TCEnv r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
 --------------------------------------------------------------------------------
 tcCast l γ e tc
-  = do  ([e'],t')   <- tcNormalCall γ l (builtinOpId BICastExpr) [(e, Just tc)] (castTy tc)
-        return       $ (e', t')
+  = do  ([e'],t') <- tcNormalCall γ l (builtinOpId BICastExpr) [(e, Just tc)] (castTy tc)
+        return       (e', t')
 
 --------------------------------------------------------------------------------
 tcCall :: Unif r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)

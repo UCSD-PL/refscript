@@ -318,7 +318,9 @@ interface Array<M extends ReadOnly, T> {
     // toLocaleString(): string;
     // join(separator?: string): string;
     // shift(): T;
-    // slice(start?: number, end?: number): T[];
+
+    slice(start?: number, end?: number): UArray<T>;
+
     // sort(compareFn?: (a: T, b: T) => number): T[];
     // splice(start: number): T[];
     // splice(start: number, deleteCount: number, ...items: T[]): T[];

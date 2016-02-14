@@ -1,16 +1,15 @@
 
 
-/*@  idd :: forall T. (x:T) => T */
+/*@  idd :: <T>(x:T) => T */
 function idd<A>(x:A):A {
     return x;
 }
 
-/*@ bar :: forall A. (A, (x:A) => A) => A */
+/*@ bar :: <A>(A, (x:A) => A) => A */
 function bar(x:any, f:any){
     return f(x);
 }
 
-/*@ main :: (number) => {number | 0 < 1} */
-function main(x){
+export function main(x: number): number {
     return bar(x, idd); // this is actually (idd @ number)
 }

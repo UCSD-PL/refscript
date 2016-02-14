@@ -87,7 +87,6 @@ Executable rsc
                   , Language.Rsc.Lookup
                   , Language.Rsc.Misc
                   , Language.Rsc.Names
-                  , Language.Rsc.Options
                   , Language.Rsc.Parser
                   , Language.Rsc.Parser.Annotations
                   , Language.Rsc.Parser.Common
@@ -172,7 +171,6 @@ Library
                     Language.Rsc.Names,
                     Language.Rsc.Module,
                     Language.Rsc.Symbols,
-                    Language.Rsc.Options,
                     Language.Rsc.Parser.Annotations,
                     Language.Rsc.Parser.Common,
                     Language.Rsc.Parser.Declarations,

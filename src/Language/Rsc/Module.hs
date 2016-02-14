@@ -12,24 +12,28 @@ module Language.Rsc.Module (
   -- * Modules
     ModuleDefQ (..), ModuleDef
   , moduleEnv
+  , mkTypeMembers     -- PV: take this somewhere else
 
 ) where
 
-import           Control.Monad                (liftM, void)
+import           Control.Monad                  (foldM, liftM, void)
 import           Data.Default
 import           Data.Generics
-import qualified Language.Fixpoint.Types      as F
+import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc            (concatMapM, single)
+import           Language.Rsc.Misc              (concatMapM, single)
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty.Common
+import           Language.Rsc.Pretty.Types      ()
 import           Language.Rsc.Program
 import           Language.Rsc.Symbols
 import           Language.Rsc.Traversals
+import           Language.Rsc.Typecheck.Subst   ()
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 
@@ -164,8 +168,12 @@ moduleEnv (Rsc { code = Src stmts }) =
 toDeclaration :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
 --------------------------------------------------------------------------------
 toDeclaration (ClassStmt l c cs)
-  | [ts] <- cas = Right (cc, TD ts (extractTypeMembers cs))
-  | otherwise   = Left $ F.Unsafe [F.err (sourceSpanSrcSpan l) errMsg ]
+  | [ts] <- cas
+  = case extractTypeMembers l cs of
+      Left e   -> Left (F.Unsafe [e])
+      Right tm -> Right (cc, TD ts tm)
+  | otherwise
+  = Left $ F.Unsafe [F.err (sourceSpanSrcSpan l) errMsg ]
   where
     cc     = fmap fSrc c
     cas    = [ ts | ClassAnn _ ts <- fFact l ]
@@ -183,11 +191,55 @@ toDeclaration s       = Left $ F.Unsafe $ single
                       $ "Statement\n" ++ ppshow s ++ "\ncannot have a type annotation."
 
 
+---------------------------------------------------------------------------------
+mkTypeMembers
+  :: (IsLocated l, PPR r, Eq q)
+  => l -> [(F.Symbol, TypeMemberQ q r)] -> [(F.Symbol, TypeMemberQ q r)]
+  -> [RTypeQ q r] -> [RTypeQ q r]
+  -> [(MutabilityQ q r, RTypeQ q r)]
+  -> [(MutabilityQ q r, RTypeQ q r)]
+  -> Either Error (TypeMembersQ q r)
+---------------------------------------------------------------------------------
+mkTypeMembers l lms lsms lcs lct lsi lni =
+    TM <$> ms <*> sms <*> call <*> ctor <*> sidx <*> nidx
+  where
+    ms   = foldM step mempty lms
+    sms  = foldM step mempty lsms
+
+    call | [] <- lcs      = Right $ Nothing
+         | otherwise      = Right $ Just (tAnd lcs)
+
+    ctor | [] <- lct      = Right $ Nothing
+         | otherwise      = Right $ Just (tAnd lct)
+
+    sidx | []      <- lsi = Right Nothing
+         | [(m,t)] <- lsi = Right $ Just (m,t)
+         | otherwise      = Left  $ errorTypeMembersSidx l
+
+    nidx | []      <- lni = Right Nothing
+         | [(m,t)] <- lni = Right $ Just (m,t)
+         | otherwise      = Left  $ errorTypeMembersNidx l
+
+    step g (x, MI n o mts)
+      | Just (MI _ o' mts') <- F.lookupSEnv x g
+      = Right $ F.insertSEnv x (MI n (o `mappend` o') (mts' ++ mts)) g
+
+    step g (x, f@(FI n o a t))
+      | Just (FI _ o' a' t') <- F.lookupSEnv x g
+      , o == o', a == a', isTFun t, isTFun t'
+      = Right $ F.insertSEnv x (FI n o a (tAnd [t, t'])) g
+      | Just f' <- F.lookupSEnv x g
+      = Left $ errorTypeMembers l f f'
+
+    step g (x, f) = Right $ F.insertSEnv x f g
+
+
 -- | Given a list of class elements, returns a @TypeMembers@ structure
 --------------------------------------------------------------------------------
-extractTypeMembers :: PPR r => [ClassElt (AnnR r)] -> TypeMembers r
+extractTypeMembers :: (PPR r, IsLocated l)
+  => l -> [ClassElt (AnnR r)] -> Either Error (TypeMembers r)
 --------------------------------------------------------------------------------
-extractTypeMembers cs  = mkTypeMembers ms sms call ctor sidx nidx
+extractTypeMembers l cs  = mkTypeMembers l ms sms call ctor sidx nidx
   where
     ms   = [(sym x, m) | MemberVarDecl  l False x _   <- cs, MemberAnn m <- fFact l]
         ++ [(sym x, m) | MemberMethDecl l False x _ _ <- cs, MemberAnn m <- fFact l]

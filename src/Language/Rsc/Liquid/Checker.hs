@@ -544,7 +544,7 @@ consStaticClassElt _ _ (MemberVarDecl l _ x Nothing)
 --
 consStaticClassElt g (TD sig ms) (MemberMethDecl l True x xs body)
   | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) (s_mems ms)
-  = do  let t = mkAnd $ map snd mts
+  = do  let t = tAnd $ map snd mts
         its <- cgFunTys l x xs t
         mapM_ (consCallable l g x xs body) its
   | otherwise
@@ -600,7 +600,7 @@ consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body
 consInstanceClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
   | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) (i_mems ms)
   = do  let (ms', ts) = unzip mts
-        its          <- cgFunTys l x xs $ mkAnd ts
+        its          <- cgFunTys l x xs $ tAnd ts
         let mts'      = zip ms' its
         mapM_ (\(m,t) -> do
             g1   <- initClassMethEnv l m sig g
@@ -734,7 +734,7 @@ consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
     l2 = getAnnotation e2
     cc (BGen (QN _ s) _) = symbolString s
 
-consExpr g e@(InfixExpr l o e1 e2) _
+consExpr g (InfixExpr l o e1 e2) _
   = do opTy <- cgSafeEnvFindTyM (infixOpId o) g
        consCall g l (infixOpId o) (zwNth [e1, e2]) opTy
 
@@ -797,7 +797,7 @@ consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
         Just mR ->
             case [ ft_ | (m, ft_) <- mts, isSubtypeWithUq g_ mR m ] of
               [] -> cgError $ errorMethMutIncomp l em mts mR
-              ts -> consCall g_ l biID (es `zip` nths) (substThis xR (mkAnd ts))
+              ts -> consCall g_ l biID (es `zip` nths) (substThis xR (tAnd ts))
         Nothing -> cgError $ errorNoMutAvailable l e tR
 
     checkTM _ _ _ (MI _ Opt _) =

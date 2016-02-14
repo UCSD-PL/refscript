@@ -419,7 +419,7 @@ tcStaticClassElt γ (TD sig ms) c@(MemberMethDecl l True x xs body) =
     Just FI{} ->
         tcError $ bugStaticField l x sig
     Just (MI _ _ mts) -> do
-        let t = mkAnd $ map snd mts
+        let t = tAnd $ map snd mts
         its <- tcFunTys l x xs t
         body' <- foldM (tcCallable γ l x xs) body its
         return $ MemberMethDecl l True x xs body'
@@ -490,7 +490,7 @@ tcInstanceClassElt _ _ (MemberVarDecl l False x _)
 tcInstanceClassElt γ (TD sig ms) c@(MemberMethDecl l False x xs bd)
   | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) (i_mems ms)
   = do  let (ms', ts) = unzip mts
-        its          <- tcFunTys l x xs $ mkAnd ts
+        its          <- tcFunTys l x xs $ tAnd ts
         let mts'      = zip ms' its
         bd'          <- foldM (\b (m,t) -> tcCallable (mkEnv m) l x xs b t) bd mts'
         return        $ MemberMethDecl l False x xs bd'
@@ -929,7 +929,7 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e0 f) es) _
         Just mR ->
             case [ t | (m, t) <- mts, isSubtypeWithUq γ mR m ] of
               [] -> tcError $ errorMethMutIncomp l em mts mR
-              ts -> tcNormalCallWD γ l biID es_ (mkAnd ts)
+              ts -> tcNormalCallWD γ l biID es_ (tAnd ts)
 
         Nothing -> tcError $ errorNoMutAvailable l ue tR
 

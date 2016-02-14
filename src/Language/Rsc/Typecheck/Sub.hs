@@ -66,7 +66,7 @@ disallowUniqueCfg c = c { allow_unique = False }
 isSubtypeC     :: (PPRE r, FE g r) => g r -> SubConf r -> RType r -> RType r -> Bool
 isConvertibleC :: (PPRE r, FE g r) => g r -> SubConf r -> RType r -> RType r -> Bool
 --------------------------------------------------------------------------------
-isSubtypeC γ c t1 t2 = subtype dummySpan γ c t1 t2 `elem` [EqT, SubT]
+isSubtypeC γ c t1 t2 = subtype dummySpan γ c t1 t2 == SubOK
 
 isSubtype       γ t1 t2 = isSubtypeC γ (SC False t1 t2 Nothing Nothing) t1 t2
 isSubtypeWithUq γ t1 t2 = isSubtypeC γ (SC True  t1 t2 Nothing Nothing) t1 t2
@@ -99,20 +99,27 @@ instance PP ConversionResult where
   pp (ConvFail es) = pp "ConvFail" <+> vcat (map pp es)
 
 
-data SubtypingResult  = EqT | SubT | NoSub [Error] deriving (Eq, Ord, Show)
+data SubtypingResult  = SubOK | NoSub [Error] deriving (Eq, Ord, Show)
 
 instance PP SubtypingResult where
-  pp EqT       = pp "equal types"
-  pp SubT      = pp "subtypes"
+  pp SubOK      = pp "subtypes"
   pp (NoSub _) = pp "no subtypes"
 
 instance Monoid SubtypingResult where
-  mempty                        = EqT
+  mempty                        = SubOK
   mappend (NoSub e1) (NoSub e2) = NoSub $ e1 ++ e2
   mappend _          (NoSub e2) = NoSub e2
   mappend (NoSub e1) _          = NoSub e1
-  mappend EqT        EqT        = EqT
-  mappend _          _          = SubT
+  mappend _          _          = SubOK
+
+
+subOrs [] = SubOK
+subOrs (x:xs) = subOr x (subOrs xs)
+
+subOr SubOK    _       = SubOK
+subOr _       SubOK    = SubOK
+subOr x       _       = x     -- both NoSub
+
 
 -- | convert: an "optimistic" version of subtyping that allows:
 --
@@ -127,8 +134,7 @@ convert
 --------------------------------------------------------------------------------
 convert l g c t1 t2
   = case subtype l g c t1 t2 of
-    EqT      -> ConvOK
-    SubT     -> ConvOK -- ConvWith (toType t2)
+    SubOK     -> ConvOK -- ConvWith (toType t2)
     NoSub es -> castable l g c es t1 t2
 
 castable _ γ c _ (TOr t1s _) t2
@@ -152,7 +158,7 @@ subtype :: (PPRE r, FE g r, IsLocated l)
 --------------------------------------------------------------------------------
 -- | Type Variables
 subtype _ _ _ (TVar v1 _) (TVar v2 _)
-  | v1 == v2  = EqT
+  | v1 == v2  = SubOK
 
 -- | Unfold bounded variables
 subtype l γ c t1@(TVar _ _) t2
@@ -161,30 +167,18 @@ subtype l γ c t1@(TVar _ _) t2
 
 -- | Primitive types
 subtype _ _ _ (TPrim c1 _) (TPrim c2 _)
-  | c1 == c2   = EqT
-  | c2 == TAny = SubT
-  | c2 == TTop = SubT
+  | c1 == c2   = SubOK
+  | c2 == TAny = SubOK
+  | c2 == TTop = SubOK
 
 -- | Unions
 subtype l γ c (TOr ts1 _) t2
---   | all (\t1 -> isSubtypeC γ c t1 t2) ts1
---   = SubT
   = mconcat (map (\t1 -> subtype l γ c t1 t2) ts1)
 
 subtype l γ c t1 (TOr ts2 _)
---   | any (\t2 -> isSubtypeC γ c t1 t2) ts2
---   = SubT
   = subOrs (map (subtype l γ c t1) ts2)
 
   where
-    subOrs [] = EqT
-    subOrs (x:xs) = subOr x (subOrs xs)
-
-    subOr EqT     _       = EqT
-    subOr _       EqT     = EqT
-    subOr SubT    _       = SubT
-    subOr _       SubT    = SubT
-    subOr x       _       = x     -- both NoSub
 
 -- | Objects
 subtype l γ c t1 t2
@@ -229,16 +223,16 @@ subtypeObj l γ c t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
   | allow_unique c      = withUqEnabled
   | otherwise           = withUqDisabled
   where
-    withUqEnabled  | isUQ t1   = EqT
-                   | x1 == x2  = EqT
-                   | x1 <: x2  = SubT
-                   | isUQ t1   = EqT   -- Allow the `Unique` coercion
+    withUqEnabled  | isUQ t1   = SubOK
+                   | x1 == x2  = SubOK
+                   | x1 <: x2  = SubOK
+                   | isUQ t1   = SubOK   -- Allow the `Unique` coercion
                    | otherwise = NoSub [errorUniqueRef l (sub_var c)]
 
     withUqDisabled | isUQ t1   = NoSub [errorUniqueRef l (sub_var c)]
                    | isUQ t2   = NoSub [errorUniqueRef l (sub_var c)]
-                   | x1 == x2  = EqT
-                   | x1 <: x2  = SubT
+                   | x1 == x2  = SubOK
+                   | x1 <: x2  = SubOK
                    | otherwise = NoSub [errorIncompMutTy l t1 t2
                                   (sub_lhs c) (sub_rhs c) (sub_fld c)]
 
@@ -253,8 +247,7 @@ subtypeObj l _ _ t1 t2@(TRef (Gen _ []) _)
 -- | Type Reference subtyping
 subtypeObj l γ c (TRef g1@(Gen x1 (m1:t1s)) _) (TRef (Gen x2 (m2:t2s)) _)
   = case subtype l γ c m1 m2 of
-      EqT     -> checkBaseType
-      SubT    -> checkBaseType
+      SubOK   -> checkBaseType
       NoSub e -> NoSub e
   where
     checkBaseType
@@ -262,7 +255,7 @@ subtypeObj l γ c (TRef g1@(Gen x1 (m1:t1s)) _) (TRef (Gen x2 (m2:t2s)) _)
       = checkTypArgs
 
       | Just (Gen _ (_:t1s')) <- weaken (envCHA γ) g1 x2
-      = mconcat $ SubT : zipWith (subtype' l γ) t1s' t2s
+      = mconcat $ SubOK : zipWith (subtype' l γ) t1s' t2s
 
       | otherwise
       = NoSub [errorSubtype l x1 x2]
@@ -280,7 +273,7 @@ subtypeObj l γ _ t1@(TClass (BGen c1 ts1)) t2@(TClass (BGen c2 ts2))
   | c1 == c2
   , and $ uncurry (isSubtype γ)        <$> ts
   , and $ uncurry (isSubtype γ) . swap <$> ts
-  = EqT
+  = SubOK
   | otherwise
   = NoSub [errorSubtype l t1 t2]
   where
@@ -290,14 +283,14 @@ subtypeObj l γ _ t1@(TClass (BGen c1 ts1)) t2@(TClass (BGen c2 ts2))
 
 -- | Module subtyping
 subtypeObj l _ _ (TMod m1) (TMod m2)
-  | m1 == m2  = EqT
+  | m1 == m2  = SubOK
   | otherwise = NoSub [errorSubtype l m1 m2]
 
 -- Structural subtyping (fall-back)
 --
 subtypeObj l γ c t1 t2 =
-  -- case (ltracePP l ("expand " ++ ppshow t1) $ expandType econf (envCHA γ) t1, ltracePP l ("expand " ++ ppshow t2) $ expandType econf (envCHA γ) t2) of
-  -- case ltracePP l ("EXPANING " ++ ppshow t1 ++ " VS " ++ ppshow t2)  (expandType econf (envCHA γ) t1, expandType econf (envCHA γ) t2) of
+  -- case ltracePP l ("EXPANING " ++ ppshow t1 ++ " VS " ++ ppshow t2)
+  --  (expandType econf (envCHA γ) t1, expandType econf (envCHA γ) t2) of
   case (expandType econf (envCHA γ) t1, expandType econf (envCHA γ) t2) of
     (Just ft1, Just ft2) -> subtypeObj' l γ c ft1 ft2
     (Nothing , Nothing ) -> NoSub [errorUnresolvedTypes l t1 t2]
@@ -360,8 +353,8 @@ subtypeMem l _ _ (_, (m1, m2))
 
 
 compareMaybe l γ _ f _ (Just c1) (Just c2) = f l γ c1 c2
-compareMaybe _ _ _ _ _ Nothing   Nothing   = EqT
-compareMaybe _ _ _ _ _ _         Nothing   = SubT
+compareMaybe _ _ _ _ _ Nothing   Nothing   = SubOK
+compareMaybe _ _ _ _ _ _         Nothing   = SubOK
 compareMaybe l _ _ _ e t1        t2        = NoSub [e (srcPos l) t1 t2]
 
 subtypeCalls l γ c = compareMaybe l γ c subtypeFun errorIncompCallSigs
@@ -377,7 +370,7 @@ subtypeSIdxs :: (IsLocated a, PPRE r, FE g r)
              -> IndInfo r
              -> SubtypingResult
 --------------------------------------------------------------------------------
-subtypeSIdxs _ _ _ _ _ Nothing = SubT
+subtypeSIdxs _ _ _ _ _ Nothing = SubOK
 
 -- LHS should have empty props if there is a string indexer present
 subtypeSIdxs l γ c _ (Just (m1,t1)) (Just (m2, t2)) =
@@ -404,7 +397,7 @@ subtypeNIdxs l γ c (Just (m1,t1)) (Just (m2, t2)) =
   where
     f = symbol "Numeric indexer"
 
-subtypeNIdxs _ _ _ _ Nothing = SubT
+subtypeNIdxs _ _ _ _ Nothing = SubOK
 subtypeNIdxs l _ c Nothing _ = NoSub [errorIncompSIdxSigs l (sub_lhs c) (sub_rhs c)]
 
 
@@ -417,24 +410,17 @@ subtypeFun l γ t1@(TFun b1s o1 _) t2@(TFun b2s o2 _)
               : subtype' l γ o1 o2
               : zipWith (subtype' l γ) args2 args1
   where
-    lengthSub | length b1s == length b2s = EqT
+    lengthSub | length b1s == length b2s = SubOK
               | otherwise                = NoSub [errorFunArgMismatch l t1 t2]
     args1     = map b_type b1s
     args2     = map b_type b2s
 
-subtypeFun l γ t1@(TAnd _) t2@(TAnd t2s)
-  | and $ isSubtype γ t1 <$> map snd t2s
-  = SubT
-  | otherwise
-  = NoSub [errorSubtype l t1 t2]
 
-subtypeFun l γ t1@(TAnd t1s) t2
-  | or $ f <$> map snd t1s
-  = SubT
-  | otherwise
-  = NoSub [errorSubtype l t1 t2]
-  where
-    f t1 = isSubtype γ t1 t2
+subtypeFun l γ (TAnd t1s) t2
+  = subOrs $ map (\(_,t1) -> subtypeFun l γ t1 t2) t1s
+
+subtypeFun l γ t1 (TAnd t2s)
+  = mconcat $ map (\(_,t2) -> subtypeFun l γ t1 t2) t2s
 
 subtypeFun l _ t1 t2 = NoSub [unsupportedConvFun l t1 t2]
 

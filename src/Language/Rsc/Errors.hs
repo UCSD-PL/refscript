@@ -93,6 +93,16 @@ unimplSSAMulVarDecl l v       = mkErr l $ show $ text "[Unimplemented] Only supp
 
 
 ---------------------------------------------------------------------------
+-- | Types
+---------------------------------------------------------------------------
+
+errorTypeMembers l t t'       = mkErr l $ show $ text "Cannot combine type members:" $+$
+                                                 nest 2 (pp t) $+$ text "and" $+$ nest 2 (pp t')
+
+errorTypeMembersNidx l        = mkErr l $ show $ text "A type can only have a single numeric indexer."
+errorTypeMembersSidx l        = mkErr l $ show $ text "A type can only have a single string indexer."
+
+---------------------------------------------------------------------------
 -- | TC
 ---------------------------------------------------------------------------
 

@@ -258,28 +258,28 @@ appTy _        (TExp _)      = error "appTy should not be applied to TExp"
 -- | Type equality (modulo α-renaming)
 ---------------------------------------------------------------------------------
 
-instance (F.Reftable r) => Eq (TGen r) where
+instance (F.Reftable r, Eq q) => Eq (TGenQ q r) where
   Gen n ts    == Gen n' ts'    = n == n' && ts == ts'
 
-instance (F.Reftable r) => Eq (TypeMembers r) where
+instance (F.Reftable r, Eq q) => Eq (TypeMembersQ q r) where
   TM m sm c k s n == TM m' sm' c' k' s' n' =
     m == m' && sm == sm' && c == c' && k == k' && s == s' && n == n'
 
-instance (F.Reftable r) => Eq (TypeMember r) where
+instance (F.Reftable r, Eq q) => Eq (TypeMemberQ q r) where
   FI n o a t == FI n' o' a' t' = n == n' && o == o' && a == a' && t == t'
   MI m k mt  == MI m' k' mt'   = m == m' && k == k' && mt == mt'
   _          == _              = False
 
-instance (F.Reftable r) => Eq (Bind r) where
+instance (F.Reftable r, Eq q) => Eq (BindQ q r) where
   B x o t == B x' o' t' = (x, o, t) == (x', o', t')
 
-instance F.Reftable r => Eq (BTGen r) where
+instance (F.Reftable r, Eq q) => Eq (BTGenQ q r) where
   BGen n1 b1s == BGen n2 b2s = n1 == n2 && b1s == b2s
 
-instance F.Reftable r => Eq (BTVar r) where
+instance (F.Reftable r, Eq q) => Eq (BTVarQ q r) where
   BTV _ _ c1 == BTV _ _ c2 = c1 == c2
 
-instance (F.Reftable r) => Eq (RType r) where
+instance (F.Reftable r, Eq q) => Eq (RTypeQ q r) where
   TPrim p _    == TPrim p' _    = p == p'
   TVar α _     == TVar α' _     = α == α'
   TOr ts _     == TOr ts' _     = ts == ts'

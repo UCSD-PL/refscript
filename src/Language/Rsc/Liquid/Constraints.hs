@@ -102,15 +102,21 @@ splitC s@(Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
        bSub b1 b2 = (b_sym b1, F.eVar $ b_sym b2)
        i'         = addHist i s
 
--- | S-And-L
---
-splitC (Sub _ _ TAnd{} _)
-  = error "TAnd not supported in splitC"
-
 -- | S-And-R
 --
-splitC (Sub _ _ _ TAnd{})
-  = error "TAnd not supported in splitC"
+splitC s@(Sub g i t1 (TAnd t2s)) =
+    concatMapM splitC $ map (\t2_ -> Sub g i' t1 (snd t2_)) t2s
+  where
+    i' = addHist i s
+
+-- | S-And-L
+--
+splitC s@(Sub g i (TAnd t1s) t2) =
+  case L.find (\t1_ -> isSubtypeWithUq g (snd t1_) t2) t1s of
+    Nothing       -> splitIncompatC g i' tVoid
+    Just (_, t1') -> splitC (Sub g i' t1' t2)
+  where
+    i' = addHist i s
 
 -- | S-All
 --

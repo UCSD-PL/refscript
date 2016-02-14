@@ -12,6 +12,7 @@
 
 module Language.Rsc.Parser.Types where
 
+import           Control.Exception              (throw)
 import           Control.Monad
 import           Data.Char                      (isLower)
 import           Data.Foldable                  (concat)
@@ -24,9 +25,10 @@ import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Types.Names
 import           Language.Rsc.Liquid.Types
+import           Language.Rsc.Locations
 import           Language.Rsc.Misc              (mapEither)
+import           Language.Rsc.Module
 import           Language.Rsc.Names
-import           Language.Rsc.Options
 import           Language.Rsc.Parser.Common
 import           Language.Rsc.Parser.Lexer
 import           Language.Rsc.Pretty
@@ -141,11 +143,6 @@ aliasVarT (l, x)
   where
     x'        = symbolString x
 
---
--- PV: Add your option parser here
---
-optionP   = string "REALS" >> return RealOption
-
 interfaceP :: Parser (TypeDeclQ RK F.Reft)
 interfaceP
   = do  _     <- withinSpacesP (reserved "interface")
@@ -172,7 +169,9 @@ typeSignatureP c k
 btgenP c = BGen <$> qnameP <*> option [] (bTParP c)
 
 typeBodyP :: PContext -> Parser (TypeMembersQ RK F.Reft)
-typeBodyP c = eltKindsToTypeMembers <$> braces (propBindP c)
+typeBodyP c = do
+    pos <- getPosition
+    eltKindsToTypeMembers pos <$> braces (propBindP c)
 
 extendsGenP :: String -> PContext -> Parser [TGenQ RK F.Reft]
 extendsGenP s c = option [] $ reserved s >> sepBy1 (extendsGen1P c) comma
@@ -404,12 +403,12 @@ allP c p
 propBindP :: PContext -> Parser [EltKind]
 propBindP c = sepEndBy memberP semi
   where
-    unc     = \f (a,b,c,d,e) -> f a b c d e
+    unc f (a,b,c,d,e) = f a b c d e
     memberP =  try (idxP c)
            <|> try (    Ctor <$> ctorP c) -- Ctor needs to be before Meth
            <|> try (unc Prop <$> propP c)
            <|> try (unc Meth <$> methP c)
-           <|> try (    Call <$> callP c)
+           <|>     (    Call <$> callP c)
 
 data EltKind = Prop Symbol StaticKind Optionality RMutability RRType
              | Meth Symbol StaticKind Optionality RMutability RRType
@@ -419,15 +418,19 @@ data EltKind = Prop Symbol StaticKind Optionality RMutability RRType
              | NIdx RMutability RRType
              deriving (Data, Typeable)
 
-eltKindsToTypeMembers :: [EltKind] -> TypeMembersQ RK F.Reft
-eltKindsToTypeMembers eks = mkTypeMembers
-    (catMaybes (map ek2itm eks))
-    (catMaybes (map ek2stm eks))
-    (catMaybes (map ek2cl eks))
-    (catMaybes (map ek2ct eks))
-    (catMaybes (map ek2si eks))
-    (catMaybes (map ek2ni eks))
+eltKindsToTypeMembers :: IsLocated l => l -> [EltKind] -> TypeMembersQ RK F.Reft
+eltKindsToTypeMembers l eks =
+    case tmsE of
+      Right tms -> tms
+      Left  e   -> throw e
   where
+    tmsE = mkTypeMembers l (catMaybes (map ek2itm eks))
+                           (catMaybes (map ek2stm eks))
+                           (catMaybes (map ek2cl eks))
+                           (catMaybes (map ek2ct eks))
+                           (catMaybes (map ek2si eks))
+                           (catMaybes (map ek2ni eks))
+
     ek2itm (Prop f InstanceK o m t) = Just (f, FI f o m t)
     ek2itm (Meth n InstanceK o m t) = Just (n, MI n o [(m,t)])
     ek2itm _                        = Nothing
@@ -447,6 +450,15 @@ eltKindsToTypeMembers eks = mkTypeMembers
 
     ek2ni (NIdx m t)                = Just (m, t)
     ek2ni _                         = Nothing
+
+
+instance PP EltKind where
+  pp (Prop s _ _ m t) = pp s <+> pp m <+> pp t
+  pp (Meth s _ _ m t) = pp s <+> pp m <+> pp t
+  pp (Call t)         = pp t
+  pp (Ctor t)         = pp "new"  <+> pp t
+  pp (SIdx _ t)       = pp "sidx" <+> pp t
+  pp (NIdx _ t)       = pp "nidx" <+> pp t
 
 
 -- | [f: string]: t

@@ -70,7 +70,7 @@ idTy t = mkFun ([], [B sx Req t], t `strengthen` uexprReft sx)
   where
     sx    = F.symbol "x_"
 
-idTys = mkAnd . map idTy
+idTys = tAnd . map idTy
 
 ---------------------------------------------------------------------------------
 castTy :: (ExprReftable F.Symbol r, F.Reftable r) => RType r -> RType r

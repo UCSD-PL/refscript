@@ -20,7 +20,7 @@ module Language.Rsc.Typecheck.Types (
   , ExprReftable(..)
 
   -- * Constructing Types
-  , tOr, tOrR, mkFun, mkAll, mkAnd, mkAndOpt, mkInitFldTy
+  , tOr, tOrR, tAnd, mkFun, mkAll, mkInitFldTy
 
   -- * Deconstructing Types
   , bkFun, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion
@@ -62,7 +62,7 @@ module Language.Rsc.Typecheck.Types (
   , fTop
 
   -- * Type Definitions
-  , mkTypeMembers, typeMembers, tmsFromList, typesOfTM
+  , typeMembers, tmsFromList, typesOfTM
 
   -- * Operator Types
   , Identifier
@@ -81,7 +81,6 @@ module Language.Rsc.Typecheck.Types (
 
 import           Control.Arrow                   (second)
 import           Data.Default
-import qualified Data.List                       as L
 import           Data.Maybe                      (maybeToList)
 import           Data.Typeable                   ()
 import           Language.Fixpoint.Misc
@@ -193,8 +192,8 @@ bkArr :: RTypeQ q r -> Maybe ([BindQ q r], RTypeQ q r)
 bkArr (TFun xts t _)  = Just (xts, t)
 bkArr _               = Nothing
 
-mkAll :: [BTVarQ q r] -> RTypeQ q r -> RTypeQ q r
-mkAll αs t            = mkAnd $ go (reverse αs) <$> bkAnd t
+mkAll :: F.Reftable r => [BTVarQ q r] -> RTypeQ q r -> RTypeQ q r
+mkAll αs t            = tAnd $ go (reverse αs) <$> bkAnd t
   where
     go (x:xs)         = go xs . TAll x
     go []             = id
@@ -209,15 +208,19 @@ bkAnd :: RTypeQ q r -> [RTypeQ q r]
 bkAnd (TAnd ts) = snd <$> ts
 bkAnd t         = [t]
 
-mkAnd [t]       = t
-mkAnd ts        = TAnd $ zip [0..] ts
 
-mkAndOpt []     = Nothing
-mkAndOpt ts     = Just $ mkAnd ts
+
+tAnd2 (TAnd t1s) (TAnd t2s) = TAnd $ zip [0..] $ map snd t1s ++ map snd t2s
+tAnd2 (TAnd t1s) t2         = TAnd $ zip [0..] $ map snd t1s ++ [t2]
+tAnd2 t1         (TAnd t2s) = TAnd $ zip [0..] $ [t1] ++ map snd t2s
+tAnd2 t1         t2         = TAnd $ zip [0..]   [t1, t2]
+
+tAnd [] = TPrim TBot fTop
+tAnd ts = foldl1 tAnd2 ts
 
 instance F.Reftable r => Monoid (RTypeQ q r) where
   mempty        = tBot
-  mappend t t'  = mkAnd $ bkAnd t ++ bkAnd t'
+  mappend t t'  = tAnd $ bkAnd t ++ bkAnd t'
 
 ----------------------------------------------------------------------------------------
 tOrR :: F.Reftable r => [RTypeQ q r] -> r -> RTypeQ q r
@@ -436,30 +439,6 @@ instance F.Symbolic (Prop a) where
   symbol (PropNum _ n)       = F.symbol $ "propNum_"    ++ show n
 
 
-
----------------------------------------------------------------------------------
-mkTypeMembers :: [(F.Symbol, TypeMemberQ q r)] -> [(F.Symbol, TypeMemberQ q r)]
-              -> [RTypeQ q r] -> [RTypeQ q r]
-              -> [(MutabilityQ q r, RTypeQ q r)]
-              -> [(MutabilityQ q r, RTypeQ q r)]
-              -> TypeMembersQ q r
----------------------------------------------------------------------------------
-mkTypeMembers lms lsms lcs lct lsi lni = TM ms sms call ctor sidx nidx
-  where
-    ms   = L.foldl' step mempty lms
-    sms  = L.foldl' step mempty lsms
-    call | [] <- lcs = Nothing | otherwise = Just (mkAnd lcs)
-    ctor | [] <- lct = Nothing | otherwise = Just (mkAnd lct)
-
-    -- XXX: Dropping excess index binders
-    sidx | (m,t):_ <- lsi = Just (m,t)
-         | otherwise      = Nothing
-    nidx | (m,t):_ <- lni = Just (m,t)
-         | otherwise      = Nothing
-
-    step g (x, MI n o mts) | Just (MI _ o' mts') <- F.lookupSEnv x g
-                           = F.insertSEnv x (MI n (o `mappend` o') (mts' ++ mts)) g
-    step g (x, f)          = F.insertSEnv x f g
 
 --------------------------------------------------------------------------------------------
 typeMembers :: F.SEnv (TypeMemberQ q r) -> TypeMembersQ q r

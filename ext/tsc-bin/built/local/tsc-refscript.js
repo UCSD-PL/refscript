@@ -27028,8 +27028,11 @@ var ts;
                         return methodDeclarationToRsClassElts(state, node);
                     case ts.SyntaxKind.PropertyDeclaration:
                         return propertyDeclarationToRsClassElts(state, node);
+                    case ts.SyntaxKind.SemicolonClassElement:
+                        return [];
                 }
                 state.error(node, ts.Diagnostics.refscript_0_SyntaxKind_1_not_supported_yet, "nodeToRsClassElts", ts.SyntaxKind[node.kind]);
+                return [];
             }
             function sourceFileNodeToRsAST(state, node) {
                 var globalAnnotations = accumulateGlobalAnnotations(node);
@@ -27411,7 +27414,8 @@ var ts;
                 if (node.modifiers && node.modifiers.some(function (modifier) { return modifier.kind === ts.SyntaxKind.ExportKeyword; })) {
                     annotations = ts.concatenate(annotations, [new ts.ExportedAnnotation(nodeToSrcSpan(node))]);
                 }
-                return new ts.RsClassStmt(nodeToSrcSpan(node), annotations, nodeToRsId(state, node.name), new ts.RsList(ts.concat(node.members.map(function (n) { return nodeToRsClassElts(state, n); }))));
+                var celts = ts.concat(node.members.map(function (n) { return nodeToRsClassElts(state, n); }));
+                return new ts.RsClassStmt(nodeToSrcSpan(node), annotations, nodeToRsId(state, node.name), new ts.RsList(celts));
             }
             function moduleDeclarationToRsStmt(state, node) {
                 var annotations = (node.modifiers && node.modifiers.some(function (modifier) { return modifier.kind === ts.SyntaxKind.ExportKeyword; })) ?

@@ -62,10 +62,10 @@ import qualified System.Console.CmdArgs.Verbosity   as V
 verifyFile :: Config -> [FilePath] -> IO (UAnnSol a, FError)
 --------------------------------------------------------------------------------
 verifyFile cfg fs
-  = runEitherIO (do p   <- EitherIO   $ parseRscFromFiles fs
-                    cha <- liftEither $ mkCHA p
-                    ssa <- EitherIO   $ ssaTransform p cha
-                    tc  <- EitherIO   $ typeCheck cfg ssa cha
+  = runEitherIO (do p   <- parseRscFromFiles fs
+                    cha <- liftEither (mkCHA p)
+                    ssa <- ssaTransform p cha
+                    tc  <- typeCheck cfg ssa cha
                     return tc)
   >>= either unsafe (pure . safe cfg)
 
@@ -95,11 +95,13 @@ castErrors (FA _ l facts) = downErrors
     downErrors = [ errorDownCast l t | TypeCast _ t <- facts]
 
 --------------------------------------------------------------------------------
-typeCheck :: Unif r => Config -> TcRsc r -> ClassHierarchy r -> IO (Either FError (TcRsc r))
+typeCheck
+  :: Unif r => Config -> TcRsc r -> ClassHierarchy r -> EitherIO FError (TcRsc r)
 --------------------------------------------------------------------------------
-typeCheck cfg pgm cha
-  = do  v <- V.getVerbosity
-        pure $ execute cfg v pgm $ tcRsc pgm cha
+typeCheck cfg pgm cha = EitherIO $ do
+    startPhase Loud "TC"
+    v <- V.getVerbosity
+    return $ execute cfg v pgm (tcRsc pgm cha)
 
 --------------------------------------------------------------------------------
 -- | TypeCheck program
@@ -1145,7 +1147,7 @@ envJoin l γ (Just γ1) (Just γ2) = do
       ) γ (zip s1s s2s)
 
   where
-    xs        = ltracePP l "PHI" [ x | PhiVar x <- fFact l ]
+    xs        = [ x | PhiVar x <- fFact l ]
     sOr s1 s2 = s1 { v_type = tOr [v_type s1, v_type s2] }
 
 

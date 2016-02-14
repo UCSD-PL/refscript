@@ -238,6 +238,7 @@ visitExpr v = vE
      step c (FuncExpr l f xs ss)     = FuncExpr l <$> (vI c <$$> f) <*> (vI c <$$> xs) <*> (vS c <$$> ss)
      step c (NewExpr l e es)         = NewExpr  l <$> (vE c e) <*> (vE c <$$> es)
      step c (Cast l e)               = Cast l     <$> (vE c e)
+     step c (Cast_ l e)              = Cast_ l    <$> (vE c e)
      step _ e                        = throw $ unimplemented l "visitExpr " e  where l = srcPos e
 
 visitClassElt :: (Monad m, Functor m, Monoid a, IsLocated b)

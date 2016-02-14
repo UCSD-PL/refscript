@@ -14,11 +14,53 @@ import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
+import           Language.Rsc.Program
 import           Language.Rsc.SystemUtils
 import           Language.Rsc.Traversals
 import qualified Language.Rsc.Types        as T
 import           Language.Rsc.Visitor
 import           Text.PrettyPrint.HughesPJ
+
+
+
+-- | Extracts all qualifiers from a RefScript program
+--
+--   Excludes qualifier declarations (qualif Q(...): ...)
+--
+--   XXX: No need to do `mkUq` here, since we're dropping common bindings later.
+--
+---------------------------------------------------------------------------------
+scrapeQuals :: RefScript -> [Qualifier]
+---------------------------------------------------------------------------------
+scrapeQuals (Rsc { code = Src ss }) =
+    qualifiers $ {- mkUq . -} foldStmts tbv [] $ filter nonLibFile ss
+  where
+    tbv = defaultVisitor { accStmt = gos, accCElt = goe, ctxStmt = ctx }
+
+    gos c (FunctionStmt l x _ _)     = [(qualify c x, t) | SigAnn _ t <- fFact l]
+    gos c (VarDeclStmt _ vds)        = [(qualify c x, t) | VarDecl l x _       <- vds
+                                                         , VarAnn _ _ (Just t) <- fFact l]
+    gos _ _                          = []
+
+    goe c (Constructor l _ _)        = [(qualify c x, t) | CtorAnn  t <- fFact l, let x = Id l "ctor" ]
+    goe c (MemberVarDecl l _ x _)    = [(qualify c x, t) | MemberAnn (T.FI _ _ _ t) <- fFact l ]
+    goe c (MemberMethDecl l _ x _ _) = [(qualify c x, t) | MemberAnn (T.MI _ _ mts) <- fFact l, (_, t) <- mts ]
+
+    -- XXX: Use this perhaps to make the bindings unique
+    qualify _ (Id a x) = Id a x -- (mconcat c ++ x)
+
+    ctx c (ModuleStmt _ m _ ) = symbolString (symbol m) : c
+    ctx c (ClassStmt  _ m _ ) = symbolString (symbol m) : c
+    ctx c _                   = c
+
+nonLibFile :: IsLocated a => Statement a -> Bool
+nonLibFile = not . isDeclarationFile -- not . isSuffixOf ".d.ts" . srcSpanFile
+
+-- mkUq = zipWith tx ([0..] :: [Int])
+--   where
+--     tx i (Id l s, t) = (Id l $ s ++ "_" ++ show i, t)
+
+
 
 -- XXX: Will drop multiple bindings tp the same name
 --      To fix, replace envFromList' with something else
@@ -54,41 +96,6 @@ lookupSort l  x γ = fromMaybe errorMsg $ lookupSEnv x γ
 
 orderedFreeVars γ = nub . filter (`memberSEnv` γ) . syms
 
--- | Extracts all qualifiers from a RefScript program
---
---   Excludes qualifier declarations (qualif Q(...): ...)
---
---   XXX: No need to do `mkUq` here, since we're dropping common bindings later.
---
----------------------------------------------------------------------------------
-scrapeQuals :: [Statement (FAnnQ q Reft)] -> [Qualifier]
----------------------------------------------------------------------------------
-scrapeQuals = qualifiers . {- mkUq . -} foldStmts tbv [] . filter nonLibFile
-  where
-    tbv = defaultVisitor { accStmt = gos, accCElt = goe, ctxStmt = ctx }
-
-    gos c (FunctionStmt l x _ _)     = [(qualify c x, t) | SigAnn _ t <- fFact l]
-    gos c (VarDeclStmt _ vds)        = [(qualify c x, t) | VarDecl l x _       <- vds
-                                                         , VarAnn _ _ (Just t) <- fFact l]
-    gos _ _                          = []
-
-    goe c (Constructor l _ _)        = [(qualify c x, t) | CtorAnn  t <- fFact l, let x = Id l "ctor" ]
-    goe c (MemberVarDecl l _ x _)    = [(qualify c x, t) | MemberAnn (T.FI _ _ _ t) <- fFact l ]
-    goe c (MemberMethDecl l _ x _ _) = [(qualify c x, t) | MemberAnn (T.MI _ _ mts) <- fFact l, (_, t) <- mts ]
-
-    -- XXX: Use this perhaps to make the bindings unique
-    qualify _ (Id a x) = Id a x -- (mconcat c ++ x)
-
-    ctx c (ModuleStmt _ m _ ) = symbolString (symbol m) : c
-    ctx c (ClassStmt  _ m _ ) = symbolString (symbol m) : c
-    ctx c _                   = c
-
-nonLibFile :: IsLocated a => Statement a -> Bool
-nonLibFile = not . isDeclarationFile -- not . isSuffixOf ".d.ts" . srcSpanFile
-
--- mkUq = zipWith tx ([0..] :: [Int])
---   where
---     tx i (Id l s, t) = (Id l $ s ++ "_" ++ show i, t)
 
 instance {-# OVERLAPPING #-} PP [Qualifier] where
   pp = vcat . map toFix

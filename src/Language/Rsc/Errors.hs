@@ -269,8 +269,8 @@ errorForbiddenSyms l t xs     = mkErr l $ show $ text "Symbol(s):" <+>
                                                  text "so should not be appearing in the refinement of type" $+$
                                                  pp t
 
-errorUnboundSyms l x t s m    = mkErr l $ show $ text "Symbol" <+> ticks (pp s) <+> text "appearing in type:" $+$
-                                                 nest 2 (pp t) $+$ text "of" <+> ticks (pp x) <+>
+errorUnboundSyms l t s m      = mkErr l $ show $ text "Symbol" <+> ticks (pp s) <+> text "appearing in type:" $+$
+                                                 nest 2 (pp t) $+$
                                                  text "is unbound [ERROR_CODE:" <+> pp m <+> text "]."
 
 unimplementedReservedSyms l   = mkErr l $ printf "Please avoid using 'func' and 'obj' as symbols in refinements."

@@ -174,10 +174,10 @@ padUndefineds xs yts
     nxs         = length xs
     xundefs     = [ B (F.symbol x') Req tUndef | x' <- snd $ splitAt nyts xs ]
 
-bkFuns :: RTypeQ q r -> Maybe [([BTVarQ q r], [BindQ q r], RTypeQ q r)]
+bkFuns :: RTypeQ q r -> Maybe [OverloadSigQ q r]
 bkFuns = sequence . fmap bkFun . bkAnd
 
-bkFun :: RTypeQ q r -> Maybe ([BTVarQ q r], [BindQ q r], RTypeQ q r)
+bkFun :: RTypeQ q r -> Maybe (OverloadSigQ q r)
 bkFun t | (αs, t')   <- bkAll t =
   do  (xts, t'')     <- bkArr t'
       return          $ (αs, xts, t'')
@@ -185,7 +185,7 @@ bkFun t | (αs, t')   <- bkAll t =
 bkFunNoBinds :: RTypeQ q r -> Maybe ([BTVarQ q r], [RTypeQ q r], RTypeQ q r)
 bkFunNoBinds = fmap (mapSnd3 $ map b_type) . bkFun
 
-mkFun :: F.Reftable r  => ([BTVarQ q r], [BindQ q r], RTypeQ q r) -> RTypeQ q r
+mkFun :: F.Reftable r  => OverloadSigQ q r -> RTypeQ q r
 mkFun (αs, bs, rt)    = mkAll αs (TFun bs rt fTop)
 
 bkArr :: RTypeQ q r -> Maybe ([BindQ q r], RTypeQ q r)

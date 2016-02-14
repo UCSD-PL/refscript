@@ -59,60 +59,42 @@ import           Text.PrettyPrint.HughesPJ       hiding (first)
 
 type Result = (A.UAnnSol RefType, F.FixResult Error)
 
+
+-- | TODO: checkTypeWF
+
 --------------------------------------------------------------------------------
 verifyFile :: Config -> FilePath -> [FilePath] -> IO Result
 --------------------------------------------------------------------------------
-verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
-  do  p         <- announce "Parse" $ EitherIO   $ parseRscFromFiles fs
-      cfg'      <- liftIO           $ withPragmas cfg (pOptions p)
-      -- _         <- pure             $ checkTypeWF p
-      cha       <- liftEither       $ mkCHA p
-      ssa       <- announce "SSA"   $ EitherIO (ssaTransform p cha)
-
-      cha0      <- liftEither       $ mkCHA ssa
-      _         <- liftIO           $ dumpJS cfg' f cha0 "-ssa" ssa
-      tc        <- announce "TC"    $ EitherIO (typeCheck cfg' ssa cha)
-
-      cha1      <- liftEither       $ mkCHA tc
-      _         <- liftIO           $ dumpJS cfg' f cha1 "-tc" tc
-      cgi       <- announce "CG"    $ pure (generateConstraints cfg' f tc cha)
-      res       <- announce "Solve" $ liftIO (solveConstraints cfg' f cgi)
-      return   res
-
-announce s a = liftIO (startPhase Loud s) >> a
-
--- (>>=>) :: IO (Either a b) -> (b -> IO c) -> IO (Either a c)
--- act >>=> k = do
---   r <- act
---   case r of
---     Left l  -> return $  Left l -- (A.NoAnn, l)
---     Right x -> Right <$> k x
-
--- eAct :: IO (Err a) -> IO a
--- eAct m = do
---   x <- m
---   case x of
---     Left  l -> throw l
---     Right r -> return r
+verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $ do
+    p         <- parseRscFromFiles fs
+    cfg'      <- liftIO (withPragmas cfg (pOptions p))
+    cha       <- liftEither (mkCHA p)
+    ssa       <- ssaTransform p cha
+    _         <- dumpJS cfg' f "SSA" ssa
+    tc        <- typeCheck cfg' ssa cha
+    _         <- dumpJS cfg' f "TC" tc
+    cgi       <- generateConstraints cfg' f tc cha
+    res       <- solveConstraints cfg' f cgi
+    return   res
 
 
 -- | solveConstraint: solve with `ueqAllSorts` enabled.
 --------------------------------------------------------------------------------
-solveConstraints
-  :: Config -> FilePath -> CGInfo -> IO (A.UAnnSol RefType, F.FixResult Error)
+solveConstraints :: Config -> FilePath -> CGInfo -> EitherIO e Result
 --------------------------------------------------------------------------------
-solveConstraints cfg f cgi
-  = do  F.Result r s <- solve fpConf (cgi_finfo cgi)
-        r'           <- pure (fmap ciToError r)
-        anns         <- pure (cgi_annot cgi)
-        sol          <- pure (applySolution s)
-        return          (A.SomeAnn anns sol, r')
+solveConstraints cfg f cgi = liftIO $ do
+    _            <- startPhase Loud "Solving"
+    F.Result r s <- solve fpConf (cgi_finfo cgi)
+    r'           <- pure (fmap ciToError r)
+    anns         <- pure (cgi_annot cgi)
+    sol          <- pure (applySolution s)
+    return          (A.SomeAnn anns sol, r')
   where
-    fpConf        = def { C.real        = real cfg
-                        , C.ueqAllSorts = C.UAS True
-                        , C.srcFile     = f
-                        , C.save        = dumpDebug cfg
-                        }
+    fpConf  = def { C.real        = real cfg
+                  , C.ueqAllSorts = C.UAS True
+                  , C.srcFile     = f
+                  , C.save        = dumpDebug cfg
+                  }
 
 -- NOT VALID WITH NEW L-F -- solveConstraints cfg f cgi
 -- NOT VALID WITH NEW L-F --   = do F.Result r s <- solve fpConf (cgi_finfo cgi)
@@ -167,10 +149,11 @@ applySolution  = fmap . fmap . tx
 
 -- | Debug info
 --
-dumpJS cfg f cha s p =
-  when (dumpDebug cfg) $
-    writeFile (extFileName Result (dropExtension f ++ s)) $
-    show $ pp p $+$ pp cha $+$ ppCasts p
+dumpJS cfg f s p =
+  when (dumpDebug cfg) $ do
+    cha <- liftEither $ mkCHA p
+    liftIO $ writeFile (extFileName Result (dropExtension f ++ s)) $
+             show $ pp p $+$ pp cha $+$ ppCasts p
 
 ppCasts (Rsc { code = Src fs })
   = pp (take 80 (repeat '=')) $+$
@@ -185,9 +168,12 @@ ppCasts (Rsc { code = Src fs })
        ++ [pp "DEAD-CAST" $+$ vcat (map pp e) | a <- as, DeadCast _ e <- fFact a ]
 
 --------------------------------------------------------------------------------
-generateConstraints :: Config -> FilePath -> RefScript -> ClassHierarchy F.Reft -> CGInfo
+generateConstraints
+  :: Config -> FilePath -> RefScript -> ClassHierarchy F.Reft -> EitherIO e CGInfo
 --------------------------------------------------------------------------------
-generateConstraints cfg f pgm = getCGInfo cfg f pgm . consRsc pgm
+generateConstraints cfg f pgm cha = do
+  liftIO $ startPhase Loud "CG"
+  return $ getCGInfo cfg f pgm (consRsc pgm cha)
 
 --------------------------------------------------------------------------------
 consRsc :: RefScript -> ClassHierarchy F.Reft -> CGM ()
@@ -221,7 +207,7 @@ initGlobalEnv pgm@(Rsc { code = Src ss }) cha = freshenCGEnvM g
 
 -- TODO: CheckSyms
 --------------------------------------------------------------------------------
-initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnLq] -> CGM CGEnv
+initModuleEnv :: F.Symbolic n => CGEnv -> n -> [Statement AnnLq] -> CGM CGEnv
 --------------------------------------------------------------------------------
 initModuleEnv g n s = freshenCGEnvM g'
   where
@@ -299,7 +285,8 @@ consFun _ (FunctionStmt _ _ _ Nothing)
 consFun g (FunctionStmt l f xs (Just body))
   = case envFindTy f (cge_names g) of
       Just s  -> do
-          ft <- cgFunTys l f xs (v_type s)
+          _   <- validateTFun l g (v_type s)
+          ft  <- cgFunTys l f xs (v_type s)
           mapM_ (consCallable l g f xs body) ft
       Nothing -> cgError $ errorMissingSpec (srcPos l) f
 

@@ -19,6 +19,7 @@ import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
+import           Language.Rsc.Core.EitherIO
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
@@ -35,9 +36,11 @@ import           Language.Rsc.Visitor
 
 ----------------------------------------------------------------------------------
 ssaTransform
-  :: PPR r => BareRsc r -> ClassHierarchy r -> IO (Either FError (SsaRsc r))
+  :: PPR r => BareRsc r -> ClassHierarchy r -> EitherIO FError (SsaRsc r)
 ----------------------------------------------------------------------------------
-ssaTransform p cha = return $ execute p $ ssaRsc cha p
+ssaTransform p cha = EitherIO $ do
+    startPhase Loud "SSA"
+    return (execute p (ssaRsc cha p))
 
 
 -- | `ssaRsc` Perfroms SSA transformation of the input program. The output

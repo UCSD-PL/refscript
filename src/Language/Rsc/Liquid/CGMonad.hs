@@ -72,6 +72,7 @@ import           Language.Rsc.Constraints
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
+import           Language.Rsc.Liquid.Qualifiers
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
@@ -186,7 +187,8 @@ cgStateCInfo :: FilePath -> RefScript -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGSta
 --------------------------------------------------------------------------------
 cgStateCInfo f pgm ((fcs, fws), cg) = CGI finfo (cg_ann cg)
   where
-    finfo    = F.fi fcs fws bs lits mempty (pQuals pgm) mempty f
+    quals    = pQuals pgm ++ scrapeQuals pgm
+    finfo    = F.fi fcs fws bs lits mempty quals mempty f
     bs       = cg_binds cg
     lits     = lits1 `mappend` lits2
     lits1    = F.sr_sort <$> measureEnv pgm
@@ -377,11 +379,9 @@ trueRefType    :: RefType -> CGM RefType
 trueRefType    = mapReftM true
 
 
-
-
 --------------------------------------------------------------------------------
 cgFunTys :: (IsLocated l, F.Symbolic b, PP x, PP [b])
-  => l -> x -> [b] -> RefType -> CGM [(Int, ([BTVar F.Reft], [Bind F.Reft], RefType))]
+         => l -> x -> [b] -> RefType -> CGM [IOverloadSig F.Reft]
 --------------------------------------------------------------------------------
 cgFunTys l f xs ft   | Just ts <- bkFuns ft
                      = zip ([0..] :: [Int]) <$> mapM fTy (concatMap expandOpts ts)

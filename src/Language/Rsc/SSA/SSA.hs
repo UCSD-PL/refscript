@@ -13,6 +13,7 @@ import qualified Data.HashSet                 as S
 import qualified Data.IntMap.Strict           as IM
 import           Data.List                    (sortBy)
 import           Data.Maybe                   (catMaybes)
+import qualified Data.Traversable             as T
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annotations
@@ -51,14 +52,21 @@ ssaRsc :: PPR r => ClassHierarchy r -> BareRsc r -> SSAM r (SsaRsc r)
 ----------------------------------------------------------------------------------
 ssaRsc cha p@(Rsc { code = Src fs })
   = do  setMeas   $ S.fromList $ F.symbol <$> envIds (consts p)
-        (_,fs')  <- ssaStmts g fs
+        (_,fs1)  <- ssaStmts g fs
         ssaAnns  <- getAnns
+        -- Replace the annotations to the respective nodes
+        let fs2 = (patch ssaAnns <$>) <$> fs1
+        -- Make sure NodeIds are unique!
+        fs3      <- reassignIds fs2
+        -- Update code and counter
         ast_cnt  <- getCounter
-        return    $ p { code  = Src $ (patch ssaAnns <$>) <$> fs'
+        return    $ p { code  = Src fs3
                       , maxId = ast_cnt }
     where
       g = initGlobSsaEnv fs cha
-      patch ms (FA i l fs) = FA i l (fs ++ IM.findWithDefault [] i ms)
+      patch ms    (FA i l fs) = FA i l (fs ++ IM.findWithDefault [] i ms)
+      stepRecount (FA _ l fs) = tick >>= \n -> return (FA n l fs)
+      reassignIds             = T.mapM $ T.mapM stepRecount
 
 
 -------------------------------------------------------------------------------------
@@ -172,10 +180,11 @@ ssaStmt g (ForStmt l v cOpt (Just (UnaryAssignExpr l1 o lv)) b) =
     op PostfixInc  = OpAssignAdd
     op PostfixDec  = OpAssignSub
 
-ssaStmt g (ForStmt l (VarInit vds) cOpt (Just e@(AssignExpr l1 _ _ _)) b) =
-    ssaForLoop g l vds cOpt (Just $ ExprStmt l1 (expand e)) b
+ssaStmt g (ForStmt l (VarInit vds) cOpt (Just e@(AssignExpr l1 _ _ _)) b) = do
+    e' <- expand e
+    ssaForLoop g l vds cOpt (Just $ ExprStmt l1 e') b
   where
-    expand (AssignExpr l1 o lv e) = AssignExpr l1 OpAssign lv (infOp o l1 lv e)
+    expand (AssignExpr l1 o lv e) = AssignExpr l1 OpAssign lv <$> infOp o l1 lv e
     expand _ = errorstar "unimplemented: expand assignExpr"
 
 ssaStmt g (ForStmt l (VarInit vds) cOpt (Just i) b) =
@@ -185,10 +194,11 @@ ssaStmt g (ForStmt l (VarInit vds) cOpt Nothing  b) =
     ssaForLoop g l vds cOpt Nothing b
 
 
-ssaStmt g (ForStmt l (ExprInit ei) cOpt (Just e@(AssignExpr l1 _ _ _)) b) =
-    ssaForLoopExpr g l ei cOpt (Just $ ExprStmt l1 (expand e)) b
+ssaStmt g (ForStmt l (ExprInit ei) cOpt (Just e@(AssignExpr l1 _ _ _)) b) = do
+    e' <- expand e
+    ssaForLoopExpr g l ei cOpt (Just $ ExprStmt l1 e') b
   where
-    expand (AssignExpr l1 o lv e) = AssignExpr l1 OpAssign lv (infOp o l1 lv e)
+    expand (AssignExpr l1 o lv e) = AssignExpr l1 OpAssign lv <$> infOp o l1 lv e
     expand _ = errorstar "unimplemented: expand assignExpr"
 
 ssaStmt g (ForStmt l (ExprInit e) cOpt (Just i) b) =
@@ -278,14 +288,14 @@ ssaStmt g (VarDeclStmt l [vd]) = do
 ssaStmt _ v@(VarDeclStmt l _) =
   ssaError $ unimplSSAMulVarDecl l v
 
--- return e
+-- return;
 ssaStmt _ s@(ReturnStmt _ Nothing) =
   return (Nothing, s)
 
 -- return e
 ssaStmt g (ReturnStmt l (Just e)) = do
     (_, s, e') <- ssaExpr g e
-    return (Nothing, prefixStmt l s $ ReturnStmt l (Just e'))
+    return (Nothing,  prefixStmt l s $ ReturnStmt l (Just e'))
 
 -- throw e
 ssaStmt g (ThrowStmt l e) = do
@@ -638,22 +648,22 @@ ssaExpandIfStmtInfixAnd l e1 e2 s1 s2
     fr = freshenAnn
 
 
-infOp OpAssign         _ _  = id
-infOp OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalExp lv)
-infOp OpAssignSub      l lv = InfixExpr l OpSub      (lvalExp lv)
-infOp OpAssignMul      l lv = InfixExpr l OpMul      (lvalExp lv)
-infOp OpAssignDiv      l lv = InfixExpr l OpDiv      (lvalExp lv)
-infOp OpAssignMod      l lv = InfixExpr l OpMod      (lvalExp lv)
-infOp OpAssignLShift   l lv = InfixExpr l OpLShift   (lvalExp lv)
-infOp OpAssignSpRShift l lv = InfixExpr l OpSpRShift (lvalExp lv)
-infOp OpAssignZfRShift l lv = InfixExpr l OpZfRShift (lvalExp lv)
-infOp OpAssignBAnd     l lv = InfixExpr l OpBAnd     (lvalExp lv)
-infOp OpAssignBXor     l lv = InfixExpr l OpBXor     (lvalExp lv)
-infOp OpAssignBOr      l lv = InfixExpr l OpBOr      (lvalExp lv)
+infOp OpAssign         _ _  e = return e
+infOp OpAssignAdd      l lv e = InfixExpr l OpAdd      <$> lvalExp lv <*> pure e
+infOp OpAssignSub      l lv e = InfixExpr l OpSub      <$> lvalExp lv <*> pure e
+infOp OpAssignMul      l lv e = InfixExpr l OpMul      <$> lvalExp lv <*> pure e
+infOp OpAssignDiv      l lv e = InfixExpr l OpDiv      <$> lvalExp lv <*> pure e
+infOp OpAssignMod      l lv e = InfixExpr l OpMod      <$> lvalExp lv <*> pure e
+infOp OpAssignLShift   l lv e = InfixExpr l OpLShift   <$> lvalExp lv <*> pure e
+infOp OpAssignSpRShift l lv e = InfixExpr l OpSpRShift <$> lvalExp lv <*> pure e
+infOp OpAssignZfRShift l lv e = InfixExpr l OpZfRShift <$> lvalExp lv <*> pure e
+infOp OpAssignBAnd     l lv e = InfixExpr l OpBAnd     <$> lvalExp lv <*> pure e
+infOp OpAssignBXor     l lv e = InfixExpr l OpBXor     <$> lvalExp lv <*> pure e
+infOp OpAssignBOr      l lv e = InfixExpr l OpBOr      <$> lvalExp lv <*> pure e
 
-lvalExp (LVar l s)          = VarRef l (Id l s)
-lvalExp (LDot l e s)        = DotRef l e (Id l s)
-lvalExp (LBracket l e1 e2)  = BracketRef l e1 e2
+lvalExp (LVar l s)          = VarRef <$> fr_ l <*> (Id <$> fr_ l <*> pure s)
+lvalExp (LDot l e s)        = DotRef <$> fr_ l <*> pure e <*> (Id <$> fr_ l <*> pure s)
+lvalExp (LBracket l e1 e2)  = BracketRef <$> fr_ l <*> pure e1 <*> pure e2
 
 -- -------------------------------------------------------------------------------------
 -- presplice :: Maybe (Statement (AnnSSA r)) -> Statement (AnnSSA r) -> Statement (AnnSSA r)
@@ -796,10 +806,10 @@ ssaExpr g (FuncExpr l fo xs bd) = do
     return (g, [], FuncExpr l fo xs bd')
 
 -- x = e
-ssaExpr g (AssignExpr l OpAssign (LVar lv v) e) = do
-    let x            = Id lv v
-    (g', _, x', e') <- ssaAsgn g l x e
-    return             (g', [ssaAsgnStmt l lv x x' e'], e')
+ssaExpr g (AssignExpr l OpAssign (LVar lv v) e) =
+    ssaAsgnExpr g l lv (Id lv v) e
+    -- (g', s, x', e') <- ssaAsgn g l x e
+    -- return             (g', s ++ [ssaAsgnStmt l lv x x' e'], e')
 
 -- e1.f = e2
 ssaExpr g (AssignExpr l OpAssign (LDot ll e1 f) e2) = do
@@ -818,12 +828,10 @@ ssaExpr g (AssignExpr l OpAssign (LBracket ll e1 e2) e3) = do
 --
 -- XXX: only allow vars on the LHS to avoid side-effects
 --
-ssaExpr g (AssignExpr l op x@(LVar lv _) e) = do
-    (g', s, _) <- ssaExpr g (AssignExpr l OpAssign x rhs)
-    x'         <- safeFindSsaEnv lv g x
-    return (g', s, VarRef lv x')
-  where
-    rhs = InfixExpr l (assignInfix op) (lvalExp x) e
+ssaExpr g (AssignExpr l op lv@(LVar x _) e) = do
+    lv'   <- lvalExp lv
+    rhs   <- InfixExpr <$> fr_ l <*> pure (assignInfix op) <*> pure lv' <*> pure e
+    ssaExpr g (AssignExpr l OpAssign lv rhs)
 
 -- x++ ==> [x1 = x0 + 1], x1
 ssaExpr g (UnaryAssignExpr l uop (LVar lv v))
@@ -836,11 +844,17 @@ ssaExpr g (UnaryAssignExpr l uop (LVar lv v))
 -- lv++
 ssaExpr g (UnaryAssignExpr l uop lv)
   = do (g', lv')  <- ssaLval g lv
-       let e'      = unaryExpr l uop (lvalExp lv')
-       return        (g', [], AssignExpr l OpAssign lv' e')
+       lv''       <- lvalExp lv'
+       let e'      = unaryExpr l uop lv''
+       return        (g', [], AssignExpr l OpAssign lv e')
 
 ssaExpr _ e
   = convertError "ssaExpr" e
+
+
+ssaAsgnExpr g l lx x e
+  = do (g', s, x', e') <- ssaAsgn g l x e
+       return         (g', s ++ [ssaAsgnStmt l lx x x' e'], e')
 
 --------------------------------------------------------------------------------
 ssaLval :: PPR r

@@ -13,6 +13,7 @@ TOP PRIORITY
     * Optional arguments should only occupy the end part of a type.
     * Refinements should not reference optional arguments.
 
+- SSA: renumber all nodes after ssa-ing of entire program is done
 
 --------------------------------------------------------------------------------
 

@@ -25,12 +25,13 @@ data Config
            , prelude    :: Maybe FilePath -- ^ use this prelude file
            , real       :: Bool           -- ^ use real-valued SMT arithmetic
            , extSolver  :: Bool           -- ^ use external (Ocaml) fixpoint solver (deprecated)
+           , dumpDebug  :: Bool           -- ^ emit .fq, .fqout, .out files
            }
   deriving (Data, Typeable, Show, Eq)
 
 
 instance Default Config where
-  def = Liquid [] [] False False Nothing False False
+  def = Liquid [] [] False False Nothing False False False
 
 
 ---------------------------------------------------------------------------------
@@ -67,6 +68,8 @@ liquid = Liquid {
  , real         = def  &= help "Use real-valued SMT logic (slow!)"
 
  , extSolver    = def  &= help "Use external (Ocaml) fixpoint solver (deprecated)"
+
+ , dumpDebug    = def  &= help "Dump debug files (e.g. .fq, .fqout, .out)"
 
  } &= help    "RefScript Refinement Type Checker"
 

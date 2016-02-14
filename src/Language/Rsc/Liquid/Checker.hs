@@ -70,11 +70,11 @@ verifyFile cfg f fs = fmap (either (A.NoAnn,) id) $ runEitherIO $
       ssa       <- announce "SSA"   $ EitherIO (ssaTransform p cha)
 
       cha0      <- liftEither       $ mkCHA ssa
-      _         <- liftIO           $ dumpJS f cha0 "-ssa" ssa
+      _         <- liftIO           $ dumpJS cfg' f cha0 "-ssa" ssa
       tc        <- announce "TC"    $ EitherIO (typeCheck cfg' ssa cha)
 
       cha1      <- liftEither       $ mkCHA tc
-      _         <- liftIO           $ dumpJS f cha1 "-tc" tc
+      _         <- liftIO           $ dumpJS cfg' f cha1 "-tc" tc
       cgi       <- announce "CG"    $ pure (generateConstraints cfg' f tc cha)
       res       <- announce "Solve" $ liftIO (solveConstraints cfg' f cgi)
       return   res
@@ -111,7 +111,7 @@ solveConstraints cfg f cgi
     fpConf        = def { C.real        = real cfg
                         , C.ueqAllSorts = C.UAS True
                         , C.srcFile     = f
-                        , C.save        = True
+                        , C.save        = dumpDebug cfg
                         }
 
 -- NOT VALID WITH NEW L-F -- solveConstraints cfg f cgi
@@ -167,10 +167,10 @@ applySolution  = fmap . fmap . tx
 
 -- | Debug info
 --
-dumpJS f cha s p = writeFile (extFileName Result (dropExtension f ++ s)) $ show
-                 $ pp p
-               $+$ pp cha
-               $+$ ppCasts p
+dumpJS cfg f cha s p =
+  when (dumpDebug cfg) $
+    writeFile (extFileName Result (dropExtension f ++ s)) $
+    show $ pp p $+$ pp cha $+$ ppCasts p
 
 ppCasts (Rsc { code = Src fs })
   = pp (take 80 (repeat '=')) $+$

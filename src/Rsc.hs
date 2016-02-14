@@ -33,9 +33,11 @@ main :: IO a
 main = do cfg  <- cmdArgs config
           run (verifier cfg) cfg
 
-top s = run (verifier cfg) cfg
+top dbg s = run (verifier cfg) cfg
   where
-    cfg = def { files = [s] }
+    cfg = def { files     = [s]
+              , dumpDebug = dbg
+              }
 
 
 -------------------------------------------------------------------------------

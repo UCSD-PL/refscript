@@ -1,16 +1,15 @@
-class Packet {
-  /*@ link : [#Mutable] Packet<Mutable> + undefined */
-  public link:Packet; 
+class Packet<M extends ReadOnly> {
+  /*@ (Mutable) link: Packet<Mutable> + undefined */
+  public link: Packet<Mutable>;
 
-  /*@ new() => void */
   constructor() { }
 }
 
 /*@ foo :: (curr: Packet<Mutable>) => { Packet<Mutable> | 0 < 1 } */
 function foo(curr) {
-  var next = curr.link;
+  let next = curr.link;
 
   if (next) curr = next;
-  
+
   return next;
 }

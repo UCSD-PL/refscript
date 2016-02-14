@@ -2,7 +2,7 @@
 /*@ foo :: ({v:number|v>0}) => {v:number|v<0} */ 
 function foo(a) {
 
-  /*@ bar :: () => void */ 
+  /*@ bar :: () => void */
   function bar() {
     a = -a;
   }
@@ -10,4 +10,3 @@ function foo(a) {
 
   return a;
 }
-

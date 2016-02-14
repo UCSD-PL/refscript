@@ -828,7 +828,7 @@ ssaExpr g (AssignExpr l OpAssign (LBracket ll e1 e2) e3) = do
 --
 -- XXX: only allow vars on the LHS to avoid side-effects
 --
-ssaExpr g (AssignExpr l op lv@(LVar x _) e) = do
+ssaExpr g (AssignExpr l op lv@(LVar _ _) e) = do
     lv'   <- lvalExp lv
     rhs   <- InfixExpr <$> fr_ l <*> pure (assignInfix op) <*> pure lv' <*> pure e
     ssaExpr g (AssignExpr l OpAssign lv rhs)

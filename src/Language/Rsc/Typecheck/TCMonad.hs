@@ -345,10 +345,12 @@ unifyTypeM l γ t t' = unifyTypesM l γ [t] [t']
 
 -- | @deadcastM@ wraps an expression @e@ with a dead-cast around @e@.
 --------------------------------------------------------------------------------
-deadcastM :: Unif r => TCEnv r -> [Error] -> Expression (AnnSSA r)
+deadcastM :: Unif r => String -> TCEnv r -> [Error] -> Expression (AnnSSA r)
                     -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-deadcastM γ es e = addAnn l fact >> wrapCast loc fact e
+deadcastM _ γ es e = do
+    addAnn l fact
+    wrapCast loc fact e
   where
     l            = getAnnotation e
     loc          = fSrc (getAnnotation e)
@@ -381,7 +383,7 @@ castM γ e consume t1 t2
   = case convert (srcPos e) γ cfg t1 t2 of
       ConvOK      -> return e
       ConvWith _  -> typecastM γ e (toType t2)
-      ConvFail es -> deadcastM γ es e
+      ConvFail es -> deadcastM "castM" γ es e
   where
     cfg | consume   = SC True  t1 t2 Nothing (Just e)
         | otherwise = SC False t1 t2 Nothing (Just e)

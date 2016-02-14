@@ -156,6 +156,16 @@ castable _ _ _ es _ _ = ConvFail es
 subtype :: (PPRE r, FE g r, IsLocated l)
         => l -> g r -> SubConf r -> RType r -> RType r -> SubtypingResult
 --------------------------------------------------------------------------------
+
+-- | Bot is a subtype of every type. This case is intended to be used for
+--   bubbling up of deadcasts.
+--
+--   XXX: Make sure TBot is only produced at deadcast points so that it is
+--        established that the code is unreachable.
+--
+subtype _ _ _ t _
+  | isTBot t = SubOK
+
 -- | Type Variables
 subtype _ _ _ (TVar v1 _) (TVar v2 _)
   | v1 == v2  = SubOK

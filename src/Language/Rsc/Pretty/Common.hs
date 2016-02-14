@@ -78,6 +78,9 @@ instance (PP t) => PP (F.SEnv t) where
            F.toListSEnv m
          )
 
+instance (PP a, PP b) => PP (Either a b) where
+  pp (Left a)  = pp "LEFT:"  <+> pp a
+  pp (Right b) = pp "RIGHT:" <+> pp b
 
 ---------------------------------------------------------------------
 ppshow :: (PP a) => a -> String

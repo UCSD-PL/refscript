@@ -543,36 +543,44 @@ tcExprWD γ e t
         et  <- tcEW γ e eet
         case et of
           (e', Just t) -> return (e', t)
-          (e', _     ) -> return (e', tNull)
+          (e', _     ) -> return (e', tBot)
 
 
 -- | Wraps `tcNormalCall` with a cast-wrapping check of an error.
 --
 --------------------------------------------------------------------------------
 tcNormalCallW
-  :: Unif r => TCEnv r -> AnnTc r -> Identifier -> [ExprSSAR r] -> RType r
+  :: Unif r => TCEnv r -> AnnTc r -> Identifier
+            -> [ExprSSAR r] -> RType r
             -> TCM r ([ExprSSAR r], Maybe (RType r))
 --------------------------------------------------------------------------------
 tcNormalCallW γ l o es t
   = tcWrap (tcNormalCall γ l o (es `zip` nths) t) >>= \case
       Right (es', t') -> return (es', Just t')
-      Left e -> (,Nothing) <$> mapM (deadcastM γ [e]) es
+      Left e -> (,Nothing) <$> mapM (deadcastM "tcNormalCallW" γ [e]) es
 
+--------------------------------------------------------------------------------
+tcNormalCallWCtx
+  :: Unif r => TCEnv r -> AnnTc r -> Identifier
+            -> [(ExprSSAR r, Maybe (RType r))] -> RType r
+            -> TCM r ([ExprSSAR r], Maybe (RType r))
+--------------------------------------------------------------------------------
 tcNormalCallWCtx γ l o es t
   = tcWrap (tcNormalCall γ l o es t) >>= \case
       Right (es', t') -> return (es', Just t')
-      Left err -> (,Nothing) <$> mapM (deadcastM γ [err]) (fst <$> es)
+      Left err -> (,Nothing) <$> mapM (deadcastM "tcNormalCallWCtx" γ [err]) (fst <$> es)
 
--- | Like `tcNormalCallW`, but return tNull in case of failure
+-- | Like `tcNormalCallW`, but return _|_ in case of failure
 --
 --------------------------------------------------------------------------------
 tcNormalCallWD
-  :: Unif r => TCEnv r -> AnnTc r -> Identifier -> [ExprSSAR r] -> RType r
-            -> TCM r ([ExprSSAR r], RType r)
+  :: Unif r => TCEnv r -> AnnTc r -> Identifier -> [ExprSSAR r]
+            -> RType r -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
-tcNormalCallWD γ l o es t = tcNormalCallW γ l o es t >>= \case
-  (es', Just t) -> return (es', t)
-  (es', _     ) -> return (es', tNull)
+tcNormalCallWD γ l o es t =
+    tcNormalCallW γ l o es t >>= \case
+      (es', Just t) -> return (es', t)
+      (es', _     ) -> return (es', tBot)
 
 
 -- | Wrap expressions and statement in deadcasts
@@ -587,7 +595,7 @@ tcEW :: Unif r => TCEnv r -> ExprSSAR r -> Either Error (ExprSSAR r, b)
                -> TCM r ((ExprSSAR r), Maybe b)
 --------------------------------------------------------------------------------
 tcEW _ _ (Right (e', t')) = return (e', Just t')
-tcEW γ e (Left er)        = (,Nothing) <$> deadcastM γ [er] e
+tcEW γ e (Left er)        = (,Nothing) <$> deadcastM "tcEW" γ [er] e
 
 --------------------------------------------------------------------------------
 tcSW :: Unif r => TCEnv r -> Statement (AnnSSA r)
@@ -598,7 +606,7 @@ tcSW _ _ (Right (s, b)) = return (s, b)
 tcSW γ s (Left  e)      = do
     l1    <- freshenAnn l
     l2    <- freshenAnn l
-    dc    <- deadcastM γ [e] (NullLit l1)
+    dc    <- deadcastM "tcSW" γ [e] (NullLit l1)
     return   (ExprStmt l2 dc, Nothing)
   where l = getAnnotation s
 
@@ -725,7 +733,7 @@ tcExpr γ (Cast_ l e) to
 
       [Right t] -> pure (Cast_ l e, ofType t)
 
-      [Left _ ] -> pure (Cast_ l e, tNull)
+      [Left _ ] -> pure (Cast_ l e, tBot)
 
       _         -> die $ bugNestedCasts (srcPos l) e
 
@@ -790,7 +798,7 @@ tcCall γ c@(PrefixExpr l o e) _
        z    <- tcNormalCallWD γ l (prefixOpId o) [e] opTy
        case z of
          ([e'], t) -> return (PrefixExpr l o e', t)
-         _ -> fatal (impossible (srcPos l) "tcCall PrefixExpr") (c, tBot)
+         _         -> fatal (impossible l "tcCall PrefixExpr") (c, tBot)
 
 -- | `e1 o e2`
 tcCall γ c@(InfixExpr l o@OpInstanceof e1 e2) _
@@ -802,7 +810,7 @@ tcCall γ c@(InfixExpr l o@OpInstanceof e1 e2) _
                                  tcNormalCallWD γ l (infixOpId o) args opTy
                       -- TODO: add qualified name
                 return (InfixExpr l o e1' e2', t')
-         _  -> fatal (unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2) (c,tBot)
+         _  -> fatal (unimplemented l "tcCall-instanceof" $ ppshow e2) (c,tBot)
   where
     l2 = getAnnotation e2
 
@@ -907,19 +915,22 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e0 f) es) _
     isVariadicCall f_ = F.symbol f_ == F.symbol "call"
 
     -- Non-variadic
-    checkNonVariadic = runFailM (tcExpr γ ue Nothing) >>= checkWithRcvr
-
-    -- Check receiver
-    checkWithRcvr (Right (_, te)) = checkWithProp (getProp l γ f te)
-    checkWithRcvr (Left er      ) = fatal er (ex, tBot)
+    checkNonVariadic =
+      runFailM (tcExpr γ ue Nothing) >>= \case
+        Right (_, te) -> checkMemberAccess te
+        Left e        -> tcError e
 
     -- Check all corresponding type members `tms`
-    checkWithProp (Right tms@(map fst -> ts))
-      = do  (e', _   ) <- tcExprT γ ue (tOr ts)
-            (es', ts') <- foldM (\(es_, ts) (tR, m) ->
-                            second (:ts) <$> checkTypeMember es_ tR m) (es, []) tms
-            return      $ (CallExpr l (DotRef l1 e' f) es', tOr ts')
-    checkWithProp (Left er) = tcError er
+    checkMemberAccess te =
+      case getProp l γ f te of
+        Right tms@(map fst -> ts) -> do
+            (e', _   ) <- tcExprT γ ue (tOr ts)
+            (es', ts') <- foldM stepTypeMemM (es, []) tms
+            return        (CallExpr l (DotRef l1 e' f) es', tOr ts')
+
+        Left e -> tcError e
+
+    stepTypeMemM (es_, ts) (tR, m) = second (:ts) <$> checkTypeMember es_ tR m
 
     -- Check a single type member
     checkTypeMember es_ _  (FI _ Req _ ft) = tcNormalCallWD γ l biID es_ ft
@@ -939,33 +950,49 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e0 f) es) _
     biID = builtinOpId BIDotRefCallExpr
 
 -- | `e(es)`
-tcCall γ (CallExpr l e es) _
-  = do (e', ft0) <- tcExpr γ e Nothing
-       (es', t)  <- tcNormalCallWD γ l (builtinOpId BICallExpr) es ft0
-       return $ (CallExpr l e' es', t)
-  where
+tcCall γ ex@(CallExpr l e es) _ = do
+    (e', ft0) <- tcExpr γ e Nothing
+    tcWrap (tcNormalCall γ l (builtinOpId BICallExpr) (es `zip` nths) ft0) >>= \case
+      Right (es', t) -> return (CallExpr l e' es', t)
+      Left e         -> (,tBot) <$> deadcastM "tcCall-CallExpr" γ [e] ex
+
+       -- (es', t)  <- tcNormalCallWD γ l (builtinOpId BICallExpr) es ft0
+       -- return       (CallExpr l e' es', t)
 
 tcCall _ e _
   = fatal (unimplemented (srcPos e) "tcCall" e) (e, tBot)
 
 --------------------------------------------------------------------------------
--- | @tcNormalCall@ resolves overloads and returns cast-wrapped versions of the arguments.
+-- | @tcNormalCall@ resolves overloads and returns cast-wrapped versions of
+--   the arguments if subtyping fails.
+--
+--   May throw exceptions.
+--
 --------------------------------------------------------------------------------
 tcNormalCall :: Unif r
-             => TCEnv r -> AnnTc r -> Identifier -> [(ExprSSAR r, Maybe (RType r))]
+             => TCEnv r -> AnnTc r -> Identifier
+             -> [(ExprSSAR r, Maybe (RType r))]
              -> RType r -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
 tcNormalCall γ l fn etos ft0
+  -- = do ets <- ltracePP l (ppshow fn ++ "  " ++ ppshow etos) <$> T.mapM (uncurry (tcExpr γ)) etos
   = do ets <- T.mapM (uncurry (tcExpr γ)) etos
+       -- z   <- ltracePP l ("resolved " ++ ppshow fn ++ " with " ++ ppshow ets) <$> resolveOverload γ l fn ets ft0
        z   <- resolveOverload γ l fn ets ft0
        case z of
          Just (i, θ, ft) ->
              do addAnn l (Overload (tce_ctx γ) (F.symbol fn) i)
                 addSubst l θ
                 (es, ts) <- pure (unzip ets)
+                -- tcCallCase γ l fn es ts ft
+
+-- XXX: Why all this ??
                 tcWrap (tcCallCase γ l fn es ts ft) >>= \case
                   Right ets' -> return ets'
-                  Left  er  -> (,tNull) <$> T.mapM (deadcastM γ [er] . fst) ets
+                  Left  er   -> do
+                      es' <- T.mapM (deadcastM "tcNormalCall" γ [er] . fst) ets
+                      return (es', tNull)
+
          Nothing -> tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) (unzip ets)
 
 
@@ -1048,8 +1075,10 @@ tcCallCaseTry γ l fn ts ((i,ft):fts)
     (<::) ts1 ts2 = and (zipWith (isSubtypeWithUq γ) ts1 ts2)
 
 --------------------------------------------------------------------------------
-tcCallCase :: (PP a, Unif r)
-  => TCEnv r -> AnnTc r -> a -> [ExprSSAR r] -> [RType r] -> RType r -> TCM r ([ExprSSAR r], RType r)
+tcCallCase
+  :: (PP a, Unif r)
+  => TCEnv r -> AnnTc r -> a -> [ExprSSAR r]
+  -> [RType r] -> RType r -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
 tcCallCase γ@(tce_ctx -> ξ) l fn es ts ft
   = do  (βs, rhs, ot)   <- instantiateFTy l ξ fn ft

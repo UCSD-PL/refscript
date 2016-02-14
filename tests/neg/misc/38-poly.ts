@@ -1,12 +1,10 @@
 
 
-/*@  idd :: forall T. (x:T) => T */
 function idd<A>(x:A):A {
     return x;
 }
 
-/*@ bar :: forall A. (A, (x:A) => A) => A */
-function bar(x:any, f:any){
+function bar<A>(x: A, f: (z:A) => A): A {
     return f(x);
 }
 

@@ -20,12 +20,21 @@ function d3_mean(array: any, f?: any): number {
     let j = n;
 
     while (i < n) {
+
+
+        // XXX: Variadic not working yet......
+
         a = f.call(array, array[i], i);
+
+        j = j ;
+
         if (d3_number(a)) {
-            s = s + <number>a
+            s = s + <number>a;
+
+            j = j;
         } else {
             // --j;
-            j --;
+            j = j - 1;
         }
         i++;
     }

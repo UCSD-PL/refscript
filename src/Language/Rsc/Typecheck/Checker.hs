@@ -1145,7 +1145,7 @@ envJoin l γ (Just γ1) (Just γ2) = do
       ) γ (zip s1s s2s)
 
   where
-    xs        = [ x | PhiVar x <- fFact l ]
+    xs        = ltracePP l "PHI" [ x | PhiVar x <- fFact l ]
     sOr s1 s2 = s1 { v_type = tOr [v_type s1, v_type s2] }
 
 

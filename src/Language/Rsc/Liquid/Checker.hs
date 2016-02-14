@@ -653,8 +653,9 @@ consExpr g (Cast_ l e) s
 
 -- | <T>e
 consExpr g ex@(Cast l e) _
-  | [tc] <- [ ct | UserCast ct <- fFact l ]
-  = consCall g l (builtinOpId BICastExpr) [(e, Just tc)] (castTy tc)
+  | [ty] <- [ t_ | UserCast t_ <- fFact l ]
+  = do  ty' <- freshTyFun g l ty
+        consCall g l (builtinOpId BICastExpr) [(e, Just ty')] (castTy ty')
   | otherwise
   = die $ bugNoCasts (srcPos l) ex
 
@@ -965,17 +966,18 @@ consCheckArgs :: PP a => AnnLq -> CGEnv -> a
 --------------------------------------------------------------------------------
 consCheckArgs l g fn ft ts xes
   = do  (rhs, rt) <- instantiateFTy l g fn xes ft
-        lhs       <- mapM (instantiateTy l g fn) ts
+        lhs       <- zipWithM (instantiateTy l g fn) [1..] ts
         _         <- zipWithM_ (subType l Nothing g) lhs rhs
         Just     <$> cgEnvAddFresh "5" l rt g
 
+-- The integer argument `n` corresponds to the order of the argument
 --------------------------------------------------------------------------------
-instantiateTy :: PP a => AnnLq -> CGEnv -> a -> RefType -> CGM RefType
+instantiateTy :: PP a => AnnLq -> CGEnv -> a -> Int -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-instantiateTy l g fn (bkAll -> (βs, t))
+instantiateTy l g fn n (bkAll -> (βs, t))
   = freshTyInst l g βs τs t
   where
-    τs = envGetContextTypArgs 0 g l fn βs
+    τs = envGetContextTypArgs n g l fn βs
 
 --------------------------------------------------------------------------------
 instantiateFTy :: PP a => AnnLq -> CGEnv -> a -> [Id AnnLq] -> RefType

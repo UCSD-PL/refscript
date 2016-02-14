@@ -1,21 +1,20 @@
-class Tree {
-/*@ new() => {Tree<M> | 0 < 1} */
-  constructor() {}
+class Tree<M extends ReadOnly> {
 
-  /*@ root : TreeNode<Immutable> + null */
-  root = null;
+    constructor() {}
 
-  /*@ foo : () : {void | 0 < 1} */
-  foo() {
-    let _root = this.root;
-    if (_root) {
-      _root.bar();
+    /*@ root : TreeNode<Immutable> + null */
+    root = null;
+
+    foo() {
+        let _root = this.root;
+        if (_root) {
+            _root.bar();
+        }
     }
-  }
 }
 
-declare class TreeNode {
-  /*@ bar : () : {void | 0 < 1} */
-  bar();
-}
+class TreeNode<M extends ReadOnly> {
+    bar(): void {} ;
 
+    constructor() {}
+}

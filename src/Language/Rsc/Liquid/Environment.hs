@@ -229,23 +229,25 @@ envGetContextCast g a
   = CNo
 
 
-
 -- | Returns the type instantiations for parameters @αs@ in context @n@
 --------------------------------------------------------------------------------
-envGetContextTypArgs :: PP f => Int -> CGEnv -> AnnLq -> f -> [BTVar F.Reft] -> [RefType]
+envGetContextTypArgs
+  :: PP f => Int -> CGEnv -> AnnLq -> f -> [BTVar F.Reft] -> [RefType]
 --------------------------------------------------------------------------------
 -- NOTE: If we do not need to instantiate any type parameter (i.e. length αs ==
 -- 0), DO NOT attempt to compare that with the TypInst that might hide within
 -- the expression, cause those type instantiations might serve anothor reason
 -- (i.e. might be there for a separate instantiation).
+--
 envGetContextTypArgs _ _ _ _ [] = []
 envGetContextTypArgs n g a f αs
-  | [its] <- tys, length its == length αs = its
-  | otherwise = die $ bugMissingTypeArgs (srcPos a) f
+  | [its] <- tys
+  , length its == length αs
+  = its
+  | otherwise
+  = die (bugMissingTypeArgs a f)
   where
-    tys = [i | TypInst m ξ' i <- fFact a
-             , ξ' == cge_ctx g
-             , n == m ]
+    tys = [i | TypInst m ξ' i <- fFact a, (ξ', n) == (cge_ctx g, m) ]
 
 
 -- | Monadic environment search wrappers

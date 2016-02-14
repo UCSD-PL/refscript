@@ -351,9 +351,13 @@ mapTypeMembersM f (TM m sm c k s n)
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-replaceAbsolute :: (PPR r, Data r, Typeable r) => BareRelRsc r -> (BareRsc r, [Error])
+replaceAbsolute
+  :: (PPR r, Data r, Typeable r) => BareRelRsc r -> Either [Error] (BareRsc r)
 --------------------------------------------------------------------------------
-replaceAbsolute pgm@(Rsc { code = Src ss }) = (pgm { code = Src ss' }, sOut)
+replaceAbsolute pgm@(Rsc { code = Src ss }) =
+    case sOut of
+      [] -> Right (pgm { code = Src ss' })
+      _  -> Left sOut
   where
     (ss', sOut)     = runState (mapM (T.mapM (\l -> ntrans (safeAbsName l) (safeAbsPath l) l)) ss) []
     (ns, ps)        = accumNamesAndPaths ss

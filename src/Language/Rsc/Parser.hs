@@ -23,15 +23,16 @@ import           Data.Maybe                       (catMaybes)
 import           Data.Monoid
 import           Data.Traversable                 (mapAccumL)
 import           Data.Tuple
+import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Parse          (Parser)
 import qualified Language.Fixpoint.Types          as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
+import qualified Language.Rsc.Core.EitherIO       as EIO
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Alias
-import qualified Language.Rsc.Liquid.Qualifiers   as Q
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Parser.Annotations
@@ -53,12 +54,13 @@ import           Text.Parsec.Error                (errorMessages, showErrorMessa
 -- | Parse the contents of a FilePath list into a program structure with relative
 -- qualified names.
 --------------------------------------------------------------------------------
-parseRscFromFiles :: [FilePath] -> IO (Either FError RefScript)
+parseRscFromFiles :: [FilePath] -> EIO.EitherIO FError RefScript
 --------------------------------------------------------------------------------
-parseRscFromFiles fs =
-  partitionEithers <$> mapM parseScriptFromJSON fs >>= \case
-    ([],ps) -> return (parseAnnotations (concat ps) >>= mkRsc)
-    (es,_ ) -> return (Left $ mconcat es)
+parseRscFromFiles fs = EIO.EitherIO $ do
+    startPhase Loud "Parse"
+    partitionEithers <$> mapM parseScriptFromJSON fs >>= \case
+      ([],ps) -> return (parseAnnotations (concat ps) >>= mkRsc)
+      (es,_ ) -> return (Left $ mconcat es)
 
 --------------------------------------------------------------------------------
 getJSON :: MonadIO m => FilePath -> m B.ByteString
@@ -85,18 +87,17 @@ parseIdFromJSON filename = decodeOrDie <$> getJSON filename
         Left msg -> Left  $ F.Crash [] $ "JSON decode error:\n" ++ msg
         Right p  -> Right p
 
+-- TODO: allow more error to lift from other parts of program creation
 --------------------------------------------------------------------------------
 mkRsc :: [Statement (SrcSpan, [Spec])] -> Either FError RefScript
 --------------------------------------------------------------------------------
-mkRsc ss = let p1          = mkRelRsc        ss
-               p2          = expandAliases   p1     -- Expand type and predicate aliases
-               p3          = scrapeQuals     p2     -- Scrape quals after expanding aliases
-               (p4, errs)  = replaceAbsolute p3
-               p5          = replaceDotRef   p4
-               p6          = fixFunBinders   p5 in
-            case errs of
-              [] -> Right p6
-              _  -> Left $ F.Unsafe errs
+mkRsc ss = either (Left . F.Unsafe) Right $ do
+    p1  <- pure (mkRelRsc ss)
+    p2  <- pure (expandAliases p1)     -- Expand type and predicate aliases
+    p3  <- replaceAbsolute p2
+    p4  <- pure (replaceDotRef p3)
+    p5  <- pure (fixFunBinders p4)
+    return p5
 
 
 -- XXX: Type aliases might appear twice as part of a TS annotation and an RSC
@@ -123,11 +124,6 @@ mkRelRsc ss = Rsc {
     starting_id       = 0
     (endingId, ss')   = mapAccumL (mapAccumL (\n -> (n+1,) . toBare n)) starting_id ss
     anns              = concatMap (FO.foldMap snd) ss
-
---------------------------------------------------------------------------------
-scrapeQuals :: Rsc (FAnnQ q F.Reft) r -> Rsc (FAnnQ q F.Reft) r
---------------------------------------------------------------------------------
-scrapeQuals p@(Rsc { code = Src c }) = p { pQuals = pQuals p ++ Q.scrapeQuals c }
 
 
 --------------------------------------------------------------------------------

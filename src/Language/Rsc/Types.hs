@@ -208,8 +208,9 @@ type TypeMember r     = TypeMemberQ AK r
 type Type             = RType ()
 
 -- XXX: Binds here are all Req
---
-type OverloadSig r    = ([BTVar r], [Bind r], RType r)
+
+type OverloadSigQ q r = ([BTVarQ q r], [BindQ q r], RTypeQ q r)
+type OverloadSig r    = OverloadSigQ AK r
 type IOverloadSig r   = (IntCallSite, OverloadSig r)
 
 

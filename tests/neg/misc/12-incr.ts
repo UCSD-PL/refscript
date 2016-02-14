@@ -1,4 +1,10 @@
 
+
+/*@ option --real */
+
+/*@ qualif Add1(v: int, y: int): v = y + 1 */
+
+
 /*@ incr :: (x:number) => {number|v = x + 1} */
 function incr(x:number):number{
     return ++x;
@@ -8,4 +14,3 @@ function incr(x:number):number{
 function foo(x:number):number{
     return x += incr(x++) + incr(x++);
 }
-

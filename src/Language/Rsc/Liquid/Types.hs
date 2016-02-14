@@ -405,3 +405,5 @@ mkOffsetSym x f = F.mkEApp offsetLocSym [F.expr x, F.expr $ symbolText $ F.symbo
 rawSymbolFTycon :: F.Symbol -> F.FTycon
 rawSymbolFTycon = F.symbolFTycon
                 . F.locAt "RSC.Types.rawStringFTycon"
+
+

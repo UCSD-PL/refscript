@@ -269,3 +269,22 @@ nths = repeat Nothing
 zwNth = (`zip` nths)
 
 s1 <//> s2 = s1 ++ "\n" ++ s2
+
+
+
+
+-- (>>=>) :: IO (Either a b) -> (b -> IO c) -> IO (Either a c)
+-- act >>=> k = do
+--   r <- act
+--   case r of
+--     Left l  -> return $  Left l -- (A.NoAnn, l)
+--     Right x -> Right <$> k x
+
+-- eAct :: IO (Err a) -> IO a
+-- eAct m = do
+--   x <- m
+--   case x of
+--     Left  l -> throw l
+--     Right r -> return r
+
+

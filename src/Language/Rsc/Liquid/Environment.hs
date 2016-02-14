@@ -11,8 +11,11 @@
 
 module Language.Rsc.Liquid.Environment (
 
+  -- * Validation
+    validateTFun
+
   -- * Initializers
-    initClassCtorEnv
+  , initClassCtorEnv
   , initClassMethEnv
 
   -- * Fresh Templates for Unknown Refinement Types
@@ -112,6 +115,9 @@ cgEnvFindTy x   = fmap v_type . envFindTy x . cge_names
 -- | Well-Formedness
 ---------------------------------------------------------------------------------------
 
+---------------------------------------------------------------------------------------
+checkSyms :: (IsLocated l, EnvKey a) => l -> String -> CGEnv -> [a] -> RefType -> [Error]
+---------------------------------------------------------------------------------------
 -- | Valid symbols:
 --
 --   * The respective defined symbol @x@
@@ -122,10 +128,7 @@ cgEnvFindTy x   = fmap v_type . envFindTy x . cge_names
 --   * Additional builtin symbols
 --   * ReadOnly ... binders in the environment
 --
----------------------------------------------------------------------------------------
-checkSyms :: (IsLocated l, EnvKey a) => l -> String -> CGEnv -> [a] -> a -> RefType -> [Error]
----------------------------------------------------------------------------------------
-checkSyms l m g ok x t = efoldRType h f F.emptySEnv [] t
+checkSyms l m g ok t = efoldRType h f F.emptySEnv [] t
   where
     h _        = ()
     f γ t' s   = let rt   = rTypeReft t'   in
@@ -135,8 +138,6 @@ checkSyms l m g ok x t = efoldRType h f F.emptySEnv [] t
 
     chk γ t' s | s `elem` biReserved
                = Just $ unimplementedReservedSyms l
-               | s == x_sym
-               = Nothing
                | s == rTypeValueVar t'
                = Nothing
                | s `elem` ok_syms
@@ -152,11 +153,10 @@ checkSyms l m g ok x t = efoldRType h f F.emptySEnv [] t
                    then Nothing
                    else Just $ errorAsgnInRef l s t a
                | otherwise
-               = Just $ errorUnboundSyms l (F.symbol x) t s m
+               = Just $ errorUnboundSyms l t s m
 
     biReserved = map F.symbol ["func", "obj"]
     biExtra    = map F.symbol ["bvor", "bvand", "builtin_BINumArgs", "offset", "this"]
-    x_sym      = F.symbol x
     ok_syms    = map F.symbol ok
     validAsgn  = [RdOnly, Ambient, WriteLocal]
 
@@ -167,6 +167,34 @@ checkSyms l m g ok x t = efoldRType h f F.emptySEnv [] t
     --                                   pp "errors"
 
 
+-------------------------------------------------------------------------------
+validateTFun :: IsLocated l => l -> CGEnv -> RefType -> CGM ()
+-------------------------------------------------------------------------------
+validateTFun l g = maybe (return ()) (validateFSigs l g) . bkFuns
+
+-------------------------------------------------------------------------------
+validateFSigs :: IsLocated l => l -> CGEnv -> [OverloadSig F.Reft] -> CGM ()
+-------------------------------------------------------------------------------
+validateFSigs l g = mapM_ (validateFSig l g)
+
+
+-------------------------------------------------------------------------------
+validateFSig :: IsLocated l => l -> CGEnv -> OverloadSig F.Reft -> CGM  ()
+-------------------------------------------------------------------------------
+validateFSig l g (bvs, bs, t) = do
+    forM_ bvEs cgError
+    forM_ tyEs cgError
+  where
+    validateTy ok t = checkSyms l "validateFSig" g ok t
+    bvEs  = concatMap (validateTy ([] :: [F.Symbol])) (catMaybes (map btv_constr bvs))
+    tyEs  = concatMap (validateTy bSyms) (map b_type bs ++ [t])
+    bSyms = map b_sym bs
+
+
+
+-------------------------------------------------------------------------------
+-- | Environment initialization
+-------------------------------------------------------------------------------
 
 -- | `initClassCtorEnv` makes `this` a Unique & Uninitialized binding
 -------------------------------------------------------------------------------
@@ -332,7 +360,7 @@ envAddGroup l msg ks g0 xts
         g1          <- foldM addFixpointBind g0 es
         return       $ g1 { cge_names = envAdds (zip xs es) (cge_names g1) }
   where
-    errors           = concat (zipWith (checkSyms l msg g0 ks) xs ts)
+    errors           = concat (zipWith (\x -> checkSyms l msg g0 (x:ks)) xs ts)
 
     (xs,ls,as,is,ts) = L.unzip5 [(x, loc, a, i, strOr a x t) | SI x loc a i t <- xts ]
 

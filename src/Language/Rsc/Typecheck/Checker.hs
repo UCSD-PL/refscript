@@ -29,7 +29,6 @@ import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.CmdLine               (Config, noFailCasts)
 import           Language.Rsc.Core.EitherIO
-import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
@@ -371,42 +370,46 @@ tcStmt _ s
 --------------------------------------------------------------------------------
 tcVarDecl :: Unif r => TCEnv r -> VarDecl (AnnTc r) -> TCM r (VarDecl (AnnTc r), TCEnvO r)
 --------------------------------------------------------------------------------
-tcVarDecl γ v@(VarDecl l x (Just e))
-  = case envFindTy x (tce_names γ) of
+tcVarDecl γ v@(VarDecl l x (Just e)) =
+  case varDeclSymbol v of
+    Left err -> tcError err
+
+    Right Nothing ->
       -- Local (no type annotation)
-      Nothing ->
         do  (e', to) <- tcExprW γ e
             sio      <- pure (SI (F.symbol x) Local WriteLocal Initialized <$> to)
             return (VarDecl l x (Just e'), tcEnvAddo γ x sio)
 
       -- Local (with type annotation)
-      Just (SI y lc WriteLocal _ t) ->
+    Right (Just (SI y lc WriteLocal _ t)) ->
         do  (e', t') <- tcExprT γ e t
             return ( VarDecl l x $ Just e'
                    , Just $ tcEnvAdd x (SI y lc WriteLocal Initialized t') γ)
 
       -- Global
-      Just (SI _ _ WriteGlobal _ t) ->
+    Right (Just s@(SI _ _ WriteGlobal _ t)) ->
         -- PV: the global variable should be in scope already,
         --     since it is being hoisted to the beginning of the
         --     scope.
         do  (e', _)  <- tcExprT γ e t
-            return    $ (VarDecl l x (Just e'), Just γ)
+            return    $ (VarDecl l x (Just e'), Just $ tcEnvAdd x s γ)
 
       -- ReadOnly
-      Just (SI y lc RdOnly _ t) ->
+    Right (Just (SI y lc RdOnly _ t)) ->
         do  ([e'], Just t') <- tcNormalCallWCtx γ l (builtinOpId BIExprT) [(e, Just t)] (idTy t)
             return ( VarDecl l x $ Just e'
                    , Just $ tcEnvAdd x (SI y lc RdOnly Initialized t') γ)
 
-      c -> fatal (unimplemented l "tcVarDecl" ("case: " ++ ppshow c)) (v, Just γ)
+    c -> fatal (unimplemented l "tcVarDecl" ("case: " ++ ppshow c)) (v, Just γ)
 
-tcVarDecl γ v@(VarDecl l x Nothing)
-  = case envFindTy x (tce_names γ) of
-      Just (SI y lc Ambient _ t) ->
+tcVarDecl γ v@(VarDecl l x Nothing) =
+  case varDeclSymbol v of
+    Left err -> tcError err
+
+    Right (Just (SI y lc Ambient _ t)) ->
           return $ (v, Just $ tcEnvAdds [(x, SI y lc Ambient Initialized t)] γ)
-      _ -> fatal (bug l "TC-tcVarDecl: this shouldn't happen") (v, Just γ)
 
+    Right _ -> fatal (bug l "TC-tcVarDecl: this shouldn't happen") (v, Just γ)
 
 --------------------------------------------------------------------------------
 tcStaticClassElt
@@ -977,9 +980,7 @@ tcNormalCall :: Unif r
              -> RType r -> TCM r ([ExprSSAR r], RType r)
 --------------------------------------------------------------------------------
 tcNormalCall γ l fn etos ft0
-  -- = do ets <- ltracePP l (ppshow fn ++ "  " ++ ppshow etos) <$> T.mapM (uncurry (tcExpr γ)) etos
   = do ets <- T.mapM (uncurry (tcExpr γ)) etos
-       -- z   <- ltracePP l ("resolved " ++ ppshow fn ++ " with " ++ ppshow ets) <$> resolveOverload γ l fn ets ft0
        z   <- resolveOverload γ l fn ets ft0
        case z of
          Just (i, θ, ft) ->

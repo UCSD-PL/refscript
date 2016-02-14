@@ -13,7 +13,7 @@ module Language.Rsc.Annotations (
 
   , SyntaxKind(..)
 
-  , scrapeVarDecl
+  , varDeclAnnots
 
   -- * Annotations & aliases
   , Annot (..)
@@ -146,15 +146,14 @@ type Var r = Id (AnnSSA r)
 phiVarsAnnot l = [ x | PhiVar x <- fFact l]
 
 
--- | scrapeVarDecl: Scrape a variable declaration for annotations
+-- | varDeclAnnots: Scrape a variable declaration for annotations
 ----------------------------------------------------------------------------------
-scrapeVarDecl :: VarDecl (AnnSSA r) -> [(Locality, SyntaxKind, Assignability, Maybe (RType r))]
+varDeclAnnots :: VarDecl (AnnSSA r) -> [(Locality, SyntaxKind, Assignability, Maybe (RType r))]
 ----------------------------------------------------------------------------------
-scrapeVarDecl (VarDecl l _ _)
+varDeclAnnots (VarDecl l _ _)
   = [ (loc, VarDeclKind, a, t)                | VarAnn loc a t         <- fFact l ]
  ++ [ (Local, FieldDeclKind, Ambient, Just t) | MemberAnn (FI _ _ _ t) <- fFact l ]
  -- PV: Assignability & Locality values are default for the field case
-
 
 --------------------------------------------------------------------------------
 enableUnique :: Functor f => f (FAnnQ q r) -> f (FAnnQ q r)

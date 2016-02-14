@@ -25,15 +25,19 @@ module Language.Rsc.Symbols (
   -- * Special symbols
   , mkArgumentsSI
 
+  -- * Extraction
+  , varDeclSymbol
+
 ) where
 
-import           Control.Exception            (throw)
+import           Control.Exception              (throw)
 import           Data.Generics
-import           Data.List                    (findIndex)
-import qualified Data.Map.Strict              as M
-import           Data.Maybe                   (fromMaybe)
-import           Language.Fixpoint.Misc       (safeZip)
-import qualified Language.Fixpoint.Types      as F
+import           Data.List                      (findIndex)
+import qualified Data.Map.Strict                as M
+import           Data.Maybe                     (fromMaybe)
+import           Language.Fixpoint.Misc         (safeZip)
+import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
@@ -123,6 +127,20 @@ symbols s = SL [ (fSrc <$> n, k, SI (F.symbol n) loc a i t)
     annToType (VarAnn     l _ (Just t)) = [(l, t)]              -- Variables
     annToType (ModuleAnn  l q         ) = [(l, TMod q)]         -- Modules
     annToType _                         = [ ]
+
+
+--------------------------------------------------------------------------------
+varDeclSymbol :: VarDecl (AnnR r) -> Either Error (Maybe (SymInfo r))
+--------------------------------------------------------------------------------
+varDeclSymbol (VarDecl l x eo) =
+    case syms of
+      [ ] -> Right Nothing
+      [s] -> Right (Just s)
+      _   -> Left (errorMultipleVarDeclAnns l x)
+  where
+    syms = [SI (F.symbol x) loc a init t | VarAnn loc a (Just t) <- fFact l]
+    init | Just _ <- eo = Initialized
+         | otherwise    = Uninitialized
 
 
 --------------------------------------------------------------------------------

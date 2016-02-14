@@ -329,3 +329,5 @@ bugArrayBIType l f t          = mkErr l $ printf "[BUG] Inconsistent built-in ar
 errorBoundSubt l v t          = mkErr l $ printf "Could not find a valid instantiation to satisfy the bound of '%s': '%s'" (ppshow v) (ppshow t)
 errorVarDecl l x t e s        = mkErr l $ printf "Expression '%s' of type '%s' cannot be assigned to variable '%s' with expected type '%s'" (ppshow e) (ppshow s) (ppshow x) (ppshow t)
 
+errorMultipleVarDeclAnns l x  = mkErr l $ show $ text "Cannot have multple variable declaration annotations for variable" <+> ticks (pp x) <> text "."
+

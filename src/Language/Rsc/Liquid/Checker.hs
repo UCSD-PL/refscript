@@ -17,6 +17,7 @@ import qualified Data.HashMap.Strict             as HM
 import           Data.List                       (partition, sortBy)
 import           Data.Maybe                      (fromMaybe)
 import qualified Data.Text                       as T
+import qualified Data.Traversable                as TR
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Solver        (solve)
 import qualified Language.Fixpoint.Types         as F
@@ -240,13 +241,13 @@ initCallableEnv :: (PP x, IsLocated x)
                 -> [Statement (AnnR F.Reft)]
                 -> CGM CGEnv
 --------------------------------------------------------------------------------
-initCallableEnv l g f fty xs s
-  = do  g1 <- freshenCGEnvM g0
-        g2 <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-0") params g1
-        g3 <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-1") [arg] g2
-        return g3
+initCallableEnv l g f fty xs s = do
+    g0    <- pure (CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId)
+    g1    <- freshenCGEnvM g0
+    g2    <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-0") params g1
+    g3    <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-1") [arg] g2
+    return g3
   where
-    g0     = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
              -- No FP binding for these
     nms    = toFgn (envNames g)
            & mappend (symEnv s)
@@ -453,45 +454,55 @@ consStmt _ s
 --------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnLq -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
-consVarDecl g (VarDecl l x (Just e))
-  = case envFindTy x (cge_names g) of
+consVarDecl g v@(VarDecl l x (Just e)) =
+  case varDeclSymbol v of
+
+    Left err -> cgError err
+
       -- Local (no type annotation)
-      Nothing ->
+    Right Nothing ->
         mseq (consExpr g e Nothing) $ \(y,gy) -> do
           eT      <- cgSafeEnvFindTyM y gy
           Just   <$> cgEnvAdds l "cvd" [SI (F.symbol x) Local WriteLocal Initialized eT] gy
 
-      Just s@(SI _ _ WriteLocal  _ _) -> go s
-      Just s@(SI _ _ WriteGlobal _ _) -> go s
-      Just s@(SI _ _ RdOnly      _ _) -> go s
-      Just   (SI _ _ _           _ _) -> cgError $ errorVarDeclAnnot (srcPos l) x
+    Right (Just s@(SI _ _ WriteLocal  _ _)) -> go s
+    Right (Just s@(SI _ _ WriteGlobal _ _)) -> go s
+    Right (Just s@(SI _ _ RdOnly      _ _)) -> go s
+    Right (Just   (SI _ _ _           _ _)) -> cgError $ errorVarDeclAnnot (srcPos l) x
+
   where
-  go (SI n lc a _ t) = (freshenTypeOpt g l t) >>= \case
-      Just fta ->
-        if onlyCtxTyped e then
-            fmap snd <$> consExpr g e (Just t)
-        else
-            mseq (consExpr g e (Just fta)) $ \(y,gy) -> do
-              eT      <- cgSafeEnvFindTyM y gy
-              _       <- subType l Nothing gy eT fta
-              _       <- subType l Nothing gy fta t
-              Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized fta] gy
 
-      Nothing ->
-        if onlyCtxTyped e then
-            fmap snd <$> consExpr g e (Just t)
-        else
-            mseq (consExpr g e (Just t)) $ \(y,gy) -> do
-              eT      <- cgSafeEnvFindTyM y gy
-              _       <- subType l Nothing gy eT t
-              Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized t] gy
+    go (SI n lc a _ t) = (freshenTypeOpt g l t) >>= \case
+        Just fta ->
+          if onlyCtxTyped e then do
+              g' <- fmap snd <$> consExpr g e (Just t)
+              TR.mapM (cgEnvAdds l "consVarDecl" [SI n lc a Initialized fta]) g'
+          else
+              mseq (consExpr g e (Just fta)) $ \(y,gy) -> do
+                eT      <- cgSafeEnvFindTyM y gy
+                _       <- subType l Nothing gy eT fta
+                _       <- subType l Nothing gy fta t
+                Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized fta] gy
+
+        Nothing ->
+          if onlyCtxTyped e then do
+              g' <- fmap snd <$> consExpr g e (Just t)
+              TR.mapM (cgEnvAdds l "consVarDecl" [SI n lc a Initialized t]) g'
+          else
+              mseq (consExpr g e (Just t)) $ \(y,gy) -> do
+                eT      <- cgSafeEnvFindTyM y gy
+                _       <- subType l Nothing gy eT t
+                Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized t] gy
 
 
-consVarDecl g (VarDecl l x Nothing)
-  = case envFindTy x (cge_names g) of
-      Just (SI n lc Ambient _ t) ->
-          Just <$> cgEnvAdds l "consVarDecl" [SI n lc Ambient Initialized t] g
-      _ ->   -- The rest should have fallen under the 'undefined' initialization case
+consVarDecl g v@(VarDecl l _ Nothing) =
+  case varDeclSymbol v of
+    Left err -> cgError err
+
+    Right (Just (SI n lc Ambient _ t)) ->
+        Just <$> cgEnvAdds l "consVarDecl" [SI n lc Ambient Initialized t] g
+
+    _ ->   -- The rest should have fallen under the 'undefined' initialization case
           error "LQ: consVarDecl this shouldn't happen"
 
 

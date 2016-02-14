@@ -295,7 +295,10 @@ hoistBindings = snd . visitStmts vs ()
     acs _ (EnumStmt     a x _         ) = [(x, a, EnumDeclKind  , RdOnly , Initialized)]
     acs _ _                             = []
 
-    acv _ (VarDecl l n ii)              = [(n, l, VarDeclKind, varAsgn l, inited l ii)]
+    acv _ _                             = []
+
+    -- PV: these are block-scoped now - they don't get lifted.
+    -- acv _ (VarDecl l n ii)              = [(n, l, VarDeclKind, varAsgn l, inited l ii)]
 
     inited l _        | any isAmbient (fFact l)
                       = Initialized

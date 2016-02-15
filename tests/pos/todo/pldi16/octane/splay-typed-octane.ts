@@ -33,34 +33,36 @@
 // also has to deal with a lot of changes to the large tree object
 // graph.
 
-/*@ alias MSplayTree     = SplayTree<Mutable>     */
-/*@ alias MSplayTreeNode = SplayTreeNode<Mutable> */
 
 module SplayVERSION {
 
+    declare type MSplayTree = SplayTree<Mutable>
+    declare type MSplayTreeNode = SplayTreeNode<Mutable>
+
     // Configuration.
-    /*@ readonly kSplayTreeSize :: # */
-    var kSplayTreeSize = 8000;
-    /*@ readonly kSplayTreeModifications :: # */
-    var kSplayTreeModifications = 80;
-    /*@ readonly kSplayTreePayloadDepth :: # */
-    var kSplayTreePayloadDepth = 5;
+    /*@ readonly kSplayTreeSize :: number */
+    let kSplayTreeSize = 8000;
+    /*@ readonly kSplayTreeModifications :: number */
+    let kSplayTreeModifications = 80;
+    /*@ readonly kSplayTreePayloadDepth :: number */
+    let kSplayTreePayloadDepth = 5;
 
     /*@ splayTree :: MSplayTree + null */
-    var splayTree:SplayTree = null;
+    let splayTree:MSplayTree = null;
 
-
-    function GeneratePayloadTree(depth:number, tag:string) {
+    function GeneratePayloadTree(depth:number, tag:string):any {
         if (depth === 0) {
             return <any>{
                 array: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
                 string: 'String for key ' + tag + ' in leaf node'
             };
         } else {
-            return {
-                left: GeneratePayloadTree(depth - 1, tag),
-                right: GeneratePayloadTree(depth - 1, tag)
-            };
+            return 3;
+            //PORT TODO
+            // return {
+            //     left: GeneratePayloadTree(depth - 1, tag),
+            //     right: GeneratePayloadTree(depth - 1, tag)
+            // };
         }
     }
 
@@ -73,14 +75,14 @@ module SplayVERSION {
 
 
     function InsertNewNode() {
-        var tree = splayTree;
+        let tree = splayTree;
         if (!tree) throw new Error('splayTree is null! did you forget to call SplaySetup?');
         // Insert new node with a unique key.
-        var key = GenerateKey();
+        let key = GenerateKey();
         while (tree.find(key) !== null) {
             key = GenerateKey();
         }
-        var payload = GeneratePayloadTree(kSplayTreePayloadDepth, String(key));
+        let payload = GeneratePayloadTree(kSplayTreePayloadDepth, String(key));
         tree.insert(key, payload);
         return key;
     }
@@ -89,27 +91,27 @@ module SplayVERSION {
 
     export function SplaySetup() {
         splayTree = new SplayTree();
-        for (var i = 0; i < kSplayTreeSize; i++) InsertNewNode();
+        for (let i = 0; i < kSplayTreeSize; i++) InsertNewNode();
     }
 
 
     export function SplayTearDown() {
-        var tree = splayTree;
+        let tree = splayTree;
         if (!tree) throw new Error('splayTree is null! did you forget to call SplaySetup?');
         // Allow the garbage collector to reclaim the memory
         // used by the splay tree no matter how we exit the
         // tear down function.
-        var keys = tree.exportKeys();
+        let keys = tree.exportKeys();
         splayTree = null;
 
         // Verify that the splay tree has the right size.
-        var length = keys.length;
+        let length = keys.length;
         if (length !== kSplayTreeSize) {
             throw new Error("Splay tree has wrong size");
         }
 
         // Verify that the splay tree has sorted, unique keys.
-        for (var i = 0; i < length - 1; i++) {
+        for (let i = 0; i < length - 1; i++) {
             if (keys[i] >= keys[i + 1]) {
                 throw new Error("Splay tree not sorted");
             }
@@ -118,13 +120,13 @@ module SplayVERSION {
 
 
     export function SplayRun() {
-        var tree = splayTree;
+        let tree = splayTree;
         if (!tree) throw new Error('splayTree is null! did you forget to call SplaySetup?');
         // Replace a few nodes in the splay tree.
-        for (var i = 0; i < kSplayTreeModifications; i++) {
+        for (let i = 0; i < kSplayTreeModifications; i++) {
             console.log(".");
-            var key = InsertNewNode();
-            var greatest = tree.findGreatestLessThan(key);
+            let key = InsertNewNode();
+            let greatest = tree.findGreatestLessThan(key);
             if (!greatest) tree.remove(key);
             else tree.remove(greatest.key);
         }
@@ -140,7 +142,7 @@ module SplayVERSION {
      *
      * @constructor
      */
-    class SplayTree {
+    class SplayTree<M extends ReadOnly> {
         constructor() {}
 
         /**
@@ -150,7 +152,7 @@ module SplayVERSION {
          * @private
          */
         /*@ root_ : MSplayTreeNode + null */
-        private root_ : SplayTreeNode = null;
+        private root_ : MSplayTreeNode = null;
 
 
         /**
@@ -169,9 +171,9 @@ module SplayVERSION {
          * @param {number} key Key to insert into the tree.
          * @param {*} value Value to insert into the tree.
          */
-        /*@ insert : (this:MSplayTree, key:number, value:top) : void */
+        /*@ @Mutable insert (key:number, value:top) : void */
         public insert(key:number, value) {
-            var root = this.root_;
+            let root = this.root_;
             if (!root) {
                 this.root_ = new SplayTreeNode(key, value);
                 return;
@@ -184,15 +186,15 @@ module SplayVERSION {
             if (root.key === key) {
                 return;
             }
-            var node = new SplayTreeNode(key, value);
+            let node = <MSplayTreeNode>(new SplayTreeNode(key, value));
             if (key > root.key) {
                 node.left = root;
                 node.right = root.right;
-                (<SplayTreeNode>root).right = null;
+                (<MSplayTreeNode>root).right = null;
             } else {
                 node.right = root;
                 node.left = root.left;
-                (<SplayTreeNode>root).left = null;
+                (<MSplayTreeNode>root).left = null;
             }
             this.root_ = node;
         }
@@ -206,9 +208,9 @@ module SplayVERSION {
          * @param {number} key Key to find and remove from the tree.
          * @return {SplayTree.Node} The removed node.
          */
-        /*@ remove : (this:MSplayTree, key:number) : MSplayTreeNode */
+        /*@ @Mutable remove (key:number) : MSplayTreeNode */
         public remove(key) {
-            var root = this.root_;
+            let root = this.root_;
             if (!root) {
                 throw new Error('Key not found: ' + key);
             }
@@ -218,11 +220,11 @@ module SplayVERSION {
             if (root.key !== key) {
                 throw new Error('Key not found: ' + key);
             }
-            var removed = root;
+            let removed = root;
             if (!root.left) {
                 this.root_ = root.right;
             } else {
-                var right = root.right;
+                let right = root.right;
                 this.root_ = root.left;
                 // Splay to make sure that the new root has an empty right child.
                 this.splay_(key);
@@ -230,7 +232,7 @@ module SplayVERSION {
                 // root.
                 root = this.root_;
                 if (!root) throw new Error('This check should never fail'); 
-                (<SplayTreeNode>root).right = right;
+                (<MSplayTreeNode>root).right = right;
             }
             return removed;
         }
@@ -243,9 +245,9 @@ module SplayVERSION {
          * @param {number} key Key to find in the tree.
          * @return {SplayTree.Node} Node having the specified key.
          */
-        /*@ find : (this:MSplayTree, key:number) : MSplayTreeNode + null */
+        /*@ @Mutable find (key:number) : MSplayTreeNode + null */
         public find(key) {
-            var root = this.root_;
+            let root = this.root_;
             if (!root) {
                 return null;
             }
@@ -259,14 +261,14 @@ module SplayVERSION {
         /**
          * @return {SplayTree.Node} Node having the maximum key value.
          */
-        /*@ findMax : (opt: MSplayTreeNode + null) : MSplayTreeNode + null */
+        /*@ findMax (opt: MSplayTreeNode + null) : MSplayTreeNode + null */
         public findMax(opt_startNode) {
-            var root = this.root_;
+            let root = this.root_;
             if (!root) {
                 return null;
             }
-            var current = opt_startNode || root;
-            var right = current.right;
+            let current = root //PORT TODO opt_startNode || root;
+            let right = current.right;
             while (right) {
                 current = right;
                 right = current.right;
@@ -279,9 +281,9 @@ module SplayVERSION {
          * @return {SplayTree.Node} Node having the maximum key value that
          *     is less than the specified key value.
          */
-        /*@ findGreatestLessThan : (this:MSplayTree, key: number) : MSplayTreeNode + null */
+        /*@ @Mutable findGreatestLessThan (key: number) : MSplayTreeNode + null */
         public findGreatestLessThan(key) {
-            var root = this.root_;
+            let root = this.root_;
             if (!root) {
                 return null;
             }
@@ -307,14 +309,14 @@ module SplayVERSION {
          */
         public exportKeys() {
             /*@ result :: MArray<number> */
-            var result:number[] = [];
-            var root = this.root_;
+            let result:number[] = [];
+            let root = this.root_;
+            /*@ f :: (MSplayTreeNode) => void */ 
+            let f = function (node) { result.push(node.key); }
             if (root) {
-                root.traverse_(function (node)
-                    /*@ <anonymous> (MSplayTreeNode) => void */ 
-                    { result.push(node.key); });
+                root.traverse_(f);
             }
-            return result;
+            return <MArray<number>>result;
         }
 
 
@@ -328,9 +330,9 @@ module SplayVERSION {
          * @param {number} key Key to splay the tree on.
          * @private
          */
-        /*@ splay_ : (this:MSplayTree, key:number) : void */
+        /*@ @Mutable splay_ (key:number) : void */
         public splay_(key) {
-            var root = this.root_;
+            let root = this.root_;
             if (!root) {
                 return;
             }
@@ -340,20 +342,20 @@ module SplayVERSION {
             // will hold the R tree of the algorithm.  Using a dummy node, left
             // and right will always be nodes and we avoid special cases.
             /*@ dummy :: MSplayTreeNode */
-            var dummy:SplayTreeNode=new SplayTreeNode(-1, null);
-            var left:SplayTreeNode=dummy;
-            var right:SplayTreeNode=dummy;
-            var current = <SplayTreeNode>root;
-            var shouldBreak = false;
+            let dummy:MSplayTreeNode=new SplayTreeNode(-1, null);
+            let left:MSplayTreeNode=dummy;
+            let right:MSplayTreeNode=dummy;
+            let current = <MSplayTreeNode>root;
+            let shouldBreak = false;
             while (!shouldBreak) {
                 if (key < current.key) {
-                    var currleft = current.left;
+                    let currleft = current.left;
                     if (!currleft) {
                         shouldBreak = true;
                     } else {
                         if (key < currleft.key) {
                             // Rotate right.
-                            var tmp = <SplayTreeNode>currleft;
+                            let tmp = <MSplayTreeNode>currleft;
                             current.left = tmp.right;
                             tmp.right = current;
                             current = tmp;
@@ -365,17 +367,17 @@ module SplayVERSION {
                             // Link right.
                             right.left = current;
                             right = current;
-                            current = <SplayTreeNode>currleft;
+                            current = <MSplayTreeNode>currleft;
                         }
                     }
                 } else if (key > current.key) {
-                    var currright = current.right;
+                    let currright = current.right;
                     if (!currright) {
                         shouldBreak = true;
                     } else {
                         if (key > currright.key) {
                             // Rotate left.
-                            var tmp = <SplayTreeNode>currright;
+                            let tmp = <MSplayTreeNode>currright;
                             current.right = tmp.left;
                             tmp.left = current;
                             current = tmp;
@@ -387,7 +389,7 @@ module SplayVERSION {
                             // Link left.
                             left.right = current;
                             left = current;
-                            current = <SplayTreeNode>currright;
+                            current = <MSplayTreeNode>currright;
                         }
                     }
                 } else {
@@ -409,7 +411,7 @@ module SplayVERSION {
      * @param {number} key Key.
      * @param {*} value Value.
      */
-    class SplayTreeNode {
+    class SplayTreeNode<M extends ReadOnly> {
         public key:number;
         public value;
         constructor(key:number, value) { this.key = key; this.value = value; }
@@ -418,14 +420,14 @@ module SplayVERSION {
          * @type {SplayTree.Node}
          */
         /*@ left : MSplayTreeNode + null */
-        public left : SplayTreeNode = null;
+        public left : MSplayTreeNode = null;
 
 
         /**
          * @type {SplayTree.Node}
          */
         /*@ right : MSplayTreeNode + null */
-        public right : SplayTreeNode = null;
+        public right : MSplayTreeNode = null;
 
 
         /**
@@ -435,12 +437,12 @@ module SplayVERSION {
          * @param {function(SplayTree.Node)} f Visitor function.
          * @private
          */
-        /*@ traverse_ : (this: MSplayTreeNode, f: (arg:MSplayTreeNode) => top) : void */
-        public traverse_(f : (arg:SplayTreeNode) => any) {
+        /*@ traverse_ (f: (arg:MSplayTreeNode) => top) : void */
+        public traverse_(f : (arg:MSplayTreeNode) => any) {
             /*@ local current :: MSplayTreeNode + null */
-            var current = this;
+            let current = this;
             while (current) {
-                var left = current.left;
+                let left = current.left;
                 if (left) left.traverse_(f);
                 f(current);
                 current = current.right;

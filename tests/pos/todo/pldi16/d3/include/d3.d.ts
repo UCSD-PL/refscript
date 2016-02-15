@@ -58,22 +58,22 @@ declare module D3 {
 //        };
 //    }
 //
-    export interface D3Event extends Event {
-        dx: number;
-        dy: number;
-        clientX: number;
-        clientY: number;
-        translate: number[];
-        scale: number;
-        sourceEvent: D3Event;
-        x: number;
-        y: number;
-        keyCode: number;
-        altKey: any;
-        type: string;
-    }
+    // export interface D3Event extends Event {
+    //     dx: number;
+    //     dy: number;
+    //     clientX: number;
+    //     clientY: number;
+    //     translate: number[];
+    //     scale: number;
+    //     sourceEvent: D3Event;
+    //     x: number;
+    //     y: number;
+    //     keyCode: number;
+    //     altKey: any;
+    //     type: string;
+    // }
 
-    export interface Base { // extends Selectors {
+    export interface Base<M extends ReadOnly> { // extends Selectors {
 //         /**
 //         * Create a behavior
 //         */
@@ -81,7 +81,7 @@ declare module D3 {
         /**
         * Access the current user event for interaction
         */
-        event: D3Event;
+        // event: D3Event;
 
         /**
         * Compare two values for sorting.
@@ -90,12 +90,10 @@ declare module D3 {
         * @param a First value
         * @param b Second value
         */
-        /*@ ascending : 
-            /\ (a: number, b: number) => { number | [ (a < b => v = -1);
+        /*@ ascending : (a: number, b: number) => { number | [ (a < b => v = -1);
                                                       (a = b => v =  0);
-                                                      (a > b => v =  1)] }
-            /\ forall T . (T,T) => {number | 0 < 1}
-         */
+                                                      (a > b => v =  1)] } */
+        /*@ ascending : <T> . (T,T) => {number | 0 < 1} */
         ascending<T>(a: T, b: T): number;
 
         /**
@@ -109,7 +107,7 @@ declare module D3 {
             /\ (a: number, b: number) => { number | [ (a > b => v = -1);
                                                       (a = b => v =  0);
                                                       (a < b => v =  1)] }
-            /\ forall T . (T,T) => {number | 0 < 1}
+            /\ <T> (T,T) => {number | 0 < 1}
          */
         descending<T>(a: T, b: T): number;
 
@@ -119,14 +117,14 @@ declare module D3 {
         * @param arr Array to search
         * @param map Accsessor function
         */
-        /*@ min : forall T U . (arr: IArray<T>, f: (T, number) => U) => { U | 0 < 1 } */
+        /*@ min : <T,U> (arr: IArray<T>, f: (T, number) => U) => { U | 0 < 1 } */
         min<T, U>(array: T[], f: (x:T, i:number) => U): U;
         /**
         * Find the minimum value in an array
         *
         * @param arr Array to search
         */
-        /*@ min : forall T . (arr: IArray<T>) => { T | 0 < 1 } */
+        /*@ min : <T> (arr: IArray<T>) => { T | 0 < 1 } */
         min<T>(array: T[]): T;
         
         /**
@@ -135,7 +133,7 @@ declare module D3 {
         * @param arr Array to search
         * @param map Accsessor function
         */
-        /*@ max : forall T U . (arr: IArray<T>, f: (T, number) => U) => { U | 0 < 1 } */
+        /*@ max : <T,U> (arr: IArray<T>, f: (T, number) => U) => { U | 0 < 1 } */
         max<T, U>(array: T[], f: (v: T) => U): U;
 
         /**
@@ -143,7 +141,7 @@ declare module D3 {
         *
         * @param arr Array to search
         */
-        /*@ max : forall T . (arr: IArray<T>) => { T | 0 < 1 } */
+        /*@ max : <T> (arr: IArray<T>) => { T | 0 < 1 } */
         max<T>(array: T[]): number;
         /**
         * Find the minimum and maximum value in an array
@@ -151,14 +149,14 @@ declare module D3 {
         * @param arr Array to search
         * @param map Accsessor function
         */
-        /*@ extent : forall T U . ({IArray<T> | 0 < len v}, f: (x:T, i:number) => U) => #pair[U] */
+        /*@ extent : <T,U> ({IArray<T> | 0 < len v}, f: (x:T, i:number) => U) => #pair[U] */
         extent<T, U>(arr: T[], map: (v: T) => U): U[];
         /**
         * Find the minimum and maximum value in an array
         *
         * @param arr Array to search
         */
-        /*@ extent : forall T . ({IArray<T> | 0 < len v}) => #pair[T] */
+        /*@ extent : <T> ({IArray<T> | 0 < len v}) => #pair[T] */
         extent<T>(arr: T[]): T[];
         /**
         * Compute the sum of an array of numbers
@@ -257,7 +255,7 @@ declare module D3 {
         *
         * @param arr Array to randomize
         */
-        /*@ shuffle : forall T . (arr: IArray<T>) => {IArray<T> | 0 < 1} */
+        /*@ shuffle : <T> (arr: IArray<T>) => {IArray<T> | 0 < 1} */
         shuffle<T>(arr: T[]): T[];
         /**
         * Reorder an array of elements according to an array of indexes
@@ -265,7 +263,7 @@ declare module D3 {
         * @param arr Array to reorder
         * @param indexes Array containing the order the elements should be returned in
         */
-        /*@ permute : forall T . (array: IArray<T>, 
+        /*@ permute : <T> (array: IArray<T>, 
                                   indexes: IArray<#idx[array]>) 
                               => { IArray<T> | (len v) = (len indexes) } */
         permute(arr: any[], indexes: any[]): any[];
@@ -304,21 +302,21 @@ declare module D3 {
         * @param map Array of objects to get the values from
         */
 
-        /*@ values : forall T . (map: [Immutable]{[k:string]:T}) => {MArray<T> | 0 < 1} */
+        /*@ values : <T> (map: [Immutable]{[k:string]:T}) => {MArray<T> | 0 < 1} */
         values<T>(map:{[k:string]:T}): T[];
         /**
         * List the key-value entries of an associative array.
         *
         * @param map Array of objects to get the key-value pairs from
         */
-        /*@ entries : forall T . ([Immutable]{[k:string]:T}) => {MArray<{key:string; value:T}> | 0 < 1} */ 
+        /*@ entries : <T> ([Immutable]{[k:string]:T}) => {MArray<{key:string; value:T}> | 0 < 1} */ 
         entries<T>(map: {[k:string]:T}): {key:string; value:T}[];
         /**
         * merge multiple arrays into one array
         *
         * @param map Arrays to merge
         */
-        /*@ merge : forall T . (map: IArray<IArray<T>>) => {IArray<T> | 0 < 1} */
+        /*@ merge : <T> (map: IArray<IArray<T>>) => {IArray<T> | 0 < 1} */
         merge<T>(map: T[][]): T[];
 
         /**
@@ -602,7 +600,7 @@ declare module D3 {
 //        functor<R,T>(value: (p : R) => T): (p : R) => T;
 //        functor<T>(value: T): (p : any) => T;
 
-        map(object?: any): Map;
+        map(object?: any): Map<M>;
 //        set(array?: Array<any>): Set;
 //        dispatch(...types: Array<string>): Dispatch;
 //        rebind(target: any, source: any, ...names: Array<any>): any;
@@ -903,14 +901,14 @@ declare module D3 {
 //        entries(values: any[]): NestKeyValue[];
 //    }
 
-    export interface Map {
+    export interface Map<M extends ReadOnly> {
         has(key: string): boolean;
         get(key: string): any;
         set<T>(key: string, value: T): T;
         remove(key: string): boolean;
-        keys(): Array<string>;
-        values(): Array<any>;
-        entries(): Array<any>;
+        keys(): Array<M, string>;
+        values(): Array<M, any>;
+        entries(): Array<M, any>;
         forEach(func: (key: string, value: any) => void ): void;
     }
 
@@ -3416,5 +3414,5 @@ declare module D3 {
 }
 
 /*@ d3 :: D3.Base<Mutable> */
-declare var d3:   D3.Base;
+declare let d3:   D3.Base<Mutable>;
 

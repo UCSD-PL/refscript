@@ -30,13 +30,13 @@
 
 module NavierStokes {
     /*@ solver :: {v:FluidField<Mutable> | offset(v,"width") = 128 && offset(v,"height") = 128} + null */
-    var solver:FluidField = null;
+    let solver:FluidField<Mutable> = null;
     /*@ nsFrameCounter :: number */
-    var nsFrameCounter = 0;
+    let nsFrameCounter = 0;
 
     export function runNavierStokes()
     {
-        var solverRO /*@ readonly */ = solver;
+        let solverRO /*@ readonly */ = solver;
         if (!solverRO) throw new Error("solver is null! did you forget to call setupNavierStokes first?");
         solverRO.update();
         nsFrameCounter++;
@@ -48,10 +48,10 @@ module NavierStokes {
     /*@ checkResult :: ({v:IArray<number> | (len v) = (128+2) * (128+2)}) => void */
     function checkResult(dens) {
     
-        var _lemma = mulThm130(130);
-        var result = 0;
-        for (var i=7000;i<7100;i++) {
-            result+=~~((dens[i]*10));
+        let _lemma = mulThm130(130);
+        let result = 0;
+        for (let i=7000;i<7100;i++) {
+            result = result + (dens[i]*10); //PORT TODO: result+=~~((dens[i]*10));
         }
 
         if (result!==74) {
@@ -61,10 +61,10 @@ module NavierStokes {
 
     export function setupNavierStokes()
     {
-        var _lemma = mulThm128(128);
-        var solverRO /*@ readonly */ = new FluidField(null, 128, 128);
+        let _lemma = mulThm128(128);
+        let solverRO /*@ readonly */ = new FluidField(null, 128, 128);
         solverRO.setIterations(20);
-        solverRO.setDisplayFunction(function(f:Field)
+        solverRO.setDisplayFunction(function(f:Field<Immutable>)
             /*@ <anonymous> (Field<Immutable>) => void */
             {});
         solverRO.setUICallback(prepareFrame);
@@ -78,9 +78,9 @@ module NavierStokes {
     }
 
     /*@ addPoints :: ({v:Field<Mutable> | offset(v,"w") = 128 && offset(v,"h") = 128}) => void */
-    function addPoints(field:Field) {
-        var n = 64;
-        for (var i = 1; i <= n; i++) {
+    function addPoints(field:Field<Mutable>) {
+        let n = 64;
+        for (let i = 1; i <= n; i++) {
             field.setVelocity(i, i, n, n);
             field.setDensity(i, i, 5);
             field.setVelocity(i, n - i, -n, -n);
@@ -91,12 +91,12 @@ module NavierStokes {
     }
 
     /*@ framesTillAddingPoints :: number */
-    var framesTillAddingPoints = 0;
+    let framesTillAddingPoints = 0;
     /*@ framesBetweenAddingPoints :: number */
-    var framesBetweenAddingPoints = 5;
+    let framesBetweenAddingPoints = 5;
 
     /*@ prepareFrame :: ({v:Field<Mutable> | offset(v,"w") = 128 && offset(v,"h") = 128}) => void */
-    function prepareFrame(field:Field)
+    function prepareFrame(field:Field<Mutable>)
     {
         if (framesTillAddingPoints === 0) {
             addPoints(field);
@@ -108,56 +108,54 @@ module NavierStokes {
     }
 
     // Code from Oliver Hunt (http://nerget.com/fluidSim/pressure.js) starts here.
-    export class FluidField {
-        /*@ width : [Immutable] pos */
+    export class FluidField<M extends ReadOnly> {
+        /*@ (Immutable) width : pos */
         private width;
-        /*@ height : [Immutable] pos */
+        /*@ (Immutable) height : pos */
         private height;
-        /*@ rowSize : [Immutable] {v:number | v = this.width + 2} */
+        /*@ (Immutable) rowSize : {v:number | v = this.width + 2} */
         private rowSize;
-        /*@ size : [Immutable] {v:number | v = (this.height+2) * (this.width+2)} */
+        /*@ (Immutable) size : {v:number | v = (this.height+2) * (this.width+2)} */
         private size;
-        /*@ dens :      [Immutable] {v:IArray<number> | (len v) = this.size} */
+        /*@ (Immutable) dens :      {v:IArray<number> | (len v) = this.size} */
         private dens;
-        /*@ dens_prev : [Immutable] {v:IArray<number> | (len v) = this.size} */
+        /*@ (Immutable) dens_prev : {v:IArray<number> | (len v) = this.size} */
         private dens_prev;
-        /*@ u :         [Immutable] {v:IArray<number> | (len v) = this.size} */
+        /*@ (Immutable) u :         {v:IArray<number> | (len v) = this.size} */
         private u;
-        /*@ u_prev :    [Immutable] {v:IArray<number> | (len v) = this.size} */
+        /*@ (Immutable) u_prev :    {v:IArray<number> | (len v) = this.size} */
         private u_prev;
-        /*@ v :         [Immutable] {v:IArray<number> | (len v) = this.size} */
+        /*@ (Immutable) v :         {v:IArray<number> | (len v) = this.size} */
         private v;
-        /*@ v_prev :    [Immutable] {v:IArray<number> | (len v) = this.size} */
+        /*@ (Immutable) v_prev :    {v:IArray<number> | (len v) = this.size} */
         private v_prev;
         private iters:number;
         private visc:number;
         private dt:number;
-        private displayFunc: (f:Field) => void;
+        private displayFunc: (f:Field<Immutable>) => void;
 
         /*@ uiCallback : ({v:Field<Mutable> | offset(v,"w") = this.width && offset(v,"h") = this.height}) => void */
-        private uiCallback = function(field:Field) 
-            /*@ <anonymous> (Field<Mutable>)=>void */ 
-            {};
+        private uiCallback;
 
         /*@ new (canvas:top, 
                  hRes:pos, 
-                 wRes:{v:pos | hRes * v < 1000000}) => {v:FluidField<M> | offset(v,"width") = wRes && offset(v,"height") = hRes} */
+                 wRes:{v:pos | hRes * v < 1000000}) : {v:FluidField<M> | offset(v,"width") = wRes && offset(v,"height") = hRes} */
         constructor(canvas, hRes, wRes) {
-            var width = wRes;
-            var height = hRes;
-            var size = (height+2) * (width+2);
+            let width = wRes;
+            let height = hRes;
+            let size = (height+2) * (width+2);
 
             this.width = width;
             this.height = height;
             this.rowSize = width + 2;
             this.size = size;
-            var dens      = new Array<number>(size);
-            var dens_prev = new Array<number>(size);
-            var u         = new Array<number>(size);
-            var u_prev    = new Array<number>(size);
-            var v         = new Array<number>(size);
-            var v_prev    = new Array<number>(size);
-            for (var i = 0; i < size; i++) {
+            let dens      = new Array<number>(size);
+            let dens_prev = new Array<number>(size);
+            let u         = new Array<number>(size);
+            let u_prev    = new Array<number>(size);
+            let v         = new Array<number>(size);
+            let v_prev    = new Array<number>(size);
+            for (let i = 0; i < size; i++) {
                 dens_prev[i] = 0; u_prev[i] = 0; v_prev[i] = 0; dens[i] = 0; u[i] = 0; v[i] = 0;
             }
             this.dens = dens;
@@ -171,88 +169,92 @@ module NavierStokes {
             this.visc = 1/2;//.
             this.dt = 1/10;//.
 
-            this.displayFunc = function(f:Field) 
+            this.displayFunc = function(f:Field<Immutable>) 
                 /*@ <anonymous> (Field<Immutable>)=>void */ 
                 {}; //ORIG: null
+
+            this.uiCallback = function(field:Field<Mutable>) 
+                /*@ <anonymous> (Field<Mutable>)=>void */ 
+                {};
         }
 
-            /*@ addFields : (x:{v:IArray<number> | (len v) = this.size}, 
+            /*@ addFields (x:{v:IArray<number> | (len v) = this.size}, 
                              s:{v:IArray<number> | (len v) = this.size}, 
                              dt:number) : void */
             addFields(x:number[], s:number[], dt:number)
             {
-                for (var i=0; i<this.size; i++) x[i] += dt*s[i];
+                for (let i=0; i<this.size; i++) x[i] = x[i] + dt*s[i]; //ORIG: +=
             }
 
-            /*@ set_bnd : (b:number, x:{v:IArray<number> | (len v) = this.size}) : void */
+            /*@ set_bnd (b:number, x:{v:IArray<number> | (len v) = this.size}) : void */
             set_bnd(b:number, x:number[])
             {
-                var width   = this.width;
-                var height  = this.height;
-                var rowSize = this.rowSize;
+                let width   = this.width;
+                let height  = this.height;
+                let rowSize = this.rowSize;
 
-                var _lemma0 = mulThm1(rowSize, height+2);
+                let _lemma0 = mulThm1(rowSize, height+2);
 
-                var _lemma1 = mulThm2(rowSize, height, height+2);
-                var _lemma2 = mulThm2(rowSize, height+1, height+2);
+                let _lemma1 = mulThm2(rowSize, height, height+2);
+                let _lemma2 = mulThm2(rowSize, height+1, height+2);
 
                 if (b===1) {
-                    for (var i = 1; i <= width; i++) {
+                    for (let i = 1; i <= width; i++) {
                         x[i] =  x[i + rowSize];
                         x[i + (height+1) *rowSize] = x[i + height * rowSize];
                     }
-                    for (var j = 1; j <= height; j++) {
-                        var _lemmaJ = mulThm2(rowSize, j, height+2);
+                    for (let j = 1; j <= height; j++) {
+                        let _lemmaJ = mulThm2(rowSize, j, height+2);
                         x[j * rowSize] = -x[1 + j * rowSize];
                         x[(width + 1) + j * rowSize] = -x[width + j * rowSize];
                     }
                 } else if (b === 2) {
-                    for (var i = 1; i <= width; i++) {
+                    for (let i = 1; i <= width; i++) {
                         x[i] = -x[i + rowSize];
                         x[i + (height + 1) * rowSize] = -x[i + height * rowSize];
                     }
 
-                    for (var j = 1; j <= height; j++) {
-                        var _lemmaJ = mulThm2(rowSize, j, height+2);
+                    for (let j = 1; j <= height; j++) {
+                        let _lemmaJ = mulThm2(rowSize, j, height+2);
                         x[j * rowSize] =  x[1 + j * rowSize];
                         x[(width + 1) + j * rowSize] =  x[width + j * rowSize];
                     }
                 } else {
-                    for (var i = 1; i <= width; i++) {
+                    for (let i = 1; i <= width; i++) {
                         x[i] =  x[i + rowSize];
                         x[i + (height + 1) * rowSize] = x[i + height * rowSize];
                     }
 
-                    for (var j = 1; j <= height; j++) {
-                        var _lemmaJ = mulThm2(rowSize, j, height+2);
+                    for (let j = 1; j <= height; j++) {
+                        let _lemmaJ = mulThm2(rowSize, j, height+2);
                         x[j * rowSize] =  x[1 + j * rowSize];
                         x[(width + 1) + j * rowSize] =  x[width + j * rowSize];
                     }
                 }
-                var maxEdge = (height + 1) * rowSize;
+                let maxEdge = (height + 1) * rowSize;
                 x[0]                 = 1/2 * (x[1] + x[rowSize]);//.
                 x[maxEdge]           = 1/2 * (x[1 + maxEdge] + x[height * rowSize]);//.
                 x[(width+1)]         = 1/2 * (x[width] + x[(width + 1) + rowSize]);//.
                 x[(width+1)+maxEdge] = 1/2 * (x[width + maxEdge] + x[(width + 1) + height * rowSize]);//.
             }
 
-            /*@ lin_solve : (b :number, 
+            /*@ lin_solve (b :number, 
                              x :{v:IArray<number> | (len v) = this.size}, 
                              x0:{v:IArray<number> | (len v) = this.size}, 
                              a :number, 
                              c :{v:number | v != 0}) : void */
             lin_solve(b:number, x:number[], x0:number[], a:number, c:number)
             {
-                var width = this.width;
-                var height = this.height;
-                var rowSize = this.rowSize;
+                let width = this.width;
+                let height = this.height;
+                let rowSize = this.rowSize;
 
                 if (a === 0 && c === 1) {
-                    for (var j=1 ; j<=height; j++) {
-                        var currentRow = j * rowSize;
-                        var _lemma = mulThm2(rowSize, j, height+2);
+                    for (let j=1 ; j<=height; j++) {
+                        let currentRow = j * rowSize;
+                        let _lemma = mulThm2(rowSize, j, height+2);
                         ++currentRow;
-                        for (var i = 0; i < width; i++) {
+                        for (let i = 0; i < width; i++) {
                             //needs Add2
                             x[currentRow] = x0[currentRow];
                             ++currentRow;
@@ -260,18 +262,18 @@ module NavierStokes {
                     }
                     this.set_bnd(b, x);
                 } else {
-                    var invC = 1 / c;
-                    for (var k=0 ; k<this.iters; k++) {
-                        for (var j=1 ; j<=height; j++) {
-                            var lastRow = (j - 1) * rowSize;
-                            var currentRow = j * rowSize;
-                            var nextRow = (j + 1) * rowSize;
-                            var _lemma1 = mulThm2(rowSize, j-1, height+2);
-                            var _lemma2 = mulThm2(rowSize, j, height+2);
-                            var _lemma3 = mulThm2(rowSize, j+1, height+2);
-                            var lastX = x[currentRow];
+                    let invC = 1 / c;
+                    for (let k=0 ; k<this.iters; k++) {
+                        for (let j=1 ; j<=height; j++) {
+                            let lastRow = (j - 1) * rowSize;
+                            let currentRow = j * rowSize;
+                            let nextRow = (j + 1) * rowSize;
+                            let _lemma1 = mulThm2(rowSize, j-1, height+2);
+                            let _lemma2 = mulThm2(rowSize, j, height+2);
+                            let _lemma3 = mulThm2(rowSize, j+1, height+2);
+                            let lastX = x[currentRow];
                             ++currentRow;
-                            for (var i=1; i<=width; i++) {
+                            for (let i=1; i<=width; i++) {
                                 x[currentRow] = (x0[currentRow] + a*(lastX+x[++currentRow]+x[++lastRow]+x[++nextRow])) * invC;
                                 lastX = x[currentRow];
                             }
@@ -281,17 +283,17 @@ module NavierStokes {
                 }
             }
 
-            /*@ diffuse : (b :number, 
+            /*@ diffuse (b :number, 
                            x :{v:IArray<number> | (len v) = this.size}, 
                            x0:{v:IArray<number> | (len v) = this.size}, 
                            dt:number) : void */
             diffuse(b:number, x:number[], x0:number[], dt:number)
             {
-                var a = 0;
+                let a = 0;
                 this.lin_solve(b, x, x0, a, 1 + 4*a);
             }
 
-            /*@ lin_solve2 : (x :{v:IArray<number> | (len v) = this.size}, 
+            /*@ lin_solve2 (x :{v:IArray<number> | (len v) = this.size}, 
                               x0:{v:IArray<number> | (len v) = this.size}, 
                               y :{v:IArray<number> | (len v) = this.size}, 
                               y0:{v:IArray<number> | (len v) = this.size}, 
@@ -299,16 +301,16 @@ module NavierStokes {
                               c :{v:number | v != 0}) : void */
             lin_solve2(x:number[], x0:number[], y:number[], y0:number[], a:number, c:number)
             {
-                var width = this.width;
-                var height = this.height;
-                var rowSize = this.rowSize;
+                let width = this.width;
+                let height = this.height;
+                let rowSize = this.rowSize;
 
                 if (a === 0 && c === 1) {
-                    for (var j=1 ; j <= height; j++) {
-                        var currentRow = j * rowSize;
-                        var _lemma = mulThm2(rowSize, j, height+2);
+                    for (let j=1 ; j <= height; j++) {
+                        let currentRow = j * rowSize;
+                        let _lemma = mulThm2(rowSize, j, height+2);
                         ++currentRow;
-                        for (var i = 0; i < width; i++) {
+                        for (let i = 0; i < width; i++) {
                             //needs Add2
                             x[currentRow] = x0[currentRow];
                             y[currentRow] = y0[currentRow];
@@ -318,19 +320,19 @@ module NavierStokes {
                     this.set_bnd(1, x);
                     this.set_bnd(2, y);
                 } else {
-                    var invC = 1/c;
-                    for (var k=0 ; k<this.iters; k++) {
-                        for (var j=1 ; j <= height; j++) {
-                            var lastRow = (j - 1) * rowSize;
-                            var currentRow = j * rowSize;
-                            var nextRow = (j + 1) * rowSize;
-                            var _lemma1 = mulThm2(rowSize, j-1, height+2);
-                            var _lemma2 = mulThm2(rowSize, j, height+2);
-                            var _lemma3 = mulThm2(rowSize, j+1, height+2);
-                            var lastX = x[currentRow];
-                            var lastY = y[currentRow];
+                    let invC = 1/c;
+                    for (let k=0 ; k<this.iters; k++) {
+                        for (let j=1 ; j <= height; j++) {
+                            let lastRow = (j - 1) * rowSize;
+                            let currentRow = j * rowSize;
+                            let nextRow = (j + 1) * rowSize;
+                            let _lemma1 = mulThm2(rowSize, j-1, height+2);
+                            let _lemma2 = mulThm2(rowSize, j, height+2);
+                            let _lemma3 = mulThm2(rowSize, j+1, height+2);
+                            let lastX = x[currentRow];
+                            let lastY = y[currentRow];
                             ++currentRow;
-                            for (var i = 1; i <= width; i++) {
+                            for (let i = 1; i <= width; i++) {
                                 x[currentRow] = (x0[currentRow] + a * (lastX + x[currentRow] + x[lastRow] + x[nextRow])) * invC;
                                 lastX = x[currentRow];
                                 y[currentRow] = (y0[currentRow] + a * (lastY + y[++currentRow] + y[++lastRow] + y[++nextRow])) * invC;
@@ -343,18 +345,18 @@ module NavierStokes {
                 }
             }
 
-            /*@ diffuse2 : (x :{v:IArray<number> | (len v) = this.size}, 
+            /*@ diffuse2 (x :{v:IArray<number> | (len v) = this.size}, 
                             x0:{v:IArray<number> | (len v) = this.size}, 
                             y :{v:IArray<number> | (len v) = this.size}, 
                             y0:{v:IArray<number> | (len v) = this.size}, 
                             dt:number) : void */
             diffuse2(x:number[], x0:number[], y:number[], y0:number[], dt:number)
             {
-                var a = 0;
+                let a = 0;
                 this.lin_solve2(x, x0, y, y0, a, 1 + 4 * a);
             }
 
-            /*@ advect : (b :number, 
+            /*@ advect (b :number, 
                           d :{v:IArray<number> | (len v) = this.size}, 
                           d0:{v:IArray<number> | (len v) = this.size}, 
                           u :{v:IArray<number> | (len v) = this.size}, 
@@ -362,38 +364,38 @@ module NavierStokes {
                           dt:number) : void */
             advect(b:number, d:number[], d0:number[], u:number[], ww:number[], dt:number)
             {
-                var width = this.width;
-                var height = this.height;
-                var rowSize = this.rowSize;
+                let width = this.width;
+                let height = this.height;
+                let rowSize = this.rowSize;
 
-                var Wdt0 = dt * width;
-                var Hdt0 = dt * height;
-                var Wp5 = width + 1/2;//.
-                var Hp5 = height + 1/2;//.
-                for (var j = 1; j<= height; j++) {
-                    var pos = j * rowSize;
-                    var _lemma = mulThm2(rowSize, j, height+2);
-                    for (var i = 1; i <= width; i++) {
-                        var x:any = i - Wdt0 * u[++pos];
-                        var y:any = j - Hdt0 * ww[pos]; // TODO revert 'ww' to 'v'
+                let Wdt0 = dt * width;
+                let Hdt0 = dt * height;
+                let Wp5 = width + 1/2;//.
+                let Hp5 = height + 1/2;//.
+                for (let j = 1; j<= height; j++) {
+                    let pos = j * rowSize;
+                    let _lemma = mulThm2(rowSize, j, height+2);
+                    for (let i = 1; i <= width; i++) {
+                        let x:any = i - Wdt0 * u[++pos];
+                        let y:any = j - Hdt0 * ww[pos]; // TODO revert 'ww' to 'v'
                         if (x < 1/2)//.
                             x = 1/2;//.
                         else if (x > Wp5)
                             x = Wp5;
-                        var i0 = Math.floor(x); //ORIG: x | 0;
-                        var i1 = i0 + 1;
+                        let i0 = Math.floor(x); //ORIG: x | 0;
+                        let i1 = i0 + 1;
                         if (y < 1/2)//.
                             y = 1/2;//.
                         else if (y > Hp5)
                             y = Hp5;
-                        var j0 = Math.floor(y); //ORIG: y | 0;
-                        var j1 = j0 + 1;
-                        var s1 = x - i0;
-                        var s0 = 1 - s1;
-                        var t1 = y - j0;
-                        var t0 = 1 - t1;
-                        var row1 = j0 * rowSize;
-                        var row2 = j1 * rowSize;
+                        let j0 = Math.floor(y); //ORIG: y | 0;
+                        let j1 = j0 + 1;
+                        let s1 = x - i0;
+                        let s0 = 1 - s1;
+                        let t1 = y - j0;
+                        let t0 = 1 - t1;
+                        let row1 = j0 * rowSize;
+                        let row2 = j1 * rowSize;
                         mulThm2(rowSize, j0, height+2);
                         mulThm2(rowSize, j1, height+2);
                         d[pos] = s0 * (t0 * d0[i0 + row1] + t1 * d0[i0 + row2]) + s1 * (t0 * d0[i1 + row1] + t1 * d0[i1 + row2]);
@@ -402,28 +404,28 @@ module NavierStokes {
                 this.set_bnd(b, d);
             }
 
-            /*@ project : (u  :{v:IArray<number> | (len v) = this.size}, 
+            /*@ project (u  :{v:IArray<number> | (len v) = this.size}, 
                            v  :{v:IArray<number> | (len v) = this.size}, 
                            p  :{v:IArray<number> | (len v) = this.size}, 
                            divv:{v:IArray<number> | (len v) = this.size}) : void */
             project(u:number[], ww:number[], p:number[], divv:number[])
             {
-                var width = this.width;
-                var height = this.height;
-                var rowSize = this.rowSize;
+                let width = this.width;
+                let height = this.height;
+                let rowSize = this.rowSize;
 
-                var h = -(1/2) / Math.sqrt(width * height);//.
-                for (var j = 1 ; j <= height; j++ ) {
-                    var row = j * rowSize;
-                    var previousRow = (j - 1) * rowSize;
-                    var prevValue = row - 1;
-                    var currentRow = row;
-                    var nextValue = row + 1;
-                    var nextRow = (j + 1) * rowSize;
-                    var _lemma1 = mulThm2(rowSize, j-1, height+2);
-                    var _lemma2 = mulThm2(rowSize, j, height+2);
-                    var _lemma3 = mulThm2(rowSize, j+1, height+2);
-                    for (var i = 1; i <= width; i++ ) {
+                let h = -(1/2) / Math.sqrt(width * height);//.
+                for (let j = 1 ; j <= height; j++ ) {
+                    let row = j * rowSize;
+                    let previousRow = (j - 1) * rowSize;
+                    let prevValue = row - 1;
+                    let currentRow = row;
+                    let nextValue = row + 1;
+                    let nextRow = (j + 1) * rowSize;
+                    let _lemma1 = mulThm2(rowSize, j-1, height+2);
+                    let _lemma2 = mulThm2(rowSize, j, height+2);
+                    let _lemma3 = mulThm2(rowSize, j+1, height+2);
+                    for (let i = 1; i <= width; i++ ) {
                         divv[++currentRow] = h * (u[++nextValue] - u[++prevValue] + ww[++nextRow] - ww[++previousRow]);
                         p[currentRow] = 0;
                     }
@@ -432,29 +434,29 @@ module NavierStokes {
                 this.set_bnd(0, p);
 
                 this.lin_solve(0, p, divv, 1, 4 );
-                var wScale = 1/2 * width;//.
-                var hScale = 1/2 * height;//.
-                for (var k = 1; k<= height; k++ ) {
-                    var prevPos = k * rowSize - 1;
-                    var currentPos = k * rowSize;
-                    var nextPos = k * rowSize + 1;
-                    var prevRow = (k - 1) * rowSize;
-                    var currentRow = k * rowSize;
-                    var nextRow = (k + 1) * rowSize;
-                    var _lemma1 = mulThm2(rowSize, k-1, height+2);
-                    var _lemma2 = mulThm2(rowSize, k, height+2);
-                    var _lemma3 = mulThm2(rowSize, k+1, height+2);
-                    for (var i = 1; i<= width; i++) {
+                let wScale = 1/2 * width;//.
+                let hScale = 1/2 * height;//.
+                for (let k = 1; k<= height; k++ ) {
+                    let prevPos = k * rowSize - 1;
+                    let currentPos = k * rowSize;
+                    let nextPos = k * rowSize + 1;
+                    let prevRow = (k - 1) * rowSize;
+                    let currentRow = k * rowSize;
+                    let nextRow = (k + 1) * rowSize;
+                    let _lemma1 = mulThm2(rowSize, k-1, height+2);
+                    let _lemma2 = mulThm2(rowSize, k, height+2);
+                    let _lemma3 = mulThm2(rowSize, k+1, height+2);
+                    for (let i = 1; i<= width; i++) {
                         ++currentPos;
-                        u[currentPos] -= wScale * (p[++nextPos] - p[++prevPos]);
-                        ww[currentPos]   -= hScale * (p[++nextRow] - p[++prevRow]);
+                        u[currentPos] = u[currentPos] - wScale * (p[++nextPos] - p[++prevPos]); //ORIG: -=
+                        ww[currentPos] = ww[currentPos] - hScale * (p[++nextRow] - p[++prevRow]); //ORIG: -=
                     }
                 }
                 this.set_bnd(1, u);
                 this.set_bnd(2, ww);
             }
 
-            /*@ dens_step : (x :{v:IArray<number> | (len v) = this.size}, 
+            /*@ dens_step (x :{v:IArray<number> | (len v) = this.size}, 
                              x0:{v:IArray<number> | (len v) = this.size}, 
                              u :{v:IArray<number> | (len v) = this.size}, 
                              v :{v:IArray<number> | (len v) = this.size}, 
@@ -466,7 +468,7 @@ module NavierStokes {
                 this.advect(0, x, x0, u, v, dt );
             }
 
-            /*@ vel_step : (u :{v:IArray<number> | (len v) = this.size}, 
+            /*@ vel_step (u :{v:IArray<number> | (len v) = this.size}, 
                             v :{v:IArray<number> | (len v) = this.size}, 
                             u0:{v:IArray<number> | (len v) = this.size}, 
                             v0:{v:IArray<number> | (len v) = this.size}, 
@@ -475,7 +477,7 @@ module NavierStokes {
             {
                 this.addFields(u, u0, dt );
                 this.addFields(v, v0, dt );
-                var temp = u0; u0 = u; u = temp;
+                let temp = u0; u0 = u; u = temp;
                 temp = v0; v0 = v; v = temp;
                 this.diffuse2(u,u0,v,v0, dt);
                 this.project(u, v, u0, v0);
@@ -486,12 +488,12 @@ module NavierStokes {
                 this.project(u, v, u0, v0 );
             }
 
-            /*@ queryUI : (d:{v:IArray<number> | (len v) = this.size}, 
+            /*@ queryUI (d:{v:IArray<number> | (len v) = this.size}, 
                            u:{v:IArray<number> | (len v) = this.size}, 
                            v:{v:IArray<number> | (len v) = this.size}) : void */
             queryUI(d:number[], u:number[], v:number[])
             {
-                for (var i = 0; i < this.size; i++) {
+                for (let i = 0; i < this.size; i++) {
                     u[i] = 0; v[i] = 0; d[i] = 0;//.
                 }
                 this.uiCallback(new Field(this.rowSize, this.width, this.height, d, u, v));
@@ -504,48 +506,47 @@ module NavierStokes {
                 this.dens_step(this.dens, this.dens_prev, this.u, this.v, this.dt);
                 this.displayFunc(new Field(this.rowSize, this.width, this.height, this.dens, this.u, this.v));
             }
-            /*@ setDisplayFunction : (this:FluidField<Mutable>, (Field<Immutable>)=>void) : void */
-            public setDisplayFunction(f:(f:Field) => void) {
+            /*@ @Mutable setDisplayFunction ((Field<Immutable>)=>void) : void */
+            public setDisplayFunction(f:(f:Field<Immutable>) => void) {
                 this.displayFunc = f;
             }
             
             public iterations() { return this.iters; }
-            /*@ setIterations : (this:FluidField<Mutable>, iters:number) : void */
+            /*@ @Mutable setIterations (iters:number) : void */
             public setIterations(iters:number) 
             {
                 if (iters > 0 && iters <= 100)
                     this.iters = iters;
             }
-            /*@ setUICallback : (this:FluidField<Mutable>, 
-                                 ({v:Field<Mutable> | offset(v,"w") = this.width && offset(v,"h") = this.height})=>void) : void */
-            public setUICallback(callback:(f:Field) => void) {
+            /*@ @Mutable setUICallback (({v:Field<Mutable> | offset(v,"w") = this.width && offset(v,"h") = this.height})=>void) : void */
+            public setUICallback(callback:(f:Field<Mutable>) => void) {
                 this.uiCallback = callback;
             }
             public reset()
             {
-                for (var i = 0; i < this.size; i++) {
+                for (let i = 0; i < this.size; i++) {
                     this.dens_prev[i] = 0; this.u_prev[i] = 0; this.v_prev[i] = 0; this.dens[i] = 0; this.u[i] = 0; this.v[i] = 0;
                 }
             }
-            /*@ getDens : () : {v:IArray<number> | (len v) = this.size} */
+            /*@ getDens () : {v:IArray<number> | (len v) = this.size} */
             public getDens()
             {
                 return this.dens;
             }
     }
 
-    export class Field {
-        /*@ rowSize : [Immutable] {v:number | v = this.w + 2} */
+    export class Field<M extends ReadOnly> {
+        /*@ (Immutable) rowSize : {v:number | v = this.w + 2} */
         private rowSize;
-        /*@ w : [Immutable] pos */
+        /*@ (Immutable) w : pos */
         private w;
-        /*@ h : [Immutable] pos */
+        /*@ (Immutable) h : pos */
         private h;
-        /*@ dens : [Immutable] {v:IArray<number> | (len v) = (this.h + 2) * (this.w + 2)} */
+        /*@ (Immutable) dens : {v:IArray<number> | (len v) = (this.h + 2) * (this.w + 2)} */
         private dens;
-        /*@ u    : [Immutable] {v:IArray<number> | (len v) = (this.h + 2) * (this.w + 2)} */
+        /*@ (Immutable) u    : {v:IArray<number> | (len v) = (this.h + 2) * (this.w + 2)} */
         private u;
-        /*@ v    : [Immutable] {v:IArray<number> | (len v) = (this.h + 2) * (this.w + 2)} */
+        /*@ (Immutable) v    : {v:IArray<number> | (len v) = (this.h + 2) * (this.w + 2)} */
         private v;
 
         /*@ new (rowSize: {v:number | v = w+2}, 
@@ -553,7 +554,7 @@ module NavierStokes {
                  h:       pos, 
                  dens:    {v:IArray<number> | (len v) = (h+2) * (w+2)},
                  u:       {v:IArray<number> | (len v) = (h+2) * (w+2)},
-                 v:       {v:IArray<number> | (len v) = (h+2) * (w+2)}) => {v:Field<M> | offset(v,"w") = w && offset(v,"h") = h } */
+                 v:       {v:IArray<number> | (len v) = (h+2) * (w+2)}) : {v:Field<M> | offset(v,"w") = w && offset(v,"h") = h } */
         constructor(rowSize:number, w:number, h:number, dens:number[], u:number[], v:number[]) {
             this.rowSize = rowSize;
             this.w = w;
@@ -563,35 +564,35 @@ module NavierStokes {
             this.v = v;
         }
 
-            /*@ setDensity : (x:{v:nat | v <= this.w}, y:{v:nat | v <= this.h}, d:number) : void */
+            /*@ setDensity (x:{v:nat | v <= this.w}, y:{v:nat | v <= this.h}, d:number) : void */
             public setDensity(x:number, y:number, d:number) {
-                var _lemma = mulThm2(this.rowSize, y+1, this.h+2);
+                let _lemma = mulThm2(this.rowSize, y+1, this.h+2);
                 this.dens[(x + 1) + (y + 1) * this.rowSize] = d;
             }
-            /*@ getDensity : (x:{v:nat | v <= this.w}, y:{v:nat | v <= this.h}) : number */
+            /*@ getDensity (x:{v:nat | v <= this.w}, y:{v:nat | v <= this.h}) : number */
             public getDensity(x:number, y:number) {
-                var _lemma = mulThm2(this.rowSize, y+1, this.h+2);
+                let _lemma = mulThm2(this.rowSize, y+1, this.h+2);
                 return this.dens[(x + 1) + (y + 1) * this.rowSize];
             }
-            /*@ setVelocity : (x:{v:nat | v <= this.w}, y:{v:nat | v <= this.h}, xv:number, yv:number) : void */
+            /*@ setVelocity (x:{v:nat | v <= this.w}, y:{v:nat | v <= this.h}, xv:number, yv:number) : void */
             public setVelocity(x:number, y:number, xv:number, yv:number) {
-                var _lemma = mulThm2(this.rowSize, y+1, this.h+2);
+                let _lemma = mulThm2(this.rowSize, y+1, this.h+2);
                 this.u[(x + 1) + (y + 1) * this.rowSize] = xv;
                 this.v[(x + 1) + (y + 1) * this.rowSize] = yv;
             }
-            /*@ getXVelocity : (x:{v:nat | v <= this.w}, y:{v:nat | v <= this.h}) : number */
+            /*@ getXVelocity (x:{v:nat | v <= this.w}, y:{v:nat | v <= this.h}) : number */
             public getXVelocity(x:number, y:number) {
-                var _lemma = mulThm2(this.rowSize, y+1, this.h+2);
+                let _lemma = mulThm2(this.rowSize, y+1, this.h+2);
                 return this.u[(x + 1) + (y + 1) * this.rowSize];
             }
-            /*@ getYVelocity : (x:{v:nat | v <= this.w}, y:{v:nat | v <= this.h}) : number */
+            /*@ getYVelocity (x:{v:nat | v <= this.w}, y:{v:nat | v <= this.h}) : number */
             public getYVelocity(x:number, y:number) {
-                var _lemma = mulThm2(this.rowSize, y+1, this.h+2);
+                let _lemma = mulThm2(this.rowSize, y+1, this.h+2);
                 return this.v[(x + 1) + (y + 1) * this.rowSize];
             }
-            /*@ width : () : {v:number | v = this.w} */
+            /*@ width () : {v:number | v = this.w} */
             public width():number { return this.w; }
-            /*@ height : () : {v:number | v = this.h} */
+            /*@ height () : {v:number | v = this.h} */
             public height():number { return this.h; }
     }
 }

@@ -1,8 +1,5 @@
-/*@  qualif UBound(v: int, x:a) : (v < len x) */
-/*@  qualif UBound(v: int) : (0 <= v) */
 
-/*@ range :: (lo: number, hi: number) => IArray<number> */
-function range(lo: number, hi: number) {
+function range(lo: number, hi: number): IArray<number> {
     if (lo < hi) {
         let rest: number[] = range(lo + 1, hi);
         let loa: IArray<number> = [lo];
@@ -11,8 +8,7 @@ function range(lo: number, hi: number) {
     return [];
 }
 
-/*@ foldl :: <A, B>((A, B) => A, A, IArray<B>) => A */
-function foldl(f, acc, xs) {
+function foldl<A, B>(f: (x: A, y: B) => A, acc: A, xs: IArray<B>): A {
     if (xs.length <= 0) {
         return acc;
     } else {
@@ -22,18 +18,22 @@ function foldl(f, acc, xs) {
     }
 }
 
-// TODO: restore this type
-/*  minIndex :: (a: { IArray<number> | 0 < len v }) => {v:number | (0 <= v && v < (len a )} */
+// TODO: restore this type -- see comments below
+/*  minIndex :: (zzzzz: { IArray<number> | 0 < len v }) => {v:number | (0 <= v) && (v < len a )} */
 
 /*@ minIndex :: (a: { IArray<number> | 0 < len v }) => number */
-function minIndex(a) {
+function minIndex(zzzzz) {
+
+    // RJ: why?
+    // PV: cause ATM `a` is a local variable and so can be updated within `minIndex`.
+    //     To avoid having it in refinements we disallow non-readonly vars. We
+    //     can add an annotation to make `a` readonly.
+
 
     /*@ readonly aa :: { IArray<number> | 0 < len v } */
-    let ra = a;
+    let ra = zzzzz;
 
-    // TODO: lose the annotation
-    /*@ step :: (i: idx<ra>, min: idx<ra>) => idx<ra> */
-    function step(i: number, min: number): number {
+    let step: (i: number, min: number) => number = function (i, min){
         if (ra[i] < ra[min]) {
             return i;
         }

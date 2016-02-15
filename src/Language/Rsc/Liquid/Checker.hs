@@ -249,10 +249,10 @@ initCallableEnv l g f fty xs s = do
     return g3
   where
              -- No FP binding for these
-    nms    = toFgn (envNames g)
-           & mappend (symEnv s)
-           & envAdds tyBs
-           & envAddReturn f (SI rSym Local ReturnVar Initialized t)
+    nms    = envAddReturn f (SI rSym Local ReturnVar Initialized t)
+           $ envAdds tyBs
+           $ mappend (symEnv s)
+           $ toFgn (envNames g)
     rSym   = F.symbol "return"
     bnds   = envAdds [(v,tv) | BTV v _ (Just tv) <- bs] $ cge_bounds g
     ctx    = pushContext i (cge_ctx g)

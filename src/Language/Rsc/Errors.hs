@@ -330,4 +330,6 @@ errorBoundSubt l v t          = mkErr l $ printf "Could not find a valid instant
 errorVarDecl l x t e s        = mkErr l $ printf "Expression '%s' of type '%s' cannot be assigned to variable '%s' with expected type '%s'" (ppshow e) (ppshow s) (ppshow x) (ppshow t)
 
 errorMultipleVarDeclAnns l x  = mkErr l $ show $ text "Cannot have multple variable declaration annotations for variable" <+> ticks (pp x) <> text "."
+errorJoinSymInfo l s1 s2      = mkErr l $ show $ text "Cannot combine the following annotations:" $+$
+                                                 nest 2 (pp s1) $+$ text "and" $+$ nest 2 (pp s2)
 

@@ -43,7 +43,9 @@ import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
+import           Language.Rsc.Misc              (foldM1)
 import           Language.Rsc.Names
+import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
@@ -130,12 +132,15 @@ symbols s = SL [ (fSrc <$> n, k, SI (F.symbol n) loc a i t)
 
 
 --------------------------------------------------------------------------------
-varDeclSymbol :: VarDecl (AnnR r) -> Either Error (Maybe (SymInfo r))
+varDeclSymbol
+  :: (F.Reftable r, PP (SymInfo r))
+  => VarDecl (AnnR r) -> Either Error (Maybe (SymInfo r))
 --------------------------------------------------------------------------------
 varDeclSymbol (VarDecl l x eo) =
     case syms of
       [ ] -> Right Nothing
       [s] -> Right (Just s)
+      ss  | all (isTFun . v_type) ss -> Just <$> foldM1 (concatSymInfo l) ss
       _   -> Left (errorMultipleVarDeclAnns l x)
   where
     syms = [SI (F.symbol x) loc a init t | VarAnn loc a (Just t) <- fFact l]
@@ -181,4 +186,14 @@ mergeSymInfo _ (k1, SI m1 l1 a1 i1 t1) (k2, SI m2 l2 a2 i2 t2)
   | m1 == m2, l1 == l2, k1 == k2, a1 == a2, i1 == i2
   = (k1, SI m1 l1 a1 i1 (t1 `mappend` t2))
 mergeSymInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
+
+
+concatSymInfo l s1@(SI m1 l1 a1 i1 t1) s2@(SI m2 l2 a2 i2 t2)
+  | (m1, l1, a1, i1) == (m2, l2, a2, i2), isTFun t1, isTFun t2
+  = Right (SI m1 l1 a1 i1 (t1 `mappend` t2))
+  | otherwise
+  = Left (errorJoinSymInfo l s1 s2)
+
+
+
 

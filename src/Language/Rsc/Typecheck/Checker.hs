@@ -874,7 +874,7 @@ tcCall γ c@(NewExpr l e es) s
 -- | e.f
 --
 tcCall γ ef@(DotRef l e0 f) _
-  = runFailM (tcExpr γ ue Nothing) >>= \t -> checkAccess (ltracePP l e0 t)
+  = runFailM (tcExpr γ ue Nothing) >>= checkAccess
   where
     ue = enableUnique e0
     checkAccess (Right (_, tRcvr))

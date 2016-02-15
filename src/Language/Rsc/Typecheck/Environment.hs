@@ -94,7 +94,7 @@ initGlobalEnv :: Unif r => TcRsc r -> ClassHierarchy r -> TCEnv r
 initGlobalEnv (Rsc { code = Src ss }) cha =
     TCE nms bnds ctx pth cha mut tThis (-1)
   where
-    nms   = tracePP "" $ symEnv ss
+    nms   = symEnv ss
     bnds  = mempty
     ctx   = emptyContext
     pth   = emptyPath

@@ -63,6 +63,43 @@ Executable rsc
   -- ghc-options:    -threaded -- -W -O2
   Main-is:        Nano.hs
   hs-source-dirs: src
+  other-modules:    Language.Nano.Annots                       
+                  , Language.Nano.CmdLine                      
+                  , Language.Nano.Env                          
+                  , Language.Nano.Environment                  
+                  , Language.Nano.Errors                       
+                  , Language.Nano.Files                        
+                  , Language.Nano.Liquid.Alias                 
+                  , Language.Nano.Liquid.CGMonad               
+                  , Language.Nano.Liquid.Environment           
+                  , Language.Nano.Liquid.Liquid                
+                  , Language.Nano.Liquid.Qualifiers            
+                  , Language.Nano.Liquid.Types                 
+                  , Language.Nano.Locations                    
+                  , Language.Nano.Misc                         
+                  , Language.Nano.Names                        
+                  , Language.Nano.Program                      
+                  , Language.Nano.SSA.SSA                      
+                  , Language.Nano.SSA.SSAMonad                 
+                  , Language.Nano.Syntax                       
+                  , Language.Nano.Syntax.Annotations           
+                  , Language.Nano.Syntax.PrettyPrint           
+                  , Language.Nano.SystemUtils                  
+                  , Language.Nano.Typecheck.Environment        
+                  , Language.Nano.Typecheck.Lookup             
+                  , Language.Nano.Typecheck.Parse              
+                  , Language.Nano.Typecheck.Resolve            
+                  , Language.Nano.Typecheck.Sub                
+                  , Language.Nano.Typecheck.Subst              
+                  , Language.Nano.Typecheck.TCMonad            
+                  , Language.Nano.Typecheck.Typecheck          
+                  , Language.Nano.Typecheck.Types              
+                  , Language.Nano.Typecheck.Unify              
+                  , Language.Nano.Types                        
+                  , Language.Nano.Visitor                      
+                  , Paths_refscript                            
+
+
 
 
 Library
@@ -98,27 +135,42 @@ Library
                   , ascii-progress >= 0.3
 
   hs-source-dirs:   src
-  Exposed-Modules:  Paths_refscript,
-                    Language.Nano.Errors,
-                    Language.Nano.Files,
-                    Language.Nano.Types,
-                    Language.Nano.Env,
-                    Language.Nano.Misc,
-                    Language.Nano.Annots,
-                    Language.Nano.CmdLine,
-                    Language.Nano.SSA.SSAMonad,
-                    Language.Nano.SSA.SSA,
-                    Language.Nano.Typecheck.Unify,
-                    Language.Nano.Typecheck.Types,
-                    Language.Nano.Typecheck.Parse,
-                    Language.Nano.Typecheck.TCMonad,
-                    Language.Nano.Typecheck.Subst,
-                    Language.Nano.Typecheck.Lookup,
-                    Language.Nano.Typecheck.Typecheck,
-                    Language.Nano.Liquid.Liquid,
-                    Language.Nano.Liquid.Types,
-                    Language.Nano.Liquid.CGMonad,
-                    Language.Nano.Liquid.Qualifiers
+  Exposed-Modules:  Paths_refscript
+                  , Language.Nano.Errors
+                  , Language.Nano.Files
+                  , Language.Nano.Types
+                  , Language.Nano.Env
+                  , Language.Nano.Misc
+                  , Language.Nano.Annots
+                  , Language.Nano.CmdLine
+                  , Language.Nano.SSA.SSAMonad
+                  , Language.Nano.SSA.SSA
+                  , Language.Nano.Typecheck.Unify
+                  , Language.Nano.Typecheck.Types
+                  , Language.Nano.Typecheck.Parse
+                  , Language.Nano.Typecheck.TCMonad
+                  , Language.Nano.Typecheck.Subst
+                  , Language.Nano.Typecheck.Lookup
+                  , Language.Nano.Typecheck.Typecheck
+                  , Language.Nano.Liquid.Liquid
+                  , Language.Nano.Liquid.Types
+                  , Language.Nano.Liquid.CGMonad
+                  , Language.Nano.Liquid.Qualifiers
+                  , Language.Nano.Environment               
+                  , Language.Nano.Liquid.Alias              
+                  , Language.Nano.Liquid.Environment        
+                  , Language.Nano.Locations                 
+                  , Language.Nano.Names                     
+                  , Language.Nano.Program                   
+                  , Language.Nano.Syntax                    
+                  , Language.Nano.Syntax.Annotations        
+                  , Language.Nano.Syntax.PrettyPrint        
+                  , Language.Nano.SystemUtils               
+                  , Language.Nano.Typecheck.Environment     
+                  , Language.Nano.Typecheck.Resolve         
+                  , Language.Nano.Typecheck.Sub             
+                  , Language.Nano.Visitor                   
+
 
 test-suite test
   default-language: Haskell98

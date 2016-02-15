@@ -4,6 +4,7 @@
 module Main where
 
 import           Control.Applicative
+import           Data.List           (isPrefixOf)
 import           System.Directory
 import           System.Environment
 import           System.Exit
@@ -19,7 +20,12 @@ main :: IO ()
 main = defaultMain =<< group "Tests" [unitTests]
 
 unitTests = group "Unit"
-  [ testGroup "pos-object" <$> dirTests rscCmd "tests/pos/pldi16"    [] ExitSuccess ]
+  [
+    testGroup "pldi-d3"           <$> dirTests rscCmd "tests/pos/pldi16/d3"                  []                ExitSuccess,
+    testGroup "pldi-octane"       <$> dirTests rscCmd "tests/pos/pldi16/octane"              ["extra", "libs"] ExitSuccess,
+    testGroup "pldi-transducers"  <$> dirTests rscCmd "tests/pos/pldi16/transducers"         []                ExitSuccess,
+    testGroup "pldi-tsc"          <$> dirTests rscCmd "tests/pos/pldi16/typescript-1.0.1.0"  ["extra", "libs"] ExitSuccess
+  ]
 
 isTest   :: FilePath -> Bool
 isTest f = takeExtension f `elem` [".ts"]
@@ -47,9 +53,18 @@ dirTests :: TestCmd -> FilePath -> [FilePath] -> ExitCode -> IO [TestTree]
 ---------------------------------------------------------------------------
 dirTests testCmd root ignored code
   = do files    <- walkDirectory root
-       let tests = [ rel | f <- files, isTest f, let rel = makeRelative root f, rel `notElem` ignored ]
-       -- putStrLn  $ "Tests found in " ++ root ++ " are = " ++ show tests
+       let tests = [ rel | f <- files
+                         , isTest f
+                         , let rel = makeRelative root f
+                         , all (not . (`isPrefixOf` rel)) ignored ]
+       putStrLn  $ "Tests found in " ++ root ++ " are = " ++ show tests
        return    $ mkTest testCmd code root <$> tests
+
+
+
+
+
+
 
 ---------------------------------------------------------------------------
 mkTest :: TestCmd -> ExitCode -> FilePath -> FilePath -> TestTree

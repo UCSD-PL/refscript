@@ -133,7 +133,8 @@ extractFact fs = map go fs
   where
     exprt ExportedSpec = True
     exprt _  = False
-    loc | any exprt fs = Exported | otherwise    = Local
+    loc | any exprt fs = Exported
+        | otherwise    = Local
     go (FunctionDeclarationSpec (_,t))     = Just $ SigAnn loc t
     go (VariableDeclarationSpec (_, a, t)) = Just $ VarAnn loc a t
     go (FunctionExpressionSpec t)          = Just $ SigAnn loc t

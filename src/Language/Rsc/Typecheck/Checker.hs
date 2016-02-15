@@ -360,7 +360,15 @@ tcStmt γ (ModuleStmt l n body)
 
 -- | enum M { ... }
 tcStmt γ (EnumStmt l n body)
-  = return (EnumStmt l n body, Just γ)
+  = return (EnumStmt l n body, Just $ tcEnvAdd nSym si γ)
+  where
+    si    = SI nSym exprt RdOnly init tEnum
+    tEnum = TRef (Gen name []) fTop
+    path  = envPath γ
+    name  = QN path nSym
+    nSym  = F.symbol n
+    exprt = Exported      -- TODO: do this check
+    init  = Initialized   -- TODO: do this check
 
 -- OTHER (Not handled)
 tcStmt _ s
@@ -866,7 +874,7 @@ tcCall γ c@(NewExpr l e es) s
 -- | e.f
 --
 tcCall γ ef@(DotRef l e0 f) _
-  = runFailM (tcExpr γ ue Nothing) >>= checkAccess
+  = runFailM (tcExpr γ ue Nothing) >>= \t -> checkAccess (ltracePP l e0 t)
   where
     ue = enableUnique e0
     checkAccess (Right (_, tRcvr))

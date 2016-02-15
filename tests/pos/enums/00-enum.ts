@@ -1,4 +1,4 @@
-var zzz = 111
+let zzz = 111
 
 enum A1 {
   a1 = 777,

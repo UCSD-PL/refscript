@@ -2461,7 +2461,9 @@ var ts;
         refscript_Unsupported_postfix_operator_0: { code: 10048, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Unsupported postfix operator '{0}'." },
         refscript_Unsupported_for_loop_initialization_expression_0: { code: 10049, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Unsupported for loop initialization expression '{0}'." },
         refscript_Only_support_single_variable_initialization_at_ForIn_statement: { code: 10050, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Only support single variable initialization at ForIn statement." },
-        refscript_New_expressions_need_to_have_arguments: { code: 10051, category: ts.DiagnosticCategory.Error, key: "[refscript] 'New' expressions need to have arguments." }
+        refscript_New_expressions_need_to_have_arguments: { code: 10051, category: ts.DiagnosticCategory.Error, key: "[refscript] 'New' expressions need to have arguments." },
+        refscript_Invalid_enumeration_entry_for_0: { code: 10052, category: ts.DiagnosticCategory.Error, key: "[refscript] Invalid enumeration entry for '{0}." },
+        refscript_Uninitialized_enumeration_members_are_not_supported: { code: 10053, category: ts.DiagnosticCategory.Unimplemented, key: "[refscript] Uninitialized enumeration members are not supported." }
     };
 })(ts || (ts = {}));
 /// <reference path="core.ts"/>
@@ -27017,6 +27019,8 @@ var ts;
                         return forStatementToRsStmt(state, node);
                     case ts.SyntaxKind.ForInStatement:
                         return forinStatementToRsStmt(state, node);
+                    case ts.SyntaxKind.EnumDeclaration:
+                        return enumDeclarationToRsStmt(state, node);
                 }
                 state.error(node, ts.Diagnostics.refscript_0_SyntaxKind_1_not_supported_yet, "nodeToRsStmt", ts.SyntaxKind[node.kind]);
             }
@@ -27472,6 +27476,17 @@ var ts;
                 var exp = nodeToRsExp(state, node.expression);
                 var body = nodeToRsStmt(state, node.statement);
                 return new ts.RsForInStmt(nodeToSrcSpan(node), [], init, exp, body);
+            }
+            function enumDeclarationToRsStmt(state, node) {
+                return new ts.RsEnumStmt(nodeToSrcSpan(node), [], new ts.RsId(nodeToSrcSpan(node.name), [], ts.getTextOfNode(node.name)), new ts.RsList(node.members.map(function (e) { return nodeToRsEnumElt(state, e); })));
+            }
+            function nodeToRsEnumElt(state, node) {
+                if (node.initializer) {
+                    return new ts.RsEnumElt(nodeToSrcSpan(node), [], new ts.RsId(nodeToSrcSpan(node.name), [], ts.getTextOfNode(node.name)), nodeToRsExp(state, node.initializer));
+                }
+                var value = checker.getConstantValue(node);
+                return new ts.RsEnumElt(nodeToSrcSpan(node), [], new ts.RsId(nodeToSrcSpan(node.name), [], ts.getTextOfNode(node.name)), new ts.RsIntLit(nodeToSrcSpan(node), [], value));
+                state.error(node, ts.Diagnostics.refscript_Uninitialized_enumeration_members_are_not_supported);
             }
             function constructorDeclarationToRsClassElts(state, node) {
                 var isAmbient = !!(node.flags & 2);

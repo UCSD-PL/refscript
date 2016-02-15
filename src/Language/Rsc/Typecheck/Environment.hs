@@ -30,7 +30,7 @@ import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc
 import           Language.Rsc.Names
-import           Language.Rsc.Pretty.Common
+import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.Symbols
 import           Language.Rsc.Typecheck.Subst
@@ -91,10 +91,10 @@ instance CheckingEnvironment r TCEnv where
 --------------------------------------------------------------------------------
 initGlobalEnv :: Unif r => TcRsc r -> ClassHierarchy r -> TCEnv r
 --------------------------------------------------------------------------------
-initGlobalEnv (Rsc { code = Src ss }) cha
-  = TCE nms bnds ctx pth cha mut tThis (-1)
+initGlobalEnv (Rsc { code = Src ss }) cha =
+    TCE nms bnds ctx pth cha mut tThis (-1)
   where
-    nms   = symEnv ss
+    nms   = tracePP "" $ symEnv ss
     bnds  = mempty
     ctx   = emptyContext
     pth   = emptyPath
@@ -124,7 +124,7 @@ initCallableEnv l γ f fty xs s
           & mappend (symEnv s)
           & envAddReturn f (SI rSym Local ReturnVar Initialized t)
 
-    rSym  = F.symbol "return"
+    rSym  = returnSymbol
     tyBs  = [(Loc (srcPos l) α, SI (F.symbol α) Local Ambient Initialized $ tVar α) | α <- αs]
     varBs = [(x, SI (F.symbol x) Local WriteLocal Initialized t) | (x, t) <- safeZip "initCallableEnv" xs ts]
     arg   = [(getArgId (srcPos l), mkArgumentsSI l ts)]

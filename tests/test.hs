@@ -39,6 +39,7 @@ unitTests = group "Unit"
   , testGroup "pos-list"         <$> dirTests rscCmd "tests/pos/lists"        [] ExitSuccess
   , testGroup "pos-inclusion"    <$> dirTests rscCmd "tests/pos/inclusion"    [] ExitSuccess
   , testGroup "pos-alias"        <$> dirTests rscCmd "tests/pos/typealias"    [] ExitSuccess
+  , testGroup "pos-enum"         <$> dirTests rscCmd "tests/pos/enums"        [] ExitSuccess
   , testGroup "pos-fb"           <$> dirTests rscCmd "tests/pos/fb"           [] ExitSuccess
 
   , testGroup "neg-object"       <$> dirTests rscCmd "tests/neg/objects"      [] (ExitFailure 1)
@@ -55,6 +56,7 @@ unitTests = group "Unit"
   , testGroup "neg-inclusion"    <$> dirTests rscCmd "tests/neg/inclusion"    [] (ExitFailure 1)
   , testGroup "neg-alias"        <$> dirTests rscCmd "tests/neg/typealias"    [] (ExitFailure 1)
   , testGroup "neg-fb"           <$> dirTests rscCmd "tests/neg/fb"           [] (ExitFailure 1)
+  , testGroup "neg-enum"         <$> dirTests rscCmd "tests/neg/enums"        [] (ExitFailure 1)
   ]
 
 isTest   :: FilePath -> Bool

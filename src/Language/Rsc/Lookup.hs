@@ -62,7 +62,7 @@ getProp l γ f t@TObj{}
 -- TODO: Instead of the actual integer value, assign unique symbolic values:
 --        E.g. A_B_C_1 ...
 getProp l γ f t@(TRef (Gen n []) _)
-  | Just e  <- resolveEnumInEnv γ n
+  | Just e  <- ltracePP l "Enum" <$> resolveEnumInEnv γ n
   , Just io <- envFindTy f (e_mapping e)
   = case io of
       IntLit _ i ->

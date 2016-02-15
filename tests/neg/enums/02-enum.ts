@@ -6,6 +6,5 @@ enum Operator {
   SUB
 }
 
-
+// Unimplemented
 assert(Operator[Operator.ADD] === "SUB");
-

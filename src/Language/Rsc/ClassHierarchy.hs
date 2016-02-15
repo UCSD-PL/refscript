@@ -414,8 +414,8 @@ getSuperType _ _ = Nothing
 getMutability :: (PP r, ExprReftable Int r, F.Reftable r)
               => ClassHierarchy r -> RType r -> Maybe (MutabilityQ AK r)
 --------------------------------------------------------------------------------
-getMutability cha t | Just (TObj m _ _) <- expandType def cha t
-                    = Just m
-                    | otherwise
-                    = Nothing
+getMutability cha t
+  | isEnumType cha t                          = Just tIM
+  | Just (TObj m _ _) <- expandType def cha t = Just m
+  | otherwise                                 = Nothing
 

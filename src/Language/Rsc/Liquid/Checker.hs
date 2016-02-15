@@ -253,7 +253,7 @@ initCallableEnv l g f fty xs s = do
            $ envAdds tyBs
            $ mappend (symEnv s)
            $ toFgn (envNames g)
-    rSym   = F.symbol "return"
+    rSym   = returnSymbol
     bnds   = envAdds [(v,tv) | BTV v _ (Just tv) <- bs] $ cge_bounds g
     ctx    = pushContext i (cge_ctx g)
     pth    = cge_path g
@@ -440,8 +440,16 @@ consStmt g (ClassStmt l x ce)
 consStmt g (InterfaceStmt _ _)
   = return $ Just g
 
-consStmt g EnumStmt{}
-  = return $ Just g
+consStmt g (EnumStmt l n body) =
+    Just <$> cgEnvAdds l "enum" [si] g
+  where
+    si    = SI nSym exprt RdOnly init tEnum
+    tEnum = TRef (Gen name []) fTop
+    path  = envPath g
+    name  = QN path nSym
+    nSym  = F.symbol n
+    exprt = Exported      -- TODO: do this check
+    init  = Initialized   -- TODO: do this check
 
 consStmt g (ModuleStmt _ n body)
   = initModuleEnv g n body >>= (`consStmts` body) >> return (Just g)

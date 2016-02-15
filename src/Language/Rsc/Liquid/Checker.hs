@@ -472,7 +472,7 @@ consVarDecl g v@(VarDecl l x (Just e)) =
 
   where
 
-    go (SI n lc a _ t) = freshenTypeOpt g l t >>= \case
+    go (SI n lc a _ t) = (freshenTypeOpt g l t) >>= \case
         Just fta ->
 
             if onlyCtxTyped e then do
@@ -922,8 +922,8 @@ consExpr g (FuncExpr l fo xs body) (Just ft)
   where
     f = fromMaybe (builtinOpId BIAnonymousFun) (fmap (fmap srcPos) fo)
 
-consExpr g (FuncExpr l fo xs body) Nothing
-  = cgError $ errorNoFuncAnn $ srcPos l
+consExpr _ (FuncExpr l _ _ _) Nothing
+  = cgError (errorNoFuncAnn l)
 
 -- not handled
 consExpr _ e _ = cgError $ unimplemented l "consExpr" e where l = srcPos  e

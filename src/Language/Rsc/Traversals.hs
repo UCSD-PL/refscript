@@ -298,17 +298,19 @@ hoistBindings = snd . visitStmts vs ()
     acv _ _                             = []
 
     -- PV: these are block-scoped now - they don't get lifted.
+    --
+    -- XXX: Perhaps allow ambient ones?
+    --
     -- acv _ (VarDecl l n ii)              = [(n, l, VarDeclKind, varAsgn l, inited l ii)]
 
-    inited l _        | any isAmbient (fFact l)
-                      = Initialized
-    inited _ (Just _) = Initialized
-    inited _ _        = Uninitialized
+    -- inited l _        | any isAmbient (fFact l) = Initialized
+    -- inited _ (Just _) = Initialized
+    -- inited _ _        = Uninitialized
 
-    isAmbient (VarAnn _ Ambient _) = True
-    isAmbient _                    = False
+    -- isAmbient (VarAnn _ Ambient _) = True
+    -- isAmbient _                    = False
 
-    varAsgn   l = fromMaybe WriteLocal $ listToMaybe [ a | VarAnn _ a _ <- fFact l ]
+    -- varAsgn   l = fromMaybe WriteLocal $ listToMaybe [ a | VarAnn _ a _ <- fFact l ]
 
 
 --------------------------------------------------------------------------------

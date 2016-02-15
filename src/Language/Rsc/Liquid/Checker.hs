@@ -472,11 +472,11 @@ consVarDecl g v@(VarDecl l x (Just e)) =
 
   where
 
-    go (SI n lc a _ t) = (freshenTypeOpt g l t) >>= \case
+    go (SI n lc a _ t) = freshenTypeOpt g l t >>= \case
         Just fta ->
 
             if onlyCtxTyped e then do
-                g' <- fmap snd <$> consExpr g e (Just t)
+                g' <- fmap snd <$> consExpr g e (Just fta)
                 TR.mapM (cgEnvAdds l "consVarDecl" [SI n lc a Initialized fta]) g'
             else
                 mseq (consExpr g e (Just fta)) $ \(y,gy) -> do
@@ -915,20 +915,15 @@ consExpr g (SuperRef l) _
   = cgError $ errorSuper (fSrc l)
 
 -- | function(xs) { }
-consExpr g (FuncExpr l fo xs body) tCtxO
-  | Just ft       <-  funTy
-  = do  kft       <-  freshTyFun g l ft
-        fts       <-  cgFunTys l f xs kft
+consExpr g (FuncExpr l fo xs body) (Just ft)
+  = do  fts       <-  cgFunTys l f xs ft
         forM_ fts  $  consCallable l g f xs body
-        Just      <$> cgEnvAddFresh "16" l kft g
-  | otherwise
-  = cgError $ errorNoFuncAnn $ srcPos l
+        Just      <$> cgEnvAddFresh "16" l ft g
   where
-    funTy | [ft] <- [t | SigAnn _ t <- fFact l] = Just ft
-          | Just ft <- tCtxO = Just ft
-          | otherwise        = Nothing
+    f = fromMaybe (builtinOpId BIAnonymousFun) (fmap (fmap srcPos) fo)
 
-    f     = fromMaybe (builtinOpId BIAnonymousFun) (fmap (fmap srcPos) fo)
+consExpr g (FuncExpr l fo xs body) Nothing
+  = cgError $ errorNoFuncAnn $ srcPos l
 
 -- not handled
 consExpr _ e _ = cgError $ unimplemented l "consExpr" e where l = srcPos  e

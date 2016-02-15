@@ -57,7 +57,7 @@ dirTests testCmd root ignored code
                          , isTest f
                          , let rel = makeRelative root f
                          , all (not . (`isPrefixOf` rel)) ignored ]
-       putStrLn  $ "Tests found in " ++ root ++ " are = " ++ show tests
+       -- putStrLn  $ "Tests found in " ++ root ++ " are = " ++ show tests
        return    $ mkTest testCmd code root <$> tests
 
 

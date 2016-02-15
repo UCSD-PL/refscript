@@ -202,3 +202,19 @@ test-suite pldi16
                     tasty-hunit,
                     tasty-rerun >= 1.1,
                     text
+
+test-suite regression
+  default-language: Haskell98
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   tests
+  ghc-options:      -O2 -threaded
+  main-is:          test.hs
+  build-depends:    base,
+                    directory,
+                    filepath,
+                    process,
+                    tasty >= 0.10,
+                    tasty-hunit,
+                    tasty-rerun >= 1.1,
+                    text
+

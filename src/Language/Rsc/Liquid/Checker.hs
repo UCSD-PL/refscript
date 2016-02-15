@@ -474,15 +474,21 @@ consVarDecl g v@(VarDecl l x (Just e)) =
 
     go (SI n lc a _ t) = (freshenTypeOpt g l t) >>= \case
         Just fta ->
-          if onlyCtxTyped e then do
-              g' <- fmap snd <$> consExpr g e (Just t)
-              TR.mapM (cgEnvAdds l "consVarDecl" [SI n lc a Initialized fta]) g'
-          else
-              mseq (consExpr g e (Just fta)) $ \(y,gy) -> do
-                eT      <- cgSafeEnvFindTyM y gy
-                _       <- subType l Nothing gy eT fta
-                _       <- subType l Nothing gy fta t
-                Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized fta] gy
+
+            if onlyCtxTyped e then do
+                g' <- fmap snd <$> consExpr g e (Just t)
+                TR.mapM (cgEnvAdds l "consVarDecl" [SI n lc a Initialized fta]) g'
+            else
+                mseq (consExpr g e (Just fta)) $ \(y,gy) -> do
+                  eT      <- cgSafeEnvFindTyM y gy
+                  _       <- subType l Nothing gy eT fta
+
+                  -- -- XXX: Type `t` is trivial so the check below would just
+                  -- --      restrict fta's K-vars to be true ...
+                  --
+                  -- _       <- subType l Nothing gy fta t
+                  --
+                  Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized fta] gy
 
         Nothing ->
           if onlyCtxTyped e then do

@@ -70,7 +70,7 @@ module VERSION {
                 this.blue = blue;
             }
 
-            /*@ add <M extends ReadOnly> (c1:Color<M>, c2:Color<M>) : {MColor | 0 < 1} */
+            /*@ add <M1 extends ReadOnly, M2 extends ReadOnly> (c1:Color<M1>, c2:Color<M2>) : {MColor | 0 < 1} */
             public static add(c1, c2) {
                 let result = new Color(0, 0, 0);
 
@@ -95,7 +95,7 @@ module VERSION {
             }
 
 
-            /*@ subtract <M extends ReadOnly> (c1:Color<M>, c2:Color<M>) : {MColor | 0 < 1} */
+            /*@ subtract <M1 extends ReadOnly, M2 extends ReadOnly> (c1:Color<M1>, c2:Color<M2>) : {MColor | 0 < 1} */
             public static subtract(c1, c2) {
                 let result = new Color(0, 0, 0);
 
@@ -106,7 +106,7 @@ module VERSION {
                 return result;
             }
 
-            /*@ multiply <M extends ReadOnly> (c1:Color<M>, c2:Color<M>) : {MColor | 0 < 1} */
+            /*@ multiply <M1 extends ReadOnly, M2 extends ReadOnly> (c1:Color<M1>, c2:Color<M2>) : {MColor | 0 < 1} */
             public static multiply(c1, c2) {
                 let result = new Color(0, 0, 0);
 
@@ -153,7 +153,7 @@ module VERSION {
                 return d;
             }
 
-            /*@ blend <M extends ReadOnly> (c1:Color<M>, c2:Color<M>, w:number) : {MColor | 0 < 1} */
+            /*@ blend <M1 extends ReadOnly, M2 extends ReadOnly> (c1:Color<M1>, c2:Color<M2>, w:number) : {MColor | 0 < 1} */
             public static blend(c1, c2, w:number) {
                 let result = new Color(0, 0, 0);
                 result = Color.add(
@@ -220,7 +220,7 @@ module VERSION {
                 this.z = vector.z;
             }
 
-            /*@ normalize <M extends ReadOnly> () : Vector<M> */
+            /*@ normalize () : Vector<Unique> */
             public normalize() {
                 let m = this.magnitude();
                 if (m === 0) throw new Error("Cannot normalize the 0-vector!");
@@ -247,18 +247,18 @@ module VERSION {
                 return this.x * w.x + this.y * w.y + this.z * w.z;
             }
 
-            /*@ add <M extends ReadOnly> (v:Vector<M>, w:Vector<M>) : {Vector<Unique> | 0 < 1} */
+            /*@ add <M1 extends ReadOnly, M2 extends ReadOnly> (v:Vector<M1>, w:Vector<M2>) : {Vector<Unique> | 0 < 1} */
             public static add(v, w) {
                 return new Vector(w.x + v.x, w.y + v.y, w.z + v.z);
             }
 
-            /*@ subtract <M extends ReadOnly> (v:Vector<M>, w:Vector<M>) : {Vector<Unique> | 0 < 1} */
+            /*@ subtract <M1 extends ReadOnly, M2 extends ReadOnly> (v:Vector<M1>, w:Vector<M2>) : {Vector<Unique> | 0 < 1} */
             public static subtract(v, w) {
                 if (!w || !v) throw 'Vectors must be defined [' + v + ',' + w + ']';
                 return new Vector(v.x - w.x, v.y - w.y, v.z - w.z);
             }
 
-            /*@ multiplyVector <M extends ReadOnly> (v:Vector<M>, w:Vector<M>) : {Vector<Unique> | 0 < 1} */
+            /*@ multiplyVector <M1 extends ReadOnly, M2 extends ReadOnly> (v:Vector<M1>, w:Vector<M2>) : {Vector<Unique> | 0 < 1} */
             public static multiplyVector(v, w) {
                 return new Vector(v.x * w.x, v.y * w.y, v.z * w.z);
             }
@@ -293,9 +293,9 @@ module VERSION {
         export class Scene<M extends ReadOnly> {
             public camera : Camera<Immutable>;
             /*@ shapes : IArray<Shape<Immutable>> */
-            public shapes : Shape<Immutable>[];
+            public shapes;
             /*@ lights : IArray<Light<Immutable>> */
-            public lights : Light<Immutable>[];
+            public lights;
             public background : Background<Immutable>;
 
             constructor() {
@@ -430,9 +430,9 @@ module VERSION {
             /*@ intersect <M extends ReadOnly> (ray:Ray<M>) : {MIntersectionInfo | 0 < 1} */
             public intersect(ray) : MIntersectionInfo {
                 let info = new IntersectionInfo(false, 0, null, null, null, null, null);
-                info.shape = <Shape<Immutable>>this;
+                info.shape = <Shape<ReadOnly>>this;
 
-                let dst = Vector.subtract(ray.position, this.position);
+                let dst:MVector = Vector.subtract(ray.position, this.position);
 
                 let B = dst.dot(ray.direction);
                 let C = dst.dot(dst) - (this.radius * this.radius);
@@ -442,7 +442,7 @@ module VERSION {
                     info.isHit = true;
                     let infoDist = (-B) - Math.sqrt(D);
                     info.distance = infoDist;
-                    let infoPos = Vector.add(
+                    let infoPos:MVector = Vector.add(
                         ray.position,
                         Vector.multiplyScalar(
                             ray.direction,
@@ -488,7 +488,7 @@ module VERSION {
 
                 info.shape = <Shape<ReadOnly>>this;
                 info.isHit = true;
-                let infoPos = Vector.add(
+                let infoPos:MVector = Vector.add(
                     ray.position,
                     Vector.multiplyScalar(
                         ray.direction,
@@ -500,8 +500,8 @@ module VERSION {
                 info.distance = t;
 
                 if (this.material.hasTexture) {
-                    let vU = new Vector(this.position.y, this.position.z, -this.position.x);
-                    let vV = vU.cross(this.position);
+                    let vU:MVector = new Vector(this.position.y, this.position.z, -this.position.x);
+                    let vV:MVector = vU.cross(this.position);
                     let u = infoPos.dot(vU);
                     let v = infoPos.dot(vV);
                     info.color = this.material.getColor(u, v);
@@ -585,9 +585,9 @@ module VERSION {
                 this.up = up;
             }
 
-            /*@ getRay <M extends ReadOnly> (vx:number, vy:number) : {Ray<M> | 0 < 1} */
+            /*@ getRay (vx:number, vy:number) : {Ray<Unique> | 0 < 1} */
             public getRay(vx:number, vy:number) {
-                let pos = <MVector>Vector.subtract(
+                let pos:MVector = Vector.subtract(
                     this.screen,
                     Vector.subtract(
                         Vector.multiplyScalar(this.equator, vx),
@@ -623,14 +623,14 @@ module VERSION {
         }
 
         // PORT TODO
-        // /*@ extend :: (dest:[Mutable]{[s:string]:top}, src:[Immutable]{[s:string]:top}) => {[Mutable]{[s:string]:top} | 0 < 1} */
-        // function extend(dest, src) {
-        //     // PV TODO
-        //     for (let p in src) {
-        //         dest[p] = src[p];
-        //     }
-        //     return dest;
-        // }
+        /*@ extend :: (dest:(Mutable){[s:string]:top}, src:(Immutable){[s:string]:top}) => {(Mutable){[s:string]:top} | 0 < 1} */
+        function extend(dest, src) {
+            // PV TODO
+            for (let p in src) {
+                dest[p] = src[p];
+            }
+            return dest;
+        }
 
         export class Engine<M extends ReadOnly> {
             /*@ canvas : CanvasRenderingContext2D<Mutable> + null */
@@ -679,7 +679,7 @@ module VERSION {
                 }
             }
 
-            /*@ @Mutable renderScene <M extends ReadOnly> (scene:Scene<M>, canvas:HTMLCanvasElement<M> + undefined) : {void | 0 < 1} */
+            /*@ @Mutable renderScene <M1 extends ReadOnly, M2 extends ReadOnly> (scene:Scene<M1>, canvas:HTMLCanvasElement<M2> + undefined) : {void | 0 < 1} */
             public renderScene(scene, canvas) {
                 checkNumber = 0;
                 /* Get canvas */
@@ -697,7 +697,7 @@ module VERSION {
                         let yp = y * 1 / canvasHeight * 2 - 1;
                         let xp = x * 1 / canvasWidth * 2 - 1;
 
-                        let ray = scene.camera.getRay(xp, yp);
+                        let ray:Ray<Mutable> = scene.camera.getRay(xp, yp);
 
                         let color = this.getPixelColor(ray, scene);
 
@@ -709,7 +709,7 @@ module VERSION {
                 }
             }
 
-            /*@ getPixelColor <M extends ReadOnly> (ray:Ray<M>, scene:Scene<M>) : {MColor | 0 < 1} */
+            /*@ getPixelColor <M1 extends ReadOnly, M2 extends ReadOnly> (ray:Ray<M1>, scene:Scene<M2>) : {MColor | 0 < 1} */
             public getPixelColor(ray, scene) {
                 let info = this.testIntersection(ray, scene, undefined);
                 if (info.isHit) {
@@ -719,7 +719,7 @@ module VERSION {
                 return scene.background.color;
             }
 
-            /*@ testIntersection <M extends ReadOnly> (ray:Ray<M>, scene:Scene<M>, exclude:Shape<M> + undefined) : {MIntersectionInfo | 0 < 1} */
+            /*@ testIntersection <M1 extends ReadOnly, M2 extends ReadOnly, M3 extends ReadOnly> (ray:Ray<M1>, scene:Scene<M2>, exclude:Shape<M3> + undefined) : {MIntersectionInfo | 0 < 1} */
             public testIntersection(ray, scene, exclude?) {
                 let hits = 0;
                 /*@ best :: MIntersectionInfo */
@@ -742,7 +742,7 @@ module VERSION {
                 return best;
             }
 
-            /*@ getReflectionRay <M extends ReadOnly> (P:MVector, N:Vector<M>, V:Vector<M>) : {Ray<M> | 0 < 1} */
+            /*@ getReflectionRay <M1 extends ReadOnly, M2 extends ReadOnly> (P:MVector, N:Vector<M1>, V:Vector<M2>) : {Ray<M> | 0 < 1} */
             public getReflectionRay(P, N, V) {
                 let c1 = -N.dot(V);
                 let R1 = Vector.add(
@@ -752,7 +752,7 @@ module VERSION {
                 return new Ray(P, R1);
             }
 
-            /*@ rayTrace <M extends ReadOnly> (info:IntersectionInfo<M>, ray:Ray<M>, scene:Scene<M>, depth:number) : {MColor | 0 < 1} */
+            /*@ rayTrace <M1 extends ReadOnly, M2 extends ReadOnly, M3 extends ReadOnly> (info:IntersectionInfo<M1>, ray:Ray<M2>, scene:Scene<M3>, depth:number) : {MColor | 0 < 1} */
             public rayTrace(info, ray, scene, depth) {
                 let infoColor = info.color;
                 let infoShape = info.shape;
@@ -778,7 +778,7 @@ module VERSION {
                     let light = sceneLights[i];
 
                     // Calc diffuse lighting
-                    let v = Vector.subtract(
+                    let v:MVector = Vector.subtract(
                         light.position,
                         infoPosition
                     ).normalize();
@@ -830,7 +830,7 @@ module VERSION {
                     let shadowInfo = new IntersectionInfo(false, 0, null, null, null, null, null);
 
                     if (this.options.renderShadows) {
-                        let shadowRay = new Ray(infoPosition, v);
+                        let shadowRay:Ray<ReadOnly> = new Ray(infoPosition, v);
 
                         shadowInfo = this.testIntersection(shadowRay, scene, infoShape);
                         if (shadowInfo.isHit && shadowInfo.shape !== infoShape /*&& shadowInfo.shape.type != 'PLANE'*/) {
@@ -854,7 +854,7 @@ module VERSION {
                             infoShape.position
                         ).normalize();
 
-                        let H = Vector.subtract(
+                        let H:MVector = Vector.subtract(
                             E,
                             Lv
                         ).normalize();
@@ -873,7 +873,7 @@ module VERSION {
         // }
 
         export function renderScene() {
-            let scene = new Scene();
+            let scene:Scene<Mutable> = new Scene();
 
             scene.camera = new Camera(
                 new Vector(0, 0, -15),
@@ -886,7 +886,7 @@ module VERSION {
                 2/5
             );
 
-            let sphere = new Sphere(
+            let sphere:Shape<Immutable> = new Sphere(
                 new Vector(-3/2, 3/2, 2),
                 3/2,
                 new Solid(
@@ -898,7 +898,7 @@ module VERSION {
                 )
             );
 
-            let sphere1 = new Sphere(
+            let sphere1:Shape<Immutable> = new Sphere(
                 new Vector(1, 1/4, 1),
                 1/2,
                 new Solid(
@@ -910,7 +910,7 @@ module VERSION {
                 )
             );
 
-            let plane = new Plane(
+            let plane:Shape<Immutable> = new Plane(
                 new Vector(1/10, 9/10, -1/2).normalize(),
                 6/5,
                 new Chessboard(
@@ -927,15 +927,15 @@ module VERSION {
             // scene.shapes.push(plane);
             // scene.shapes.push(sphere);
             // scene.shapes.push(sphere1);
-            scene.shapes = [<Shape<Immutable>>plane, <Shape<Immutable>>sphere, <Shape<Immutable>>sphere1];
+            scene.shapes = [plane, sphere, sphere1];
 
-            let light = new Light(
+            let light:Light<Immutable> = new Light(
                 new Vector(5, 10, -1),
                 new Color(4/5, 4/5, 4/5),
                 10 // (ORIG: default param omitted)
             );
 
-            let light1 = new Light(
+            let light1:Light<Immutable> = new Light(
                 new Vector(-3, 5, -15),
                 new Color(4/5, 4/5, 4/5),
                 100
@@ -948,6 +948,7 @@ module VERSION {
 
             let imageWidth = 100; // $F('imageWidth');
             let imageHeight = 100; // $F('imageHeight');
+            /*@ pixelSize :: {IArray<{number | v > 0}> | len(v) = 2} */
             let pixelSize = [5,5];//"5,5".split(','); //  $F('pixelSize').split(',');
             let renderDiffuse = true; // $F('renderDiffuse');
             let renderShadows = true; // $F('renderShadows');
@@ -968,7 +969,7 @@ module VERSION {
                     rayDepth: rayDepth
                 }
             );
-            raytracer.renderScene(scene, null);
+            raytracer.renderScene(scene, undefined);
         }
 
     }

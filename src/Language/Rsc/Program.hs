@@ -133,7 +133,7 @@ mkSSAId :: (F.Symbolic x, IsLocated a) => a -> x -> Int -> Id a
 mkSSAId l x n = Id l (symbolString (F.symbol x) ++ ssaStr ++ show n)
 
 mkNextId :: F.Symbolic x => a -> x -> Id a
-mkNextId a x = Id a $ nextStr ++ (F.symbolString (F.symbol x))
+mkNextId a = Id a . (nextStr ++) . symbolString . F.symbol
 
 isNextId :: Id a -> Maybe (Id a)
 isNextId (Id a s) = Id a <$> stripPrefix nextStr s

@@ -87,8 +87,8 @@ declare function builtin_PrefixLNot<A>(x: A): boolean;
 
 /*@ builtin_OpLAnd ::<B>(x: undefined, y:B) => undefined */
 /*@ builtin_OpLAnd ::<B>(x: null, y:B) => null */
-/*@ builtin_OpLAnd ::<A>(x:A, y:A) => { v:A | if (Prop x) then (v = y) else (v = x) } */
-/*@ builtin_OpLAnd ::<A,B>(x:A, y:B) => { v:top | (Prop(v) <=> (Prop(x) && Prop(y))) } */
+/*@ builtin_OpLAnd ::<A>(x:A, y:A) => { v:A | if Prop x then v = y else v = x } */
+/*@ builtin_OpLAnd ::<A,B>(x:A, y:B) => { v:top | Prop v <=> (Prop x && Prop y) } */
 declare function builtin_OpLAnd(x: any, y: any): any;
 
 
@@ -96,9 +96,10 @@ declare function builtin_OpLAnd(x: any, y: any): any;
 //     (x: number) => {v:number | v = 0 - (x + 1) }
 //  */
 // declare function builtin_PrefixBNot(n: number): number;
-//
-/*@ builtin_OpBOr :: (a: bitvector32, b: bitvector32) => { v: bitvector32 | v = bvor a b } */
-declare function builtin_OpBOr(a: number, b: number): number;
+
+/*@ builtin_OpBOr :: (x: bitvector32, x: bitvector32) => { v: bitvector32 | v = bvor x y } */
+/*@ builtin_OpBOr :: <A>(x: A, b: A) => { v: A | if Prop x then v = x else v = y } */
+declare function builtin_OpBOr(x: number, y: number): number;
 
 // declare function builtin_OpBXor(a: number, b: number): number;
 //

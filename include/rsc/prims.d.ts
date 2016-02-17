@@ -63,7 +63,7 @@ declare function builtin_OpSub(a: number, b: number): number;
  */
 declare function builtin_OpMul(a: number, b: number): number;
 
-/*@ builtin_OpDiv :: (x: number, {y: number | y != 0}) => {v:number | (x > 0 && y > 1) => (0 <= v && v < x)} */
+/*@ builtin_OpDiv :: (x: number, y: {number | v != 0}) => {v:number | (x > 0 && y > 1) => (0 <= v && v < x)} */
 declare function builtin_OpDiv(a: number, b: number): number;
 
 declare function builtin_OpMod(a: number, b: number): number;
@@ -173,8 +173,8 @@ declare function assert<A>(x: A): void;
 
 declare function random(): number;
 
-/*@ pos :: () => posint */
-declare function pos(): posint;
+/*@ _pos :: () => posint */
+declare function _pos(): posint;
 
 declare function alert(s: string): void;
 

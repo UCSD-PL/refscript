@@ -12,7 +12,7 @@ function sumLoop(acc: number, i: number): number {
 }
 
 export function main() {
-    let n: number = pos();
+    let n: number = _pos();
     let m: number = sumLoop(0, n);
     assert(m === n);
 }

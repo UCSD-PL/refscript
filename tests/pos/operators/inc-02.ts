@@ -5,7 +5,7 @@ function inc(x: number): number {
 }
 
 export function main(): void {
-    let a: number = pos();
+    let a: number = _pos();
     let b: number = inc(a);
     assert(b === a + 1);
     assert(b > 0);

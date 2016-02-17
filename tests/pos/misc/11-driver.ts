@@ -31,8 +31,8 @@ function driver(l: number, newCount: number, oldCount: number) {
 }
 
 export function main(): void {
-	let newCount = pos();
-	let oldCount = pos();
+	let newCount = _pos();
+	let oldCount = _pos();
 	let l = create();
 	if (newCount < oldCount) {
 		l = driver(l, newCount, oldCount);

@@ -404,7 +404,7 @@ module VERSION {
         export class Shape<M extends ReadOnly> {
             /*@ position : MVector */
             public position:MVector;
-            public material;
+            public material:BaseMaterial<Immutable>;
 
             /*@ new (position:MVector, material:BaseMaterial<Immutable>) : {Shape<M> | 0 < 1} */
             constructor(position:MVector, material) {
@@ -486,7 +486,7 @@ module VERSION {
                 let t = -(this.position.dot(ray.position) + this.d) / Vd;
                 if (t <= 0) return info;
 
-                info.shape = <Shape<Immutable>>this;
+                info.shape = <Shape<ReadOnly>>this;
                 info.isHit = true;
                 let infoPos = Vector.add(
                     ray.position,
@@ -553,7 +553,7 @@ module VERSION {
 
             /*@ @Mutable initialize () : {void | 0 < 1} */
             public initialize() {
-                this.color = new Color(0, 0, 0);
+                this.color = <IColor>(new Color(0, 0, 0));
             }
 
             public toString() {
@@ -587,7 +587,7 @@ module VERSION {
 
             /*@ getRay <M extends ReadOnly> (vx:number, vy:number) : {Ray<M> | 0 < 1} */
             public getRay(vx:number, vy:number) {
-                let pos = Vector.subtract(
+                let pos = <MVector>Vector.subtract(
                     this.screen,
                     Vector.subtract(
                         Vector.multiplyScalar(this.equator, vx),
@@ -711,7 +711,7 @@ module VERSION {
 
             /*@ getPixelColor <M extends ReadOnly> (ray:Ray<M>, scene:Scene<M>) : {MColor | 0 < 1} */
             public getPixelColor(ray, scene) {
-                let info = this.testIntersection(ray, scene, null);
+                let info = this.testIntersection(ray, scene, undefined);
                 if (info.isHit) {
                     let color = this.rayTrace(info, ray, scene, 0);
                     return color;
@@ -758,10 +758,15 @@ module VERSION {
                 let infoShape = info.shape;
                 let infoNormal = info.normal;
                 let infoPosition = info.position;
-                if (!infoColor ||
-                    !infoShape ||
-                    !infoNormal ||
-                    !infoPosition) throw new Error('incomplete IntersectionInfo'); //TODO is there a way to get rid of this check?
+
+                // if (!infoColor ||
+                //     !infoShape ||
+                //     !infoNormal ||
+                //     !infoPosition) throw new Error('incomplete IntersectionInfo'); //TODO is there a way to get rid of this check?
+                if (!infoColor)    throw new Error('incomplete IntersectionInfo'); //TODO can we at least get the more compact version above?
+                if (!infoShape)    throw new Error('incomplete IntersectionInfo');
+                if (!infoNormal)   throw new Error('incomplete IntersectionInfo');
+                if (!infoPosition) throw new Error('incomplete IntersectionInfo');
 
                 // Calc ambient
                 let color = Color.multiplyScalar(infoColor, scene.background.ambience);

@@ -2,7 +2,7 @@
 /*@ type LList<M,T> = List<M,T> + null */
 declare type LList<M,T> = any;
 
-/*@ measure LLlen :: <M extends ReadOnly, T> (LList<M,T>) => number */
+/*@ measure LLlen :: <A>(A) => number */
 
 interface List<M extends ReadOnly, T> {
   data: T;

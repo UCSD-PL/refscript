@@ -99,17 +99,15 @@ instance F.Predicate  (Expression a) where
 --------------------------------------------------------------------------------
 eProp :: Expression a -> F.Expr
 --------------------------------------------------------------------------------
-eProp (InfixExpr _ OpLT   e1 e2)       = F.PAtom F.Lt (F.expr e1) (F.expr e2)
-eProp (InfixExpr _ OpLEq  e1 e2)       = F.PAtom F.Le (F.expr e1) (F.expr e2)
-eProp (InfixExpr _ OpGT   e1 e2)       = F.PAtom F.Gt (F.expr e1) (F.expr e2)
-eProp (InfixExpr _ OpGEq  e1 e2)       = F.PAtom F.Ge (F.expr e1) (F.expr e2)
--- TODO:
--- eProp (InfixExpr _ OpEq   e1 e2)       = F.PAtom F.Eq (F.expr e1) (F.expr e2)
-eProp (InfixExpr _ OpStrictEq   e1 e2) = F.PAtom F.Eq (F.expr e1) (F.expr e2)
-eProp (InfixExpr _ OpNEq  e1 e2)       = F.PAtom F.Ne (F.expr e1) (F.expr e2)
-eProp (InfixExpr _ OpLAnd e1 e2)       = F.pAnd [F.prop e1, F.prop e2]
-eProp (InfixExpr _ OpLOr  e1 e2)       = F.pOr  [F.prop e1, F.prop e2]
-eProp e                                = convertError "InfixExpr -> F.Prop" e
+eProp (InfixExpr _ OpLT       e1 e2) = F.PAtom F.Lt (F.expr e1) (F.expr e2)
+eProp (InfixExpr _ OpLEq      e1 e2) = F.PAtom F.Le (F.expr e1) (F.expr e2)
+eProp (InfixExpr _ OpGT       e1 e2) = F.PAtom F.Gt (F.expr e1) (F.expr e2)
+eProp (InfixExpr _ OpGEq      e1 e2) = F.PAtom F.Ge (F.expr e1) (F.expr e2)
+eProp (InfixExpr _ OpStrictEq e1 e2) = F.PAtom F.Eq (F.expr e1) (F.expr e2)
+eProp (InfixExpr _ OpNEq      e1 e2) = F.PAtom F.Ne (F.expr e1) (F.expr e2)
+eProp (InfixExpr _ OpLAnd     e1 e2) = F.pAnd [F.prop e1, F.prop e2]
+eProp (InfixExpr _ OpLOr      e1 e2) = F.pOr  [F.prop e1, F.prop e2]
+eProp e                              = convertError "InfixExpr -> F.Prop" e
 
 --------------------------------------------------------------------------------
 bop       :: InfixOp -> F.Bop
@@ -151,20 +149,23 @@ rTypeSortedReft t = F.RR (rTypeSort t) (rTypeReft t)
 rTypeReft         = maybe fTop F.toReft . stripRTypeBase
 rTypeValueVar t   = vv where F.Reft (vv,_) = rTypeReft t
 
+
+-- Avoid incluging mutability of `TRef` - it crashes FP
 --------------------------------------------------------------------------------
 rTypeSort :: F.Reftable r => RTypeQ q r -> F.Sort
 --------------------------------------------------------------------------------
-rTypeSort (TVar α _)          = F.FObj $ F.symbol α
-rTypeSort (TAll v t)          = rTypeSortForAll $ TAll v t
-rTypeSort (TFun xts t _)      = F.mkFFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
-rTypeSort (TPrim c _)         = rTypeSortPrim c
-rTypeSort (TOr _ _)           = F.fAppTC (rawStringFTycon unionSym ) []
-rTypeSort (TAnd _)            = F.fAppTC (rawStringFTycon intersSym) []
-rTypeSort (TRef (Gen n ts) _) = F.fAppTC (rawSymbolFTycon (F.symbol n)) (rTypeSort <$> ts)
-rTypeSort  TObj{}             = F.fAppTC (rawStringFTycon objectSym) []
-rTypeSort  TClass{}           = F.fAppTC (rawStringFTycon classSym ) []
-rTypeSort  TMod{}             = F.fAppTC (rawStringFTycon moduleSym) []
-rTypeSort _                   = error $ render $ text "BUG: Unsupported in rTypeSort"
+rTypeSort (TVar α _)              = F.FObj $ F.symbol α
+rTypeSort (TAll v t)              = rTypeSortForAll $ TAll v t
+rTypeSort (TFun xts t _)          = F.mkFFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
+rTypeSort (TPrim c _)             = rTypeSortPrim c
+rTypeSort (TOr _ _)               = F.fAppTC (rawStringFTycon unionSym ) []
+rTypeSort (TAnd _)                = F.fAppTC (rawStringFTycon intersSym) []
+rTypeSort (TRef (Gen n (_:ts)) _) = F.fAppTC (rawSymbolFTycon (F.symbol n)) (rTypeSort <$> ts)
+rTypeSort (TRef (Gen n []    ) _) = F.fAppTC (rawSymbolFTycon (F.symbol n)) []
+rTypeSort  TObj{}                 = F.fAppTC (rawStringFTycon objectSym) []
+rTypeSort  TClass{}               = F.fAppTC (rawStringFTycon classSym ) []
+rTypeSort  TMod{}                 = F.fAppTC (rawStringFTycon moduleSym) []
+rTypeSort _                       = error $ render $ text "BUG: Unsupported in rTypeSort"
 
 rTypeSortPrim TBV32      = BV.mkSort BV.S32
 rTypeSortPrim TNumber    = F.intSort

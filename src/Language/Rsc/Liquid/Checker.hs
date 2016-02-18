@@ -353,7 +353,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
       case (m1o, m1fo) of
         (Just m1, Just m1f)
           | isSubtype g m1f tMU || isSubtypeWithUq g m1 tUQ ->
-            case getProp l g1 f t1 of
+            case getProp l g1 x1 f t1 of
               Left e -> cgError e
               Right (unzip -> (ts, fs)) -> do
                   subType l Nothing g1 t1 (tOr ts)
@@ -584,7 +584,6 @@ consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body
     exitP = [SI sExit Local Ambient Initialized $ mkFun (bs, xts, ret)]
 
     ret   = unqualifyThis $ thisT `strengthen` F.reft (F.vv Nothing) (F.pAnd $ bnd <$> out)
-                                  `strengthen` F.exprReft thisSym
 
     xts   = case expandType (EConf True False) (envCHA g1) thisT of
               Just (TObj _ ms _ ) -> sortBy c_sym (msToBs ms)
@@ -795,12 +794,13 @@ consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
     checkNonVariadic =
       mseq (consExpr g e Nothing) $ \(xR, g') -> do
         tR  <- cgSafeEnvFindTyM xR g'
-        checkWithProp xR g' (getProp l g' f tR)
+        case getProp l g' xR f tR of
+          Left e  -> cgError e
+          Right p -> checkWithProp xR g' p
 
     -- Only support single members at the moment
-    checkWithProp xR g_ (Right [(tR, m)]) = checkTM xR g_ tR m
-    checkWithProp _  _  (Right _)         = error "TODO: add case in checkWithProp Right _"
-    checkWithProp _  _  (Left er)         = cgError er
+    checkWithProp xR g_ [(tR, m)] = checkTM xR g_ tR m
+    checkWithProp _  _  _         = error "TODO: add case in checkWithProp Right _"
 
     -- Check a single type member
     checkTM _  g_ _  (FI _ Req _ ft) = consCall g_ l biID (es `zip` nths) ft
@@ -831,7 +831,10 @@ consExpr g (CallExpr l e es) _
 --
 consExpr g0 (DotRef l e f) _
   = mseq (consExpr g0 e Nothing) $ \(x, g1) -> do
-      cgSafeEnvFindTyM x g1 >>= checkAccess g1 x . getProp l g1 f
+      te <- cgSafeEnvFindTyM x g1
+      case getProp l g1 x f te of
+        Right tf -> checkAccess g1 x tf
+        Left  e  -> cgError e
 
   where
     -- The receiver will be cast already to the type for which the
@@ -840,8 +843,7 @@ consExpr g0 (DotRef l e f) _
     -- Array accesses have already been translated to method calls to
     -- __getLength.
     --
-    checkAccess g x (Right tf) = Just <$> addWithOpt (opt tf) (fieldsTy g x tf) g
-    checkAccess _ _ (Left e)   = cgError e
+    checkAccess g x tf = Just <$> addWithOpt (opt tf) (fieldsTy g x tf) g
 
     -- The accessed type
     fieldsTy g x tf   = tOr [ doField g x m t | (_, FI _ _ m t) <- tf ]

@@ -189,8 +189,11 @@ ppBind (x, t) = pp x <+> text ":=" <+> pp t
 
 -- | PP Fixpoint
 
+instance PP F.Sort where
+  pp = pprint
+
 instance PP (F.SortedReft) where
-  pp (F.RR _ b) = pp b
+  pp (F.RR s b) = braces (pp s <+> text "|" <+> pp b)
 
 instance PP F.Reft where
   pp = pprint

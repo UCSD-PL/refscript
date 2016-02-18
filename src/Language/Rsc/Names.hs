@@ -57,6 +57,8 @@ module Language.Rsc.Names (
 
   , arraySym
   , boolSym
+  , numberSym
+  , stringSym
   , voidSym
   , unionSym
   , intersSym
@@ -238,16 +240,19 @@ offsetSym  = "offset"
 objectName = mkAbsName [] objectSym
 arrayName  = mkAbsName [] arraySym
 
-arraySym, boolSym, voidSym, unionSym, topSym, botSym, nullSym, undefSym :: F.Symbol
-arraySym = "Array"
-boolSym  = "Boolean"
-voidSym  = "Void"
-unionSym = "Union"
-topSym   = "Top"
-botSym   = "Bot"
-anySym   = "Any"
-nullSym  = "Null"
-undefSym = "Undefined"
+arraySym, boolSym, numberSym, stringSym, voidSym, unionSym, topSym,
+  botSym, nullSym, undefSym :: F.Symbol
+arraySym  = "Array"
+boolSym   = "Boolean"
+numberSym = "Number"
+stringSym = "String"
+voidSym   = "Void"
+unionSym  = "Union"
+topSym    = "Top"
+botSym    = "Bot"
+anySym    = "Any"
+nullSym   = "Null"
+undefSym  = "Undefined"
 
 objectSym, selfSym, classSym, moduleSym, enumSym, intersSym:: F.Symbol
 objectSym = "Object"

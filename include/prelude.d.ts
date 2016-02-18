@@ -91,14 +91,13 @@ declare function builtin_PrefixLNot<A>(x: A): boolean;
 /*@ builtin_OpLAnd ::<A,B>(x:A, y:B) => { v:top | Prop v <=> (Prop x && Prop y) } */
 declare function builtin_OpLAnd(x: any, y: any): any;
 
-
 // /*@ builtin_PrefixBNot ::
 //     (x: number) => {v:number | v = 0 - (x + 1) }
 //  */
 // declare function builtin_PrefixBNot(n: number): number;
 
-/*@ builtin_OpBOr :: (x: bitvector32, x: bitvector32) => { v: bitvector32 | v = bvor x y } */
-/*@ builtin_OpBOr :: <A>(x: A, b: A) => { v: A | if (Prop x) then (v = x) else (v = y) } */
+/*@ builtin_OpBOr :: (x: bitvector32, y: bitvector32) => { v: bitvector32 | v = bvor x y } */
+/*@ builtin_OpBOr :: <A>(x: A, y: A) => { v: A | if (Prop x) then (v = x) else (v = y) } */
 declare function builtin_OpBOr(x: number, y: number): number;
 
 // declare function builtin_OpBXor(a: number, b: number): number;
@@ -385,7 +384,7 @@ declare let Array: ArrayConstructor<ReadOnly>;
 /*@ type LList<M,T> = List<M,T> + null */
 declare type LList<M,T> = any;
 
-/*@ measure LLlen :: <M extends ReadOnly, T> (LList<M,T>) => number */
+/*@ measure LLlen :: <A>(A) => number */
 
 interface List<M extends ReadOnly, T> {
   data: T;

@@ -318,9 +318,7 @@ cgEnvAdds :: IsLocated l => l -> String -> [CGEnvEntry] -> CGEnv -> CGM CGEnv
 --------------------------------------------------------------------------------
 cgEnvAdds l msg xts g = foldM step g es
   where
-
     step g_ es_ = envAddGroup l msg ks g_ es_
-
     es = map (objFields g) xts
     ks = map F.symbol      xts
 
@@ -345,7 +343,8 @@ objFields g e@(SI x loc a _ t)
     mkSI f Req tf = SI (mkQualSym x f) loc a InitUnknown $ ty tf f
 
     -- v = offset(x,"f")
-    ty t f = substThis x t `eSingleton` mkOffsetSym x f
+    ty t f = -- tracePP (ppshow t ++ ppshow " after substing " ++ ppshow (thisSym, x)) $
+             substThis x $ t `eSingleton` mkOffsetSym x f
 
 
 --------------------------------------------------------------------------------
@@ -369,11 +368,10 @@ envAddGroup l msg ks g0 xts
     inv _            = return
 
     -- Union strengthening
-    strOr a x t@(TOr ts r) | a `elem` [WriteGlobal, ReturnVar]
-                           = t
-                           | otherwise
-                           = TOr (map (`eSingleton` x) ts) r
-    strOr _ _ t            = t
+    strOr a x t@(TOr ts r)
+      | a `elem` [WriteGlobal, ReturnVar] = t
+      | otherwise = TOr (map (`eSingleton` x) ts) r
+    strOr _ _ t = t
 
 
 

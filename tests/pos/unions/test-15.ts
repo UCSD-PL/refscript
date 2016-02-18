@@ -1,5 +1,5 @@
 
-/*@ check_undefined :: <T>(x: { T + undefined | v = y}, y: { T + undefined | v = x }) => T */
+/*@ check_undefined :: <T>(x: { T + undefined | v ~~ y}, y: { T + undefined | v ~~ x }) => T */
 function check_undefined<T>(x:any, y: any) : T {
   if (typeof x === "undefined")
 	  return crash();

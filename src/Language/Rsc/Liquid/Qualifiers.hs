@@ -104,5 +104,3 @@ instance {-# OVERLAPPING #-} PP [Qualifier] where
 instance PP Qualifier where
   pp = toFix
 
-instance PP Sort where
-  pp = toFix

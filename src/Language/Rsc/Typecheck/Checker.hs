@@ -259,7 +259,7 @@ tcStmt γ s@(ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
       case (m1o, m1fo) of
         (Just m1, Just m1f)
           | isSubtype γ m1f tMU || isSubtypeWithUq γ m1 tUQ ->
-            case getProp l γ f t1 of
+            case getProp l γ F.dummySymbol f t1 of
               Left e -> tcError e
               Right (unzip -> (ts, fs)) ->
                   do  e1''      <- castM γ e1' True t1 (tOr ts)
@@ -880,7 +880,7 @@ tcCall γ ef@(DotRef l e0 f) _
     ue = enableUnique e0
     checkAccess (Right (_, tRcvr))
       | isArrayLen tRcvr = checkArrayLength
-      | otherwise        = checkProp (getProp l γ f tRcvr)
+      | otherwise        = checkProp (getProp l γ F.dummySymbol f tRcvr)
     checkAccess (Left er) = fatal er (ef, tBot)
 
     -- `array.length`
@@ -936,7 +936,7 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e0 f) es) _
 
     -- Check all corresponding type members `tms`
     checkMemberAccess te =
-      case getProp l γ f te of
+      case getProp l γ F.dummySymbol f te of
         Right tms@(map fst -> ts) -> do
             (e', _   ) <- tcExprT γ ue (tOr ts)
             (es', ts') <- foldM stepTypeMemM (es, []) tms

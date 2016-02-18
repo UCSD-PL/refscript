@@ -21,6 +21,7 @@ import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
+import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Module
 import           Language.Rsc.Names
@@ -38,69 +39,72 @@ excludedFieldSymbols = F.symbol <$> [ "hasOwnProperty", "prototype", "__proto__"
 type PPRD r   = (ExprReftable Int r, PP r, F.Reftable r)
 type CEnv r t = (CheckingEnvironment r t , Functor t)
 
--- | `getProp γ b x s t` performs the access `x.f`, where `x: t` and returns a
+-- | `getProp l γ x f t` performs the access `x.f`, where `x: t` and returns a
 --   list of pairs `(tBase, tMember)` where
 --
---   (a) `tBase` is the part of `t` for which the access of field `f` is
---        successful, and
+--   * tBase  : the part of `t` for which the access of field `f` is successful
 --
---   (b) `tMember` is the accessed type member.
+--   * tMember: the accessed type member.
 --
 --------------------------------------------------------------------------------
-getProp :: (CEnv r t, PPRD r, PP f, IsLocated l, F.Symbolic f)
-        => l -> t r -> f -> RType r -> Either Error [(RType r, TypeMember r)]
+getProp :: (CEnv r t, PPRD r, IsLocated l, F.Expression x, F.Symbolic x, F.Symbolic f)
+        => l -> t r -> x -> f -> RType r -> Either Error [(RType r, TypeMember r)]
 --------------------------------------------------------------------------------
-getProp l γ f t@(TPrim _ _) = getPropPrim l γ f t
+getProp l γ x f t@(TPrim _ _) = getPropPrim l γ x f t
 
-getProp l γ f (TOr ts _) = getPropUnion l γ f ts
+getProp l γ x f (TOr ts _) = getPropUnion l γ x f ts
 
 -- | TODO: Chain up to 'Object'
-getProp l γ f t@TObj{}
-  = fmap (map (t,)) (accessMember l γ InstanceK f t)
+getProp l γ x f t@TObj{}
+  = fmap (map (t,)) (accessMember l γ InstanceK x f t)
 
 -- | Enumeration
--- TODO: Instead of the actual integer value, assign unique symbolic values:
---        E.g. A_B_C_1 ...
-getProp l γ f t@(TRef (Gen n []) _)
+--
+--   TODO: Instead of the actual integer value, assign unique symbolic values:
+--         E.g. A_B_C_1 ...
+--
+getProp l γ _ f t@(TRef (Gen n []) _)
   | Just e  <- resolveEnumInEnv γ n
   , Just io <- envFindTy f (e_mapping e)
   = case io of
       IntLit _ i ->
-                    Right [(t, FI undefined Req tIM (tNum `strengthen` exprReft i))]
-      -- XXX : is 32-bit going to be enough ???
-      -- XXX: Invalid BV values will be dropped
-      HexLit _ s -> case bitVectorValue s of
-                      Just v -> Right [(t, FI undefined Req tIM (tBV32 `strengthen` v))]
-                      _      -> Left (errorEnumLookup l f t)
-      _          -> Left (errorEnumLookup l f t)
+          Right [(t, FI fSym Req tIM (tNum `strengthen` exprReft i))]
+      HexLit _ s ->
+          case bitVectorValue s of
+            Just v -> Right [(t, FI fSym Req tIM (tBV32 `strengthen` v))]
+            _      -> Left (errorEnumLookup l fSym t)
+      _ ->  Left (errorEnumLookup l fSym t)
+  where
+    fSym = F.symbol f
 
-getProp l γ f t@(TRef _ _)
-  = fmap (map (t,)) (accessMember l γ InstanceK f t)
+getProp l γ x f t@(TRef _ _)
+  = fmap (map (t,)) (accessMember l γ InstanceK x f t)
 
-getProp l γ f t@(TClass _)
-  = fmap (map (t,)) (accessMember l γ StaticK f t)
+getProp l γ x f t@(TClass _)
+  = fmap (map (t,)) (accessMember l γ StaticK x f t)
 
-getProp _ γ f t@(TMod m)
+getProp _ γ _ f t@(TMod m)
   | Just m' <- resolveModuleInEnv γ m
   , Just v' <- envFindTy f (m_variables m')
   = Right [(t, symToField v')]
 
-getProp l _ f t = Left (errorGenericLookup l f t)
+getProp l _ _ f t = Left (errorGenericLookup l (F.symbol f) t)
 
 
 --------------------------------------------------------------------------------
-getPropPrim :: (CEnv r t, PP f, PPRD r, IsLocated l, F.Symbolic f)
-  => l -> t r -> f -> RType r -> Either Error [(RType r, TypeMember r)]
+getPropPrim
+  :: (CEnv r t, PPRD r, IsLocated l, F.Expression x, F.Symbolic x, F.Symbolic f)
+  => l -> t r -> x -> f -> RType r -> Either Error [(RType r, TypeMember r)]
 --------------------------------------------------------------------------------
-getPropPrim l γ f t@(TPrim c _) =
+getPropPrim l γ x f t@(TPrim c _) =
   case c of
-    TNumber    -> fmap (map (t,)) (lookupAmbientType l γ f "Number")
-    TString    -> fmap (map (t,)) (lookupAmbientType l γ f "String")
-    TStrLit _  -> fmap (map (t,)) (lookupAmbientType l γ f "String")
-    TBV32      -> fmap (map (t,)) (lookupAmbientType l γ f "Number")
-    _          -> Left (errorPrimLookup l f t)
+    TNumber    -> fmap (map (t,)) (lookupAmbientType l γ x f numberSym)
+    TString    -> fmap (map (t,)) (lookupAmbientType l γ x f stringSym)
+    TStrLit _  -> fmap (map (t,)) (lookupAmbientType l γ x f stringSym)
+    TBV32      -> fmap (map (t,)) (lookupAmbientType l γ x f numberSym)
+    _          -> Left (errorPrimLookup l (F.symbol f) t)
 
-getPropPrim _ _ _ _ = error "getPropPrim should only be applied to TApp"
+getPropPrim _ _ _ _ _ = error "getPropPrim should only be applied to TApp"
 
 
 -- | `extractCtor γ t` extracts a contructor signature from a type @t@
@@ -118,25 +122,35 @@ extractCtor γ t = go t
 
 
 --------------------------------------------------------------------------------
-accessMember :: (CEnv r t, PPRE r, PP f, IsLocated l, F.Symbolic f)
-  => l -> t r -> StaticKind -> f -> RType r -> Either Error [TypeMember r]
+accessMember
+  :: (CEnv r t, PPRE r, IsLocated l, F.Expression x, F.Symbolic x, F.Symbolic f)
+  => l -> t r -> StaticKind -> x -> f -> RType r -> Either Error [TypeMember r]
 --------------------------------------------------------------------------------
-accessMember l γ static m t
+accessMember l γ InstanceK x m t
   | Just (TObj _ es _) <- expandType econf (envCHA γ) t
-  , Just mem           <- F.lookupSEnv (F.symbol m) (mems es)
-  = Right [mem]
+  , Just mem           <- F.symbol m `F.lookupSEnv` i_mems es
+  = Right [substThis x mem]
+
   -- In the case of string indexing, build up an optional and assignable field
   | Just (TObj _ es _) <- expandType econf (envCHA γ) t
   , Just (mIdx, tIdx)  <- tm_sidx es
   , validFieldName m
-  = Right [FI (F.symbol m) Opt mIdx tIdx]
-  | otherwise
-  = Left $ errorMemLookup l m t
-  where
-    mems | static == StaticK  = s_mems
-         | otherwise          = i_mems
+  = Right [substThis x $ FI (F.symbol m) Opt mIdx tIdx]
 
+  | otherwise
+  = Left $ errorMemLookup l (F.symbol m) t
+  where
     econf = EConf True True -- Lookup members inherited from built-in objects
+
+accessMember l γ StaticK x m t
+  | Just (TObj _ es _) <- expandType econf (envCHA γ) t
+  , Just mem           <- F.symbol m `F.lookupSEnv` i_mems es
+  = Right [substThis x mem]
+  | otherwise
+  = Left $ errorMemLookup l (F.symbol m) t
+  where
+    econf = EConf True True -- Lookup members inherited from built-in objects
+
 
 --------------------------------------------------------------------------------
 validFieldName  :: F.Symbolic f => f -> Bool
@@ -144,28 +158,27 @@ validFieldName  :: F.Symbolic f => f -> Bool
 validFieldName f = F.symbol f `notElem` excludedFieldSymbols
 
 --------------------------------------------------------------------------------
-lookupAmbientType ::
-  (CEnv r t, PP f, PPRD r, PP b, IsLocated l, F.Symbolic f, F.Symbolic b) =>
-  l -> t r -> b -> f -> Either Error [TypeMemberQ AK r]
+lookupAmbientType
+  :: (CEnv r t, PPRD r, IsLocated l, F.Expression x, F.Symbolic x, F.Symbolic f)
+  => l -> t r -> x -> f -> F.Symbol -> Either Error [TypeMemberQ AK r]
 --------------------------------------------------------------------------------
-lookupAmbientType l γ f amb
-  | Just (TD _ ms) <- resolveTypeInEnv γ nm
-  = accessMember l γ InstanceK f (TObj tIM ms fTop)
+lookupAmbientType l γ x f amb
+  | Just (TD _ ms) <- resolveTypeInEnv γ (mkAbsName [] amb)
+  = accessMember l γ InstanceK x f (TObj tIM ms fTop)
   | otherwise
-  = Left (errorAmbientLookup l f (F.symbol amb))
-  where
-    nm = mkAbsName [] (F.symbol amb)
+  = Left (errorAmbientLookup l (F.symbol f) (F.symbol x))
 
 -- | Accessing the @f@ field of the union type with @ts@ as its parts, returns
 --   "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
 --   accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 --------------------------------------------------------------------------------
-getPropUnion :: (CEnv r t, PPRD r, PP f, IsLocated l, F.Symbolic f)
-  => l -> t r -> f -> [RType r] -> Either Error [(RType r, TypeMember r)]
+getPropUnion
+  :: (CEnv r t, PPRD r, IsLocated l, F.Expression x, F.Symbolic x, F.Symbolic f)
+  => l -> t r -> x -> f -> [RType r] -> Either Error [(RType r, TypeMember r)]
 --------------------------------------------------------------------------------
-getPropUnion l γ f ts =
-  case rights (map (getProp l γ f) ts) of
-    [ ] -> Left (errorUnionLookup l f (tOrR ts fTop))
+getPropUnion l γ x f ts =
+  case rights (map (getProp l γ x f) ts) of
+    [ ] -> Left (errorUnionLookup l (F.symbol f) (tOrR ts fTop))
     tfs -> Right (concat tfs)
 
 --------------------------------------------------------------------------------

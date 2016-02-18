@@ -44,18 +44,14 @@ import           Language.Rsc.Types
 -----------------------------------------------------------------------------
 
 data FactQ q r
+
   -- ** ANALYSIS **
+
   -- SSA
   = PhiVar        (Var r)            -- Φ-var (SSA version) at end of if-stmt
   | PhiLoop       (Var r, Var r)     -- Φ-var (SSA version) before loop and at
                                      -- end of loop body
-                                     --
   | PhiLoopTC     (Var r, Var r, Type)
-
-  -- | PhiVarTC      (Var r)
-  -- | PhiVarTy      (Var r, RTypeQ q r)
-  -- | PhiLoop       !(Env (Var r, Var r))
-  -- | PhiPost       [(Var r, Var r, Var r)]
 
   -- Unification
   | TypInst       Int IContext [RTypeQ q r]
@@ -90,7 +86,7 @@ data FactQ q r
 
   -- Auxiliary
   | BypassUnique
-    deriving (Data, Typeable)
+
 
 type Fact      = FactQ AK
 type UFact     = Fact ()
@@ -115,7 +111,7 @@ instance Eq (Annot a SrcSpan) where
 data FAnnQ q r = FA  { fId   :: NodeId
                      , fSrc  :: SrcSpan
                      , fFact :: [FactQ q r]
-                     } deriving (Data, Typeable)
+                     }
 
 instance {-# OVERLAPPING #-} IsLocated (FAnnQ q r) where
   srcPos (FA _ s _) = s

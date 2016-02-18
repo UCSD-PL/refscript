@@ -188,7 +188,7 @@ cgStateCInfo :: FilePath -> RefScript -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGSta
 cgStateCInfo f pgm ((fcs, fws), cg) = CGI finfo (cg_ann cg)
   where
     quals    = pQuals pgm ++ scrapeQuals pgm
-    finfo    = F.fi fcs fws bs lits mempty quals mempty f
+    finfo    = F.fi fcs fws bs lits mempty quals mempty f False
     bs       = cg_binds cg
     lits     = lits1 `mappend` lits2
     lits1    = F.sr_sort <$> measureEnv pgm
@@ -210,9 +210,9 @@ measureEnv :: RefScript -> F.SEnv F.SortedReft
 measureEnv = fmap rTypeSortedReft . envSEnv . consts
 
 --------------------------------------------------------------------------------
-cgError     :: Error -> CGM b
+cgError :: Error -> CGM b
 --------------------------------------------------------------------------------
-cgError err = throwE $ catMessage err "[CG-ERROR]\n"
+cgError = throwE
 
 --------------------------------------------------------------------------------
 -- | Environment API
@@ -278,7 +278,7 @@ subType l (Just err) g t1 t2
   = modify $ \st -> st { cg_cs = Sub g (ci err l) t1 t2 : cg_cs st }
 
 subType l Nothing g t1 t2
-  = subType l (Just (mkErr l "Liquid Type Error")) g t1 t2
+  = subType l (Just (mkErr l $ text "Liquid Type Error")) g t1 t2
 
 
 -- TODO: KVar subst

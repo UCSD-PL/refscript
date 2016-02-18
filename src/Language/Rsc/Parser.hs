@@ -38,7 +38,7 @@ import           Language.Rsc.Names
 import           Language.Rsc.Parser.Annotations
 import           Language.Rsc.Parser.Declarations ()
 import           Language.Rsc.Parser.Types
--- import           Language.Rsc.Pretty.Errors
+import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Program
 import           Language.Rsc.Transformations
 import           Language.Rsc.Typecheck.Types
@@ -46,6 +46,7 @@ import           Language.Rsc.Types
 import           Prelude                          hiding (mapM)
 import           Text.Parsec                      hiding (State, parse)
 import           Text.Parsec.Error                (errorMessages, showErrorMessages)
+import           Text.PrettyPrint.HughesPJ        (nest, ($+$))
 
 --------------------------------------------------------------------------------
 -- | Parse File and Type Signatures
@@ -149,8 +150,8 @@ extractFact fs = map go fs
 
 
 --------------------------------------------------------------------------------
-parseAnnotations :: [Statement (SrcSpan, [RawSpec])]
-                 -> Either FError [Statement (SrcSpan, [Spec])]
+parseAnnotations
+  :: [Statement (SrcSpan, [RawSpec])] -> Either FError [Statement (SrcSpan, [Spec])]
 --------------------------------------------------------------------------------
 parseAnnotations ss
   | [] <- errs = Right ss'
@@ -182,19 +183,23 @@ parseAnnotations ss
 --------------------------------------------------------------------------------
 parseSpec :: PContext -> [Error] -> RawSpec -> ([Error], Spec)
 --------------------------------------------------------------------------------
-parseSpec ctx errs rawspec
-  = failLeft
-  $ runParser (parseRawSpecWithError ctx rawspec) 0 f (getSpecString rawspec)
+parseSpec ctx es rawspec =
+    failLeft $ runParser (parseRawSpecWithError ctx rawspec) 0 f (getSpecString rawspec)
+
   where
-    failLeft (Left err) = (fromError err : errs, ErrorSpec)
-    failLeft (Right r)  = (errs, r)
+
+    failLeft (Left err) = (fromError err : es, ErrorSpec)
+    failLeft (Right r)  = (es, r)
+
     f = sourceName $ sp_start ss
-    fromError err = mkErr ss   $ showErr err
-                              ++ "\n\nWhile parsing: "
-                              ++ show (getSpecString rawspec)
+
+    fromError err = mkErr ss $ pp (showErr err)    $+$
+                               pp "While parsing:" $+$
+                               nest 2 (pp (getSpecString rawspec))
     ss = srcPos rawspec
     -- Slight change from this one:
     -- http://hackage.haskell.org/package/parsec-3.1.5/docs/src/Text-Parsec-Error.html#ParseError
+    showErr :: ParseError -> String
     showErr = showErrorMessages "or" "unknown parse error" "expecting"
                 "unexpected" "end of input" . errorMessages
 

@@ -49,6 +49,7 @@ import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Typecheck.Unify
 import           Language.Rsc.Types
 import           Language.Rsc.TypeUtilities
+import           Language.Rsc.Visitor
 import           Text.PrettyPrint.HughesPJ          (($+$))
 
 -- import           Debug.Trace                        hiding (traceShow)
@@ -74,17 +75,17 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
 
 safe cfg (Rsc {code = Src fs}) = (NoAnn, failCasts (noFailCasts cfg) fs)
     where
-        failCasts True  _   = F.Safe
-        failCasts False f   = applyNonNull F.Safe F.Unsafe
-                            $ concatMap castErrors
-                            $ casts f
+        failCasts True  _ = F.Safe
+        failCasts False f = applyNonNull F.Safe F.Unsafe
+                          $ concatMap castErrors
+                          $ casts f
 
-        casts              :: Data r => [Statement (AnnTc r)] -> [AnnTc r]
-        casts stmts         = everything (++) ([] `mkQ` f) stmts
+        casts :: Data r => [Statement (AnnTc r)] -> [AnnTc r]
+        casts = foldStmts castVis () []
           where
-            f              :: Expression (AnnTc r) -> [(AnnTc r)]
-            f (Cast_ a _)   = [a]
-            f _             = []
+            castVis = defaultVisitor { accExpr = aE }
+            aE _ (Cast_ a _) = [a]
+            aE _ _ = [ ]
 
 --------------------------------------------------------------------------------
 castErrors :: Unif r => AnnTc r -> [Error]

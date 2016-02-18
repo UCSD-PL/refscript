@@ -202,9 +202,9 @@ extSubst bs = getSubst >>= setSubst . (`mappend` θ)
 
 -- | tcError produces a *recoverable* error (e.g. in a dead-cast environment)
 --------------------------------------------------------------------------------
-tcError     :: Error -> TCM r a
+tcError :: Error -> TCM r a
 --------------------------------------------------------------------------------
-tcError err = throwE $ catMessage err "[TC-ERROR] "
+tcError = throwE
 
 --------------------------------------------------------------------------------
 tcWrap :: TCM r a -> TCM r (Either Error a)

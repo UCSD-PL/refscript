@@ -63,8 +63,8 @@ sourcePos = sp_start . srcPos
 class IsLocated a where
   srcPos :: a -> SrcSpan
 
-instance IsLocated Error where
-  srcPos = srcPos . errLoc
+-- instance IsLocated Error where
+--   srcPos = srcPos . errLoc
 
 instance IsLocated SrcSpan where
   srcPos x = x

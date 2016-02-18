@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
@@ -9,6 +10,7 @@ import           Data.Aeson                     (eitherDecode)
 import           Data.Aeson.Types               hiding (Error, Parser, parse)
 import qualified Data.ByteString.Lazy.Char8     as B
 import           Data.List                      (nub, sort)
+import           GHC.Generics                   (Generic)
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Solver       (resultExit)
 import qualified Language.Fixpoint.Types        as F
@@ -69,9 +71,9 @@ withExistingFile cfg f
           ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
                                 Left  s  -> return $ Left $ F.Crash [] $ s <//> stdOut
                                 Right fs -> return $ Right fs
-          ExitFailure _   -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
+          ExitFailure _   -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult SError) of
                                 Left  s  -> return $ Left $ F.Crash [] $ s <//> stdOut
-                                Right e  -> return $ Left e
+                                Right e  -> return $ Left $ toErr e
   | otherwise
   = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
   where
@@ -92,12 +94,21 @@ getIncludeLibs cfg = case prelude cfg of
   Nothing -> single <$> getPreludeTSPath
   Just p  -> return [p]
 
-instance FromJSON (F.FixResult Error)
-instance ToJSON (F.FixResult Error) where
+
+data SError = SError { errLoc :: SrcSpan
+                     , errMsg :: String }
+          deriving (Eq, Ord, Show, Generic)
+
+toErr :: F.FixResult SError -> F.FixResult Error
+toErr = fmap (\(SError l s) -> err l (pp s))
+
+
+instance FromJSON SError
+instance ToJSON SError where
   toJSON = genericToJSON defaultOptions
 
-instance FromJSON Error
-instance ToJSON Error where
+instance FromJSON (F.FixResult SError)
+instance ToJSON (F.FixResult SError) where
   toJSON = genericToJSON defaultOptions
 
 

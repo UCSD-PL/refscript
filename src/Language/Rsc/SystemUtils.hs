@@ -101,9 +101,13 @@ annotByteString res a = encode $ mkAnnMap res a
 annotVimString        :: PP a => F.FixResult Error -> UAnnInfo a -> String
 annotVimString res a  = toVim $ mkAnnMap res a
 
+-- TODO
+--
 ------------------------------------------------------------------------------
 -- | Type Representing Inferred Annotations
 ------------------------------------------------------------------------------
+
+type AnnErrors = [(SrcSpan, String)]
 
 data AnnMap  = AnnMap {
     status :: String
@@ -113,17 +117,19 @@ data AnnMap  = AnnMap {
 
 mkAnnMap res ann = AnnMap (mkAnnMapStatus res) (mkAnnMapTyp ann) (mkAnnMapErr res)
 
-mkAnnMapStatus (F.Crash _ _) = "error"
-mkAnnMapStatus (F.Safe)      = "safe"
-mkAnnMapStatus (F.Unsafe _)  = "unsafe"
+mkAnnMapStatus _ = "TODO-mkAnnMapStatus"
+-- mkAnnMapStatus (F.Crash _ _) = "error"
+-- mkAnnMapStatus (F.Safe)      = "safe"
+-- mkAnnMapStatus (F.Unsafe _)  = "unsafe"
 
-mkAnnMapErr (F.Unsafe ls)    = eInfo "Liquid Error: "   <$> ls
-mkAnnMapErr (F.Crash ls msg) = eInfo ("Crash: " ++ msg) <$> ls
-mkAnnMapErr _                = []
+mkAnnMapErr _ = [(dummySpan, "TODO-mkAnnMapErr")]
+-- mkAnnMapErr (F.Unsafe ls)    = eInfo "Liquid Error: "   <$> ls
+-- mkAnnMapErr (F.Crash ls msg) = eInfo ("Crash: " ++ msg) <$> ls
+-- mkAnnMapErr _                = []
 
-eInfo msg err                = (srcPos $ errLoc err', errMsg err')
+eInfo msg err = (srcPos $ errLoc err, errMsg err)
   where
-    err'                     = catMessage err msg
+    -- err'      = catMessage err msg
 
 mkAnnMapTyp (AI m)
   = M.map (\a -> (F.symbolSafeString $ ann_bind a, render $ pp (ann_type a)))
@@ -144,7 +150,6 @@ lineCol sp      = (srcSpanStartLine sp, srcSpanStartCol sp)
 
 data Assoc k a = Asc (M.HashMap k a)
 type AnnTypes  = Assoc Int (Assoc Int Annot1)
-type AnnErrors = [(SrcSpan, String)]
 data Annot1    = A1 String String Int Int
                     --  { ident :: String
                     --  , ann   :: String

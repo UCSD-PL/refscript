@@ -33,7 +33,7 @@ import           Text.PrettyPrint.HughesPJ
 scrapeQuals :: RefScript -> [Qualifier]
 ---------------------------------------------------------------------------------
 scrapeQuals (Rsc { code = Src ss }) =
-    qualifiers $ {- mkUq . -} foldStmts tbv [] $ filter nonLibFile ss
+    qualifiers $ {- mkUq . -} foldStmts tbv [] [] $ filter nonLibFile ss
   where
     tbv = defaultVisitor { accStmt = gos, accCElt = goe, ctxStmt = ctx }
 

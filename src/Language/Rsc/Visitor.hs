@@ -61,6 +61,7 @@ data VisitorM m acc ctx b = Visitor {
   , txLVal  :: ctx -> LValue b     -> LValue b
 
   -- | Accumulations are allowed to access current @ctx@ but @acc@ value is monoidal
+  --   Called after `ctxStmt`,etc.
   , accStmt :: ctx -> Statement b  -> acc
   , accExpr :: ctx -> Expression b -> acc
   , accCElt :: ctx -> ClassElt b   -> acc
@@ -113,8 +114,8 @@ scopeVisitor = defaultVisitor { endExpr = ee, endStmt = es }
 foldRsc :: (IsLocated b, Monoid a) => Visitor a ctx b -> ctx -> a -> Rsc b r -> a
 foldRsc v c a p = snd $ execVisitM v c a p
 
-foldStmts :: (IsLocated b, Monoid a) => Visitor a ctx b -> ctx -> [Statement b] -> a
-foldStmts v c p = execState (visitStmtsM v c p) mempty
+foldStmts :: (IsLocated b, Monoid a) => Visitor a ctx b -> ctx -> a -> [Statement b] -> a
+foldStmts v c a p = execState (visitStmtsM v c p) a
 
 visitRsc :: (IsLocated b, Monoid a) =>   Visitor a ctx b -> ctx -> Rsc b r -> Rsc b r
 visitRsc v c p = fst $ execVisitM v c mempty p

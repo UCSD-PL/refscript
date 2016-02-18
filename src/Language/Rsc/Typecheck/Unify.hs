@@ -179,7 +179,7 @@ varEql l θ α β =
     Left  s1 ->
       case varAsn l θ β $ tVar α of
         Right θ'' -> Right θ''
-        Left  s2  -> Left $ catMessage s1 (errMsg s2)
+        Left  s2  -> Left (s1 `catError` s2)
 
 -----------------------------------------------------------------------------
 varAsn ::  Unif r => SrcSpan -> RSubst r -> TVar -> RType r -> Either Error (RSubst r)

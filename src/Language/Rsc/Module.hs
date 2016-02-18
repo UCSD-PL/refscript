@@ -173,22 +173,18 @@ toDeclaration (ClassStmt l c cs)
       Left e   -> Left (F.Unsafe [e])
       Right tm -> Right (cc, TD ts tm)
   | otherwise
-  = Left $ F.Unsafe [F.err (sourceSpanSrcSpan l) errMsg ]
+  = Left $ F.Unsafe [errorClassAnnot l c]
   where
     cc     = fmap fSrc c
     cas    = [ ts | ClassAnn _ ts <- fFact l ]
-    errMsg = "[TODO fix error msg] Invalid class annotation for class: " ++ ppshow c
 
 toDeclaration (InterfaceStmt l c)
   | [t] <- ifaceAnns  = Right (fmap fSrc c,t)
-  | otherwise         = Left $ F.Unsafe [F.err (sourceSpanSrcSpan l) errMsg ]
+  | otherwise         = Left $ F.Unsafe [errorInterfaceAnnot l c]
   where
     ifaceAnns = [ t | InterfaceAnn t <- fFact l ]
-    errMsg    = "[TODO fix error msg] Invalid interface annotation for interface: " ++ ppshow c
 
-toDeclaration s       = Left $ F.Unsafe $ single
-                      $ F.err (sourceSpanSrcSpan $ getAnnotation s)
-                      $ "Statement\n" ++ ppshow s ++ "\ncannot have a type annotation."
+toDeclaration s = Left $ F.Unsafe [errorStatementeAnnot (getAnnotation s) s]
 
 
 ---------------------------------------------------------------------------------

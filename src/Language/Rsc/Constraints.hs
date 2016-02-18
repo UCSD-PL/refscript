@@ -44,7 +44,9 @@ data Cinfo = Ci { ci_info    :: !Error
                 , ci_history :: [SubC]
                 }
 
-ciToError (Ci e _ h) = err (errLoc e) (errMsg e ++ "\n" ++ hs)
+-- TODO: restore this
+--
+ciToError (Ci e _ h) = e -- err (errLoc e) (errMsg e ++ "\n" ++ hs)
   where
     hs = show (ppAll h)
     ppAll [] = empty

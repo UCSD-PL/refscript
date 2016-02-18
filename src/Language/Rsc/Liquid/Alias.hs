@@ -36,7 +36,6 @@ expandAliases   :: RelRefScript -> RelRefScript
 expandAliases p =  expandCodePred pe'
                 $  expandCodeTAlias te'
                 $  expandPred pe'
-               -- <$> expandRefType te'   -- there are no RefTypes in Reft
                <$> p'
   where
     p'          = p { pAlias = pe' } {tAlias = te'}
@@ -122,12 +121,12 @@ getTApps    = everything (++) ([] `mkQ` fromT)
 expandTAlias  :: TAliasEnv RRType ->  TAlias RRType -> TAlias RRType
 expandTAlias te a = a {al_body = expandRefType te $ al_body a}
 
-expandRefType :: Data a => TAliasEnv RRType -> a -> a
-expandRefType te = everywhere $ mkT tx
+expandRefType :: Transformable t => TAliasEnv RRType -> t RK F.Reft -> t RK F.Reft
+expandRefType te = trans tx [] []
   where
-    tx t@(TRef (Gen (QN (QP RK_ l []) c) ts) r) =
+    tx _ _ t@(TRef (Gen (QN (QP RK_ l []) c) ts) r) =
         maybe t (applyTAlias l t c ts r) (envFindTy c te)
-    tx t = t
+    tx _ _ t = t
 
 applyTAlias l t _ ts_ r a
   | (nt, ne) == (nα, nx)

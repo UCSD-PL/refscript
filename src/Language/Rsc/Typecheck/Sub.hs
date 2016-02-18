@@ -227,7 +227,7 @@ subtypeObj l γ c (TObj m1 e1s _) (TObj m2 e2s _)
 
 -- Enumeration subtyping
 --
-subtypeObj l γ c t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
+subtypeObj l γ _ t1@(TRef (Gen x1 []) _) t2@(TRef (Gen x2 []) _)
   | isEnumType (envCHA γ) t1, isEnumType (envCHA γ) t2
   = if x1 == x2 then SubOK
                 else NoSub [errorSubtype l t1 t2]

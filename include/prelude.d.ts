@@ -138,10 +138,10 @@ declare function builtin_BIForInKeys(obj: Object): string[];
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for...in
 //TODO: remove the last overload once {[s:string]:A} extends { } PV: ???
 
-/*@ builtin_BIForInKeys :: <A>(a: IArray<A>)         => IArray<{ number | 0 <= v && v < len a }> */
-/*@ builtin_BIForInKeys ::    (o: Object<Immutable>) => IArray<{ string | hasProperty o v && enumProp v o }> */
-/*@ builtin_BIForInKeys ::    (o: (Immutable) { })   => IArray<{ string | hasProperty o v && enumProp v o }> */
-/*@ builtin_BIForInKeys :: <A>(o: (Immutable) { [s:string]:A }) => IArray<{ string | hasProperty o v && enumProp v o }> */
+/*@ builtin_BIForInKeys :: <A>(a: IArray<A>)                    => IArray<{ number | 0 <= v && v < len a }> */
+/*@ builtin_BIForInKeys ::    (o: Object<Immutable>)            => IArray<{ string | hasProperty o v && enumProp o v }> */
+/*@ builtin_BIForInKeys ::    (o: (Immutable) { })              => IArray<{ string | hasProperty o v && enumProp o v }> */
+/*@ builtin_BIForInKeys :: <A>(o: (Immutable) { [s:string]:A }) => IArray<{ string | hasProperty o v && enumProp o v }> */
 declare function builtin_BIForInKeys(obj: Object): string[];
 
 /*@ builtin_OpInstanceof :: <A>(x:A, s: string) => { v: boolean | Prop v <=> extends_class(x, s) } */

@@ -144,7 +144,7 @@ accessMember l γ InstanceK x m t
 
 accessMember l γ StaticK x m t
   | Just (TObj _ es _) <- expandType econf (envCHA γ) t
-  , Just mem           <- F.symbol m `F.lookupSEnv` i_mems es
+  , Just mem           <- F.symbol m `F.lookupSEnv` s_mems es
   = Right [substThis x mem]
   | otherwise
   = Left $ errorMemLookup l (F.symbol m) t

@@ -417,16 +417,17 @@ addFixpointBind g (SI x _ _           _ t)
 --------------------------------------------------------------------------------
 addInvariant :: CGEnv -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-addInvariant g t
-  = do  extraInvariants <- extraInvs <$> getCgOpts
-        if extraInvariants then (hasProp . hierarchy . truthy . typeof t) <$> getCgInvs
-                           else (          hierarchy . truthy . typeof t) <$> getCgInvs
+addInvariant g tIn = do
+    extraInvariants <- extraInvs <$> getCgOpts
+    if extraInvariants
+      then (hasProp . hierarchy . truthy . typeof tIn) <$> getCgInvs
+      else (          hierarchy . truthy . typeof tIn) <$> getCgInvs
   where
     cha = envCHA g
     -- | typeof
     typeof t@(TPrim p o)   i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup p i
-    typeof t@(TRef{})      _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
-    typeof t@(TObj{})      _ = t `strengthen` F.reft (vv t) (typeofExpr $ F.symbol "object")
+    typeof t@(TRef{})      _ = t `strengthen` F.reft (vv t) (typeofExpr tagObjectSym)
+    typeof t@(TObj{})      _ = t `strengthen` F.reft (vv t) (typeofExpr tagObjectSym)
     typeof   (TFun a b _)  _ = TFun a b typeofReft
     typeof t               _ = t
 
@@ -437,18 +438,18 @@ addInvariant g t
 
     strengthenOp t o r     | r `L.elem` ofRef o = t
                            | otherwise          = t `strengthen` r
-    typeofReft             = F.reft  (vv t) $ F.pAnd [ typeofExpr $ F.symbol "function"
-                                                     , F.eProp    $ vv t                ]
-    typeofExpr s           = F.PAtom F.Eq (F.mkEApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t])
-                                          (F.expr $ F.symbolSafeText s)
+
+    typeofReft   = F.reft vvI $ F.pAnd [typeofExpr tagFuncSym, F.eProp vvI]
+    typeofExpr s = F.PAtom F.Eq (F.mkEApp (F.dummyLoc tagSym) [F.eVar vvI])
+                                (F.expr $ F.symbolSafeText s)
 
     ofRef (F.Reft (s, ra))    = F.reft s <$> F.conjuncts ra
 
     -- | { f: T } --> hasProperty(v, "f")
-    hasProp ty             = t `strengthen` keyReft (boundKeys cha ty)
-    keyReft ks             = F.reft (vv t) $ F.pAnd (hasPropExpr <$> ks)
+    hasProp ty             = tIn `strengthen` keyReft (boundKeys cha ty)
+    keyReft ks             = F.reft vvI $ F.pAnd (hasPropExpr <$> ks)
     hasPropExpr s          = F.mkEApp (F.dummyLoc (F.symbol "hasProperty"))
-                                [F.eVar (vv t), F.expr (F.symbolSafeText s)]
+                                [F.eVar vvI, F.expr (F.symbolSafeText s)]
 
     -- | extends class / interface
     hierarchy t@(TRef c _)
@@ -463,10 +464,11 @@ addInvariant g t
     rExtClass t cs = F.reft (vv t) (F.pAnd $ refa t "extends_class"     <$> cs)
     rExtIface t cs = F.reft (vv t) (F.pAnd $ refa t "extends_interface" <$> cs)
 
-    refa t s c     =F.mkEApp (sym s) [ F.expr $ rTypeValueVar t
-                                     , F.expr $ F.symbolSafeText c]
-    vv             = rTypeValueVar
-    sym s          = F.dummyLoc $ F.symbol s
+    refa t s c = F.mkEApp (sym s) [ F.expr vvI, F.expr (F.symbolSafeText c)]
+
+    vv    = rTypeValueVar
+    vvI   = vv tIn
+    sym   = F.dummyLoc . F.symbol
 
 
 --------------------------------------------------------------------------------

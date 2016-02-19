@@ -1,4 +1,5 @@
 
+/*@ qualif EC(v: Str, x: a): extends_class x v */
 
 class Animal<M extends ReadOnly> {
 

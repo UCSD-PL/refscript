@@ -76,6 +76,10 @@ module Language.Rsc.Names (
   , extendsInterfaceSym
   , offsetSym
 
+  , tagSym
+  , tagObjectSym
+  , tagFuncSym
+
   ) where
 
 import           Data.Data
@@ -261,6 +265,12 @@ classSym  = "class"
 moduleSym = "module"
 enumSym   = "enum"
 intersSym = "intersection"
+
+tagSym, tagObjectSym, tagFuncSym :: F.Symbol
+tagSym       = "ttag"
+tagObjectSym = "object"
+tagFuncSym   = "function"
+
 
 extendsClassSym, extendsInterfaceSym :: F.Symbol
 extendsClassSym     = "extends_class"

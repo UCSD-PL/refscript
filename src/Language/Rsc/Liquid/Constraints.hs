@@ -29,6 +29,7 @@ import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.CGMonad
 import           Language.Rsc.Liquid.Environment
+import           Language.Rsc.Liquid.Refinements
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc               (concatMapM)

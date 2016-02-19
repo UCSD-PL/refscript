@@ -21,12 +21,13 @@ module Language.Rsc.Traversals (
   -- , checkTypeWF
   ) where
 
-import qualified Data.HashSet             as H
-import qualified Data.List                as L
-import           Data.Maybe               (catMaybes, maybeToList)
-import qualified Language.Fixpoint.Types  as F
+import qualified Data.HashSet                    as H
+import qualified Data.List                       as L
+import           Data.Maybe                      (catMaybes, maybeToList)
+import qualified Language.Fixpoint.Types         as F
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
+import           Language.Rsc.Liquid.Refinements
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Types
@@ -59,7 +60,8 @@ efold f g h                  = go
     go γ z t@(TOr ts r)      = h γ r $ g γ t $ gos γ z ts
     go γ z t@(TAnd ts)       = g γ t $ gos γ z $ map snd ts
     go γ z t@(TRef n r  )    = h γ r $ g γ t $ gos γ z $ g_args n
-    go γ z t@(TObj _ xts r)  = h γ r $ g γ t $ efoldTypeMembers' f g h xts γ z
+    go γ z t@(TObj _ xts r)  = h γ r $ g γ t $ efoldTypeMembers' f g h xts γ' z
+                               where γ' = F.insertSEnv thisSym (f t) γ
     go γ z t@(TClass n)      = g γ t $ gos γ z $ catMaybes $ btv_constr <$> b_args n
     go γ z t@(TMod _)        = g γ t z
     go γ z t@(TAll bs t')    = g γ t $ go γ (gos γ z $ maybeToList $ btv_constr bs) t'

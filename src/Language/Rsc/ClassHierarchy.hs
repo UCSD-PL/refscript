@@ -23,7 +23,7 @@ module Language.Rsc.ClassHierarchy (
     , boundKeys, getMutability
 
     -- * Type Transformations
-    , weaken, expandType
+    , weaken, expandType, expandTypeDef
 
     , typeMemersOfTDecl, typeMembersOfType
 
@@ -195,6 +195,12 @@ data ExpandConf = EConf {
 
 instance Default ExpandConf where
   def = EConf True False
+
+---------------------------------------------------------------------------
+expandTypeDef
+  :: (ExprReftable Int r, PPR r) => ClassHierarchy r -> RType r -> Maybe (RType r)
+---------------------------------------------------------------------------
+expandTypeDef = expandType def
 
 
 -- | `expandType c γ t` expands type @t@ to an object type (TObj)

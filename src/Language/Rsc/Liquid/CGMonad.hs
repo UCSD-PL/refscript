@@ -73,6 +73,7 @@ import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Qualifiers
+import           Language.Rsc.Liquid.Refinements
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
@@ -384,7 +385,8 @@ cgFunTys :: (IsLocated l, F.Symbolic b, PP x, PP [b])
          => l -> x -> [b] -> RefType -> CGM [IOverloadSig F.Reft]
 --------------------------------------------------------------------------------
 cgFunTys l f xs ft   | Just ts <- bkFuns ft
-                     = zip ([0..] :: [Int]) <$> mapM fTy (concatMap expandOpts ts)
+                     = do tyParts <- mapM fTy (concatMap expandOpts ts)
+                          return   $ zip [0..] tyParts
                      | otherwise
                      = cgError $ errorNonFunction (srcPos l) f ft
   where

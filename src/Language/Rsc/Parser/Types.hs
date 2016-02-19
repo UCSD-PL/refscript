@@ -540,8 +540,6 @@ freshIntP'
 -- | Parses refined types of the form: `{ kind | refinement }`
 --------------------------------------------------------------------------------
 xrefP :: Parser (F.Reft -> a) -> Parser a
--- xrefP = refDefP (symbol "v") refaP
-
 xrefP kindP
   = braces $ do
       t  <- kindP

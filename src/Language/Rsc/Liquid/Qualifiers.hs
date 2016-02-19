@@ -3,13 +3,14 @@
 
 module Language.Rsc.Liquid.Qualifiers (scrapeQuals) where
 
-import           Data.List                 (delete, nub)
-import           Data.Maybe                (fromMaybe)
-import           Language.Fixpoint.Types   hiding (quals)
+import           Data.List                       (delete, nub)
+import           Data.Maybe                      (fromMaybe)
+import           Language.Fixpoint.Types         hiding (quals)
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
+import           Language.Rsc.Liquid.Refinements
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
@@ -17,7 +18,7 @@ import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.SystemUtils
 import           Language.Rsc.Traversals
-import qualified Language.Rsc.Types        as T
+import qualified Language.Rsc.Types              as T
 import           Language.Rsc.Visitor
 import           Text.PrettyPrint.HughesPJ
 

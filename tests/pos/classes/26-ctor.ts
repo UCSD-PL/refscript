@@ -5,7 +5,7 @@ class Foo<M extends ReadOnly> {
     /*@ (Immutable) a: number */
     a;
 
-    /*@ new (x: number): { v: Foo<M> | this.a = x } */
+    /*@ new (x: number): { v: Foo<M> | offset(v, "a") = x } */
     constructor(x) {
         this.a = x;
     }

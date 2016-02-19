@@ -83,6 +83,7 @@ Executable rsc
                   , Language.Rsc.Liquid.Environment
                   , Language.Rsc.Liquid.Qualifiers
                   , Language.Rsc.Liquid.Types
+                  , Language.Rsc.Liquid.Refinements
                   , Language.Rsc.Locations
                   , Language.Rsc.Lookup
                   , Language.Rsc.Misc
@@ -201,6 +202,7 @@ Library
                     Language.Rsc.Typecheck.Checker,
                     Language.Rsc.Liquid.Checker,
                     Language.Rsc.Liquid.Types,
+                    Language.Rsc.Liquid.Refinements, 
                     Language.Rsc.Liquid.CGMonad,
                     Language.Rsc.Liquid.Qualifiers,
                     Language.Rsc.Pretty.Syntax,

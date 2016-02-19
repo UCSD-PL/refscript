@@ -52,12 +52,12 @@ module Language.Rsc.Liquid.Environment (
 
 import           Control.Monad
 import           Data.Default
-import qualified Data.HashMap.Strict            as HM
-import qualified Data.List                      as L
-import           Data.Maybe                     (catMaybes, fromMaybe)
-import           Debug.Trace                    hiding (traceShow)
+import qualified Data.HashMap.Strict             as HM
+import qualified Data.List                       as L
+import           Data.Maybe                      (catMaybes, fromMaybe)
+import           Debug.Trace                     hiding (traceShow)
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types        as F
+import qualified Language.Fixpoint.Types         as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations
 import           Language.Rsc.ClassHierarchy
@@ -66,6 +66,7 @@ import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.CGMonad
+import           Language.Rsc.Liquid.Refinements
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Module
@@ -116,7 +117,7 @@ cgEnvFindTy x   = fmap v_type . envFindTy x . cge_names
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-checkSyms :: (IsLocated l, EnvKey a) => l -> String -> CGEnv -> [a] -> RefType -> [Error]
+checkSyms :: (IsLocated l, EnvKey a, PP m) => l -> m -> CGEnv -> [a] -> RefType -> [Error]
 ---------------------------------------------------------------------------------------
 -- | Valid symbols:
 --
@@ -131,9 +132,9 @@ checkSyms :: (IsLocated l, EnvKey a) => l -> String -> CGEnv -> [a] -> RefType -
 checkSyms l m g ok t = efoldRType h f F.emptySEnv [] t
   where
     h _        = ()
-    f γ t' s   = let rt   = rTypeReft t'   in
-                 let noKv = noKVars   rt   in
-                 let ss   = F.syms    noKv in
+    f γ t' s   = let rt   = rTypeReft t'     in
+                 let noKv = noKVars rt       in
+                 let ss   = F.syms noKv      in
                  s ++ catMaybes (fmap (chk γ t') ss)
 
     chk γ t' s | s `elem` biReserved
@@ -156,7 +157,7 @@ checkSyms l m g ok t = efoldRType h f F.emptySEnv [] t
                = Just $ errorUnboundSyms l t s m
 
     biReserved = map F.symbol ["func", "obj"]
-    biExtra    = map F.symbol ["bvor", "bvand", "builtin_BINumArgs", "offset", "this"]
+    biExtra    = map F.symbol ["bvor", "bvand", "builtin_BINumArgs", "offset"]
     ok_syms    = map F.symbol ok
     validAsgn  = [RdOnly, Ambient, WriteLocal]
 
@@ -201,7 +202,8 @@ validateFSig l g (bvs, bs, t) = do
 initClassCtorEnv :: IsLocated l => l -> TypeSig F.Reft -> CGEnv -> CGM CGEnv
 -------------------------------------------------------------------------------
 initClassCtorEnv l  (TS _ (BGen nm bs) _) g =
-    cgEnvAdds l "initClassCtorEnv" [eThis] g'
+    -- cgEnvAdds l "initClassCtorEnv" [eThis] g'
+    return g'
   where
     g'    = g { cge_bounds = envAdds bts (cge_bounds g)
               , cge_this   = Just tThis
@@ -209,7 +211,7 @@ initClassCtorEnv l  (TS _ (BGen nm bs) _) g =
               }
     bts   = [(s,t) | BTV s _ (Just t) <- bs]
     tThis = adjUQ (TRef (Gen nm (map btVar bs)) fTop)
-    eThis = SI thisSym Local RdOnly Uninitialized tThis
+    -- eThis = SI thisSym Local RdOnly Uninitialized tThis
     adjUQ (TRef (Gen n (_:ps)) r) = TRef (Gen n (tUQ:ps)) r
     adjUQ t                       = t
 
@@ -314,7 +316,7 @@ freshenAnn :: IsLocated l => l -> CGM AnnLq
 freshenAnn l = FA <$> cgTickAST <*> pure (srcPos l) <*> pure []
 
 --------------------------------------------------------------------------------
-cgEnvAdds :: IsLocated l => l -> String -> [CGEnvEntry] -> CGEnv -> CGM CGEnv
+cgEnvAdds :: (IsLocated l, PP m) => l -> m -> [CGEnvEntry] -> CGEnv -> CGM CGEnv
 --------------------------------------------------------------------------------
 cgEnvAdds l msg xts g = foldM step g es
   where
@@ -349,8 +351,8 @@ objFields g e@(SI x loc a _ t)
 
 --------------------------------------------------------------------------------
 envAddGroup
-  :: IsLocated l
-  => l -> String -> [F.Symbol] -> CGEnv -> [CGEnvEntry] -> CGM CGEnv
+  :: (IsLocated l, PP m)
+  => l -> m -> [F.Symbol] -> CGEnv -> [CGEnvEntry] -> CGM CGEnv
 --------------------------------------------------------------------------------
 envAddGroup l msg ks g0 xts
   = do  -- Flag any errors

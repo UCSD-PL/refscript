@@ -570,12 +570,14 @@ consInstanceClassElt :: CGEnv -> TypeDecl F.Reft -> ClassElt AnnLq -> CGM ()
 --------------------------------------------------------------------------------
 -- | Constructor
 --
-consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
-  = do  g2    <- initClassCtorEnv l sig g1
-        g3    <- cgEnvAdds l "ctor" exitP g2
-        ts    <- cgFunTys l ctor xs ctorT
-        mapM_ (consCallable l g3 ctor xs body) ts
+consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body) = do
+    g2    <- initClassCtorEnv l sig g1
+    g3    <- cgEnvAdds l "ctor" exitP g2
+    ts    <- cgFunTys l ctor xs ctorT
+    mapM_ (consCallable l g3 ctor xs body) ts
+
   where
+
     thisT = TRef (Gen nm (map btVar bs)) fTop
     ctor  = builtinOpId BICtor
     cExit = builtinOpId BICtorExit
@@ -599,8 +601,56 @@ consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body
     v_sym = F.symbol $ F.vv Nothing
     c_sym = on compare (show . b_sym)
 
-    ctorT = fromMaybe (die $ unsupportedNonSingleConsTy (srcPos l)) (tm_ctor ms)
+    ctorT = case tm_ctor ms of
+              Nothing -> die (unsupportedNonSingleConsTy (srcPos l))
+              Just ft -> case bkFun ft of
+                           Just (bvs, bs, rt) -> mkFun (bvs, bs, substThisWithSelf rt)
+                           Nothing            -> error "Unsupported ctor ty"
 
+
+
+-- consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
+--   = do  validateTFun l g1 ctorT
+--         g2    <- initClassCtorEnv l sig g1
+--
+--         g3    <- cgEnvAdds l "Constructor" [ctorObjSi, ctorRetSi] g2
+--
+--         ts    <- cgFunTys l ctor xs ctorT
+--         mapM_    (consCallable l g3 ctor xs body) ts
+--   where
+--     thisT      = TRef (Gen nm (map btVar bs)) fTop
+--     ctor       = builtinOpId BICtor
+--
+--     ctorObj    = builtinOpId BICtorObject
+--     ctorObjSi  = SI (F.symbol ctorObj) Local Ambient Initialized ctorObjTy
+--     ctorObjTy  = ltracePP l "ctorObjTy" $ mkFun (bs, xts, ret)
+--     xts        = case expandTypeDef (envCHA g1) thisT of
+--                    Just (TObj _ ms _ ) -> sortBy c_sym (toBinds ms)
+--                    _                   -> []
+--     ret        = substThisWithSelf     -- this --> vv
+--                $ unqualifyThis         -- offset(this, "f") --> f
+--                $ strengthen thisT
+--                $ F.reft (F.vv Nothing) (F.pAnd $ bnd <$> out)
+--
+--     ctorRet    = builtinOpId BICtorReturn
+--     ctorRetSi  = SI (F.symbol ctorRet) Local Ambient Initialized ctorRetTy
+--     ctorRetTy  = ltracePP l "ctorRetTy" $ mkFun ([], [B thisSym Req retTy], tVoid)
+--
+--
+--     toBinds ms = [ B x Req (unqualifyThis t) | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
+--     out        = [ f | (f, FI _ _ m _) <- F.toListSEnv (i_mems ms), isSubtype g1 m tIM ]
+--
+--     bnd f      = F.PAtom F.Eq (mkOffsetSym v_sym $ symbolString f) (F.eVar f)
+--
+--     v_sym      = F.symbol $ F.vv Nothing
+--     c_sym      = on compare (show . b_sym)
+--
+--     (ctorT, retTy) =
+--       case tm_ctor ms of
+--         Nothing -> die (unsupportedNonSingleConsTy (srcPos l))
+--         Just ft -> case bkFun ft of
+--                      Just (bvs, bs, c) -> (mkFun (bvs, bs, tVoid), c)
+--
 
 -- | Instance method
 --
@@ -904,10 +954,11 @@ consExpr g (ObjectLit l pes) to
 --
 consExpr g (NewExpr l e es) s
   = mseq (consExpr g e Nothing) $ \(x,g1) -> do
-      t <-  cgSafeEnvFindTyM x g1
+      t <- cgSafeEnvFindTyM x g1
       case extractCtor g1 t of
         Just ct ->
-            mseq (consCall g1 l (builtinOpId BICtor) (es `zip` nths) ct) $ \(x, g2) -> do
+            let ct' = substThisCtor ct in
+            mseq (consCall g1 l (builtinOpId BICtor) (es `zip` nths) ct') $ \(x, g2) -> do
               tNew    <- cgSafeEnvFindTyM x g2
               tNew'   <- pure (adjustCtxMut tNew s)
               tNew''  <- pure (substThis (rTypeValueVar tNew') tNew')

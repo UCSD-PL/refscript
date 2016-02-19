@@ -222,7 +222,7 @@ errorForbiddenSyms l t xs     = mkErr l $ text "Symbol(s):" <+>
 
 errorUnboundSyms l t s m      = mkErr l $ text "Symbol" <+> ticks (pp s) <+> text "appearing in type:" $+$
                                                  nest 2 (pp t) $+$
-                                                 text "is unbound [ERROR_CODE:" <+> pp m <+> text "]."
+                                                 text "is unbound" <+> brackets (text "ERROR_CODE:" <+> pp m)
 
 unimplementedReservedSyms l   = mkErr l $ text $ printf "Please avoid using 'func' and 'obj' as symbols in refinements."
 errorAsgnInRef l x t a        = mkErr l $ text "Only readonly variables can be used in refinements." $+$

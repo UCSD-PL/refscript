@@ -1,11 +1,20 @@
 
+
 class Animal<M extends ReadOnly> {
 
-    /*@ (Immutable) kind: { v: string | [((v = "") || (v = "horse") || (v = "snake") || (v = "tiger"));
+    /* (Immutable) kind: { v: string | [((v = "") || (v = "horse") || (v = "snake") || (v = "tiger"));
                                           (v = "horse") => extends_class(this, "Horse");
                                           (v = "snake") => extends_class(this, "Snake")] } */
+
+    /*@ (Immutable) kind: { v: string | v = "" || v = "horse" || v = "snake" || v = "tiger" } */
     public kind: string = "";
-    constructor() { }
+
+    /*@ new (): { Animal<M> | (this.kind = "horse" => extends_class this "Horse") &&
+                              (this.kind = "snake" => extends_class this "Snake") }
+    */
+    constructor() {
+
+    }
 }
 
 class Horse<M extends ReadOnly> extends Animal<M> {

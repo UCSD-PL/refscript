@@ -465,11 +465,11 @@ tcInstanceClassElt
   => TCEnv r -> TypeDecl r -> ClassElt (AnnTc r) -> TCM r (ClassElt (AnnTc r))
 --------------------------------------------------------------------------------
 -- | Constructor
---
-tcInstanceClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
-  = do  its    <- tcFunTys l ctor xs ctorTy
-        body'  <- foldM (tcCallable γ' l ctor xs) body its
-        return  $ Constructor l xs body'
+
+tcInstanceClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body) = do
+    its    <- tcFunTys l ctor xs ctorTy
+    body'  <- foldM (tcCallable γ' l ctor xs) body its
+    return  $ Constructor l xs body'
   where
     γ'     = tcEnvAdd cExit viExit (initClassCtorEnv sig γ)
     ctor   = builtinOpId BICtor
@@ -486,6 +486,41 @@ tcInstanceClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
 
     c_sym = on compare (show . b_sym)     -- XXX: Symbolic compare is on Symbol ID
     ctorTy = fromMaybe (die $ unsupportedNonSingleConsTy (srcPos l)) (tm_ctor ms)
+
+
+-- tcInstanceClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
+--   = do  its    <- tcFunTys l ctor xs ctorTy
+--         body'  <- foldM (tcCallable γ' l ctor xs) body its
+--         return  $ Constructor l xs body'
+--   where
+--     γ'     = tcEnvAdd ctorObj ctorObjSi
+--            $ tcEnvAdd ctorRet ctorRetSi
+--            $ initClassCtorEnv sig γ
+--     ctor   = builtinOpId BICtor
+--
+--     thisT   = TRef (Gen nm (map btVar bs)) fTop
+--
+--     ctorObj   = builtinOpId BICtorObject
+--     ctorObjSi = SI (F.symbol ctorObj) Local Ambient Initialized ctorObjTy
+--     ctorObjTy = ltracePP l "ctorObjTy" $ mkFun (bs, xts, thisT)
+--     xts       = case expandTypeDef (envCHA γ) thisT of
+--                   Just (TObj _ ms_ _ ) -> toBinds ms_
+--                   _ -> []
+--
+--     toBinds m = sortBy c_sym [ B x Req t | (x, FI _ _ _ t) <- F.toListSEnv (i_mems m) ]
+--
+--     ctorRet   = builtinOpId BICtorReturn
+--     ctorRetSi = SI (F.symbol ctorRet) Local Ambient Initialized ctorRetTy
+--     ctorRetTy = ltracePP l "ctorRetTy" $ mkFun ([], [B thisSym Req retTy], tVoid)
+--
+--     c_sym = on compare (show . b_sym)     -- XXX: Symbolic compare is on Symbol ID
+--
+--     -- ret ty :: (..) => void
+--     (ctorTy, retTy) =
+--         case tm_ctor ms of
+--           Nothing -> die (unsupportedNonSingleConsTy (srcPos l))
+--           Just ft -> case bkFun ft of
+--                        Just (bvs, bs, c) -> (mkFun (bvs, bs, tVoid), c)
 
 -- | Instance variable
 --

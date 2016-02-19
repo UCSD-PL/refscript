@@ -386,8 +386,10 @@ ctorVisitor ms =
                                        <*> return e
     te lv                 = return lv
 
-    ts r@(ReturnStmt l _) = maybeBlock <$> fr_ l <*> ((:[r]) <$> ctorExit l ms)
+    ts r@(ReturnStmt l _) = error "no return in ctor"
     ts r                  = return r
+
+    -- ts r@(ReturnStmt l _) = maybeBlock <$> fr_ l <*> ((:[tracePP "ret" r]) <$> ctorExit l ms)
 
 
 -------------------------------------------------------------------------------------
@@ -436,12 +438,14 @@ transSuper l g es
 -------------------------------------------------------------------------------------
 ctorExit :: AnnSSA r -> [Id t] -> SSAM r (Statement (AnnSSA r))
 -------------------------------------------------------------------------------------
-ctorExit l ms
-  = do  m     <- VarRef <$> fr <*> freshenIdSSA (builtinOpId BICtorExit)
-        es    <- mapM ((VarRef <$> fr <*>) . return . mkCtorId l) ms
-        ReturnStmt <$> fr <*> justM (CallExpr <$> fr <**> m <**> es)
+ctorExit l ms = do
+    ctorExit    <- VarRef <$> fr <*> freshenIdSSA (builtinOpId BICtorExit)
+    es          <- mapM (VarRef <$> fr <**>) ms'
+    exitC       <- CallExpr <$> fr <**> ctorExit <**> es
+    ReturnStmt <$> fr <**> Just exitC
   where
-    fr = fr_ l
+    ms' = map (mkCtorId l) ms
+    fr  = fr_ l
 
 
 -- | Constructor Transformation

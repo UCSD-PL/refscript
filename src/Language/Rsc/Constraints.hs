@@ -46,7 +46,7 @@ data Cinfo = Ci { ci_info    :: !Error
 
 -- TODO: restore this
 --
-ciToError (Ci e _ h) = e -- err (errLoc e) (errMsg e ++ "\n" ++ hs)
+ciToError (_, Ci e _ h) = e -- err (errLoc e) (errMsg e ++ "\n" ++ hs)
   where
     hs = show (ppAll h)
     ppAll [] = empty

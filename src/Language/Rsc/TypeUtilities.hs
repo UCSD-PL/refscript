@@ -75,7 +75,7 @@ idTys = tAnd . map idTy
 ---------------------------------------------------------------------------------
 castTy :: (ExprReftable F.Symbol r, F.Reftable r) => RType r -> RType r
 ---------------------------------------------------------------------------------
-castTy t = TFun [B sx Req t] (t `eSingleton` sx) fTop
+castTy t = TFun [B sx Req t] (t `uSingleton` sx) fTop
   where
     sx    = F.symbol "x"
 

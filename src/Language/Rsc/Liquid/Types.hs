@@ -19,7 +19,7 @@ module Language.Rsc.Liquid.Types (
     RefType, RRType
 
   -- * Conversions
-  , RefTypable (..), eSingleton, pSingleton
+  , RefTypable (..), eSingleton, uSingleton, pSingleton
 
   -- * Manipulating RefType
   , rTypeValueVar
@@ -133,7 +133,10 @@ instance F.Reftable r => RefTypable (RType r) where
   rType = ofType . toType           -- removes all refinements
 
 eSingleton      :: (F.Reftable r, F.Expression e, ExprReftable e r) => RType r -> e -> RType r
-eSingleton t e  = t `strengthen` (uexprReft e)
+eSingleton t e  = t `strengthen` (exprReft e)
+
+uSingleton      :: (F.Reftable r, F.Expression e, ExprReftable e r) => RType r -> e -> RType r
+uSingleton t e  = t `strengthen` (uexprReft e)
 
 pSingleton      :: (F.Predicate p) => RefType -> p -> RefType
 pSingleton t p  = t `strengthen` (F.propReft p)

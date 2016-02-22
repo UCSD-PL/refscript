@@ -9,9 +9,9 @@ module RichardsTYPEDVERSION {
     }
 
     class HandlerTask<M extends ReadOnly> extends Task<M> {
-        /*@ new () : {HandlerTask<M> | 0 < 1} */
         constructor() {
             super();
         }
     }
+    let h = new HandlerTask()
 }

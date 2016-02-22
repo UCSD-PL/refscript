@@ -606,9 +606,11 @@ consInstanceClassElt g1 typDecl (Constructor l xs body) = do
     aeq   = F.PAtom F.Eq
 
     -- The type that needs to be established (including class invariant)
-    ctorT = case tm_ctor ms >>= bkFun of
-              Nothing -> die (unsupportedNonSingleConsTy (srcPos l))
-              Just (bvs, bs, rt) -> mkFun (bvs, bs, prepRt rt)
+    ctorT = case fmap bkAnd (tm_ctor ms) >>= mapM bkFun of
+              Just tys -> tAnd (map ctorT1 tys)
+              Nothing  -> die (unsupportedNonSingleConsTy (srcPos l))
+
+    ctorT1 (bvs, bs, rt) = mkFun (bvs, bs, prepRt rt)
 
     prepRt = substThisWithSelf . (`strengthen` clInv)
     clInv  = getClassInvariant g1 nm

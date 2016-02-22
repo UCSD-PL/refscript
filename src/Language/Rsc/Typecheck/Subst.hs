@@ -117,7 +117,7 @@ instance Free (TypeSig r) where
   free (TS _ n h)           = S.unions [free n, free h]
 
 instance Free (TypeDecl r) where
-  free (TD s m)             = S.unions [free s, free m]
+  free (TD s _ m)           = S.unions [free s, free m]
 
 instance Free (BTGen r) where
   free (BGen n ts)          = S.unions [free n, free ts]
@@ -217,7 +217,7 @@ instance F.Reftable r => SubstitutableQ q r (TypeSigQ q r) where
   apply θ (TS k n h)        = TS k n (apply θ h)
 
 instance F.Reftable r => SubstitutableQ q r (TypeDeclQ q r) where
-  apply θ (TD s m)          = TD (apply θ s) (apply θ m)
+  apply θ (TD s p m)        = TD (apply θ s) p (apply θ m)
 
 instance (F.Reftable r, SubstitutableQ q r a) => SubstitutableQ q r (Statement a) where
   apply θ s                 = fmap (apply θ) s

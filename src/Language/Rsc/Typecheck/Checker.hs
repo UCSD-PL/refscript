@@ -428,7 +428,7 @@ tcStaticClassElt
 
 -- | Static method: The classes type parameters should not be included in env
 --
-tcStaticClassElt γ (TD sig ms) c@(MemberMethDecl l True x xs body) =
+tcStaticClassElt γ (TD sig _ ms) c@(MemberMethDecl l True x xs body) =
   case F.lookupSEnv (F.symbol x) (s_mems ms) of
     Just FI{} ->
         tcError $ bugStaticField l x sig
@@ -442,7 +442,7 @@ tcStaticClassElt γ (TD sig ms) c@(MemberMethDecl l True x xs body) =
 
 -- | Static field
 --
-tcStaticClassElt γ (TD sig ms) c@(MemberVarDecl l True x (Just e)) =
+tcStaticClassElt γ (TD sig _ ms) c@(MemberVarDecl l True x (Just e)) =
   case F.lookupSEnv (F.symbol x) (s_mems ms) of
     Just MI{} ->
         tcError $ bugStaticField l x sig
@@ -466,7 +466,7 @@ tcInstanceClassElt
 --------------------------------------------------------------------------------
 -- | Constructor
 
-tcInstanceClassElt γ (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body) = do
+tcInstanceClassElt γ (TD sig@(TS _ (BGen nm bs) _) _ ms) (Constructor l xs body) = do
     its    <- tcFunTys l ctor xs ctorTy
     body'  <- foldM (tcCallable γ' l ctor xs) body its
     return  $ Constructor l xs body'
@@ -536,7 +536,7 @@ tcInstanceClassElt _ _ (MemberVarDecl l False x _)
 --         as a binder to this.
 --   TODO: Also might not need 'tce_this'
 --
-tcInstanceClassElt γ (TD sig ms) c@(MemberMethDecl l False x xs bd)
+tcInstanceClassElt γ (TD sig _ ms) c@(MemberMethDecl l False x xs bd)
   | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) (i_mems ms)
   = do  let (ms', ts) = unzip mts
         its          <- tcFunTys l x xs $ tAnd ts

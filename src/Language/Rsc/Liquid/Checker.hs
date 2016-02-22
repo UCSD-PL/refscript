@@ -540,7 +540,7 @@ consStaticClassElt :: CGEnv -> TypeDecl F.Reft -> ClassElt AnnLq -> CGM ()
 
 -- | Static field
 --
-consStaticClassElt g (TD sig ms) (MemberVarDecl l True x (Just e)) =
+consStaticClassElt g (TD sig _ ms) (MemberVarDecl l True x (Just e)) =
   case F.lookupSEnv (F.symbol x) (s_mems ms) of
     Just MI{} ->
         cgError $ bugStaticField l x sig
@@ -554,7 +554,7 @@ consStaticClassElt _ _ (MemberVarDecl l _ x Nothing)
 
 -- | Static method
 --
-consStaticClassElt g (TD sig ms) (MemberMethDecl l True x xs body)
+consStaticClassElt g (TD sig _ ms) (MemberMethDecl l True x xs body)
   | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) (s_mems ms)
   = do  let t = tAnd $ map snd mts
         its <- cgFunTys l x xs t
@@ -570,7 +570,9 @@ consInstanceClassElt :: CGEnv -> TypeDecl F.Reft -> ClassElt AnnLq -> CGM ()
 --------------------------------------------------------------------------------
 -- | Constructor
 --
-consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body) = do
+--   TODO: establish `p` at the end of constructor.
+--
+consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) p ms) (Constructor l xs body) = do
     g2    <- initClassCtorEnv l sig g1
     g3    <- cgEnvAdds l "ctor" exitP g2
     ts    <- cgFunTys l ctor xs ctorT
@@ -658,7 +660,7 @@ consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body
 --         as a binder to this.
 --   TODO: Also might not need 'cge_this'
 --
-consInstanceClassElt g (TD sig ms) (MemberMethDecl l False x xs body)
+consInstanceClassElt g (TD sig _ ms) (MemberMethDecl l False x xs body)
   | Just (MI _ _ mts) <- F.lookupSEnv (F.symbol x) (i_mems ms)
   = do  let (ms', ts) = unzip mts
         its          <- cgFunTys l x xs $ tAnd ts

@@ -141,6 +141,7 @@ extractFact fs = map go fs
     go (FunctionExpressionSpec t)          = Just $ SigAnn loc t
     go (InterfaceSpec t)                   = Just $ InterfaceAnn t
     go (ClassSpec t)                       = Just $ ClassAnn loc t
+    go (ClassInvSpec p)                    = Just $ ClassInvAnn p
     go (ModuleSpec t)                      = Just $ ModuleAnn loc t
     go (ConstructorSpec t)                 = Just $ CtorAnn t
     go (CastSpec _ t)                      = Just $ UserCast t

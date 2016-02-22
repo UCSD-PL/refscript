@@ -351,7 +351,7 @@ _                `eqV` _                = False
 
 
 ----------------------------------------------------------------------------------
-rTypeR' :: F.Reftable r => RType r -> Maybe r
+rTypeR' :: F.Reftable r => RTypeQ q r -> Maybe r
 ----------------------------------------------------------------------------------
 rTypeR' (TPrim _ r)  = Just r
 rTypeR' (TVar _ r)   = Just r
@@ -366,7 +366,7 @@ rTypeR' (TAll _ _)   = Nothing
 rTypeR' (TExp _)     = Nothing
 
 ----------------------------------------------------------------------------------
-rTypeR :: F.Reftable r => RType r -> r
+rTypeR :: F.Reftable r => RTypeQ q r -> r
 ----------------------------------------------------------------------------------
 rTypeR t | Just r <- rTypeR' t = r
          | otherwise = errorstar "Unimplemented: rTypeR"

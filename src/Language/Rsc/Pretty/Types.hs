@@ -131,7 +131,8 @@ instance PP Assignability where
   pp ReturnVar    = text "ReturnVar"
 
 instance (PP r, F.Reftable r) => PP (TypeDeclQ q r) where
-  pp (TD s m) = pp s <+> lbrace $+$ nest 4 (pp m) $+$ rbrace
+  pp (TD s p m) = pp s $+$ text "pred" <+> pp p $+$
+                  lbrace $+$ nest 4 (pp m) $+$ rbrace
 
 instance (PP r, F.Reftable r) => PP (TypeSigQ q r) where
   pp (TS k n h) = pp k <+> pp n <+> ppHeritage h

@@ -79,6 +79,7 @@ data FactQ q r
 
   -- Named type annotation
   | ClassAnn      Locality (TypeSigQ q r)
+  | ClassInvAnn   r
   | InterfaceAnn  (TypeDeclQ q r)
 
   | ModuleAnn     Locality (QP q)

@@ -148,7 +148,7 @@ interfaceP
   = do  _     <- withinSpacesP (reserved "interface")
         s     <- typeSignatureP mempty InterfaceTDK
         bd    <- typeBodyP (pCtxFromSig s)
-        return $ TD s bd
+        return $ TD s fTop bd
 
 classDeclP :: Parser (TypeSigQ RK F.Reft)
 classDeclP

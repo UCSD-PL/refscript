@@ -1,5 +1,5 @@
 
-/*@ option REALS */
+/*@ option --reals */
 
 let a = 10;
 

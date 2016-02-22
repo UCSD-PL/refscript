@@ -412,8 +412,9 @@ transSuper l g es
            | otherwise
            = []
 
-    parent | Just n <- curClass g,
-             Just (TD (TS _ _ ([Gen (QN path name) _],_)) _ ) <- resolveType cha n
+    parent | Just n <- curClass g
+           , Just (TD d _ _) <- resolveType cha n
+           , TS _ _ ([Gen (QN path name) _],_) <- d
            = case path of
                QP _ _ []     -> VarRef <$> fr <*> (Id <$> fr <**> F.symbolSafeString name)
                QP _ _ (y:ys) -> do

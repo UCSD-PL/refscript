@@ -114,7 +114,7 @@ fromModuleDef ms = CHA graph nk ms
     data_      = concatMap foo $ qenvToList ms
 
     foo (_, m) = map bar $ envToList $ m_types m
-    bar (_, d) | TD s _ <- d, TS _ _ h <- s
+    bar (_, d) | TD s _ _ <- d, TS _ _ h <- s
                = (s, [ (x, g) | g@(Gen x _) <- uncurry (++) h ])
 
 --------------------------------------------------------------------------------
@@ -122,7 +122,7 @@ isClassType :: ClassHierarchy r -> RTypeQ AK t -> Bool
 --------------------------------------------------------------------------------
 isClassType cha n | TRef (Gen x _) _ <- n
                   , Just d           <- resolveType cha x
-                  , TD (TS k _ _) _  <- d
+                  , TD (TS k _ _) _ _  <- d
                   = k == ClassTDK
                   | otherwise
                   = False
@@ -139,9 +139,9 @@ stringInterface      = mkAbsName [] $ F.symbol "String"
 booleanInterface     = mkAbsName [] $ F.symbol "Boolean"
 
 --------------------------------------------------------------------------------
--- RESolveModule :: ClassHierarchy r -> AbsPath -> Maybe (ModuleDef r)
--- resolveType   :: ClassHierarchy r -> AbsName -> Maybe (TypeDeclQ AK r)
--- resolveEnum   :: ClassHierarchy r -> AbsName -> Maybe EnumDef
+resolveModule :: ClassHierarchy r -> AbsPath -> Maybe (ModuleDef r)
+resolveType   :: ClassHierarchy r -> AbsName -> Maybe (TypeDeclQ AK r)
+resolveEnum   :: ClassHierarchy r -> AbsName -> Maybe EnumDef
 --------------------------------------------------------------------------------
 resolveModule (cModules -> ms) = (`qenvFindTy` ms)
 resolveType cha (QN p s) = resolveModule cha p >>= envFindTy s . m_types
@@ -162,7 +162,7 @@ typeMembersOfType cha t =
 --------------------------------------------------------------------------------
 typeMemersOfTDecl :: PPR r => ClassHierarchy r -> TypeDecl r -> TypeMembers r
 --------------------------------------------------------------------------------
-typeMemersOfTDecl cha (TD (TS _ _ (h,_)) es) =
+typeMemersOfTDecl cha (TD (TS _ _ (h,_)) _ es) =
     es `mappend` heritage h
   where
     expd = expandWithSubst cha
@@ -174,7 +174,7 @@ typeMemersOfTDecl cha (TD (TS _ _ (h,_)) es) =
 expandWithSubst :: (Substitutable r (TypeMembers r), PPR r)
                 => ClassHierarchy r -> TypeDecl r -> [RType r] -> TypeMembers r
 --------------------------------------------------------------------------------
-expandWithSubst cha t@(TD (TS _ (BGen _ bvs) _) _) ts =
+expandWithSubst cha t@(TD (TS _ (BGen _ bvs) _) _ _) ts =
     apply θ ms
   where
     θ   = fromList $ zip (btvToTV <$> bvs) ts
@@ -346,7 +346,7 @@ nonStaticFields (CHA g m modules) x
   = HS.toList . HS.unions $ HS.fromList . flds <$> ps
   where
     flds (QN p y) = [ s | ms        <- maybeToList (qenvFindTy p modules)
-                        , TD _ es   <- maybeToList (envFindTy y  $ m_types ms)
+                        , TD _ _ es <- maybeToList (envFindTy y  $ m_types ms)
                         , (s, FI{}) <- F.toListSEnv $ i_mems  es ]
 
     ps            = [ n | cur <- maybeToList (HM.lookup x m)
@@ -360,9 +360,9 @@ inheritedNonStaticFields :: ClassHierarchy r -> AbsName -> [F.Symbol]
 inheritedNonStaticFields (CHA g m mod) x
   = HS.toList . HS.unions $ HS.fromList . flds <$> ps
   where
-    flds (QN p y) = [ s | ms      <- maybeToList $ qenvFindTy p mod
-                        , TD _ es <- maybeToList $ envFindTy  y $ m_types ms
-                        , s       <- map fst     $ F.toListSEnv $ i_mems  es ]
+    flds (QN p y) = [ s | ms        <- maybeToList $ qenvFindTy p mod
+                        , TD _ _ es <- maybeToList $ envFindTy  y $ m_types ms
+                        , s         <- map fst     $ F.toListSEnv $ i_mems  es ]
 
     ps            = [ n | cur <- maybeToList $ HM.lookup x m
                         , anc <- reachable cur g
@@ -405,7 +405,7 @@ getImmediateSuperclass _ = Nothing
 -- getSuperType :: F.Reftable r => ClassHierarchy r -> RType r -> Maybe (RType r)
 --------------------------------------------------------------------------------
 getSuperType cha (TRef (Gen nm ts) _)
-  | Just (TD (TS _ (BGen _ bs) ([p],_)) _) <- resolveType cha nm
+  | Just (TD (TS _ (BGen _ bs) ([p],_)) _ _) <- resolveType cha nm
   = let θ = fromList $ zip (btvToTV <$> bs) ts in
     Just $ apply θ $ TRef p fTop
   | otherwise

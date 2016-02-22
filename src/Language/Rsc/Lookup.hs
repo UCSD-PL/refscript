@@ -114,7 +114,7 @@ extractCtor :: (PPRD r, CEnv r g) => g r -> RType r -> Maybe (RType r)
 --------------------------------------------------------------------------------
 extractCtor γ t = go t
   where
-    go (TClass (BGen x _)) | Just (TD _ ms) <- resolveTypeInEnv γ x
+    go (TClass (BGen x _)) | Just (TD _ _ ms) <- resolveTypeInEnv γ x
                            = tm_ctor ms
     go (TRef _ _)          = expandType def (envCHA γ) t >>= go
     go (TObj _ ms _)       = tm_ctor ms
@@ -163,7 +163,7 @@ lookupAmbientType
   => l -> t r -> x -> f -> F.Symbol -> Either Error [TypeMemberQ AK r]
 --------------------------------------------------------------------------------
 lookupAmbientType l γ x f amb
-  | Just (TD _ ms) <- resolveTypeInEnv γ (mkAbsName [] amb)
+  | Just (TD _ _ ms) <- resolveTypeInEnv γ (mkAbsName [] amb)
   = accessMember l γ InstanceK x f (TObj tIM ms fTop)
   | otherwise
   = Left (errorAmbientLookup l (F.symbol f) (F.symbol x))

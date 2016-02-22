@@ -419,10 +419,12 @@ addInvariant :: CGEnv -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
 addInvariant g tIn = do
     extraInvariants <- extraInvs <$> getCgOpts
-    if extraInvariants
-      then (hasProp . hierarchy . truthy . typeof tIn) <$> getCgInvs
-      else (          hierarchy . truthy . typeof tIn) <$> getCgInvs
+    if extraInvariants then hasProp . commonStr <$> getCgInvs
+                       else           commonStr <$> getCgInvs
   where
+
+    commonStr = classInvariant . hierarchy . truthy . typeof tIn
+
     cha = envCHA g
     -- | typeof
     typeof t@(TPrim p o)   i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup p i
@@ -458,6 +460,12 @@ addInvariant g tIn = do
       | otherwise
       = t `strengthen` rExtIface t (name <$> interfaceAncestors cha (g_name c))
     hierarchy t = t
+
+    classInvariant t@(TRef c _)
+      | isClassType cha t
+      , Just (TD _ p _) <- resolveType (envCHA g) (g_name c)
+      = tracePP ("Before: " ++ ppshow t) $ t `strengthen` p
+    classInvariant t = t
 
     name (QN _ s) = s
 
@@ -617,10 +625,11 @@ freshenModuleDefM g (a, m)
     goV (x, v) = (x,) <$> freshenVI g x v
 
     -- KVar class definitions only
-    goT (x, d@(TD s ms)) | sigKind s == ClassTDK
-                         = (x,) . TD s <$> mapTypeMembersM (freshTyFun g x) ms
-                         | otherwise
-                         = return (x, d)
+    goT (x, d@(TD s p ms))
+      | sigKind s == ClassTDK
+      = (x,) . TD s p <$> mapTypeMembersM (freshTyFun g x) ms
+      | otherwise
+      = return (x, d)
 
 
 envTyAdds msg l xts g = cgEnvAdds l msg' sis g

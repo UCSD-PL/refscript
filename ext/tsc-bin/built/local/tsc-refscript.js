@@ -25884,20 +25884,21 @@ var ts;
         AnnotationKind[AnnotationKind["InterfaceRawSpec"] = 3] = "InterfaceRawSpec";
         AnnotationKind[AnnotationKind["ModuleRawSpec"] = 4] = "ModuleRawSpec";
         AnnotationKind[AnnotationKind["ClassRawSpec"] = 5] = "ClassRawSpec";
-        AnnotationKind[AnnotationKind["FieldRawSpec"] = 6] = "FieldRawSpec";
-        AnnotationKind[AnnotationKind["MethodRawSpec"] = 7] = "MethodRawSpec";
-        AnnotationKind[AnnotationKind["ConstructorRawSpec"] = 8] = "ConstructorRawSpec";
-        AnnotationKind[AnnotationKind["CallRawSpec"] = 9] = "CallRawSpec";
-        AnnotationKind[AnnotationKind["CastRawSpec"] = 10] = "CastRawSpec";
-        AnnotationKind[AnnotationKind["ExportRawSpec"] = 11] = "ExportRawSpec";
-        AnnotationKind[AnnotationKind["AssignabilityRawSpec"] = 12] = "AssignabilityRawSpec";
-        AnnotationKind[AnnotationKind["MeasureRawSpec"] = 13] = "MeasureRawSpec";
-        AnnotationKind[AnnotationKind["TypeAliasRawSpec"] = 14] = "TypeAliasRawSpec";
-        AnnotationKind[AnnotationKind["PredicateAliasRawSpec"] = 15] = "PredicateAliasRawSpec";
-        AnnotationKind[AnnotationKind["QualifierRawSpec"] = 16] = "QualifierRawSpec";
-        AnnotationKind[AnnotationKind["InvariantRawSpec"] = 17] = "InvariantRawSpec";
-        AnnotationKind[AnnotationKind["OptionRawSpec"] = 18] = "OptionRawSpec";
-        AnnotationKind[AnnotationKind["TypeSignatureRawSpec"] = 19] = "TypeSignatureRawSpec";
+        AnnotationKind[AnnotationKind["ClassInvRawSpec"] = 6] = "ClassInvRawSpec";
+        AnnotationKind[AnnotationKind["FieldRawSpec"] = 7] = "FieldRawSpec";
+        AnnotationKind[AnnotationKind["MethodRawSpec"] = 8] = "MethodRawSpec";
+        AnnotationKind[AnnotationKind["ConstructorRawSpec"] = 9] = "ConstructorRawSpec";
+        AnnotationKind[AnnotationKind["CallRawSpec"] = 10] = "CallRawSpec";
+        AnnotationKind[AnnotationKind["CastRawSpec"] = 11] = "CastRawSpec";
+        AnnotationKind[AnnotationKind["ExportRawSpec"] = 12] = "ExportRawSpec";
+        AnnotationKind[AnnotationKind["AssignabilityRawSpec"] = 13] = "AssignabilityRawSpec";
+        AnnotationKind[AnnotationKind["MeasureRawSpec"] = 14] = "MeasureRawSpec";
+        AnnotationKind[AnnotationKind["TypeAliasRawSpec"] = 15] = "TypeAliasRawSpec";
+        AnnotationKind[AnnotationKind["PredicateAliasRawSpec"] = 16] = "PredicateAliasRawSpec";
+        AnnotationKind[AnnotationKind["QualifierRawSpec"] = 17] = "QualifierRawSpec";
+        AnnotationKind[AnnotationKind["InvariantRawSpec"] = 18] = "InvariantRawSpec";
+        AnnotationKind[AnnotationKind["OptionRawSpec"] = 19] = "OptionRawSpec";
+        AnnotationKind[AnnotationKind["TypeSignatureRawSpec"] = 20] = "TypeSignatureRawSpec";
     })(ts.AnnotationKind || (ts.AnnotationKind = {}));
     var AnnotationKind = ts.AnnotationKind;
     (function (AnnotContext) {
@@ -26009,6 +26010,14 @@ var ts;
         return ClassAnnotation;
     })(Annotation);
     ts.ClassAnnotation = ClassAnnotation;
+    var ClassInvAnnotation = (function (_super) {
+        __extends(ClassInvAnnotation, _super);
+        function ClassInvAnnotation(sourceSpan, content) {
+            _super.call(this, sourceSpan, AnnotationKind.ClassInvRawSpec, content);
+        }
+        return ClassInvAnnotation;
+    })(Annotation);
+    ts.ClassInvAnnotation = ClassInvAnnotation;
     var CallAnnotation = (function (_super) {
         __extends(CallAnnotation, _super);
         function CallAnnotation(sourceSpan, content) {
@@ -26240,6 +26249,9 @@ var ts;
         var tokens = stringTokens(s);
         if (tokens && tokens.length > 0 && tokens[0] === "class") {
             return [new ClassAnnotation(srcSpan, s)];
+        }
+        if (tokens && tokens.length > 0 && tokens[0] === "inv") {
+            return [new ClassInvAnnotation(srcSpan, tokens.slice(1).join(' '))];
         }
         return [];
     }
@@ -27409,15 +27421,15 @@ var ts;
             }
             function classDeclarationToRsStmt(state, node) {
                 var annotations = nodeAnnotations(node, ts.makeClassStatementAnnotations);
-                if (annotations.length < 1) {
+                if (annotations.every(function (a) { return !(a instanceof ts.ClassAnnotation); })) {
                     var nameText = ts.getTextOfNode(node.name);
                     var typeParametersText = typeParametersToString(node.typeParameters);
                     var heritageText = heritageClausesToString(node.heritageClauses);
                     var annotationText = ["class", nameText, typeParametersText, heritageText].join(" ");
-                    annotations = ts.concatenate(annotations, [new ts.ClassAnnotation(nodeToSrcSpan(node), annotationText)]);
+                    annotations.push(new ts.ClassAnnotation(nodeToSrcSpan(node), annotationText));
                 }
                 if (node.modifiers && node.modifiers.some(function (modifier) { return modifier.kind === ts.SyntaxKind.ExportKeyword; })) {
-                    annotations = ts.concatenate(annotations, [new ts.ExportedAnnotation(nodeToSrcSpan(node))]);
+                    annotations.push(new ts.ExportedAnnotation(nodeToSrcSpan(node)));
                 }
                 var celts = ts.concat(node.members.map(function (n) { return nodeToRsClassElts(state, n); }));
                 return new ts.RsClassStmt(nodeToSrcSpan(node), annotations, nodeToRsId(state, node.name), new ts.RsList(celts));
@@ -27478,7 +27490,11 @@ var ts;
                 return new ts.RsForInStmt(nodeToSrcSpan(node), [], init, exp, body);
             }
             function enumDeclarationToRsStmt(state, node) {
-                return new ts.RsEnumStmt(nodeToSrcSpan(node), [], new ts.RsId(nodeToSrcSpan(node.name), [], ts.getTextOfNode(node.name)), new ts.RsList(node.members.map(function (e) { return nodeToRsEnumElt(state, e); })));
+                var annotations = [];
+                if (node.modifiers && node.modifiers.some(function (modifier) { return modifier.kind === ts.SyntaxKind.ExportKeyword; })) {
+                    annotations.push(new ts.ExportedAnnotation(nodeToSrcSpan(node)));
+                }
+                return new ts.RsEnumStmt(nodeToSrcSpan(node), annotations, new ts.RsId(nodeToSrcSpan(node.name), [], ts.getTextOfNode(node.name)), new ts.RsList(node.members.map(function (e) { return nodeToRsEnumElt(state, e); })));
             }
             function nodeToRsEnumElt(state, node) {
                 if (node.initializer) {

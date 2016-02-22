@@ -168,15 +168,16 @@ moduleEnv (Rsc { code = Src stmts }) =
 toDeclaration :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
 --------------------------------------------------------------------------------
 toDeclaration (ClassStmt l c cs)
-  | [ts] <- cas
+  | [ts] <- cAnn
   = case extractTypeMembers l cs of
-      Left e   -> Left (F.Unsafe [e])
-      Right tm -> Right (cc, TD ts tm)
+      Left e   -> Left  (F.Unsafe [e])
+      Right tm -> Right (cc, TD ts cInv tm)
   | otherwise
-  = Left $ F.Unsafe [errorClassAnnot l c]
+  = Left (F.Unsafe [errorClassAnnot l c])
   where
     cc     = fmap fSrc c
-    cas    = [ ts | ClassAnn _ ts <- fFact l ]
+    cAnn   =         [ ts | ClassAnn _ ts <- fFact l ]
+    cInv   = mconcat [ r  | ClassInvAnn r <- fFact l ]
 
 toDeclaration (InterfaceStmt l c)
   | [t] <- ifaceAnns  = Right (fmap fSrc c,t)

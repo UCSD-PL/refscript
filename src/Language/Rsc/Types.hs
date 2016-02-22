@@ -157,6 +157,7 @@ data TypeSigQ q r     = TS { sigKind  :: TypeDeclKind
                         deriving (Data, Typeable, Foldable, Traversable, Functor)
 
 data TypeDeclQ q r    = TD { typeSig  :: TypeSigQ q r
+                           , typeInv  :: r
                            , typeBody :: TypeMembersQ q r
                            }
                         deriving (Data, Typeable, Foldable, Traversable, Functor)

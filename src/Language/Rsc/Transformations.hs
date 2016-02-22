@@ -64,7 +64,7 @@ instance Transformable FactQ where
   trans = transFact
 
 instance Transformable TypeDeclQ where
-  trans f αs xs (TD s@(TS _ b _) es) = TD (trans f αs xs s) (trans f αs' xs es)
+  trans f αs xs (TD s@(TS _ b _) p es) = TD (trans f αs xs s) p (trans f αs' xs es)
     where
       αs' = map btvToTV (b_args b) ++ αs
 
@@ -113,7 +113,6 @@ transFact :: F.Reftable r => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r)
                           -> [TVar] -> [BindQ q r] -> FactQ q r -> FactQ q r
 transFact f = go
   where
-    -- go αs xs (PhiVarTy (v,t))    = PhiVarTy      $ (v, trans f αs xs t)
     go αs xs (TypInst x y ts)    = TypInst x y   $ trans f αs xs <$> ts
     go αs xs (EltOverload x m t) = EltOverload x (trans f αs xs m) (trans f αs xs t)
     go αs xs (VarAnn l a t)      = VarAnn l a    $ trans f αs xs <$> t
@@ -122,9 +121,10 @@ transFact f = go
     go αs xs (UserCast t)        = UserCast      $ trans f αs xs t
     go αs xs (SigAnn l t)        = SigAnn l      $ trans f αs xs t
     go αs xs (ClassAnn l ts)     = ClassAnn l    $ trans f αs xs ts
+    go αs xs (ClassInvAnn r)     = ClassInvAnn   $ rTypeR   -- PV: a little indirect
+                                                 $ trans f αs xs
+                                                 $ tVoid `strengthen` r
     go αs xs (InterfaceAnn td)   = InterfaceAnn  $ trans f αs xs td
-
-    -- TODO: do we need to translate TypeCast?
     go _ _   t                   = t
 
 -- | transRType :
@@ -176,7 +176,7 @@ instance NameTransformable FactQ where
   ntrans = ntransFact
 
 instance NameTransformable TypeDeclQ where
-  ntrans f g (TD s m) = TD <$> ntrans f g s <*> ntrans f g m
+  ntrans f g (TD s p m) = TD <$> ntrans f g s <*> pure p <*> ntrans f g m
 
 instance NameTransformable TypeSigQ where
   ntrans f g (TS k b (e,i))
@@ -219,6 +219,7 @@ ntransFact f g = go
     go (BypassUnique)      = pure $ BypassUnique
     go (DeadCast x es)     = pure $ DeadCast x es
     go (TypeCast x t)      = pure $ TypeCast x t -- TODO: transform this?
+    go (ClassInvAnn r)     = pure $ ClassInvAnn r
     go (ModuleAnn l m)     = ModuleAnn l   <$> g m
     go (TypInst x y ts)    = TypInst x y   <$> mapM (ntrans f g) ts
     go (EltOverload x m t) = EltOverload x <$> ntrans f g m <*> ntrans f g t
@@ -403,7 +404,8 @@ replaceDotRef p@(Rsc { code = Src fs, tAlias = ta, pAlias = pa, invts = is })
         , invts        = trans tt [] [] <##>  is
         }
   where
-    tf (FA l a facts) = FA l a $ trans tt [] [] <$> facts
+    tf (FA l a facts) = FA l a (map (trans tt [] []) facts)
+
     tt _ _            = fmap $ FV.trans vs () ()
 
     vs                = FV.defaultVisitor { FV.txExpr = tx }

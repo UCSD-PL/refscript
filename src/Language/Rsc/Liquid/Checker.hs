@@ -989,7 +989,7 @@ consCheckArgs :: PP a => AnnLq -> CGEnv -> a
                       -> CGM (Maybe (Id AnnLq, CGEnv))
 --------------------------------------------------------------------------------
 consCheckArgs l g fn ft ts xes
-  = do  (rhs, rt) <- instantiateFTy l g fn xes ft
+  = do  (rhs, rt) <- ltracePP l "instantiate" <$> instantiateFTy l g fn xes ft
         lhs       <- zipWithM (instantiateTy l g fn) [1..] ts
         _         <- zipWithM_ (subType l Nothing g) lhs rhs
         Just     <$> cgEnvAddFresh "5" l rt g

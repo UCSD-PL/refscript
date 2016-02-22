@@ -145,7 +145,8 @@ transRType f               = go
                                                            ms' = trans f αs xs ms
     go αs xs (TClass n)    = f αs xs $ TClass n'     where n'  = trans f αs xs n
     go αs xs (TMod m)      = f αs xs $ TMod m
-    go αs xs (TAll a t)    = f αs xs $ TAll a t'     where t'  = go αs' xs t
+    go αs xs (TAll a t)    = f αs xs $ TAll a' t'    where a'  = trans f αs xs a
+                                                           t'  = go αs' xs t
                                                            αs' = αs ++ [btvToTV a]
     go αs xs (TFun bs t r) = f αs xs $ TFun bs' t' r where bs' = trans f αs xs' <$> bs
                                                            t'  = go αs xs' t

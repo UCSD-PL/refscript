@@ -1132,7 +1132,7 @@ tcCallCase γ@(tce_ctx -> ξ) l fn es ts ft
         lhs             <- zipWithM (instantiateTy l ξ) [1..] ts
         θ               <- unifyTypesM (srcPos l) γ lhs rhs
 
-        let (vs, appVs, cs)  = unzip3 [ (s, apply θ (btVar bv), c) | bv@(BTV s l (Just c)) <- βs
+        let (vs, appVs, cs)  = ltracePP l "unif" $ unzip3 [ (s, apply θ (btVar bv), c) | bv@(BTV s l (Just c)) <- βs
                                                             , not (unassigned (TV s l) θ) ]
 
         unless (appVs <:: cs) (tcError (errorBoundsInvalid l vs appVs cs))

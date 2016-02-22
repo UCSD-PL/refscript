@@ -166,9 +166,10 @@ ssaStmt g (WhileStmt l cnd body) = do
     (gNopt, body')  <- ssaStmt gc body
     case gNopt of
       Just gN -> do
-          let (_, δ, _) = envProgress (mSSA g) (mSSA gN)
+          let (_, δ, ν) = envProgress (mSSA g) (mSSA gN)
+          let gN'       = removeSsaVars ν gN
           mapM_ (addAnn l . PhiLoop) (envValues δ)
-          return (Just gN, WhileStmt l cnd' body')
+          return (Just gN', WhileStmt l cnd' body')
       Nothing ->
           return (Just gc, WhileStmt l cnd' body')
 

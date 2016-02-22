@@ -28,6 +28,7 @@ module Language.Rsc.SSA.SSAMonad (
    , initClassSsaEnv
    , initSsaVar
    , updSsaEnv
+   , removeSsaVars
    , varDeclToAsgn
    , freshenAnn
    , freshenIdSSA
@@ -225,6 +226,13 @@ updSsaEnvLocal g l x = do
     x'    <- mkSSAId <$> freshenAnn l <*> pure x <*> tick
     let g' = insertSsaEnv g x x'
     return (x', g')
+
+-------------------------------------------------------------------------------------
+removeSsaVars :: F.Symbolic v => [v] -> SsaEnv r -> SsaEnv r
+-------------------------------------------------------------------------------------
+removeSsaVars xs g = g { mAsgn = envDels xs (mAsgn g)
+                       , mSSA  = envDels xs (mSSA  g)
+                       }
 
 -------------------------------------------------------------------------------------
 tick :: SSAM r Int

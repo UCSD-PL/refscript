@@ -5,22 +5,22 @@
 /*@ extend :: (src: (Immutable) { [s:string]: string }, dest: (Mutable) { [s:string]:top }) => (Mutable) { [s:string]:top } */
 export function extend(src, dest) {
     for (let p in src) {
-        // dest[p] = src[p];
+        dest[p] = src[p];
     }
     return dest;
 }
 
-// /* @ readonly options :: (Mutable) { [s: string]: top } */
-// let options = {};
-//
-// let this_options = extend({
-//     canvasHeight: 100,
-//     canvasWidth: 100,
-//     pixelWidth: 2,
-//     pixelHeight: 2,
-//     renderDiffuse: false,
-//     renderShadows: false,
-//     renderHighlights: false,
-//     renderReflections: false,
-//     rayDepth: 2
-// }, options /*|| {}*/);
+/*@ readonly options :: (Mutable) { [s: string]: top } */
+let options = {};
+
+let this_options = extend({
+    canvasHeight: 100,
+    canvasWidth: 100,
+    pixelWidth: 2,
+    pixelHeight: 2,
+    renderDiffuse: false,
+    renderShadows: false,
+    renderHighlights: false,
+    renderReflections: false,
+    rayDepth: 2
+}, options /*|| {}*/);

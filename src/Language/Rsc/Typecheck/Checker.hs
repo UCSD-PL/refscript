@@ -228,7 +228,7 @@ tcStmt γ s@(ExprStmt l (AssignExpr l1 OpAssign v@(LVar lx x) e))
       case info of
         Just (SI _ _ WriteGlobal Uninitialized t) -> do
             (e', _) <- tcExprT γ e t
-            γ'      <- pure (tcEnvAdd v (SI xSym Local WriteGlobal Initialized t) γ)
+            γ'      <- pure (tcEnvAdd (SI xSym Local WriteGlobal Initialized t) γ)
             return     (mkStmt e', Just γ')
 
         Just (SI _ _ WriteGlobal _ t) -> do
@@ -239,7 +239,7 @@ tcStmt γ s@(ExprStmt l (AssignExpr l1 OpAssign v@(LVar lx x) e))
 
         Nothing -> do
             (e', t) <- tcExpr γ e Nothing
-            γ'      <- pure (tcEnvAdd v (SI xSym Local WriteLocal Initialized t) γ)
+            γ'      <- pure (tcEnvAdd (SI xSym Local WriteLocal Initialized t) γ)
             return     (mkStmt e', Just γ')
 
     mkStmt  = ExprStmt l . AssignExpr l1 OpAssign (LVar lx x)
@@ -361,7 +361,7 @@ tcStmt γ (ModuleStmt l n body)
 
 -- | enum M { ... }
 tcStmt γ (EnumStmt l n body)
-  = return (EnumStmt l n body, Just $ tcEnvAdd nSym si γ)
+  = return (EnumStmt l n body, Just $ tcEnvAdd si γ)
   where
     si    = SI nSym exprt RdOnly init tEnum
     tEnum = TRef (Gen name []) fTop
@@ -393,7 +393,7 @@ tcVarDecl γ v@(VarDecl l x (Just e)) =
     Right (Just (SI y lc WriteLocal _ t)) ->
         do  (e', t') <- tcExprT γ e t
             return ( VarDecl l x $ Just e'
-                   , Just $ tcEnvAdd x (SI y lc WriteLocal Initialized t') γ)
+                   , Just $ tcEnvAdd (SI y lc WriteLocal Initialized t') γ)
 
       -- Global
     Right (Just s@(SI _ _ WriteGlobal _ t)) ->
@@ -401,13 +401,13 @@ tcVarDecl γ v@(VarDecl l x (Just e)) =
         --     since it is being hoisted to the beginning of the
         --     scope.
         do  (e', _)  <- tcExprT γ e t
-            return    $ (VarDecl l x (Just e'), Just $ tcEnvAdd x s γ)
+            return    $ (VarDecl l x (Just e'), Just $ tcEnvAdd s γ)
 
       -- ReadOnly
     Right (Just (SI y lc RdOnly _ t)) ->
         do  ([e'], Just t') <- tcNormalCallWCtx γ l (builtinOpId BIExprT) [(e, Just t)] (idTy t)
             return ( VarDecl l x $ Just e'
-                   , Just $ tcEnvAdd x (SI y lc RdOnly Initialized t') γ)
+                   , Just $ tcEnvAdd (SI y lc RdOnly Initialized t') γ)
 
     c -> fatal (unimplemented l "tcVarDecl" ("case: " ++ ppshow c)) (v, Just γ)
 
@@ -466,12 +466,13 @@ tcInstanceClassElt
 --------------------------------------------------------------------------------
 -- | Constructor
 
-tcInstanceClassElt γ (TD sig@(TS _ (BGen nm bs) _) _ ms) (Constructor l xs body) = do
+tcInstanceClassElt γ typeDecl (Constructor l xs body) = do
     its    <- tcFunTys l ctor xs ctorTy
     body'  <- foldM (tcCallable γ' l ctor xs) body its
     return  $ Constructor l xs body'
   where
-    γ'     = tcEnvAdd cExit viExit (initClassCtorEnv sig γ)
+    TD sig@(TS _ (BGen nm bs) _) _ ms = typeDecl
+    γ'     = tcEnvAdd viExit (initClassCtorEnv sig γ)
     ctor   = builtinOpId BICtor
 
     thisT   = TRef (Gen nm (map btVar bs)) fTop
@@ -1150,16 +1151,16 @@ envJoin l γ (Just γ1) (Just γ2) = do
 
     return $ Just $ foldl (\γ' (s1, s2) ->
         if isSubtype γ1 (v_type s1) (v_type s2) then      -- T1 <: T2 ==> T2
-            tcEnvAdd (v_name s2) s2 γ'
+            tcEnvAdd s2 γ'
         else if isSubtype γ1 (v_type s2) (v_type s1) then -- T2 <: T1 ==> T1
-            tcEnvAdd (v_name s1) s1 γ'
+            tcEnvAdd s1 γ'
         else                                              -- o.w.     ==> T1 \/ T2
-            tcEnvAdd (v_name s1) (sOr s1 s2) γ'
+            tcEnvAdd (s1 { v_type = sOr s1 s2 }) γ'
       ) γ (zip s1s s2s)
 
   where
     xs        = [ x | PhiVar x <- fFact l ]
-    sOr s1 s2 = s1 { v_type = tOr [v_type s1, v_type s2] }
+    sOr s1 s2 = tOr [v_type s1, v_type s2]
 
 
 --------------------------------------------------------------------------------
@@ -1179,8 +1180,8 @@ envLoopJoin l γ (Just γ') = foldM (\γ_ (x, x') -> do
       -- to escape (any more than the original variable).
       --
       if isSubtypeWithUq γ_ (v_type s') (v_type s) then do
-          addAnn l (PhiLoopTC (x, x', toType $ v_type s))
-          return   (tcEnvAdd (v_name s') s γ_)
+          addAnn l (PhiLoopTC (x, x', toType (v_type s)))
+          return   (tcEnvAdd (s { v_name = v_name s' }) γ_)
 
       -- This would require a fixpoint computation, so it's not allowed
       else

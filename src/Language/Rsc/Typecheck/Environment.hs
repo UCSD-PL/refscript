@@ -83,6 +83,8 @@ instance CheckingEnvironment r TCEnv where
   envThis   = tce_this
   envFnId   = tce_fnid
 
+instance (Unif r) => PP (TCEnv r) where
+  pp γ = pp (tce_names γ)
 
 --------------------------------------------------------------------------------
 -- | Environment initialization
@@ -143,8 +145,7 @@ initCallableEnv l γ f fty xs s
 --------------------------------------------------------------------------------
 initClassCtorEnv :: Unif r => TypeSigQ AK r -> TCEnv r -> TCEnv r
 --------------------------------------------------------------------------------
-initClassCtorEnv (TS _ (BGen nm bs) _) γ =
-    tcEnvAdd thisSym eThis γ'
+initClassCtorEnv (TS _ (BGen nm bs) _) γ = tcEnvAdd eThis γ'
   where
     γ'    = γ { tce_mut    = Just tUQ
               , tce_this   = Just tThis
@@ -160,8 +161,7 @@ initClassCtorEnv (TS _ (BGen nm bs) _) γ =
 --------------------------------------------------------------------------------
 initClassMethEnv :: Unif r => MutabilityR r -> TypeSig r -> TCEnv r -> TCEnv r
 --------------------------------------------------------------------------------
-initClassMethEnv m (TS _ (BGen nm bs) _) γ =
-    tcEnvAdd thisSym eThis γ'
+initClassMethEnv m (TS _ (BGen nm bs) _) γ = tcEnvAdd eThis γ'
   where
     γ'    = γ { tce_bounds = envAdds bts (tce_bounds γ)
               , tce_mut    = Just m
@@ -197,9 +197,9 @@ initModuleEnv γ n s = TCE nms bnds ctx pth cha mut tThis fnId
 tcEnvAdds xs γ = γ { tce_names = envAdds xs $ tce_names γ }
 
 --------------------------------------------------------------------------------
-tcEnvAdd :: (F.Symbolic x, IsLocated x) => x -> SymInfo r -> TCEnv r -> TCEnv r
+tcEnvAdd :: SymInfo r -> TCEnv r -> TCEnv r
 --------------------------------------------------------------------------------
-tcEnvAdd x t γ = γ { tce_names = envAdd x t $ tce_names γ }
+tcEnvAdd s γ = γ { tce_names = envAdd (F.symbol s) s $ tce_names γ }
 
 --------------------------------------------------------------------------------
 tcEnvFindTy :: (Unif r, F.Symbolic x, IsLocated x) => x -> TCEnv r -> Maybe (RType r)

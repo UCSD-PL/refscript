@@ -1,5 +1,5 @@
 
-function foo() {
+export function foo() {
     let a = 0;
 
     for (let j = 1; j <= 3; j++) {
@@ -7,6 +7,5 @@ function foo() {
             ++a;
         }
     }
-
     ++a;
 }

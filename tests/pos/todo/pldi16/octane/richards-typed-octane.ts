@@ -83,31 +83,31 @@ module RichardsTYPEDVERSION {
     /**
      * The task is running and is currently scheduled.
      */
-    /*@ readonly */
+    /*@ readonly STATE_RUNNING :: bitvector32 */
     let STATE_RUNNING   = 0x00000000;
 
     /**
      * The task has packets left to process.
      */
-    /*@ readonly */
+    /*@ readonly STATE_RUNNABLE :: bitvector32 */
     let STATE_RUNNABLE  = 0x00000001;
 
     /**
      * The task is not currently running.  The task is not blocked as such and may
      * be started by the scheduler.
      */
-    /*@ readonly */
+    /*@ readonly STATE_SUSPENDED :: bitvector32 */
     let STATE_SUSPENDED = 0x00000002;
 
     /**
      * The task is blocked and cannot be run until it is explicitly released.
      */
-    /*@ readonly */
+    /*@ readonly STATE_HELD :: bitvector32 */
     let STATE_HELD      = 0x00000004;
 
-    /*@ readonly */
+    /*@ readonly STATE_SUSPENDED_RUNNABLE :: bitvector32 */
     let STATE_SUSPENDED_RUNNABLE = STATE_SUSPENDED | STATE_RUNNABLE;
-    /*@ readonly */
+    /*@ readonly STATE_NOT_HELD :: bitvector32 */
     let STATE_NOT_HELD           = 0xFFFFFFFB //ORIG: ~STATE_HELD;
 
     export function testRichards() {

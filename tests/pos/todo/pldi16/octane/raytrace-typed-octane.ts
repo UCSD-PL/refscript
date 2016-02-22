@@ -339,7 +339,7 @@ module VERSION {
 
             /*@ wrapUp (t:number) : {number | 0 < 1} */
             public wrapUp(t:number) {
-                t = t //PORT TODO: t % 2;
+                t = t % 2;
                 if (t < -1) t = t + 2 //ORIG: t += 2;
                 if (t >= 1) t = t - 2 //ORIG: t -= 2;
                 return t;
@@ -622,7 +622,6 @@ module VERSION {
             }
         }
 
-        // PORT TODO
         /*@ extend :: (dest:(Mutable){[s:string]:top}, src:(Immutable){[s:string]:top}) => {(Mutable){[s:string]:top} | 0 < 1} */
         function extend(dest, src) {
             // PV TODO

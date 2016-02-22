@@ -39,30 +39,33 @@ module SplayVERSION {
     declare type MSplayTree = SplayTree<Mutable>
     declare type MSplayTreeNode = SplayTreeNode<Mutable>
 
+    interface PayloadTreeNode<M extends ReadOnly> {array: IArray<number>; string: string}
+    interface PayloadTreeR<M extends ReadOnly> {left: PayloadTree<M>; right: PayloadTree<M>}
+    declare type PayloadTree<M extends ReadOnly> = PayloadTreeNode<M> | PayloadTreeR<M>;
+
     // Configuration.
-    /*@ readonly kSplayTreeSize :: number */
+    /*@ readonly */
     let kSplayTreeSize = 8000;
-    /*@ readonly kSplayTreeModifications :: number */
+    /*@ readonly */
     let kSplayTreeModifications = 80;
-    /*@ readonly kSplayTreePayloadDepth :: number */
+    /*@ readonly */
     let kSplayTreePayloadDepth = 5;
 
     /*@ splayTree :: MSplayTree + null */
     let splayTree:MSplayTree = null;
 
-    function GeneratePayloadTree(depth:number, tag:string):any {
+    function GeneratePayloadTree(depth:number, tag:string):PayloadTree<Immutable> {
         if (depth === 0) {
-            return <any>{
+            return {
                 array: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
                 string: 'String for key ' + tag + ' in leaf node'
             };
         } else {
-            return 3;
             //PORT TODO
-            // return {
-            //     left: GeneratePayloadTree(depth - 1, tag),
-            //     right: GeneratePayloadTree(depth - 1, tag)
-            // };
+            return {
+                left: GeneratePayloadTree(depth - 1, tag),
+                right: GeneratePayloadTree(depth - 1, tag)
+            };
         }
     }
 

@@ -54,60 +54,60 @@ module RichardsTYPEDVERSION {
      * correct run so if the actual queue or hold count is different from
      * the expected there must be a bug in the implementation.
      **/
-    /*@ readonly EXPECTED_QUEUE_COUNT :: number */
+    /*@ readonly */
     let EXPECTED_QUEUE_COUNT = 2322;
-    /*@ readonly EXPECTED_HOLD_COUNT :: number */
+    /*@ readonly */
     let EXPECTED_HOLD_COUNT = 928;
 
-    /*@ readonly ID_IDLE :: number */
+    /*@ readonly */
     let ID_IDLE       = 0;
-    /*@ readonly ID_WORKER :: number */
+    /*@ readonly */
     let ID_WORKER     = 1;
-    /*@ readonly ID_HANDLER_A :: number */
+    /*@ readonly */
     let ID_HANDLER_A  = 2;
-    /*@ readonly ID_HANDLER_B :: number */
+    /*@ readonly */
     let ID_HANDLER_B  = 3;
-    /*@ readonly ID_DEVICE_A :: number */
+    /*@ readonly */
     let ID_DEVICE_A   = 4;
-    /*@ readonly ID_DEVICE_B :: number */
+    /*@ readonly */
     let ID_DEVICE_B   = 5;
-    /*@ readonly NUMBER_OF_IDS :: number */
+    /*@ readonly */
     let NUMBER_OF_IDS = 6;
-    /*@ readonly KIND_DEVICE :: number */
+    /*@ readonly */
     let KIND_DEVICE   = 0;
-    /*@ readonly KIND_WORK :: number */
+    /*@ readonly */
     let KIND_WORK     = 1;
-    /*@ readonly DATA_SIZE :: number */
+    /*@ readonly */
     let DATA_SIZE = 4;
 
     /**
      * The task is running and is currently scheduled.
      */
-    /*@ readonly STATE_RUNNING :: bitvector32 */
+    /*@ readonly */
     let STATE_RUNNING   = 0x00000000;
 
     /**
      * The task has packets left to process.
      */
-    /*@ readonly STATE_RUNNABLE :: bitvector32 */
+    /*@ readonly */
     let STATE_RUNNABLE  = 0x00000001;
 
     /**
      * The task is not currently running.  The task is not blocked as such and may
      * be started by the scheduler.
      */
-    /*@ readonly STATE_SUSPENDED :: bitvector32 */
+    /*@ readonly */
     let STATE_SUSPENDED = 0x00000002;
 
     /**
      * The task is blocked and cannot be run until it is explicitly released.
      */
-    /*@ readonly STATE_HELD :: bitvector32 */
+    /*@ readonly */
     let STATE_HELD      = 0x00000004;
 
-    /*@ readonly STATE_SUSPENDED_RUNNABLE :: bitvector32 */
+    /*@ readonly */
     let STATE_SUSPENDED_RUNNABLE = STATE_SUSPENDED | STATE_RUNNABLE;
-    /*@ readonly STATE_NOT_HELD :: bitvector32 */
+    /*@ readonly */
     let STATE_NOT_HELD           = 0xFFFFFFFB //ORIG: ~STATE_HELD;
 
     export function testRichards() {

@@ -1,6 +1,6 @@
 
 export function foo(): void {
-    let a = pos();
+    let a = _pos();
     let b = random()
 
     if (a || b) {

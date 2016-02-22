@@ -173,8 +173,8 @@ declare function assert<A>(x: A): void;
 
 declare function random(): number;
 
-/*@ pos :: () => posint */
-declare function pos(): posint;
+/*@ _pos :: () => posint */
+declare function _pos(): posint;
 
 declare function alert(s: string): void;
 

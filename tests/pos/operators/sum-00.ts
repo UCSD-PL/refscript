@@ -11,7 +11,7 @@ function sumLoop(acc: number, i: number): number {
 }
 
 export function main(): void {
-    let n = pos();
+    let n = _pos();
     let m = sumLoop(0, n);
     assert(m === n);
 }

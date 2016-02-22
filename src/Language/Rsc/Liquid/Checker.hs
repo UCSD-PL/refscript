@@ -570,9 +570,7 @@ consInstanceClassElt :: CGEnv -> TypeDecl F.Reft -> ClassElt AnnLq -> CGM ()
 --------------------------------------------------------------------------------
 -- | Constructor
 --
---   TODO: establish `p` at the end of constructor.
---
-consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) p ms) (Constructor l xs body) = do
+consInstanceClassElt g1 typDecl (Constructor l xs body) = do
     g2    <- initClassCtorEnv l sig g1
     g3    <- cgEnvAdds l "ctor" exitP g2
     ts    <- cgFunTys l ctor xs ctorT
@@ -580,79 +578,41 @@ consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) p ms) (Constructor l xs bo
 
   where
 
-    thisT = TRef (Gen nm (map btVar bs)) fTop
-    ctor  = builtinOpId BICtor
-    cExit = builtinOpId BICtorExit
-    sExit = F.symbol cExit
+    TD sig@(TS _ (BGen nm bs) _) _ ms = typDecl
 
+    thisT      = TRef (Gen nm (map btVar bs)) fTop
+    ctor       = builtinOpId BICtor
+    cExit      = builtinOpId BICtorExit
+    sExit      = F.symbol cExit
+    allMembers = typeMembersOfType (envCHA g1) thisT      -- Including inherited
+
+    -- (_f1: T1, ...) => { A | offset(v, "f1") = _f1, ... }
+    --
     exitP = [SI sExit Local Ambient Initialized $ mkFun (bs, xts, ret)]
-
-    ret   = unqualifyThis $ thisT `strengthen` F.reft (F.vv Nothing) (F.pAnd $ bnd <$> out)
-
-    xts   = case expandType (EConf True False) (envCHA g1) thisT of
-              Just (TObj _ ms _ ) -> sortBy c_sym (msToBs ms)
-              _                   -> []
+    xts   = sortBy c_sym (toBinds allMembers)
+    ret   = unqualifyThis $ thisT `strengthen` F.reft (F.vv Nothing) (F.pAnd (map bnd out))
 
     -- unqualifyThis :: offset(this, "f") ==> f
-    msToBs ms = [ B x Req (unqualifyThis t) | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
+    --
+    toBinds ms = [ B x Req (unqualifyThis t) | (x, FI _ _ _ t) <- lMems ms ]
 
-    out       = [ f | (f, FI _ _ m _) <- F.toListSEnv (i_mems ms), isSubtype g1 m tIM ]
+    out   = [ f | (f, FI _ _ m _) <- lMems allMembers, isSubtype g1 m tIM ]
 
-    bnd f = F.PAtom F.Eq (mkOffsetSym v_sym $ symbolString f) (F.eVar f)
+    bnd f = mkOffsetSym v_sym (symbolString f) `aeq` F.eVar f
 
     v_sym = F.symbol $ F.vv Nothing
     c_sym = on compare (show . b_sym)
+    lMems = F.toListSEnv . i_mems
+    aeq   = F.PAtom F.Eq
 
-    ctorT = case tm_ctor ms of
+    -- The type that needs to be established (including class invariant)
+    ctorT = case tm_ctor ms >>= bkFun of
               Nothing -> die (unsupportedNonSingleConsTy (srcPos l))
-              Just ft -> case bkFun ft of
-                           Just (bvs, bs, rt) -> mkFun (bvs, bs, substThisWithSelf rt)
-                           Nothing            -> error "Unsupported ctor ty"
+              Just (bvs, bs, rt) -> mkFun (bvs, bs, prepRt rt)
 
+    prepRt = substThisWithSelf . (`strengthen` clInv)
+    clInv  = getClassInvariant g1 nm
 
-
--- consInstanceClassElt g1 (TD sig@(TS _ (BGen nm bs) _) ms) (Constructor l xs body)
---   = do  validateTFun l g1 ctorT
---         g2    <- initClassCtorEnv l sig g1
---
---         g3    <- cgEnvAdds l "Constructor" [ctorObjSi, ctorRetSi] g2
---
---         ts    <- cgFunTys l ctor xs ctorT
---         mapM_    (consCallable l g3 ctor xs body) ts
---   where
---     thisT      = TRef (Gen nm (map btVar bs)) fTop
---     ctor       = builtinOpId BICtor
---
---     ctorObj    = builtinOpId BICtorObject
---     ctorObjSi  = SI (F.symbol ctorObj) Local Ambient Initialized ctorObjTy
---     ctorObjTy  = ltracePP l "ctorObjTy" $ mkFun (bs, xts, ret)
---     xts        = case expandTypeDef (envCHA g1) thisT of
---                    Just (TObj _ ms _ ) -> sortBy c_sym (toBinds ms)
---                    _                   -> []
---     ret        = substThisWithSelf     -- this --> vv
---                $ unqualifyThis         -- offset(this, "f") --> f
---                $ strengthen thisT
---                $ F.reft (F.vv Nothing) (F.pAnd $ bnd <$> out)
---
---     ctorRet    = builtinOpId BICtorReturn
---     ctorRetSi  = SI (F.symbol ctorRet) Local Ambient Initialized ctorRetTy
---     ctorRetTy  = ltracePP l "ctorRetTy" $ mkFun ([], [B thisSym Req retTy], tVoid)
---
---
---     toBinds ms = [ B x Req (unqualifyThis t) | (x, FI _ _ _ t) <- F.toListSEnv (i_mems ms) ]
---     out        = [ f | (f, FI _ _ m _) <- F.toListSEnv (i_mems ms), isSubtype g1 m tIM ]
---
---     bnd f      = F.PAtom F.Eq (mkOffsetSym v_sym $ symbolString f) (F.eVar f)
---
---     v_sym      = F.symbol $ F.vv Nothing
---     c_sym      = on compare (show . b_sym)
---
---     (ctorT, retTy) =
---       case tm_ctor ms of
---         Nothing -> die (unsupportedNonSingleConsTy (srcPos l))
---         Just ft -> case bkFun ft of
---                      Just (bvs, bs, c) -> (mkFun (bvs, bs, tVoid), c)
---
 
 -- | Instance method
 --

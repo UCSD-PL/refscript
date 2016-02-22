@@ -35,6 +35,7 @@ module Language.Rsc.Liquid.Environment (
   , cgEnvAddFresh
   , cgEnvAddFreshWithInit
   , addInvariant
+  , getClassInvariant
 
   , envTyAdds
   , envFindTyWithAsgn
@@ -414,6 +415,15 @@ addFixpointBind g (SI x _ _           _ t)
         return        $ g { cge_fenv = ibs2 }
 
 
+-- | Get the conjunction of class invariants inherited from all ancestry
+--------------------------------------------------------------------------------
+getClassInvariant :: CGEnv -> AbsName -> F.Reft
+--------------------------------------------------------------------------------
+getClassInvariant (envCHA -> c) = mconcat . map inv . classAncestors c
+  where
+    inv a | Just (TD s p _) <- resolveType c a, sigKind s == ClassTDK = p
+          | otherwise = mempty
+
 --------------------------------------------------------------------------------
 addInvariant :: CGEnv -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
@@ -464,7 +474,7 @@ addInvariant g tIn = do
     classInvariant t@(TRef c _)
       | isClassType cha t
       , Just (TD _ p _) <- resolveType (envCHA g) (g_name c)
-      = tracePP ("Before: " ++ ppshow t) $ t `strengthen` p
+      = t `strengthen` p
     classInvariant t = t
 
     name (QN _ s) = s

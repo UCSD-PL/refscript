@@ -5,9 +5,9 @@
 
 // Aliases
 
-/*@ alias nat       = {number | 0 <= v} */
-/*@ alias idx[a]    = {nat | v < (len a) } */
-/*@ alias pair[T]   = {IArray<T> | (len v) = 2} */
+/*@ type nat       = {number | 0 <= v} */
+/*@ type idx[a]    = {nat | v < (len a) } */
+/*@ type pair[T]   = {IArray<T> | (len v) = 2} */
 
 
 // Qualifiers
@@ -90,10 +90,10 @@ declare module D3 {
         * @param a First value
         * @param b Second value
         */
-        /*@ ascending : (a: number, b: number) => { number | [ (a < b => v = -1);
+        /*@ ascending (a: number, b: number) : { number | [ (a < b => v = -1);
                                                       (a = b => v =  0);
                                                       (a > b => v =  1)] } */
-        /*@ ascending : <T> . (T,T) => {number | 0 < 1} */
+        /*@ ascending <T> (T,T) : {number | 0 < 1} */
         ascending<T>(a: T, b: T): number;
 
         /**
@@ -103,12 +103,10 @@ declare module D3 {
         * @param a First value
         * @param b Second value
         */
-        /*@ descending :
-            /\ (a: number, b: number) => { number | [ (a > b => v = -1);
+        /*@ descending (a: number, b: number) : { number | [ (a > b => v = -1);
                                                       (a = b => v =  0);
-                                                      (a < b => v =  1)] }
-            /\ <T> (T,T) => {number | 0 < 1}
-         */
+                                                      (a < b => v =  1)] } */
+        /*@ descending <T> (T,T) : {number | 0 < 1} */
         descending<T>(a: T, b: T): number;
 
         /**
@@ -117,14 +115,14 @@ declare module D3 {
         * @param arr Array to search
         * @param map Accsessor function
         */
-        /*@ min : <T,U> (arr: IArray<T>, f: (T, number) => U) => { U | 0 < 1 } */
+        /*@ min <T,U> (arr: IArray<T>, f: (T, number) => U) : { U | 0 < 1 } */
         min<T, U>(array: T[], f: (x:T, i:number) => U): U;
         /**
         * Find the minimum value in an array
         *
         * @param arr Array to search
         */
-        /*@ min : <T> (arr: IArray<T>) => { T | 0 < 1 } */
+        /*@ min <T> (arr: IArray<T>) : { T | 0 < 1 } */
         min<T>(array: T[]): T;
         
         /**
@@ -133,7 +131,7 @@ declare module D3 {
         * @param arr Array to search
         * @param map Accsessor function
         */
-        /*@ max : <T,U> (arr: IArray<T>, f: (T, number) => U) => { U | 0 < 1 } */
+        /*@ max <T,U> (arr: IArray<T>, f: (T, number) => U) : { U | 0 < 1 } */
         max<T, U>(array: T[], f: (v: T) => U): U;
 
         /**
@@ -141,7 +139,7 @@ declare module D3 {
         *
         * @param arr Array to search
         */
-        /*@ max : <T> (arr: IArray<T>) => { T | 0 < 1 } */
+        /*@ max <T> (arr: IArray<T>) : { T | 0 < 1 } */
         max<T>(array: T[]): number;
         /**
         * Find the minimum and maximum value in an array
@@ -149,14 +147,14 @@ declare module D3 {
         * @param arr Array to search
         * @param map Accsessor function
         */
-        /*@ extent : <T,U> ({IArray<T> | 0 < len v}, f: (x:T, i:number) => U) => #pair[U] */
+        /*@ extent <T,U> ({IArray<T> | 0 < len v}, f: (x:T, i:number) => U) : #pair[U] */
         extent<T, U>(arr: T[], map: (v: T) => U): U[];
         /**
         * Find the minimum and maximum value in an array
         *
         * @param arr Array to search
         */
-        /*@ extent : <T> ({IArray<T> | 0 < len v}) => #pair[T] */
+        /*@ extent <T> ({IArray<T> | 0 < len v}) : #pair[T] */
         extent<T>(arr: T[]): T[];
         /**
         * Compute the sum of an array of numbers
@@ -164,14 +162,14 @@ declare module D3 {
         * @param arr Array to search
         * @param map Accsessor function
         */
-        /*@ sum : forall T. (arr : IArray<T>, f: (T, idx[array]) => number) => {number | 0 < 1} */ 
+        /*@ sum <T> (arr : IArray<T>, f: (T, idx[array]) => number) : {number | 0 < 1} */ 
         sum<T>(arr: T[], map: (v: T) => number): number;
         /**
         * Compute the sum of an array of numbers
         *
         * @param arr Array to search
         */
-        /*@ sum : (array : IArray<number>) => {number | 0 < 1} */
+        /*@ sum (array : IArray<number>) : {number | 0 < 1} */
         sum(arr: number[]) : number;
 
         /**
@@ -181,7 +179,7 @@ declare module D3 {
         * @param map Accsessor function
         */
         
-        /*@ mean : forall T. (array : IArray<T>, f: (T, idx[array]) => number + undefined) => {number + undefined | 0 < 1} */
+        /*@ mean <T> (array : IArray<T>, f: (T, idx[array]) => number + undefined) : {number + undefined | 0 < 1} */
         mean<T>(arr: T[], map: (v: T) => number): number;
         /**
         * Compute the arithmetic mean of an array of numbers
@@ -189,7 +187,7 @@ declare module D3 {
         * @param arr Array to search
         */
         
-        /*@ mean : (array : IArray<number + undefined>) => {number + undefined | 0 < 1} */ 
+        /*@ mean (array : IArray<number + undefined>) : {number + undefined | 0 < 1} */ 
         mean(arr: number[]): number;
 
         /**
@@ -199,7 +197,7 @@ declare module D3 {
         * @param map Accsessor function
         */
 
-        /*@ median : forall T. (array : IArray<T>, f: (T) => number) => {number + undefined | 0 < 1} */
+        /*@ median <T> (array : IArray<T>, f: (T) => number) : {number + undefined | 0 < 1} */
         median<T>(arr: T[], map: (v: T) => number): number;
         /**
         * Compute the median of an array of numbers (the 0.5-quantile).
@@ -207,7 +205,7 @@ declare module D3 {
         * @param arr Array to search
         */
         
-        /*@ median : (array : IArray<number>) => {number + undefined | 0 < 1} */ 
+        /*@ median (array : IArray<number>) : {number + undefined | 0 < 1} */ 
         median(arr: number[]): number;
         /**
         * Compute a quantile for a sorted array of numbers.
@@ -215,7 +213,7 @@ declare module D3 {
         * @param arr Array to search
         * @param p The quantile to return
         */
-        /*@ quantile : (arr: {IArray<number> | 0 < len v}, p: {number | 0 <= v && v < 1}) => number */
+        /*@ quantile (arr: {IArray<number> | 0 < len v}, p: {number | 0 <= v && v < 1}) : number */
         quantile: (arr: number[], p: number) => number;
         /**
         * Locate the insertion point for x in array to maintain sorted order
@@ -255,7 +253,7 @@ declare module D3 {
         *
         * @param arr Array to randomize
         */
-        /*@ shuffle : <T> (arr: IArray<T>) => {IArray<T> | 0 < 1} */
+        /*@ shuffle <T> (arr: IArray<T>) : {IArray<T> | 0 < 1} */
         shuffle<T>(arr: T[]): T[];
         /**
         * Reorder an array of elements according to an array of indexes
@@ -263,9 +261,9 @@ declare module D3 {
         * @param arr Array to reorder
         * @param indexes Array containing the order the elements should be returned in
         */
-        /*@ permute : <T> (array: IArray<T>, 
+        /*@ permute <T> (array: IArray<T>, 
                                   indexes: IArray<#idx[array]>) 
-                              => { IArray<T> | (len v) = (len indexes) } */
+                              : { IArray<T> | (len v) = (len indexes) } */
         permute(arr: any[], indexes: any[]): any[];
         /**
         * Transpose a variable number of arrays.
@@ -273,7 +271,7 @@ declare module D3 {
         * @param arrs Arrays to transpose
         */
         //TODO: should actually be forall T, not number
-        /*@ zip : (args:IArray<IArray<number>>) => {IArray<IArray<number>> | 0 < 1} */
+        /*@ zip (args:IArray<IArray<number>>) : {IArray<IArray<number>> | 0 < 1} */
         zip(...arrs: any[]): any[];
 //        /**
 //        * Parse the given 2D affine transform string, as defined by SVG's transform attribute.
@@ -287,14 +285,14 @@ declare module D3 {
         * @param matrix Two dimensional array to transpose
         */
         //TODO: should actually be T, not number (see zip)
-        /*@ transpose : (matrix:IArray<IArray<number>>) => {IArray<IArray<number>> | 0 < 1} */
+        /*@ transpose (matrix:IArray<IArray<number>>) : {IArray<IArray<number>> | 0 < 1} */
         transpose(matrix: any[]): any[];
         /**
         * List the keys of an associative array.
         *
         * @param map Array of objects to get the key values from
         */
-        /*@ keys : (map: [Immutable]{ }) => MArray<{string | hasProperty(v, map) && enumProp(v, map)}> */
+        /*@ keys (map: [Immutable]{ }) : MArray<{string | hasProperty(v, map) && enumProp(v, map)}> */
         keys(map:{ }): string[];
         /**
         * List the values of an associative array.
@@ -302,21 +300,21 @@ declare module D3 {
         * @param map Array of objects to get the values from
         */
 
-        /*@ values : <T> (map: [Immutable]{[k:string]:T}) => {MArray<T> | 0 < 1} */
+        /*@ values <T> (map: [Immutable]{[k:string]:T}) : {MArray<T> | 0 < 1} */
         values<T>(map:{[k:string]:T}): T[];
         /**
         * List the key-value entries of an associative array.
         *
         * @param map Array of objects to get the key-value pairs from
         */
-        /*@ entries : <T> ([Immutable]{[k:string]:T}) => {MArray<{key:string; value:T}> | 0 < 1} */ 
+        /*@ entries <T> ([Immutable]{[k:string]:T}) : {MArray<{key:string; value:T}> | 0 < 1} */ 
         entries<T>(map: {[k:string]:T}): {key:string; value:T}[];
         /**
         * merge multiple arrays into one array
         *
         * @param map Arrays to merge
         */
-        /*@ merge : <T> (map: IArray<IArray<T>>) => {IArray<T> | 0 < 1} */
+        /*@ merge <T> (map: IArray<IArray<T>>) => {IArray<T> | 0 < 1} */
         merge<T>(map: T[][]): T[];
 
         /**
@@ -324,7 +322,7 @@ declare module D3 {
         *
         * @param stop Value to generate the range to
         */
-        /*@ range : /\ (number) : { MArray<number> | 0 < 1 } */
+        /*@ range (number) : { MArray<number> | 0 < 1 } */
         range(stop: number): number[];
         /**
         * Generate a range of numeric values.
@@ -333,8 +331,8 @@ declare module D3 {
         * @param stop Value to generate the range to
         * @param step Step between each value
         */
-        /*@ range : /\ (number, number, {number | v != 0}) : { MArray<number> | 0 < 1 }
-                    /\ (number, number                   ) : { MArray<number> | 0 < 1 } */
+        /*@ range (number, number, {number | v != 0}) : { MArray<number> | 0 < 1 } */
+        /*@ range (number, number                   ) : { MArray<number> | 0 < 1 } */
         range(start: number, stop: number, step?: number): number[];
 //        /**
 //        * Create new nest operator

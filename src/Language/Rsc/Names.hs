@@ -46,6 +46,7 @@ module Language.Rsc.Names (
   , offsetLocSym
   , protoSym
   , thisSym
+  , callSym
   , argSym
   , getArgSym
   , thisId
@@ -230,10 +231,11 @@ undefinedId     = Id (srcPos dummySpan) "undefined"
 thisId l        = Id l "this"
 
 
-offsetSym, thisSym, protoSym, argSym, getArgSym :: F.Symbol
+offsetSym, thisSym, protoSym, callSym, argSym, getArgSym :: F.Symbol
 thisSym    = "this"
 protoSym   = "__proto__"
 argSym     = "arguments"
+callSym    = "call"
 getArgSym  = F.symbol getArgName
 offsetSym  = "offset"
 

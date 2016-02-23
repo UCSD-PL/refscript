@@ -88,6 +88,22 @@ getProp _ γ _ f t@(TMod m)
   , Just v' <- envFindTy f (m_variables m')
   = Right [(t, symToField v')]
 
+getProp _ γ _ f t
+  | isTFun t
+  , F.symbol f == callSym
+  , Just ft <- go t
+  = Right [(t, MI fSym Req [(tRO, ft)])]
+  where
+    go    = fmap tAnd . mapM aa . bkAnd
+    aa t  | Just (bs, ts, rt) <- bkFun t
+          = Just (mkFun (bv:bs, b:ts, rt))
+          | otherwise = Nothing
+    bv    = BTV vSym dummySpan Nothing
+    tv    = tVar (TV vSym dummySpan)
+    b     = B thisSym Req tv
+    vSym  = F.symbol "__v"
+    fSym  = F.symbol f
+
 getProp l _ _ f t = Left (errorGenericLookup l (F.symbol f) t)
 
 

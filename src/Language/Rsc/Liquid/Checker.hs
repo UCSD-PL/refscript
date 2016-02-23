@@ -799,7 +799,7 @@ consExpr g (CallExpr l (SuperRef _) _) _
 
 -- | e.m(es)
 consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
-  | isVariadicCall f = cgError (unimplemented l "Variadic" ex)
+  -- | isVariadicCall f = cgError (unimplemented l "Variadic" ex)
   | otherwise        = checkNonVariadic
 
   where

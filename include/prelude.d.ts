@@ -412,29 +412,18 @@ interface Boolean { }
 /*** Function ************************************************************/
 
 interface Function {
-    /**
-      * Calls the function, substituting the specified object for the this
-      * value of the function, and the specified array for the arguments of the function.
-      * @param thisArg The object to be used as the this object.
-      * @param argArray A set of arguments to be passed to the function.
-      */
+
     apply(thisArg: any, argArray?: any): any;
 
-    // /**
-    //   * Calls a method of an object, substituting another object for the current object.
-    //   * @param thisArg The object to be used as the current object.
-    //   * @param argArray A list of arguments to be passed to the method.
-    //   */
-    // call<M extends ReadOnly>(thisArg: any, ...argArray: Array<M, any>): any;
-    //
-    // /**
-    //   * For a given function, creates a bound function that has the same body
-    //   * as the original function.
-    //   * The this object of the bound function is associated with the specified
-    //   * object, and has the specified initial parameters.
-    //   * @param thisArg An object to which the this keyword can refer inside the new function.
-    //   * @param argArray A list of arguments to be passed to the new function.
-    //   */
+    call(thisArg: any): any;    
+    call(thisArg: any, a1: any): any;
+    call(thisArg: any, a1: any, a2: any): any;
+    call(thisArg: any, a1: any, a2: any, a3: any): any;
+    call(thisArg: any, a1: any, a2: any, a3: any, a4: any): any;
+    call(thisArg: any, a1: any, a2: any, a3: any, a4: any, a5: any): any;
+    call(thisArg: any, a1: any, a2: any, a3: any, a4: any, a5: any, a6: any): any;
+    call(thisArg: any, a1: any, a2: any, a3: any, a4: any, a5: any, a6: any, a7: any): any;
+
     // bind<M extends ReadOnly>(thisArg: any, ...argArray: Array<M, any>): any;
 
     prototype: any;
@@ -446,10 +435,6 @@ interface Function {
 }
 
 declare let Function: {
-    /**
-      * Creates a new function.
-      * @param args A list of arguments the function accepts.
-      */
     //new (...args: string[]): Function;
     //(...args: string[]): Function;
     prototype: Function;
@@ -748,149 +733,3 @@ interface ErrorConstructor<M extends Immutable> {
 }
 
 declare let Error: ErrorConstructor<Immutable>;
-
-/*** Console ************************************************************/
-interface Console<M extends ReadOnly> {
-    // info(message?: any, ...optionalParams: any[]): void;
-    // warn(message?: any, ...optionalParams: any[]): void;
-    // error(message?: any, ...optionalParams: any[]): void;
-    log(message?: any): void; // TODO log(message?: any, ...optionalParams: any[]): void;
-    profile(reportName?: string): void;
-    // assert(test?: boolean, message?: string, ...optionalParams: any[]): void;
-    //msIsIndependentlyComposed(element: Element): boolean;
-    clear(): void;
-    // dir(value?: any, ...optionalParams: any[]): void;
-    profileEnd(): void;
-    count(countTitle?: string): void;
-    groupEnd(): void;
-    time(timerName?: string): void;
-    timeEnd(timerName?: string): void;
-    trace(): void;
-    group(groupTitle?: string): void;
-    dirxml(value: any): void;
-    // debug(message?: string, ...optionalParams: any[]): void;
-    groupCollapsed(groupTitle?: string): void;
-    //select(element: Element): void;
-}
-// interface ConsoleConstructor<M extends Immutable> {
-//     prototype: Console<M>;
-//     new(): Console<M>;
-// }
-declare let console: Console<Immutable>;
-
-interface Math<M extends ReadOnly> {
-    /** The mathematical constant e. This is Euler's number, the base of natural logarithms. */
-    E: number;
-    /** The natural logarithm of 10. */
-    LN10: number;
-    /** The natural logarithm of 2. */
-    LN2: number;
-    /** The base-2 logarithm of e. */
-    LOG2E: number;
-    /** The base-10 logarithm of e. */
-    LOG10E: number;
-    /** Pi. This is the ratio of the circumference of a circle to its diameter. */
-    PI: number;
-    /** The square root of 0.5, or, equivalently, one divided by the square root of 2. */
-    SQRT1_2: number;
-    /** The square root of 2. */
-    SQRT2: number;
-    /**
-      * Returns the absolute value of a number (the value without regard to whether it is positive or negative).
-      * For example, the absolute value of -5 is the same as the absolute value of 5.
-      * @param x A numeric expression for which the absolute value is needed.
-      */
-    abs(x: number): number;
-    /**
-      * Returns the arc cosine (or inverse cosine) of a number.
-      * @param x A numeric expression.
-      */
-    acos(x: number): number;
-    /**
-      * Returns the arcsine of a number.
-      * @param x A numeric expression.
-      */
-    asin(x: number): number;
-    /**
-      * Returns the arctangent of a number.
-      * @param x A numeric expression for which the arctangent is needed.
-      */
-    atan(x: number): number;
-    /**
-      * Returns the angle (in radians) from the X axis to a point.
-      * @param y A numeric expression representing the cartesian y-coordinate.
-      * @param x A numeric expression representing the cartesian x-coordinate.
-      */
-    atan2(y: number, x: number): number;
-    /**
-      * Returns the smallest number greater than or equal to its numeric argument.
-      * @param x A numeric expression.
-      */
-    ceil(x: number): number;
-    /**
-      * Returns the cosine of a number.
-      * @param x A numeric expression that contains an angle measured in radians.
-      */
-    cos(x: number): number;
-    /**
-      * Returns e (the base of natural logarithms) raised to a power.
-      * @param x A numeric expression representing the power of e.
-      */
-    exp(x: number): number;
-    /**
-      * Returns the greatest number less than or equal to its numeric argument.
-      * @param x A numeric expression.
-      */
-    /*@ floor (x: number) : {number | x - 1 < v && v <= x} */
-    floor(x: number): number;
-    /**
-      * Returns the natural logarithm (base e) of a number.
-      * @param x A numeric expression.
-      */
-    log(x: number): number;
-    /**
-      * Returns the larger of a set of supplied numeric expressions.
-      * @param values Numeric expressions to be evaluated.
-      */
-    /*@ max (a:number, b:number) : {number | v = if (a < b) then b else a} */
-    max(a: number, b: number): number;
-    // ORIG: max(...values: number[]): number;
-    /**
-      * Returns the smaller of a set of supplied numeric expressions.
-      * @param values Numeric expressions to be evaluated.
-      */
-    /*@ min (a:number, b:number) : {number | v = if (a < b) then a else b} */
-    min(...values: number[]): number;
-    /**
-      * Returns the value of a base expression taken to a specified power.
-      * @param x The base value of the expression.
-      * @param y The exponent value of the expression.
-      */
-    pow(x: number, y: number): number;
-    /** Returns a pseudorandom number between 0 and 1. */
-    random(): number;
-    /**
-      * Returns a supplied numeric expression rounded to the nearest number.
-      * @param x The value to be rounded to the nearest number.
-      */
-    round(x: number): number;
-    /**
-      * Returns the sine of a number.
-      * @param x A numeric expression that contains an angle measured in radians.
-      */
-    sin(x: number): number;
-    /**
-      * Returns the square root of a number.
-      * @param x A numeric expression.
-      */
-    /*@ sqrt (x:{number | v >= 0}) : {number | v = 0 <=> x = 0} */
-    sqrt(x: number): number;
-    /**
-      * Returns the tangent of a number.
-      * @param x A numeric expression that contains an angle measured in radians.
-      */
-    tan(x: number): number;
-}
-
-/** An intrinsic object that provides basic mathematics functionality and constants. */
-declare let Math: Math<Immutable>;

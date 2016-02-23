@@ -923,7 +923,7 @@ tcCall _ (CallExpr _ (SuperRef _)  _) _
 -- | `e.m(es)`
 --
 tcCall γ ex@(CallExpr l em@(DotRef l1 e0 f) es) _
-  | isVariadicCall f = tcError (unimplemented l "Variadic" ex)
+  -- | isVariadicCall f = tcError (unimplemented l "Variadic" ex)
   | otherwise        = checkNonVariadic
   where
     ue  = enableUnique e0

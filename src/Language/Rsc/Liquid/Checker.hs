@@ -770,6 +770,8 @@ consExpr g (CondExpr l e e1 e2) (Just t)
       z1 <- consExpr (envAddGuard xc True  g') e1 (Just t)
       z2 <- consExpr (envAddGuard xc False g') e2 (Just t)
       case (z1, z2) of
+        (Nothing, _) -> return z2
+        (_, Nothing) -> return z1
         (Just (x1, g1'), Just (x2, g2')) -> do
             t1            <- cgSafeEnvFindTyM x1 g1'
             t2            <- cgSafeEnvFindTyM x2 g2'
@@ -777,7 +779,6 @@ consExpr g (CondExpr l e e1 e2) (Just t)
             _             <- subType l Nothing g1' t1 tf
             _             <- subType l Nothing g2' t2 tf
             return         $ Just (xf, gf)
-        _ -> return Nothing
   where
     checkCond = do
         t   <- cgSafeEnvFindTyM (builtinOpId BITruthy) g

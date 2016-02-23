@@ -784,8 +784,18 @@ ssaExpr g (PrefixExpr l o e) = do
     (g', ss, e') <- ssaExpr g e
     return (g', ss, PrefixExpr l o e')
 
-ssaExpr _ e@(InfixExpr l OpLOr _ _)
-  = ssaError $ unimplementedInfix l e
+ssaExpr g (InfixExpr l OpLOr e1 e2) = do
+    n     <- ("lor_" ++) . show  <$> tick
+    -- var lor_nn = e1;
+    r     <- Id           <$> fr l <**> n
+    vd    <- VarDecl      <$> fr l <**> r <**> Just e1
+    vs    <- VarDeclStmt  <$> fr l <**> [vd]
+    vr    <- VarRef       <$> fr l <**> r
+    -- lor_nn ? lor_nn : e2
+    (g', sc, e') <- ssaExpr g (CondExpr l vr vr e2)
+    return (g', vs:sc, e')
+  where
+    fr = freshenAnn
 
 ssaExpr g (InfixExpr l o e1 e2) = do
     (g1, s1, e1') <- ssaExpr g e1

@@ -1,6 +1,6 @@
 //adapted from transducers
 
-class Foo<T> {
+class Foo<M extends ReadOnly, T> {
     constructor() { }
 }
 
@@ -9,6 +9,6 @@ class Foo<T> {
 export function reduce(xf, coll) {
     if (typeof coll === "number") {
         /*@ xxf :: Foo<Immutable, boolean> */
-        var xxf = xf;
+        let xxf = xf;
     }
 }

@@ -64,9 +64,9 @@ module NavierStokes {
         let _lemma = mulThm128(128);
         let solverRO /*@ readonly */ = new FluidField(null, 128, 128);
         solverRO.setIterations(20);
-        solverRO.setDisplayFunction(function(f:Field<Immutable>)
-            /*@ <anonymous> (Field<Immutable>) => void */
-            {});
+
+        let dFunc: (f:Field<Immutable>) => void = function() {};
+        solverRO.setDisplayFunction(dFunc);
         solverRO.setUICallback(prepareFrame);
         solverRO.reset();
         solver = solverRO;
@@ -362,7 +362,7 @@ module NavierStokes {
                           u :{v:IArray<number> | (len v) = this.size}, 
                           v :{v:IArray<number> | (len v) = this.size}, 
                           dt:number) : void */
-            advect(b:number, d:number[], d0:number[], u:number[], ww:number[], dt:number)
+            advect(b:number, d:number[], d0:number[], u:number[], v:number[], dt:number)
             {
                 let width = this.width;
                 let height = this.height;
@@ -377,7 +377,7 @@ module NavierStokes {
                     let _lemma = mulThm2(rowSize, j, height+2);
                     for (let i = 1; i <= width; i++) {
                         let x:any = i - Wdt0 * u[++pos];
-                        let y:any = j - Hdt0 * ww[pos]; // TODO revert 'ww' to 'v'
+                        let y:any = j - Hdt0 * v[pos];
                         if (x < 1/2)//.
                             x = 1/2;//.
                         else if (x > Wp5)
@@ -408,7 +408,7 @@ module NavierStokes {
                            v  :{v:IArray<number> | (len v) = this.size}, 
                            p  :{v:IArray<number> | (len v) = this.size}, 
                            divv:{v:IArray<number> | (len v) = this.size}) : void */
-            project(u:number[], ww:number[], p:number[], divv:number[])
+            project(u:number[], v:number[], p:number[], divv:number[])
             {
                 let width = this.width;
                 let height = this.height;
@@ -426,7 +426,7 @@ module NavierStokes {
                     let _lemma2 = mulThm2(rowSize, j, height+2);
                     let _lemma3 = mulThm2(rowSize, j+1, height+2);
                     for (let i = 1; i <= width; i++ ) {
-                        divv[++currentRow] = h * (u[++nextValue] - u[++prevValue] + ww[++nextRow] - ww[++previousRow]);
+                        divv[++currentRow] = h * (u[++nextValue] - u[++prevValue] + v[++nextRow] - v[++previousRow]);
                         p[currentRow] = 0;
                     }
                 }
@@ -449,11 +449,11 @@ module NavierStokes {
                     for (let i = 1; i<= width; i++) {
                         ++currentPos;
                         u[currentPos] = u[currentPos] - wScale * (p[++nextPos] - p[++prevPos]); //ORIG: -=
-                        ww[currentPos] = ww[currentPos] - hScale * (p[++nextRow] - p[++prevRow]); //ORIG: -=
+                        v[currentPos] = v[currentPos] - hScale * (p[++nextRow] - p[++prevRow]); //ORIG: -=
                     }
                 }
                 this.set_bnd(1, u);
-                this.set_bnd(2, ww);
+                this.set_bnd(2, v);
             }
 
             /*@ dens_step (x :{v:IArray<number> | (len v) = this.size}, 

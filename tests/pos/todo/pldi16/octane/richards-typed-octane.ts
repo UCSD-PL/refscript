@@ -59,6 +59,9 @@ module RichardsTYPEDVERSION {
     /*@ readonly */
     let EXPECTED_HOLD_COUNT = 928;
 
+    // ORIG: appeared after all IDs
+    /*@ readonly NUMBER_OF_IDS :: {number | v = 6} */
+    let NUMBER_OF_IDS = 6;
     /*@ readonly */
     let ID_IDLE       = 0;
     /*@ readonly */
@@ -71,8 +74,6 @@ module RichardsTYPEDVERSION {
     let ID_DEVICE_A   = 4;
     /*@ readonly */
     let ID_DEVICE_B   = 5;
-    /*@ readonly */
-    let NUMBER_OF_IDS = 6;
     /*@ readonly */
     let KIND_DEVICE   = 0;
     /*@ readonly */
@@ -124,17 +125,17 @@ module RichardsTYPEDVERSION {
         let scheduler = new Scheduler(0,0,new Array<MTaskControlBlock>(NUMBER_OF_IDS),null,null,-1);
         scheduler.addIdleTask(ID_IDLE, 0, null, COUNT);
 
-        let queue = new Packet(null, ID_WORKER, KIND_WORK, 0);
-        queue = new Packet(queue,  ID_WORKER, KIND_WORK, 0);
+        let queue:MPacket = new Packet(null, ID_WORKER, KIND_WORK, 0);
+        queue = <MPacket>new Packet(queue,  ID_WORKER, KIND_WORK, 0);
         scheduler.addWorkerTask(ID_WORKER, 1000, queue);
 
-        queue = new Packet(null, ID_DEVICE_A, KIND_DEVICE, 0);
-        queue = new Packet(queue,  ID_DEVICE_A, KIND_DEVICE, 0);
-        queue = new Packet(queue,  ID_DEVICE_A, KIND_DEVICE, 0);
+        queue = <MPacket>new Packet(null, ID_DEVICE_A, KIND_DEVICE, 0);
+        queue = <MPacket>new Packet(queue,  ID_DEVICE_A, KIND_DEVICE, 0);
+        queue = <MPacket>new Packet(queue,  ID_DEVICE_A, KIND_DEVICE, 0);
         scheduler.addHandlerTask(ID_HANDLER_A, 2000, queue);
 
-        queue = new Packet(null, ID_DEVICE_B, KIND_DEVICE, 0);
-        queue = new Packet(queue,  ID_DEVICE_B, KIND_DEVICE, 0);
+        queue = <MPacket>new Packet(null, ID_DEVICE_B, KIND_DEVICE, 0);
+        queue = <MPacket>new Packet(queue,  ID_DEVICE_B, KIND_DEVICE, 0);
         queue = new Packet(queue,  ID_DEVICE_B, KIND_DEVICE, 0);
         scheduler.addHandlerTask(ID_HANDLER_B, 3000, queue);
 
@@ -274,7 +275,7 @@ module RichardsTYPEDVERSION {
                        queue:MPacket + null, 
                        task:MTask) : {void | 0 < 1} */
         public addTask(id:number, priority:number, queue:MPacket, task:MTask) {
-            this.currentTcb = new TaskControlBlock(this.list, id, priority, queue, task);
+            this.currentTcb = <MTaskControlBlock> new TaskControlBlock(this.list, id, priority, queue, task);
             this.list = this.currentTcb;
             this.blocks[id] = this.currentTcb;
         }

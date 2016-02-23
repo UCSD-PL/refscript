@@ -4,7 +4,7 @@
 //     ensures that no 'undefined' or 'null' 
 //     or such in the array
 
-/*@ alias NonEmptyIArray<T> = {IArray<T> | 0 < len v} */
+/*@ type NonEmptyIArray<T> = {IArray<T> | 0 < len v} */
 
 /*@ d3_extent_1 :: <T> (NonEmptyIArray<T>) => #pair[T] */
 function d3_extent_1<T>(array: T[]): T[]{

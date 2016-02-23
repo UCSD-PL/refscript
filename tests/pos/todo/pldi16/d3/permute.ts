@@ -6,7 +6,8 @@
                               indexes: IArray<#idx[array]>) 
                           => { IArray<T> | (len v) = (len indexes) } */
 function d3_permute<T>(array: T[], indexes:number[]) : T[] {
-  let i = indexes.length, permutes: T[] = new Array<T>(i);
+  let i = indexes.length;
+  let permutes: T[] = new Array<T>(i);
   // while (i--) permutes[i] = array[indexes[i]];
   while (i) {
     i--;

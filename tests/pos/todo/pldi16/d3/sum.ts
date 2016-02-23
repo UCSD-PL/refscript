@@ -1,8 +1,8 @@
 /// <reference path="include/d3.d.ts" />
 
 
-/*@ d3_sum :: /\ (array : IArray<number>) => {number | 0 < 1} 
-              /\ forall T. (array : IArray<T>, f: (T, idx[array]) => number) => {number | 0 < 1} */ 
+/*@ d3_sum :: (array : IArray<number>) => {number | 0 < 1} */
+/*@ d3_sum :: <T> (array : IArray<T>, f: (T, idx[array]) => number) => {number | 0 < 1} */ 
 function d3_sum(array: any, f?:any): number {
   let s = 0;
   let n = array.length;

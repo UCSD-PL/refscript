@@ -8,8 +8,12 @@ function inc2(n: number) { return n + 2; }
 /*@ readonly xx :: { (Immutable) f: (n: number) => number } */
 let xx = { f: inc1 };
 
-function foo(): number {
-    return xx.f(5);
-}
+module A {
 
-assert(foo() === 6);
+    function foo(): number {
+        return xx.f(5);
+    }
+
+    assert(foo() === 6);
+
+}

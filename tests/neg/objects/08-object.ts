@@ -7,8 +7,13 @@ function inc(n: number): number { return n + 1; }
 /*@ readonly g09 :: (Immutable) { a: number; f: (n: number) => number; } */
 let g09 = { a: 5, f: inc };
 
-/*@ foo :: () => { number | v = 7 } */
-function foo() {
-    let gf = g09.f;
-    return gf(g09.a);
+
+module A {
+
+    /*@ foo :: () => { number | v = 7 } */
+    function foo() {
+        let gf = g09.f;
+        return gf(g09.a);
+    }
+
 }

@@ -6,6 +6,11 @@ let innerObj = { n: 6 };
 /*@ outerObj :: { a: number; b: string; c: { n : number } } */
 let outerObj = { a: 5, b: "String", c: innerObj };
 
-export function foo (n: number): { n: number } {
-    return outerObj.c;
+
+module A {
+
+    export function foo (n: number): { n: number } {
+        return outerObj.c;
+    }
+
 }

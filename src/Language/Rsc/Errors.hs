@@ -181,7 +181,7 @@ errorDeadCast l               = mkErr l $ text "Deadcast inserted."
 
 -- Lookup
 errorEnumLookup l e n         = mkErr l $ text $ printf "Cannot find member '%s' in enumeration '%s'" (ppshow n) (ppshow e)
-errorPrimLookup l e n         = mkErr l $ text $ printf "Cannot find member '%s' in primitive type '%s'" (ppshow n) (ppshow e)
+errorPrimLookup l f t         = mkErr l $ text "Cannot find member" <+> ticks (pp f) <+> text "in primitive type" <+> pp t
 errorMemLookup l m t          = mkErr l $ text $ printf "Cannot find member '%s' in type '%s'" (ppshow m) (ppshow t)
 errorGenericLookup l f t      = mkErr l $ text $ printf "Cannot find member '%s' in type '%s'" (ppshow f) (ppshow t)
 errorAmbientLookup l t f      = mkErr l $ text $ printf "Cannot find member '%s' in ambient element '%s'" (ppshow f) (ppshow t)

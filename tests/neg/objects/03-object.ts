@@ -7,6 +7,12 @@ let innerObj = { n: 6 }
 /*@ readonly */
 let outerObj = { a: 5, b: "String", oo: innerObj };
 
-export function foo (): { n: number } {
-    return outerObj.oo;
+
+
+module A {
+
+    export function foo (): { n: number } {
+        return outerObj.oo;
+    }
+
 }

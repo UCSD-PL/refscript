@@ -5,7 +5,7 @@ export function foo1(): string {
     let a1 = "1";
     a1 = a1 + "2";
 
-    function bar1(): string {
+    let bar1: () => string = function() {
         a1 = a1 + "3";
         return a1;
     }

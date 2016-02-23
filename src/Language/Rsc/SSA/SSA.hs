@@ -11,7 +11,7 @@ import           Data.Default
 import           Data.Function                (on)
 import qualified Data.HashSet                 as S
 import qualified Data.IntMap.Strict           as IM
-import           Data.List                    (sortBy)
+import           Data.List                    (partition, sortBy)
 import           Data.Maybe                   (catMaybes)
 import qualified Data.Traversable             as T
 import           Language.Fixpoint.Misc
@@ -76,7 +76,21 @@ ssaRsc cha p@(Rsc { code = Src fs })
 ssaStmts :: PPR r => SsaEnv r -> [Statement (AnnSSA r)]
                   -> SSAM r (Maybe (SsaEnv r), [Statement (AnnSSA r)])
 -------------------------------------------------------------------------------------
-ssaStmts g = fmap (mapSnd flattenBlock) . ssaSeqOpt ssaStmt g
+ssaStmts g ss = fmap (mapSnd flattenBlock) $ ssaSeqOpt ssaStmt g ss'
+  where
+    ss' = as ++ fs ++ qs
+
+    (fs, rs)  = partition isFuncStmt ss
+    (as, qs)  = partition isAmbDeclStmt rs
+
+    isFuncStmt FunctionStmt{} = True
+    isFuncStmt _              = False
+
+    isAmbDeclStmt (VarDeclStmt a vds)  = any isAmbDecl vds
+    isAmbDeclStmt _                    = False
+    isAmbDecl     (VarDecl l _ _ )     = any isAmbient (fFact l)
+    isAmbient     (VarAnn _ Ambient _) = True
+    isAmbient     _                    = False
 
 
 -------------------------------------------------------------------------------------
@@ -1145,8 +1159,7 @@ ssaForLoop :: PPR r
            -> Statement (AnnSSA r)
            -> SSAM r (Maybe (SsaEnv r), Statement (AnnSSA r))
 -------------------------------------------------------------------------------------
-ssaForLoop g l vds cOpt incExpOpt b =
-  do
+ssaForLoop g l vds cOpt incExpOpt b = do
     (b, sts') <- ssaStmts g sts
     return     $ (b, maybeBlock l sts')
   where
@@ -1165,8 +1178,7 @@ ssaForLoopExpr :: PPR r
                -> Statement (AnnSSA r)
                -> SSAM r (Maybe (SsaEnv r), Statement (AnnSSA r))
 -------------------------------------------------------------------------------------
-ssaForLoopExpr g l exp cOpt incExpOpt b =
-  do
+ssaForLoopExpr g l exp cOpt incExpOpt b = do
     l1        <- fr_ l
     (b, sts') <- ssaStmts g [ExprStmt l1 exp, WhileStmt l c bd]
     l2        <- fr_ l

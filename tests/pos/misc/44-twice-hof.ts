@@ -15,8 +15,7 @@ function main(x:number,y:boolean):number{
 
 	assert (z > 0);
 
-	/*@ plus :: (number) => number */
-	function plus(a:number):number{ return a + z };
+	let plus: (a: number) => number = function(a) { return a + z };
 
 	return twice(plus, xr);
 }

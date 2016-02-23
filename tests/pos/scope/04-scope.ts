@@ -16,7 +16,7 @@ function f1() {
                     let v5 = 1;
                     v5++;
 
-                    function f6() {
+                    let f6: () => void = function() {
                         let v6 = 1;
                         v5++;
 

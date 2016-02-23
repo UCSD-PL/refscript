@@ -1,11 +1,12 @@
 //adapted from underscore
-/*@ isNull :: forall T . (ob:T) => {boolean | ((Prop v) <=> (ob ~~ null))} */
+
+/*@ isNull :: <T>(ob:T) => {boolean | ((Prop v) <=> (ob ~~ null))} */
 function isNull(ob) {
-  return ob === null;
+    return ob === null;
 }
 
 // (this one already works:)
-/*@ isUndefined :: forall T . (ob:T) => {boolean | ((Prop v) <=> (ob ~~ undefined))} */
+/*@ isUndefined :: <T>(ob:T) => {boolean | ((Prop v) <=> (ob ~~ undefined))} */
 function isUndefined(ob) {
-  return ob === undefined;
+    return ob === undefined;
 }

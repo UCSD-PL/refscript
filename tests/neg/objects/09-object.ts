@@ -8,14 +8,18 @@ let gobj = {
 	b: "glorp",
 };
 
-export function foo(): void {
-  gobj.a = gobj.a + 1;
-  return;
-}
+module A {
 
-export function moo(): void{
-	foo();
-	let z = gobj.a;
-	assert(z > 2);
-	return;
+	export function foo(): void {
+	  gobj.a = gobj.a + 1;
+	  return;
+	}
+
+	export function moo(): void{
+		foo();
+		let z = gobj.a;
+		assert(z > 2);
+		return;
+	}
+
 }

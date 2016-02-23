@@ -4,8 +4,8 @@ export function foo(): number {
     /*@ a :: number */
     let a = 1;
     a = a + 1;
-    /*@ bar :: ( ) => number */
-    function bar(): number {
+
+    let bar: () => number = function() {
         a = a + 1;
         return a;
     }

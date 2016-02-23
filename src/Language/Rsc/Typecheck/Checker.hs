@@ -676,7 +676,7 @@ tcExpr γ e@(VarRef l x) _
   = return (e,t)
 
   | otherwise
-  = fatal (errorUnboundId (fSrc l) x) (VarRef l x, tBot)
+  = tcError (errorUnboundId (fSrc l) x)
   where
     to = tcEnvFindTy x γ
 

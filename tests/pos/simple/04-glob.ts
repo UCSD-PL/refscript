@@ -2,9 +2,14 @@
 
 /*@ global */ let glob = 20;
 
-function zog() {
-    glob = 20;
-}
-zog();
 
-assert(glob === 20);
+module A {
+
+    function zog() {
+        glob = 20;
+    }
+    zog();
+
+    assert(glob === 20);
+
+}

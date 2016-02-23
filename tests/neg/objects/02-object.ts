@@ -10,10 +10,14 @@ function inc2(n: number) { return n + 2; }
 /*@ readonly */
 let x = { f: inc1 };
 
-function foo() :number {
-  return (x.f)(5);
+module A {
+
+    function foo() :number {
+      return (x.f)(5);
+    }
+
+    x.f = inc2;
+
+    assert(foo() === 7);
+
 }
-
-x.f = inc2;
-
-assert(foo() === 7);

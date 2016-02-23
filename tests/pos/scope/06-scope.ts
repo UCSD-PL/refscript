@@ -1,11 +1,11 @@
 //adapted from navier-stokes
 
-export function foo(): void {
-    /*@ u :: string */
-    let u = "hi";
+/*@ u :: string */
+let u = "hi";
 
-    /*@ bar :: (u:number) => {void | true} */
-    function bar(u) {
+module A {
+
+    export function bar(u: number): void {
         u = 3;
         u = 3;
     }

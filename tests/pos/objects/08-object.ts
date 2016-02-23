@@ -6,8 +6,13 @@ function inc(n: number): number { return n + 1; }
 /*@ readonly gg :: (Immutable) { a: number; f: (n: number) => number; } */
 let gg = { a: 5, f: inc };
 
-/*@ foo :: () => { number | v = 6 } */
-function foo() {
-    let gf = gg.f;
-    return gf(gg.a);
+
+module A {
+
+    /*@ foo :: () => { number | v = 6 } */
+    function foo() {
+        let gf = gg.f;
+        return gf(gg.a);
+    }
+
 }

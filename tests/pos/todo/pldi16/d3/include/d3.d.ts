@@ -6,7 +6,7 @@
 // Aliases
 
 /*@ type nat       = {number | 0 <= v} */
-/*@ type idx[a]    = {nat | v < (len a) } */
+/* type idx[a]    = {nat | v < (len a) } */
 /*@ type pair[T]   = {IArray<T> | (len v) = 2} */
 
 
@@ -292,7 +292,7 @@ declare module D3 {
         *
         * @param map Array of objects to get the key values from
         */
-        /*@ keys (map: [Immutable]{ }) : MArray<{string | hasProperty(v, map) && enumProp(v, map)}> */
+        /*@ keys (map: (Immutable){ }) : MArray<{string | hasProperty(v, map) && enumProp(v, map)}> */
         keys(map:{ }): string[];
         /**
         * List the values of an associative array.
@@ -300,40 +300,40 @@ declare module D3 {
         * @param map Array of objects to get the values from
         */
 
-        /*@ values <T> (map: [Immutable]{[k:string]:T}) : {MArray<T> | 0 < 1} */
+        /*@ values <T> (map: (Immutable){[k:string]:T}) : {MArray<T> | 0 < 1} */
         values<T>(map:{[k:string]:T}): T[];
         /**
         * List the key-value entries of an associative array.
         *
         * @param map Array of objects to get the key-value pairs from
         */
-        /*@ entries <T> ([Immutable]{[k:string]:T}) : {MArray<{key:string; value:T}> | 0 < 1} */ 
+        /*@ entries <T> ((Immutable){[k:string]:T}) : {MArray<{key:string; value:T}> | 0 < 1} */
         entries<T>(map: {[k:string]:T}): {key:string; value:T}[];
-        /**
-        * merge multiple arrays into one array
-        *
-        * @param map Arrays to merge
-        */
-        /*@ merge <T> (map: IArray<IArray<T>>) => {IArray<T> | 0 < 1} */
-        merge<T>(map: T[][]): T[];
+//         /**
+//         * merge multiple arrays into one array
+//         *
+//         * @param map Arrays to merge
+//         */
+//         /*@ merge <T> (map: IArray<IArray<T>>) => {IArray<T> | 0 < 1} */
+//         merge<T>(map: T[][]): T[];
 
-        /**
-        * Generate a range of numeric values from 0.
-        *
-        * @param stop Value to generate the range to
-        */
-        /*@ range (number) : { MArray<number> | 0 < 1 } */
-        range(stop: number): number[];
-        /**
-        * Generate a range of numeric values.
-        *
-        * @param start Value to start
-        * @param stop Value to generate the range to
-        * @param step Step between each value
-        */
-        /*@ range (number, number, {number | v != 0}) : { MArray<number> | 0 < 1 } */
-        /*@ range (number, number                   ) : { MArray<number> | 0 < 1 } */
-        range(start: number, stop: number, step?: number): number[];
+//         /**
+//         * Generate a range of numeric values from 0.
+//         *
+//         * @param stop Value to generate the range to
+//         */
+//         /*@ range (number) : { MArray<number> | 0 < 1 } */
+//         range(stop: number): number[];
+//         /**
+//         * Generate a range of numeric values.
+//         *
+//         * @param start Value to start
+//         * @param stop Value to generate the range to
+//         * @param step Step between each value
+//         */
+//         /*@ range (number, number, {number | v != 0}) : { MArray<number> | 0 < 1 } */
+//         /*@ range (number, number                   ) : { MArray<number> | 0 < 1 } */
+//         range(start: number, stop: number, step?: number): number[];
 //        /**
 //        * Create new nest operator
 //        */
@@ -598,7 +598,7 @@ declare module D3 {
 //        functor<R,T>(value: (p : R) => T): (p : R) => T;
 //        functor<T>(value: T): (p : any) => T;
 
-        map(object?: any): Map<M>;
+//        map(object?: any): Map<M>;
 //        set(array?: Array<any>): Set;
 //        dispatch(...types: Array<string>): Dispatch;
 //        rebind(target: any, source: any, ...names: Array<any>): any;

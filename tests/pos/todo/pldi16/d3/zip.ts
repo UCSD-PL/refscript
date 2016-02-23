@@ -25,7 +25,7 @@ d3.zip = function<T>(args)
   if (!n) return [];
 
   let m = d3.min(args, d3_zipLength);
-  let zips = new Array<Array<T>>(m);
+  let zips = new IArray<IArray<T>>(m);
   for (let i = 0; i < m; i++) {
     let zip = new Array<T>(n);
     zips[i] = zip;

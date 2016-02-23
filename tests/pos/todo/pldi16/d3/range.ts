@@ -29,9 +29,9 @@ function d3_range(start:number, arg_stop?:number, arg_step?:number): number[] {
   let step = <number>loc_step;
 
   if ((stop - start) / step === Infinity) throw new Error("infinite range");
-  let range:number[] = [],
-       k:number = d3_range_integerScale(Math.abs(step)),
-       i = 0;
+  let range:number[] = [];
+  let k:number = d3_range_integerScale(Math.abs(step));
+  let i = 0;
   start *= k; stop *= k; step *= k;
   let j = start;
   if (step < 0) while (j > stop) { range.push(j / k); i++; j = start + step * i; }

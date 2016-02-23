@@ -3,9 +3,9 @@
 /*@ d3_merge :: <T> (map: IArray<IArray<T>>) => {v: IArray<T> | 0 < 1}*/
 
 function d3_merge<T>(arrays: T[][]): T[] {
-  let n = arrays.length,
-      i = -1,
-      j = 0;
+  let n = arrays.length;
+  let i = -1;
+  let j = 0;
 
   //Original code:
   //while (++i < n) j += arrays[i].length;

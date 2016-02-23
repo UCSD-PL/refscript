@@ -249,7 +249,7 @@ initCallableEnv l g f fty xs s = do
     return g3
   where
              -- No FP binding for these
-    nms    = envAddReturn f (SI rSym Local ReturnVar Initialized t)
+    nms    = envAddReturn f (ltracePP l "ret" $ SI rSym Local ReturnVar Initialized t)
            $ envAdds tyBs
            $ mappend (symEnv s)
            $ toFgn (envNames g)
@@ -407,8 +407,8 @@ consStmt g (ReturnStmt l Nothing)
 -- return e
 consStmt g (ReturnStmt l (Just e))
   = mseq (consExpr g e (Just rt)) $ \(y,gy) -> do
-      eT  <- cgSafeEnvFindTyM y gy
-      _   <- subType l Nothing gy eT rt
+      eT  <- ltracePP l e <$> cgSafeEnvFindTyM y gy
+      _   <- subType l Nothing gy eT $ ltracePP l "check against" rt
       return Nothing
   where
     rt = cgEnvFindReturn g
@@ -578,7 +578,7 @@ consInstanceClassElt g1 typDecl (Constructor l xs body) = do
 
   where
 
-    TD sig@(TS _ (BGen nm bs) _) _ ms = typDecl
+    TD sig@(TS _ (BGen nm bs) h) _ ms = typDecl
 
     thisT      = TRef (Gen nm (map btVar bs)) fTop
     ctor       = builtinOpId BICtor
@@ -588,9 +588,15 @@ consInstanceClassElt g1 typDecl (Constructor l xs body) = do
 
     -- (_f1: T1, ...) => { A | offset(v, "f1") = _f1, ... }
     --
-    exitP = [SI sExit Local Ambient Initialized $ mkFun (bs, xts, ret)]
+    exitP = ltracePP l "" [SI sExit Local Ambient Initialized $ mkFun (bs, xts, ret)]
     xts   = sortBy c_sym (toBinds allMembers)
-    ret   = unqualifyThis $ thisT `strengthen` F.reft (F.vv Nothing) (F.pAnd (map bnd out))
+
+    -- Use the parent type as base return type, strengthened
+    -- by the field initializations
+    ret   = unqualifyThis $ parT `strengthen` F.reft (F.vv Nothing) (F.pAnd (map bnd out))
+
+    parT  | ([p],_) <- h = TRef p fTop
+          | otherwise    = tObj
 
     -- unqualifyThis :: offset(this, "f") ==> f
     --
@@ -606,7 +612,7 @@ consInstanceClassElt g1 typDecl (Constructor l xs body) = do
     aeq   = F.PAtom F.Eq
 
     -- The type that needs to be established (including class invariant)
-    ctorT = case fmap bkAnd (tm_ctor ms) >>= mapM bkFun of
+    ctorT = ltracePP l "ctorT" $ case fmap bkAnd (tm_ctor ms) >>= mapM bkFun of
               Just tys -> tAnd (map ctorT1 tys)
               Nothing  -> die (unsupportedNonSingleConsTy (srcPos l))
 
@@ -973,7 +979,7 @@ consCall g l fn ets ft@(validOverloads g l fn -> fts)
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts <- mapM (`cgSafeEnvFindTyM` g') xes
       case fts of
-        ft : _ -> consCheckArgs l g' fn ft ts xes
+        ft : _ -> traceTypePP l fn $ consCheckArgs l g' fn ft ts xes
         _      -> cgError $ errorNoMatchCallee (srcPos l) fn ts ft
 
 -- | `consCheckArgs` does the subtyping between the types of the arguments
@@ -993,7 +999,7 @@ consCheckArgs l g fn ft ts xes
   = do  (rhs, rt) <- instantiateFTy l g fn xes ft
         lhs       <- zipWithM (instantiateTy l g fn) [1..] ts
         _         <- zipWithM_ (subType l Nothing g) lhs rhs
-        Just     <$> cgEnvAddFresh "5" l rt g
+        Just     <$> cgEnvAddFresh "5" l (ltracePP l ("add fresh " ++ ppshow fn) rt) g
 
 -- The integer argument `n` corresponds to the order of the argument
 --------------------------------------------------------------------------------

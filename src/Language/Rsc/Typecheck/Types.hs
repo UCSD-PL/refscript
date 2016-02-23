@@ -44,7 +44,7 @@ module Language.Rsc.Typecheck.Types (
 
   --   # Constructors
   , tNum, tReal, tBV32, tBool, tString, tTop, tVoid, tErr, tVar
-  , btVar, tUndef, tNull, tBot, tAny
+  , btVar, tUndef, tNull, tBot, tAny, tObj
 
   --   # Tests
   , isTPrim, isTAny, isTTop, isTUndef, isTUnion, isTStr, isTBool
@@ -399,6 +399,9 @@ tUndef  = tPrim TUndefined
 tAny    = tPrim TAny
 tNull   = tPrim TNull
 tErr    = tVoid
+
+tObj :: F.Reftable r => RTypeQ AK r
+tObj    = TObj tUQ mempty fTop
 
 
 

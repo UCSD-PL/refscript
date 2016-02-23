@@ -385,8 +385,7 @@ cgFunTys :: (IsLocated l, F.Symbolic b, PP x, PP [b])
          => l -> x -> [b] -> RefType -> CGM [IOverloadSig F.Reft]
 --------------------------------------------------------------------------------
 cgFunTys l f xs ft   | Just ts <- bkFuns ft
-                     = do tyParts <- mapM fTy (concatMap expandOpts ts)
-                          return   $ zip [0..] tyParts
+                     = zip [0..] <$> mapM fTy (concatMap expandOpts ts)
                      | otherwise
                      = cgError $ errorNonFunction (srcPos l) f ft
   where

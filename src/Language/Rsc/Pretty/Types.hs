@@ -44,6 +44,11 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp (TOr [] _)      = pp (TPrim TBot ())
   pp (TOr (t:ts) r)  = F.ppTy r $ sep $ pp t : map ((text "+" <+>) . pp) ts
   pp (TAnd ts)       = vcat [text "/\\" <+> pp t | t <- ts]
+  pp t@TRef{}        | isUQ t = pp "UQ"
+                     | isIM t = pp "IM"
+                     | isAF t = pp "AF"
+                     | isRO t = pp "RO"
+                     | isMU t = pp "MU"
   pp (TRef t r)      = F.ppTy r (pp t)
   pp (TObj m ms r)   = parens (pp (toType m)) <+> ppBody ms r
     where

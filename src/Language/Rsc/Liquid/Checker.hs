@@ -580,7 +580,7 @@ consInstanceClassElt :: CGEnv -> TypeDecl F.Reft -> ClassElt AnnLq -> CGM ()
 consInstanceClassElt g1 typDecl (Constructor l xs body) = do
     g2    <- initClassCtorEnv l sig g1
     g3    <- cgEnvAdds l "ctor" exitP g2
-    ts    <- cgFunTys l ctor xs ctorT
+    ts    <- cgFunTys l ctor xs $ ltracePP l "CtorT" ctorT
     mapM_ (consCallable l g3 ctor xs body) ts
 
   where
@@ -943,7 +943,7 @@ consExpr g (ObjectLit l pes) to
 consExpr g (NewExpr l e es) s
   = mseq (consExpr g e Nothing) $ \(x,g1) -> do
       t <- cgSafeEnvFindTyM x g1
-      case extractCtor g1 t of
+      case ltracePP l "Ctor extractedty" $ extractCtor g1 t of
         Just ct ->
             let ct' = substThisCtor ct in
             mseq (consCall g1 l (builtinOpId BICtor) (es `zip` nths) ct') $ \(x, g2) -> do

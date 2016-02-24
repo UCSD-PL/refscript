@@ -572,103 +572,109 @@ preM (ClassStmt _ _ cs)
 preM _ = return []
 
 
--- | Expand: [[ if ( e1 || e2) { s1 } else { s2 } ]]
---
---      let r = false;
---      if ( [[ e1 ]] ) {       // IF1
---          r = true;           // RT1
---      }
---      else {
---          if ( [[ e2 ]] ) {   // IF2
---              r = true;       // RT2
---          }
---      }
---      if ( r ) {
---          [[ s1 ]]
---      }
---      else {
---          [[ s2 ]]
---      }
---
-ssaExpandIfStmtInfixOr l e1 e2 s1 s2
-  = do  n     <- ("lor_" ++) . show  <$> tick
-        -- R1 ::= var r_NN = false;
-        r     <- Id           <$> fr l <**> n
-        fls   <- BoolLit      <$> fr l <**> False
-        vd    <- VarDecl      <$> fr l <**> r <**> Just fls
-        vs    <- VarDeclStmt  <$> fr l <**> [vd]
-        -- RT1 ::= r = true;
-        tru1  <- BoolLit      <$> fr l <**> True
-        lv1   <- LVar         <$> fr l <**> n
-        ae1   <- AssignExpr   <$> fr l <**> OpAssign <**> lv1 <**> tru1
-        as1   <- ExprStmt     <$> fr l <**> ae1
-        -- RT2 ::= r = true;
-        tru2  <- BoolLit      <$> fr l <**> True
-        lv2   <- LVar         <$> fr l <**> n
-        ae2   <- AssignExpr   <$> fr l <**> OpAssign <**> lv2 <**> tru2
-        as2   <- ExprStmt     <$> fr l <**> ae2
-        -- IF2 ::= if ( e2 ) { r = true } else { }
-        if2   <- IfSingleStmt <$> fr l <**> e2 <**> as2
-        -- IF1 ::= if ( e1 ) { r = true } else { if ( e2 ) { r = true } }
-        if1   <- IfStmt       <$> fr l <**> e1 <**> as1 <**> if2
-        -- if ( r ) { s1 } else { s2 }
-        r3    <- Id           <$> fr l <**> n
-        v3    <- VarRef       <$> fr l <**> r3
-        if3   <- IfStmt       <$> fr l <**> v3 <**> s1 <**> s2
-        maybeBlock            <$> fr l <**> [vs, if1, if3]
-  where
-    fr = freshenAnn
+-- -- | Expand: [[ if ( e1 || e2) { s1 } else { s2 } ]]
+-- --
+-- --      let r = false;
+-- --      if ( [[ e1 ]] ) {       // IF1
+-- --          r = true;           // RT1
+-- --      }
+-- --      else {
+-- --          if ( [[ e2 ]] ) {   // IF2
+-- --              r = true;       // RT2
+-- --          }
+-- --      }
+-- --      if ( r ) {
+-- --          [[ s1 ]]
+-- --      }
+-- --      else {
+-- --          [[ s2 ]]
+-- --      }
+-- --
+-- ssaExpandIfStmtInfixOr l e1 e2 s1 s2
+--   = do  n     <- ("lor_" ++) . show  <$> tick
+--         -- R1 ::= var r_NN = false;
+--         r     <- Id           <$> fr l <**> n
+--         fls   <- BoolLit      <$> fr l <**> False
+--         vd    <- VarDecl      <$> fr l <**> r <**> Just fls
+--         vs    <- VarDeclStmt  <$> fr l <**> [vd]
+--         -- RT1 ::= r = true;
+--         tru1  <- BoolLit      <$> fr l <**> True
+--         lv1   <- LVar         <$> fr l <**> n
+--         ae1   <- AssignExpr   <$> fr l <**> OpAssign <**> lv1 <**> tru1
+--         as1   <- ExprStmt     <$> fr l <**> ae1
+--         -- RT2 ::= r = true;
+--         tru2  <- BoolLit      <$> fr l <**> True
+--         lv2   <- LVar         <$> fr l <**> n
+--         ae2   <- AssignExpr   <$> fr l <**> OpAssign <**> lv2 <**> tru2
+--         as2   <- ExprStmt     <$> fr l <**> ae2
+--         -- IF2 ::= if ( e2 ) { r = true } else { }
+--         if2   <- IfSingleStmt <$> fr l <**> e2 <**> as2
+--         -- IF1 ::= if ( e1 ) { r = true } else { if ( e2 ) { r = true } }
+--         if1   <- IfStmt       <$> fr l <**> e1 <**> as1 <**> if2
+--         -- if ( r ) { s1 } else { s2 }
+--         r3    <- Id           <$> fr l <**> n
+--         v3    <- VarRef       <$> fr l <**> r3
+--         if3   <- IfStmt       <$> fr l <**> v3 <**> s1 <**> s2
+--         maybeBlock            <$> fr l <**> [vs, if1, if3]
+--   where
+--     fr = freshenAnn
 
--- | Expand: [[ if ( e1 && e2) { s1 } else { s2 } ]]
---
---      let r = true;
---      if ( [[ e1 ]] ) {
---          if ( [[ e2 ]] ) {
---
---          }
---          else {
---              r = false;
---          }
---      }
---      else {
---          r = false;
---      }
---      if ( r ) {
---          [[ s1 ]]
---      }
---      else {
---          [[ s2 ]]
---      }
---
+ssaExpandIfStmtInfixOr l e1 e2 s1 s2
+  = mapStmtM freshenAnn $ IfStmt l e1 s1 (IfStmt l e2 s1 s2)
+
 ssaExpandIfStmtInfixAnd l e1 e2 s1 s2
-  = do  n     <- ("land_" ++) . show  <$> tick
-        -- var r_NN = true;
-        r     <- Id           <$> fr l <**> n
-        fls   <- BoolLit      <$> fr l <**> True
-        vd    <- VarDecl      <$> fr l <**> r <**> Just fls
-        vs    <- VarDeclStmt  <$> fr l <**> [vd]
-        -- r = false;
-        tru1  <- BoolLit      <$> fr l <**> False
-        lv1   <- LVar         <$> fr l <**> n
-        ae1   <- AssignExpr   <$> fr l <**> OpAssign <**> lv1 <**> tru1
-        as1   <- ExprStmt     <$> fr l <**> ae1
-        -- IF2 ::= if ( e2 ) {  } else { r = false; }
-        emp   <- EmptyStmt    <$> fr l
-        if2   <- IfStmt       <$> fr l <**> e2 <**> emp <**> as1
-        -- AS2 ::= r = false;
-        tru2  <- BoolLit      <$> fr l <**> False
-        lv2   <- LVar         <$> fr l <**> n
-        ae2   <- AssignExpr   <$> fr l <**> OpAssign <**> lv2 <**> tru2
-        as2   <- ExprStmt     <$> fr l <**> ae2
-        -- IF1 ::= if ( e1 ) { IF2 } else { AS2 }
-        if1   <- IfStmt       <$> fr l <**> e1 <**> if2 <**> as2
-        -- if ( r ) { s1 } else { s2 }
-        r3    <- Id           <$> fr l <**> n
-        v3    <- VarRef       <$> fr l <**> r3
-        if3   <- IfStmt       <$> fr l <**> v3 <**> s1 <**> s2
-        maybeBlock            <$> fr l <**> [vs, if1, if3]
-  where
-    fr = freshenAnn
+  = mapStmtM freshenAnn $ IfStmt l e1 (IfStmt l e2 s1 s2) s2
+
+-- -- | Expand: [[ if ( e1 && e2) { s1 } else { s2 } ]]
+-- --
+-- --      let r = true;
+-- --      if ( [[ e1 ]] ) {
+-- --          if ( [[ e2 ]] ) {
+-- --
+-- --          }
+-- --          else {
+-- --              r = false;
+-- --          }
+-- --      }
+-- --      else {
+-- --          r = false;
+-- --      }
+-- --      if ( r ) {
+-- --          [[ s1 ]]
+-- --      }
+-- --      else {
+-- --          [[ s2 ]]
+-- --      }
+-- --
+-- ssaExpandIfStmtInfixAnd l e1 e2 s1 s2
+--   = do  n     <- ("land_" ++) . show  <$> tick
+--         -- var r_NN = true;
+--         r     <- Id           <$> fr l <**> n
+--         fls   <- BoolLit      <$> fr l <**> True
+--         vd    <- VarDecl      <$> fr l <**> r <**> Just fls
+--         vs    <- VarDeclStmt  <$> fr l <**> [vd]
+--         -- r = false;
+--         tru1  <- BoolLit      <$> fr l <**> False
+--         lv1   <- LVar         <$> fr l <**> n
+--         ae1   <- AssignExpr   <$> fr l <**> OpAssign <**> lv1 <**> tru1
+--         as1   <- ExprStmt     <$> fr l <**> ae1
+--         -- IF2 ::= if ( e2 ) {  } else { r = false; }
+--         emp   <- EmptyStmt    <$> fr l
+--         if2   <- IfStmt       <$> fr l <**> e2 <**> emp <**> as1
+--         -- AS2 ::= r = false;
+--         tru2  <- BoolLit      <$> fr l <**> False
+--         lv2   <- LVar         <$> fr l <**> n
+--         ae2   <- AssignExpr   <$> fr l <**> OpAssign <**> lv2 <**> tru2
+--         as2   <- ExprStmt     <$> fr l <**> ae2
+--         -- IF1 ::= if ( e1 ) { IF2 } else { AS2 }
+--         if1   <- IfStmt       <$> fr l <**> e1 <**> if2 <**> as2
+--         -- if ( r ) { s1 } else { s2 }
+--         r3    <- Id           <$> fr l <**> n
+--         v3    <- VarRef       <$> fr l <**> r3
+--         if3   <- IfStmt       <$> fr l <**> v3 <**> s1 <**> s2
+--         maybeBlock            <$> fr l <**> [vs, if1, if3]
+--   where
+--     fr = freshenAnn
 
 
 infOp OpAssign         _ _  e = return e

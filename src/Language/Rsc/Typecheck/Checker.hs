@@ -1138,9 +1138,7 @@ instantiateFTy l ξ fn ft@(bkAll -> (bs, t))
 --
 --------------------------------------------------------------------------------
 envJoin :: Unif r
-        => AnnTc r -> TCEnv r
-        -> TCEnvO r -> TCEnvO r
-        -> TCM r (Maybe (TCEnv r)) -- , [Statement (AnnSSA r)], [Statement (AnnSSA r)]))
+  => AnnTc r -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (Maybe (TCEnv r))
 --------------------------------------------------------------------------------
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
@@ -1149,18 +1147,22 @@ envJoin l γ (Just γ1) (Just γ2) = do
     s1s   <- mapM (safeEnvFindSI l γ1) xs    -- SI entry at the end of the 1st branch
     s2s   <- mapM (safeEnvFindSI l γ2) xs    -- SI entry at the end of the 2nd branch
 
-    return $ Just $ foldl (\γ' (s1, s2) ->
-        if isSubtype γ1 (v_type s1) (v_type s2) then      -- T1 <: T2 ==> T2
-            tcEnvAdd s2 γ'
-        else if isSubtype γ1 (v_type s2) (v_type s1) then -- T2 <: T1 ==> T1
-            tcEnvAdd s1 γ'
-        else                                              -- o.w.     ==> T1 \/ T2
-            tcEnvAdd (s1 { v_type = sOr s1 s2 }) γ'
-      ) γ (zip s1s s2s)
+    return $ Just $ foldl (\γ' (s1, s2) -> tcEnvAdd (siJoin γ1 s1 s2) γ') γ (zip s1s s2s)
 
   where
     xs        = [ x | PhiVar x <- fFact l ]
     sOr s1 s2 = tOr [v_type s1, v_type s2]
+
+siJoin γ s1 s2
+    | isSubtype γ (v_type s1) (v_type s2) = s2
+    | isSubtype γ (v_type s2) (v_type s1) = s1
+    | otherwise = s1 { v_type = tOr [v_type s1, v_type s2] }
+
+tyJoin γ t1 t2
+    | isSubtype γ t1 t2 = t2
+    | isSubtype γ t2 t1 = t1
+    | otherwise         = tOr [t1, t2]
+
 
 
 --------------------------------------------------------------------------------

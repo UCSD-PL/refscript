@@ -25,7 +25,7 @@ module Language.Rsc.Liquid.Environment (
   , freshTyPhi
   , freshTyPhis
   , freshTyPhis'
-  , freshTyCondExpr
+  , freshTy'
   , freshTyObj
   , freshenEnv
   , freshenCHA
@@ -596,11 +596,11 @@ freshTyPhi l g s = do
 
 -- | Instantiate Fresh Type at conditional expression
 --------------------------------------------------------------------------------
-freshTyCondExpr :: AnnLq -> CGEnv -> Type -> CGM (Id AnnLq, CGEnv, RefType)
+freshTy' :: AnnLq -> CGEnv -> Type -> CGM (Id AnnLq, CGEnv, RefType)
 --------------------------------------------------------------------------------
-freshTyCondExpr l g t
-  = do  t'      <- freshTy "freshTyCondExpr" t
-        (x, g') <- cgEnvAddFresh "freshTyCondExpr" l t' g
+freshTy' l g t
+  = do  t'      <- freshTy "freshTy'" t
+        (x, g') <- cgEnvAddFresh "freshTy'" l t' g
         _       <- wellFormed l g' t'
         return    $ (x, g', t')
 

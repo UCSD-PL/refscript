@@ -797,7 +797,7 @@ consExpr g (CondExpr l e e1 e2) (Just t)
         (Just (x1, g1'), Just (x2, g2')) -> do
             t1            <- cgSafeEnvFindTyM x1 g1'
             t2            <- cgSafeEnvFindTyM x2 g2'
-            (xf, gf, tf)  <- freshTyCondExpr l g' (toType t)
+            (xf, gf, tf)  <- freshTy' l g' (toType t)
             _             <- subType l Nothing g1' t1 tf
             _             <- subType l Nothing g2' t2 tf
             return         $ Just (xf, gf)
@@ -1147,14 +1147,7 @@ envJoin l g (Just g1) (Just g2) = do
     s1s   <-  mapM (safeEnvFindSI l g1) xs    -- SI entry at the end of the 1st branch
     s2s   <-  mapM (safeEnvFindSI l g2) xs    -- SI entry at the end of the 2nd branch
 
-    Just <$> foldM (\g_ (s1, s2) -> do
-        if isSubtype g1 (v_type s1) (v_type s2) then      -- T1 <: T2
-            checkPhi g_ s2 s1 s2
-        else if isSubtype g1 (v_type s2) (v_type s1) then -- T2 <: T1
-            checkPhi g_ s1 s1 s2
-        else
-            checkPhi g_ (sOr s1 s2) s1 s2
-      ) g (zip s1s s2s)
+    Just <$> foldM (\g_ (s1, s2) -> checkPhi g_ (siJoin g1 s1 s2) s1 s2) g (zip s1s s2s)
 
   where
 
@@ -1167,6 +1160,17 @@ envJoin l g (Just g1) (Just g2) = do
         ts        <- zipWithM (cgSafeEnvFindTyM . v_name) [s1,s2] [g1,g2]
         zipWithM_ (\l_ g_ -> subType l Nothing g_ l_ r_) ts [g1,g2]
         return g'
+
+siJoin g s1 s2
+    | isSubtype g (v_type s1) (v_type s2) = s2
+    | isSubtype g (v_type s2) (v_type s1) = s1
+    | otherwise = s1 { v_type = tOr [v_type s1, v_type s2] }
+
+tyJoin g t1 t2
+    | isSubtype g t1 t2 = t2
+    | isSubtype g t2 t1 = t1
+    | otherwise         = tOr [t1, t2]
+
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

@@ -38,10 +38,14 @@ module Language.Rsc.AST.Syntax (
 
   , undefinedVar
 
+  , mapStmtM
+  , mapExprM
+
   ) where
 
 import           Data.Default
 import           Data.Generics          (Data, Typeable)
+import qualified Data.Traversable       as T
 import           GHC.Generics
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
@@ -346,3 +350,11 @@ onlyCtxTyped FuncExpr{} = True
 onlyCtxTyped _          = False
 
 undefinedVar    = VarRef (srcPos dummySpan) undefinedId
+
+
+mapStmtM :: Monad m => (a -> m b) -> Statement a -> m (Statement b)
+mapStmtM = T.mapM
+
+mapExprM :: Monad m => (a -> m b) -> Expression a -> m (Expression b)
+mapExprM = T.mapM
+

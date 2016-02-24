@@ -21,13 +21,12 @@ module Language.Rsc.Traversals (
   -- , checkTypeWF
   ) where
 
-import qualified Data.HashSet                    as H
-import qualified Data.List                       as L
-import           Data.Maybe                      (catMaybes, maybeToList)
-import qualified Language.Fixpoint.Types         as F
+import qualified Data.HashSet             as H
+import qualified Data.List                as L
+import           Data.Maybe               (catMaybes, maybeToList)
+import qualified Language.Fixpoint.Types  as F
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
-import           Language.Rsc.Liquid.Refinements
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Types

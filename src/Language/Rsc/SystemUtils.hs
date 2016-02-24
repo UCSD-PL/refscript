@@ -127,9 +127,9 @@ mkAnnMapErr _ = [(dummySpan, "TODO-mkAnnMapErr")]
 -- mkAnnMapErr (F.Crash ls msg) = eInfo ("Crash: " ++ msg) <$> ls
 -- mkAnnMapErr _                = []
 
-eInfo msg err = (srcPos $ errLoc err, errMsg err)
-  where
-    -- err'      = catMessage err msg
+-- eInfo msg err = (srcPos $ errLoc err, errMsg err)
+--   where
+--     -- err'      = catMessage err msg
 
 mkAnnMapTyp (AI m)
   = M.map (\a -> (F.symbolSafeString $ ann_bind a, render $ pp (ann_type a)))

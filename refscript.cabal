@@ -126,6 +126,7 @@ Executable rsc
 Library
   Default-language: Haskell2010
   -- ghc-options:    -threaded -- -W -O2
+  -- ghc-options:   -threaded -Werror -W -fno-warn-missing-methods
   build-depends:    base
                   , containers
                   , pretty
@@ -202,7 +203,7 @@ Library
                     Language.Rsc.Typecheck.Checker,
                     Language.Rsc.Liquid.Checker,
                     Language.Rsc.Liquid.Types,
-                    Language.Rsc.Liquid.Refinements, 
+                    Language.Rsc.Liquid.Refinements,
                     Language.Rsc.Liquid.CGMonad,
                     Language.Rsc.Liquid.Qualifiers,
                     Language.Rsc.Pretty.Syntax,

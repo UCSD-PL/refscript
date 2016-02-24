@@ -47,10 +47,8 @@ module Language.Rsc.Liquid.Types (
 
   ) where
 
-import qualified Data.HashMap.Strict             as HM
 import           Data.Maybe                      (mapMaybe)
 import qualified Data.Text                       as T
-import qualified Language.Fixpoint.Smt.Bitvector as BV
 import qualified Language.Fixpoint.Types         as F
 import           Language.Fixpoint.Types.Names   (symbolText)
 import           Language.Rsc.AST
@@ -61,7 +59,6 @@ import           Language.Rsc.Transformations
 import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
-import           Text.PrettyPrint.HughesPJ
 
 --------------------------------------------------------------------------------
 -- | Refinement Types and Annotations

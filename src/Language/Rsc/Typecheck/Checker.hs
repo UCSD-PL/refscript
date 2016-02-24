@@ -221,7 +221,7 @@ tcStmt γ s@(InterfaceStmt _ _)
   = return (s, Just γ)
 
 -- | x = e
-tcStmt γ s@(ExprStmt l (AssignExpr l1 OpAssign v@(LVar lx x) e))
+tcStmt γ s@(ExprStmt l (AssignExpr l1 OpAssign (LVar lx x) e))
   = tcWrap check >>= tcSW γ s
   where
     check =
@@ -922,13 +922,13 @@ tcCall _ (CallExpr _ (SuperRef _)  _) _
 
 -- | `e.m(es)`
 --
-tcCall γ ex@(CallExpr l em@(DotRef l1 e0 f) es) _
+tcCall γ (CallExpr l em@(DotRef l1 e0 f) es) _
   -- | isVariadicCall f = tcError (unimplemented l "Variadic" ex)
   | otherwise        = checkNonVariadic
   where
     ue  = enableUnique e0
-    -- Variadic check
-    isVariadicCall f_ = F.symbol f_ == F.symbol "call"
+    -- -- Variadic check
+    -- isVariadicCall f_ = F.symbol f_ == F.symbol "call"
 
     -- Non-variadic
     checkNonVariadic =

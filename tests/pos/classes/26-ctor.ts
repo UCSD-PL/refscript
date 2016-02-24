@@ -1,6 +1,7 @@
 
 //adapted from navier-stokes
 
+
 class Foo<M extends ReadOnly> {
     /*@ (Immutable) a: number */
     a;

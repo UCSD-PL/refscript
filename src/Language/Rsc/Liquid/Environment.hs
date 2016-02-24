@@ -26,7 +26,9 @@ module Language.Rsc.Liquid.Environment (
   , freshTyPhis
   , freshTyPhis'
   , freshTyCondExpr
-  , freshTyObj, freshenCGEnvM
+  , freshTyObj
+  , freshenEnv
+  , freshenCHA
 
   , cgEnvAdds
   , cgSafeEnvFindTyM
@@ -202,7 +204,7 @@ validateFSig l g (bvs, bs, t) = do
 -------------------------------------------------------------------------------
 initClassCtorEnv :: IsLocated l => l -> TypeSig F.Reft -> CGEnv -> CGM CGEnv
 -------------------------------------------------------------------------------
-initClassCtorEnv l  (TS _ (BGen nm bs) _) g =
+initClassCtorEnv _ (TS _ (BGen nm bs) _) g =
     -- cgEnvAdds l "initClassCtorEnv" [eThis] g'
     return g'
   where
@@ -482,7 +484,7 @@ addInvariant g tIn = do
     rExtClass t cs = F.reft (vv t) (F.pAnd $ refa t "extends_class"     <$> cs)
     rExtIface t cs = F.reft (vv t) (F.pAnd $ refa t "extends_interface" <$> cs)
 
-    refa t s c = F.mkEApp (sym s) [ F.expr vvI, F.expr (F.symbolSafeText c)]
+    refa _ s c = F.mkEApp (sym s) [ F.expr vvI, F.expr (F.symbolSafeText c)]
 
     vv    = rTypeValueVar
     vvI   = vv tIn
@@ -610,14 +612,15 @@ freshTyObj :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType
 freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g
 
 --------------------------------------------------------------------------------
-freshenCGEnvM :: CGEnv -> CGM CGEnv
+freshenCHA  :: CGEnv -> ClassHierarchy F.Reft -> CGM (ClassHierarchy F.Reft)
 --------------------------------------------------------------------------------
-freshenCGEnvM g@(CGE { cge_names = nms, cge_cha = CHA gr n m })
-  = do  nms'  <- envFromList <$> mapM go (envToList nms)
-        cha'  <- CHA gr n <$> qenvFromList
-                          <$> freshenModuleDefM g `mapM` qenvToList m
-        return $ g { cge_names = nms'
-                   , cge_cha   = cha' }
+freshenCHA g (CHA gr n m) =
+    CHA gr n . qenvFromList <$> freshenModuleDefM g `mapM` qenvToList m
+
+--------------------------------------------------------------------------------
+freshenEnv :: CGEnv -> Env CGEnvEntry -> CGM (Env CGEnvEntry)
+--------------------------------------------------------------------------------
+freshenEnv g nms = envFromList <$> mapM go (envToList nms)
   where
     go (k, SI x loc a i v@TVar{}) = return (k, SI x loc a i v)
     go (k, v                    ) = (k,) <$> freshenVI g (srcPos k) v
@@ -628,18 +631,33 @@ freshenModuleDefM
 --------------------------------------------------------------------------------
 freshenModuleDefM g (a, m)
   = do  vars  <- envFromList <$> mapM goV (envToList $ m_variables m)
-        types <- envFromList <$> mapM goT (envToList $ m_types m)
+        types <- envFromList <$> mapM (\a -> freshenClassDeclM g a) (envToList $ m_types m)
         return (a, m { m_variables = vars, m_types = types })
   where
     -- XXX: is this right?
     goV (x, v) = (x,) <$> freshenVI g x v
 
-    -- KVar class definitions only
-    goT (x, d@(TD s p ms))
-      | sigKind s == ClassTDK
-      = (x,) . TD s p <$> mapTypeMembersM (freshTyFun g x) ms
-      | otherwise
-      = return (x, d)
+
+
+-- KVar class definitions only
+--
+freshenClassDeclM g (x, d@(TD s p ms))
+    | sigKind s == ClassTDK
+    = do  -- PV: remove for now..
+          -- unless isTrivialRetType (error "Ctor return type needs to have trivial refinements - Add class invariants instead" )
+          ms'  <- mapTypeMembersM (freshTyFun g x) ms
+          return  (x, TD s p ms')
+
+    | otherwise
+    = return (x, d)
+
+  where
+
+--     isTrivialRetType =
+--       let rts = [ rt | ft         <- concatMap bkAnd (tm_ctor ms)
+--                      , (_, _, rt) <- maybeToList (bkFun ft) ] in
+--       all isTrivialRefType rts
+
 
 
 envTyAdds msg l xts g = cgEnvAdds l msg' sis g

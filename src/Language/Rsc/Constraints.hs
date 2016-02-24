@@ -46,20 +46,20 @@ data Cinfo = Ci { ci_info    :: !Error
 
 -- TODO: restore this
 --
-ciToError (_, Ci e _ h) = e -- err (errLoc e) (errMsg e ++ "\n" ++ hs)
+ciToError (_, Ci e _ _ {- h -} ) = e -- err (errLoc e) (errMsg e ++ "\n" ++ hs)
   where
-    hs = show (ppAll h)
-    ppAll [] = empty
-    ppAll (x:xs) = ppFull x $+$ ppTail xs
+    -- hs = show (ppAll h)
+    -- ppAll [] = empty
+    -- ppAll (x:xs) = ppFull x $+$ ppTail xs
 
-    ppTail xs = vcat (map ppShort xs)
+    -- ppTail xs = vcat (map ppShort xs)
 
-    ppFull s = -- @(Sub g _ l r) =
-      -- text "In the environment" $+$ nest 2 (pp (cge_names g)) $+$
-      ppShort s
-    ppShort (Sub _ _ l r) =
-      text "Which was produced from the subtyping between:" $+$
-      nest 2 (nest 2 (pp l) $+$ text "and" $+$ nest 2 (pp r))
+    -- ppFull s = -- @(Sub g _ l r) =
+    --   -- text "In the environment" $+$ nest 2 (pp (cge_names g)) $+$
+    --   ppShort s
+    -- ppShort (Sub _ _ l r) =
+    --   text "Which was produced from the subtyping between:" $+$
+    --   nest 2 (nest 2 (pp l) $+$ text "and" $+$ nest 2 (pp r))
 
 ci   :: (IsLocated a) => Error -> a -> Cinfo
 ci e l = Ci e (srcPos l) []

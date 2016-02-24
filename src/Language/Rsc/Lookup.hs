@@ -88,7 +88,7 @@ getProp _ γ _ f t@(TMod m)
   , Just v' <- envFindTy f (m_variables m')
   = Right [(t, symToField v')]
 
-getProp _ γ _ f t
+getProp _ _ _ f t
   | isTFun t
   , F.symbol f == callSym
   , Just ft <- go t

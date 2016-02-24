@@ -193,37 +193,42 @@ consRsc p@(Rsc {code = Src fs}) cha
 --------------------------------------------------------------------------------
 initGlobalEnv :: RefScript -> ClassHierarchy F.Reft -> CGM CGEnv
 --------------------------------------------------------------------------------
-initGlobalEnv pgm@(Rsc { code = Src ss }) cha = freshenCGEnvM g
+initGlobalEnv pgm@(Rsc { code = Src ss }) cha = do
+    let g  = CGE nms bnds ctx pth cha fenv grd cst mut thisT (-1)
+    cha'  <- freshenCHA g (envCHA   g)
+    nms'  <- freshenEnv g (envNames g)
+    return $ g { cge_cha = cha', cge_names = nms' }
   where
-    g     = CGE nms bnds ctx pth cha fenv grd cst mut thisT (-1)
-    nms   = symEnv ss
-    bnds  = mempty
-    ctx   = emptyContext
-    pth   = mkAbsPath []
-    fenv  = F.emptyIBindEnv
-    grd   = []
-    cst   = consts pgm
-    mut   = Nothing
-    thisT = Nothing
+    nms    = symEnv ss
+    bnds   = mempty
+    ctx    = emptyContext
+    pth    = mkAbsPath []
+    fenv   = F.emptyIBindEnv
+    grd    = []
+    cst    = consts pgm
+    mut    = Nothing
+    thisT  = Nothing
 
 -- TODO: CheckSyms
 --------------------------------------------------------------------------------
 initModuleEnv :: F.Symbolic n => CGEnv -> n -> [Statement AnnLq] -> CGM CGEnv
 --------------------------------------------------------------------------------
-initModuleEnv g n s = freshenCGEnvM g'
+initModuleEnv g n s = do
+    let g' = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
+    nms'  <- freshenEnv g' (envNames g')
+    return $ g' { cge_names = nms' }
   where
-    g'    = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
-    nms   = symEnv s `mappend` toFgn (envNames g)
-    bnds  = envBounds g
-    ctx   = cge_ctx g
-    pth   = extendAbsPath (cge_path g) n
-    cha   = cge_cha g
-    fenv  = cge_fenv g
-    grd   = cge_guards g
-    cst   = cge_consts g
-    mut   = Nothing
-    thisT = Nothing
-    fnId  = cge_fnid g
+    nms    = symEnv s `mappend` toFgn (envNames g)
+    bnds   = envBounds g
+    ctx    = cge_ctx g
+    pth    = extendAbsPath (cge_path g) n
+    cha    = cge_cha g
+    fenv   = cge_fenv g
+    grd    = cge_guards g
+    cst    = cge_consts g
+    mut    = Nothing
+    thisT  = Nothing
+    fnId   = cge_fnid g
 
 -- | `initCallableEnv l f i xs (αs, ts, t) g`
 --
@@ -242,8 +247,9 @@ initCallableEnv :: (PP x, IsLocated x)
                 -> CGM CGEnv
 --------------------------------------------------------------------------------
 initCallableEnv l g f fty xs s = do
-    g0    <- pure (CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId)
-    g1    <- freshenCGEnvM g0
+    let g0 = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
+    nms'  <- freshenEnv g0 nms
+    let g1 = g0 { cge_names = nms' }
     g2    <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-0") params g1
     g3    <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-1") [arg] g2
     return g3
@@ -429,7 +435,7 @@ consStmt g s@FunctionStmt{}
 --  * Compute type for "this" and add that to the env as well.
 --
 consStmt g (ClassStmt l x ce)
-  = do  d       <- resolveTypeM l g nm
+  = do  d     <- resolveTypeM l g nm
         mapM_ (consStaticClassElt g d) ceS
         mapM_ (consInstanceClassElt g d) ceI
         return $ Just g
@@ -562,7 +568,8 @@ consStaticClassElt g (TD sig _ ms) (MemberMethDecl l True x xs body)
   | otherwise
   = cgError  $ errorClassEltAnnot (srcPos l) (sigTRef sig) x
 
-consStaticClassElt _ _ c = error (show $ pp "consStaticClassElt - not a static element: " $+$ pp c)
+consStaticClassElt _ _ c =
+  error (show $ pp "consStaticClassElt - not a static element: " $+$ pp c)
 
 
 --------------------------------------------------------------------------------
@@ -618,7 +625,17 @@ consInstanceClassElt g1 typDecl (Constructor l xs body) = do
 
     ctorT1 (bvs, bs, rt) = mkFun (bvs, bs, prepRt rt)
 
-    prepRt = substThisWithSelf . (`strengthen` clInv)
+    -- Check for:
+    --
+    --  * Class invariants
+    --
+    --  * Whatever refinement is given at the constructor's sig
+    --
+    prepRt t = parT `strengthen` clInv `strengthen` rTypeR t
+
+    -- No `this` allowed
+    -- No return type refinements for constructor
+    -- substThisWithSelf . (`strengthen` clInv)
     clInv  = getClassInvariant g1 nm
 
 
@@ -804,13 +821,13 @@ consExpr g (CallExpr l (SuperRef _) _) _
   where
 
 -- | e.m(es)
-consExpr g ex@(CallExpr l em@(DotRef _ e f) es) _
+consExpr g (CallExpr l em@(DotRef _ e f) es) _
   -- | isVariadicCall f = cgError (unimplemented l "Variadic" ex)
   | otherwise        = checkNonVariadic
 
   where
     -- Variadic check
-    isVariadicCall f_ = F.symbol f_ == F.symbol "call"
+    -- isVariadicCall f_ = F.symbol f_ == F.symbol "call"
 
     checkNonVariadic =
       mseq (consExpr g e Nothing) $ \(xR, g') -> do

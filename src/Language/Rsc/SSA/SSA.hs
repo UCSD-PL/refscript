@@ -86,7 +86,7 @@ ssaStmts g ss = fmap (mapSnd flattenBlock) $ ssaSeqOpt ssaStmt g ss'
     isFuncStmt FunctionStmt{} = True
     isFuncStmt _              = False
 
-    isAmbDeclStmt (VarDeclStmt a vds)  = any isAmbDecl vds
+    isAmbDeclStmt (VarDeclStmt _ vds)  = any isAmbDecl vds
     isAmbDeclStmt _                    = False
     isAmbDecl     (VarDecl l _ _ )     = any isAmbient (fFact l)
     isAmbient     (VarAnn _ Ambient _) = True
@@ -386,23 +386,23 @@ fr_ = freshenAnn
 -------------------------------------------------------------------------------------
 ctorVisitor :: PPR r => [Id (AnnSSA r)] -> VisitorM (SSAM r) () () (AnnSSA r)
 -------------------------------------------------------------------------------------
-ctorVisitor ms =
+ctorVisitor _ =
     defaultVisitor { endStmt = es } { endExpr = ee } { mStmt = ts } { mExpr = te }
   where
-    es FunctionStmt{}     = True
-    es _                  = False
-    ee FuncExpr{}         = True
-    ee _                  = False
+    es FunctionStmt{} = True
+    es _              = False
+    ee FuncExpr{}     = True
+    ee _              = False
 
     te (AssignExpr la OpAssign (LDot ld (ThisRef _) s) e)
-                          = AssignExpr <$> fr_ la
-                                       <*> return OpAssign
-                                       <*> (LVar <$> fr_ ld <**> mkCtorStr s)
-                                       <*> return e
-    te lv                 = return lv
+                      = AssignExpr <$> fr_ la
+                                   <*> return OpAssign
+                                   <*> (LVar <$> fr_ ld <**> mkCtorStr s)
+                                   <*> return e
+    te lv             = return lv
 
-    ts r@(ReturnStmt l _) = error "no return in ctor"
-    ts r                  = return r
+    ts ReturnStmt{}   = error "no return in ctor"
+    ts r              = return r
 
     -- ts r@(ReturnStmt l _) = maybeBlock <$> fr_ l <*> ((:[tracePP "ret" r]) <$> ctorExit l ms)
 

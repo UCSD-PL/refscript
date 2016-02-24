@@ -74,7 +74,6 @@ import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Liquid.Qualifiers
 import           Language.Rsc.Liquid.Refinements
-import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
@@ -279,7 +278,11 @@ subType l (Just err) g t1 t2
   = modify $ \st -> st { cg_cs = Sub g (ci err l) t1 t2 : cg_cs st }
 
 subType l Nothing g t1 t2
-  = subType l (Just (mkErr l $ text "Liquid Type Error")) g t1 t2
+  = subType l (Just (mkErr l msg)) g t1 t2
+  where
+    msg = text "Liquid Type Error" $+$
+          text "LHS" $+$ nest 2 (pp t1) $+$
+          text "RHS" $+$ nest 2 (pp t2)
 
 
 -- TODO: KVar subst

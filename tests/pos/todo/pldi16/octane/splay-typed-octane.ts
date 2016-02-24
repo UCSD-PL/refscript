@@ -61,7 +61,6 @@ module SplayVERSION {
                 string: 'String for key ' + tag + ' in leaf node'
             };
         } else {
-            //PORT TODO
             return {
                 left: GeneratePayloadTree(depth - 1, tag),
                 right: GeneratePayloadTree(depth - 1, tag)
@@ -76,8 +75,8 @@ module SplayVERSION {
         return Math.random();
     }
 
-
-    function InsertNewNode() {
+    /*@ InsertNewNode :: () => void */
+    let InsertNewNode : () => void = function() {
         let tree = splayTree;
         if (!tree) throw new Error('splayTree is null! did you forget to call SplaySetup?');
         // Insert new node with a unique key.
@@ -92,13 +91,13 @@ module SplayVERSION {
 
 
 
-    export function SplaySetup() {
+    export let SplaySetup : () => void = function() {
         splayTree = new SplayTree();
         for (let i = 0; i < kSplayTreeSize; i++) InsertNewNode();
     }
 
 
-    export function SplayTearDown() {
+    export let SplayTearDown : () => void = function() {
         let tree = splayTree;
         if (!tree) throw new Error('splayTree is null! did you forget to call SplaySetup?');
         // Allow the garbage collector to reclaim the memory
@@ -122,7 +121,7 @@ module SplayVERSION {
     }
 
 
-    export function SplayRun() {
+    export let SplayRun : () => void = function() {
         let tree = splayTree;
         if (!tree) throw new Error('splayTree is null! did you forget to call SplaySetup?');
         // Replace a few nodes in the splay tree.
@@ -270,7 +269,7 @@ module SplayVERSION {
             if (!root) {
                 return null;
             }
-            let current = root //PORT TODO opt_startNode || root;
+            let current = opt_startNode || root;
             let right = current.right;
             while (right) {
                 current = right;

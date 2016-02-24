@@ -23,7 +23,9 @@ import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Text.PrettyPrint.HughesPJ
 
-angles p = char '<' <> p <> char '>'
+angles p = langle <> p <> rangle
+langle   = char '<'
+rangle   = char '>'
 
 instance PP Bool where
   pp True   = text "True"
@@ -44,11 +46,7 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp (TOr [] _)      = pp (TPrim TBot ())
   pp (TOr (t:ts) r)  = F.ppTy r $ sep $ pp t : map ((text "+" <+>) . pp) ts
   pp (TAnd ts)       = vcat [text "/\\" <+> pp t | t <- ts]
-  pp t@TRef{}        | isUQ t = pp "UQ"
-                     | isIM t = pp "IM"
-                     | isAF t = pp "AF"
-                     | isRO t = pp "RO"
-                     | isMU t = pp "MU"
+  pp t@TRef{}        | mutRelated t = ppMut t
   pp (TRef t r)      = F.ppTy r (pp t)
   pp (TObj m ms r)   = parens (pp (toType m)) <+> ppBody ms r
     where
@@ -58,6 +56,16 @@ instance (F.Reftable r, PP r) => PP (RTypeQ q r) where
   pp t@(TAll _ _)    = ppArgs angles comma αs <> pp t' where (αs, t') = bkAll t
   pp (TFun xts t _)  = ppArgs parens comma xts <+> text "=>" <+> pp t
   pp (TExp e)        = pprint e
+
+
+ppMut t@TRef{} | isUQ t = pp "UQ"
+               | isIM t = pp "IM"
+               | isAF t = pp "AF"
+               | isRO t = pp "RO"
+               | isMU t = pp "MU"
+ppMut (TVar v _ )       = pp v
+ppMut _                 = pp "MUT???"
+
 
 instance (F.Reftable r, PP r) => PP (TypeMembersQ q r) where
   pp (TM ms sms cs cts sidx nidx)
@@ -88,8 +96,8 @@ instance PP Optionality where
   pp Req = empty
 
 instance (F.Reftable r, PP r) => PP (TGenQ q r) where
-  pp (Gen x []) = pp x
-  pp (Gen x ts) = pp x <> ppArgs angles comma ts
+  pp (Gen x [])     = pp x
+  pp (Gen x (m:ts)) = pp x <> angles (intersperse comma (ppMut m : map pp ts))
 
 instance (F.Reftable r, PP r) => PP (BTGenQ q r) where
   pp (BGen x []) = pp x

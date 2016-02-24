@@ -10,7 +10,7 @@
 module Language.Rsc.Transformations (
     Transformable (..), NameTransformable (..), AnnotTransformable (..)
   , transFmap, ntransFmap, ntransPure
-  , emapReft, mapReftM, mapTypeMembersM
+  , emapReft, mapReftM
   , replaceDotRef, replaceAbsolute
   , fixFunBinders
   ) where
@@ -331,21 +331,6 @@ mapTypeMembers f (TM m sm c k s n)
 
 mapReftElt f (FI x m a t) = FI x m <$> mapReftM f a <*> mapReftM f t
 mapReftElt f (MI x m mts) = MI x m <$> mapM (mapPairM (mapReftM f) (mapReftM f)) mts
-
---------------------------------------------------------------------------------
-mapTypeMembersM :: (Applicative m, Monad m)
-                => (RType r -> m (RType r)) -> TypeMembers r -> m (TypeMembers r)
---------------------------------------------------------------------------------
-mapTypeMembersM f (TM m sm c k s n)
-  = TM <$> T.mapM memMapM m
-       <*> T.mapM memMapM sm
-       <*> T.mapM f c
-       <*> T.mapM f k
-       <*> T.mapM (\(m_, t_) -> (,) <$> f m_ <*> f t_) s
-       <*> T.mapM (\(m_, t_) -> (,) <$> f m_ <*> f t_) n
-  where
-    memMapM (FI x o a t) = FI x o <$> f a <*> f t
-    memMapM (MI x o mts) = MI x o <$> mapM (mapSndM f) mts
 
 
 --------------------------------------------------------------------------------

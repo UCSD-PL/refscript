@@ -577,25 +577,24 @@ consInstanceClassElt :: CGEnv -> TypeDecl F.Reft -> ClassElt AnnLq -> CGM ()
 --------------------------------------------------------------------------------
 -- | Constructor
 --
-consInstanceClassElt g1 typDecl (Constructor l xs body) = do
-    g2    <- initClassCtorEnv l sig g1
-    g3    <- cgEnvAdds l "ctor" exitP g2
-    ts    <- cgFunTys l ctor xs $ ltracePP l "CtorT" ctorT
-    mapM_ (consCallable l g3 ctor xs body) ts
-
+consInstanceClassElt g typDecl (Constructor l xs body) = do
+    g2    <- cgEnvAdds l "ctor" exitP g1
+    ts    <- cgFunTys l ctor xs ctorT
+    mapM_ (consCallable l g2 ctor xs body) ts
   where
-
     TD sig@(TS _ (BGen nm bs) h) _ ms = typDecl
-
+    g1         =  initClassCtorEnv sig g
     thisT      = TRef (Gen nm (map btVar bs)) fTop
     ctor       = builtinOpId BICtor
     cExit      = builtinOpId BICtorExit
     sExit      = F.symbol cExit
-    allMembers = typeMembersOfType (envCHA g1) thisT      -- Including inherited
+    allMembers = typeMembersOfType (envCHA g) thisT      -- Including inherited
 
-    -- (_f1: T1, ...) => { A | offset(v, "f1") = _f1, ... }
+    --  (_f1: T1, ...) => { A | offset(v, "f1") = _f1, ... }
     --
-    exitP = [SI sExit Local Ambient Initialized $ mkFun (bs, xts, ret)]
+    --  No type variables for constructor
+    --
+    exitP = [SI sExit Local Ambient Initialized $ mkFun ([], xts, ret)]
     xts   = sortBy c_sym (toBinds allMembers)
 
     -- Use the parent type as base return type, strengthened
@@ -609,7 +608,7 @@ consInstanceClassElt g1 typDecl (Constructor l xs body) = do
     --
     toBinds ms = [ B x Req (unqualifyThis t) | (x, FI _ _ _ t) <- lMems ms ]
 
-    out   = [ f | (f, FI _ _ m _) <- lMems allMembers, isSubtype g1 m tIM ]
+    out   = [ f | (f, FI _ _ m _) <- lMems allMembers, isSubtype g m tIM ]
 
     bnd f = mkOffsetSym v_sym (symbolString f) `aeq` F.eVar f
 
@@ -623,7 +622,7 @@ consInstanceClassElt g1 typDecl (Constructor l xs body) = do
               Just tys -> tAnd (map ctorT1 tys)
               Nothing  -> die (unsupportedNonSingleConsTy (srcPos l))
 
-    ctorT1 (bvs, bs, rt) = mkFun (bvs, bs, prepRt rt)
+    ctorT1 (_, bs, rt) = mkFun ([], bs, prepRt rt)
 
     -- Check for:
     --
@@ -636,7 +635,7 @@ consInstanceClassElt g1 typDecl (Constructor l xs body) = do
     -- No `this` allowed
     -- No return type refinements for constructor
     -- substThisWithSelf . (`strengthen` clInv)
-    clInv  = getClassInvariant g1 nm
+    clInv  = getClassInvariant g nm
 
 
 -- | Instance method
@@ -943,7 +942,7 @@ consExpr g (ObjectLit l pes) to
 consExpr g (NewExpr l e es) s
   = mseq (consExpr g e Nothing) $ \(x,g1) -> do
       t <- cgSafeEnvFindTyM x g1
-      case ltracePP l "Ctor extractedty" $ extractCtor g1 t of
+      case extractCtor g1 t of
         Just ct ->
             let ct' = substThisCtor ct in
             mseq (consCall g1 l (builtinOpId BICtor) (es `zip` nths) ct') $ \(x, g2) -> do

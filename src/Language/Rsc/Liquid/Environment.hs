@@ -58,6 +58,7 @@ import           Data.Default
 import qualified Data.HashMap.Strict             as HM
 import qualified Data.List                       as L
 import           Data.Maybe                      (catMaybes, fromMaybe)
+import qualified Data.Traversable                as T
 import           Debug.Trace                     hiding (traceShow)
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types         as F
@@ -72,11 +73,11 @@ import           Language.Rsc.Liquid.CGMonad
 import           Language.Rsc.Liquid.Refinements
 import           Language.Rsc.Liquid.Types
 import           Language.Rsc.Locations
+import           Language.Rsc.Misc
 import           Language.Rsc.Module
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Symbols
-import           Language.Rsc.Transformations
 import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Sub
 import           Language.Rsc.Typecheck.Subst
@@ -202,16 +203,14 @@ validateFSig l g (bvs, bs, t) = do
 
 -- | `initClassCtorEnv` makes `this` a Unique & Uninitialized binding
 -------------------------------------------------------------------------------
-initClassCtorEnv :: IsLocated l => l -> TypeSig F.Reft -> CGEnv -> CGM CGEnv
+initClassCtorEnv :: TypeSig F.Reft -> CGEnv -> CGEnv
 -------------------------------------------------------------------------------
-initClassCtorEnv _ (TS _ (BGen nm bs) _) g =
-    -- cgEnvAdds l "initClassCtorEnv" [eThis] g'
-    return g'
+initClassCtorEnv (TS _ (BGen nm bs) _) g =
+    g { cge_bounds = envAdds bts (cge_bounds g)
+      , cge_this   = Just tThis
+      , cge_mut    = Just tUQ
+      }
   where
-    g'    = g { cge_bounds = envAdds bts (cge_bounds g)
-              , cge_this   = Just tThis
-              , cge_mut    = Just tUQ
-              }
     bts   = [(s,t) | BTV s _ (Just t) <- bs]
     tThis = adjUQ (TRef (Gen nm (map btVar bs)) fTop)
     -- eThis = SI thisSym Local RdOnly Uninitialized tThis
@@ -497,7 +496,7 @@ addInvariant g tIn = do
 
 -- | Freshen up
 freshTy :: RefTypable a => s -> a -> CGM RefType
-freshTy _ τ = refresh $ rType τ
+freshTy _ = refresh . rType
 
 
 -- | Instantiate Fresh Type (at Function-site)
@@ -629,35 +628,34 @@ freshenEnv g nms = envFromList <$> mapM go (envToList nms)
 freshenModuleDefM
   :: CGEnv -> (AbsPath, ModuleDef F.Reft) -> CGM (AbsPath, ModuleDef F.Reft)
 --------------------------------------------------------------------------------
-freshenModuleDefM g (a, m)
-  = do  vars  <- envFromList <$> mapM goV (envToList $ m_variables m)
-        types <- envFromList <$> mapM (\a -> freshenClassDeclM g a) (envToList $ m_types m)
-        return (a, m { m_variables = vars, m_types = types })
+freshenModuleDefM g (a, m) = do
+    vrs'  <- envFromList <$> mapM goV vrs
+    tys'  <- envFromList <$> mapM (freshenClassDeclM g) tys
+    return   (a, m { m_variables = vrs', m_types = tys' })
   where
     -- XXX: is this right?
     goV (x, v) = (x,) <$> freshenVI g x v
+    tys        = envToList (m_types     m)
+    vrs        = envToList (m_variables m)
 
-
-
--- KVar class definitions only
---
-freshenClassDeclM g (x, d@(TD s p ms))
-    | sigKind s == ClassTDK
-    = do  -- PV: remove for now..
-          -- unless isTrivialRetType (error "Ctor return type needs to have trivial refinements - Add class invariants instead" )
-          ms'  <- mapTypeMembersM (freshTyFun g x) ms
-          return  (x, TD s p ms')
-
-    | otherwise
-    = return (x, d)
-
+-- XXX: Do NOT freshen constructors! Because of the trick of returning the
+--      parent class object, some of the returned types might not get
+--      constrained, hence can cause unsoundness.
+--------------------------------------------------------------------------------
+freshenClassDeclM
+  :: IsLocated t => CGEnv -> (t, TypeDecl F.Reft) -> CGM (t, TypeDecl F.Reft)
+--------------------------------------------------------------------------------
+freshenClassDeclM g (x, (TD s@(TS ClassTDK _ _) p ms)) = do
+    ms'  <- mapTypeMembersM (freshTyFun g x) ms
+    return  (x, TD s p ms')
   where
+    mapTypeMembersM f (TM m sm c k s n) = TM <$> T.mapM (memMapM f) m
+                                             <*> T.mapM (memMapM f) sm
+                                             <**> c <**> k <**> s <**> n
+    memMapM f (FI x o a t) = FI x o <$> f a <*> f t
+    memMapM f (MI x o mts) = MI x o <$> mapM (mapSndM f) mts
 
---     isTrivialRetType =
---       let rts = [ rt | ft         <- concatMap bkAnd (tm_ctor ms)
---                      , (_, _, rt) <- maybeToList (bkFun ft) ] in
---       all isTrivialRefType rts
-
+freshenClassDeclM _ (x, d) = return (x, d)
 
 
 envTyAdds msg l xts g = cgEnvAdds l msg' sis g
@@ -665,12 +663,12 @@ envTyAdds msg l xts g = cgEnvAdds l msg' sis g
     sis  = [ SI x Local WriteLocal Initialized t | B x _ t <- xts ]
     msg' = msg ++ " - envTyAdds " ++ ppshow (srcPos l)
 
-traceTypePP l msg act
-  = do  z <- act
-        case z of
-          Just (x,g) -> do  t <- cgSafeEnvFindTyM x g
-                            return $ Just $ trace (str x t) (x,g)
-          Nothing -> return Nothing
+traceTypePP l msg act = do
+    z <- act
+    case z of
+      Just (x,g) -> do  t <- cgSafeEnvFindTyM x g
+                        return $ Just $ trace (str x t) (x,g)
+      Nothing -> return Nothing
   where
     str x t = boldBlue (printf "\nTrace: [%s] %s\n" (ppshow (srcPos l)) (ppshow msg)) ++
               printf "%s: %s" (ppshow x) (ppshow t)

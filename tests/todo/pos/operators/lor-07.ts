@@ -4,7 +4,5 @@ export function foo(x: number, y: string, z: boolean) {
     if (x && (y || z)) {
         return 1;
     }
-    else {
-        return 0;
-    }
+    return 0;    
 }

@@ -58,6 +58,9 @@ import           System.Console.CmdArgs.Default
 import           System.FilePath.Posix           (dropExtension)
 import           Text.PrettyPrint.HughesPJ       hiding (first)
 
+
+import           Debug.Trace                     hiding (traceShow)
+
 type Result = (A.UAnnSol RefType, F.FixResult Error)
 
 
@@ -1147,7 +1150,10 @@ envJoin l g (Just g1) (Just g2) = do
     s1s   <-  mapM (safeEnvFindSI l g1) xs    -- SI entry at the end of the 1st branch
     s2s   <-  mapM (safeEnvFindSI l g2) xs    -- SI entry at the end of the 2nd branch
 
-    Just <$> foldM (\g_ (s1, s2) -> checkPhi g_ (siJoin g1 s1 s2) s1 s2) g (zip s1s s2s)
+    g'    <- foldM (\g_ (s1, s2) -> checkPhi g_ (siJoin g1 s1 s2) s1 s2) g (zip s1s s2s)
+
+
+    return $ Just g'
 
   where
 
@@ -1160,6 +1166,8 @@ envJoin l g (Just g1) (Just g2) = do
         ts        <- zipWithM (cgSafeEnvFindTyM . v_name) [s1,s2] [g1,g2]
         zipWithM_ (\l_ g_ -> subType l Nothing g_ l_ r_) ts [g1,g2]
         return g'
+
+    joinGrds  = F.pOr $ map (F.pAnd . cge_guards) [g1, g2]
 
 siJoin g s1 s2
     | isSubtype g (v_type s1) (v_type s2) = s2

@@ -20,13 +20,10 @@ module Language.Rsc.Liquid.Environment (
 
   -- * Fresh Templates for Unknown Refinement Types
   , freshTyFun
-  , freshenTypeOpt, freshenType
+  , freshenType
   , freshTyInst
-  , freshTyPhi
   , freshTyPhis
-  , freshTyPhis'
-  , freshTy'
-  , freshTyObj
+  , freshTyCondExpr
   , freshenEnv
   , freshenCHA
 
@@ -516,29 +513,23 @@ freshenVI _ _ v@(SI _ _ Ambient _ _)
 freshenVI _ _ v@(SI _ Exported _ _ _)
   = return v
 freshenVI g l v@(SI x loc a@WriteGlobal i t)
-  | isTrivialRefType t
-  = freshTy "freshenVI" (toType t) >>= (SI x loc a i <$>) . wellFormed l g
-  | otherwise
-  = return v
+  | isTrivialRefType t  = freshTy "freshenVI" (toType t) >>= (SI x loc a i <$>) . wellFormed l g
+  | otherwise           = return v
 freshenVI g l v@(SI x loc a i t)
-  | not (isTFun t)
-  = return v
-  | isTrivialRefType t
-  = freshTy "freshenVI" (toType t) >>= (SI x loc a i <$>) . wellFormed l g
-  | otherwise
-  = return v
+  = SI x loc a i <$> freshTyFun g l t
+
+
+
+--   | not (isTFun t)     = return v
+--   | isTrivialRefType t = freshTy "freshenVI" (toType t) >>= (SI x loc a i <$>) . wellFormed l g
+--   | otherwise          = return v
 
 --------------------------------------------------------------------------------
-freshenTypeOpt :: IsLocated l => CGEnv -> l -> RefType -> CGM (Maybe RefType)
+freshenType :: IsLocated l => CGEnv -> l -> Bool -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-freshenTypeOpt g l t
-  | isTrivialRefType t = Just <$> (freshTy "ft-WG" t >>= wellFormed l g)
-  | otherwise          = return Nothing
-
---------------------------------------------------------------------------------
-freshenType :: IsLocated l => CGEnv -> l -> RefType -> CGM RefType
---------------------------------------------------------------------------------
-freshenType g l t = fromMaybe t <$> freshenTypeOpt g l t
+freshenType g l b t
+  | b && isTrivialRefType t = freshTy "ft-WG" t >>= wellFormed l g
+  | otherwise               = return t
 
 -- | 1. Instantiates fresh types (at call-site)
 --   2. Adds well-formedness constraints for instantiated type variables
@@ -560,24 +551,12 @@ freshTyInst l g bs τs tbody
     ff (_, BTV _ _ Nothing ) = return ()
     αs        = btvToTV <$> bs
 
--- | Instantiate Fresh Type (at Phi-site)
---------------------------------------------------------------------------------
-freshTyPhis :: AnnLq -> CGEnv -> [Id AnnLq] -> [Type] -> CGM (CGEnv, [RefType])
---------------------------------------------------------------------------------
-freshTyPhis l g xs τs
-  = do ts <- mapM (freshTy "freshTyPhis") τs
-       g' <- cgEnvAdds l "freshTyPhis" (zipWith si xs ts) g
-       _  <- mapM (wellFormed l g') ts
-       return (g', ts)
-  where
-    si x t = SI (F.symbol x) Local WriteLocal Initialized t
-
 
 -- | Instantiate Fresh Type (at Phi-site)
 --------------------------------------------------------------------------------
-freshTyPhis' :: F.Reftable r => AnnLq -> CGEnv -> [SymInfo r] -> CGM (CGEnv, [RefType])
+freshTyPhis :: F.Reftable r => AnnLq -> CGEnv -> [SymInfo r] -> CGM (CGEnv, [RefType])
 --------------------------------------------------------------------------------
-freshTyPhis' l g es
+freshTyPhis l g es
   = do  ts' <- mapM (freshTy "freshTyPhis") ts
         g'  <- cgEnvAdds l "freshTyPhis" (L.zipWith5 SI xs ls as is ts') g
         _   <- mapM (wellFormed l g') ts'
@@ -585,30 +564,15 @@ freshTyPhis' l g es
   where
     (xs,ls,as,is,ts) = L.unzip5 [ (F.symbol x,l,a,i,t) | SI x l a i t <- es ]
 
---------------------------------------------------------------------------------
-freshTyPhi :: F.Reftable r => AnnLq -> CGEnv -> SymInfo r -> CGM (CGEnv, RefType)
---------------------------------------------------------------------------------
-freshTyPhi l g s = do
-    (g, ts) <- freshTyPhis' l g [s]
-    case ts of
-      [t] -> return (g, t)
-      _   -> error "freshTyPhi impossible"
-
 -- | Instantiate Fresh Type at conditional expression
 --------------------------------------------------------------------------------
-freshTy' :: AnnLq -> CGEnv -> Type -> CGM (Id AnnLq, CGEnv, RefType)
+freshTyCondExpr :: AnnLq -> CGEnv -> Type -> CGM (Id AnnLq, CGEnv, RefType)
 --------------------------------------------------------------------------------
-freshTy' l g t
+freshTyCondExpr l g t
   = do  t'      <- freshTy "freshTy'" t
-        (x, g') <- cgEnvAddFresh "freshTy'" l t' g
+        (x, g') <- cgEnvAddFresh "freshTyCondExpr" l t' g
         _       <- wellFormed l g' t'
         return    $ (x, g', t')
-
--- | Fresh Object Type
---------------------------------------------------------------------------------
-freshTyObj :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType
---------------------------------------------------------------------------------
-freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g
 
 --------------------------------------------------------------------------------
 freshenCHA  :: CGEnv -> ClassHierarchy F.Reft -> CGM (ClassHierarchy F.Reft)

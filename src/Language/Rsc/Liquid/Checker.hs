@@ -332,7 +332,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign v@(LVar _ x) e))
 
       -- This is the first time we initialize this variable
       Just (SI n lc WriteGlobal Uninitialized t) -> do
-          t' <- freshenType g l t
+          t' <- freshenType g l True t
           mseq (consExprT g e t') $ \(_, g') ->
             Just <$> cgEnvAdds l "consAsgn-0" [SI n lc WriteGlobal Initialized t'] g'
 
@@ -482,41 +482,21 @@ consVarDecl g v@(VarDecl l x (Just e)) =
           eT      <- cgSafeEnvFindTyM y gy
           Just   <$> cgEnvAdds l "cvd" [SI (F.symbol x) Local WriteLocal Initialized eT] gy
 
-    Right (Just s@(SI _ _ WriteLocal  _ _)) -> go s
-    Right (Just s@(SI _ _ WriteGlobal _ _)) -> go s
-    Right (Just s@(SI _ _ RdOnly      _ _)) -> go s
+    Right (Just s@(SI _ _ WriteLocal  _ _)) -> go True s
+    Right (Just s@(SI _ _ WriteGlobal _ _)) -> go True s
+    Right (Just s@(SI _ _ RdOnly      _ _)) -> go True s
     Right (Just   (SI _ _ _           _ _)) -> cgError $ errorVarDeclAnnot (srcPos l) x
-
   where
-
-    go (SI n lc a _ t) = (freshenTypeOpt g l t) >>= \case
-        Just fta ->
-
-            if onlyCtxTyped e then do
-                g' <- fmap snd <$> consExpr g e (Just fta)
-                TR.mapM (cgEnvAdds l "consVarDecl" [SI n lc a Initialized fta]) g'
-            else
-                mseq (consExpr g e (Just fta)) $ \(y,gy) -> do
-                  eT      <- cgSafeEnvFindTyM y gy
-                  _       <- subType l Nothing gy eT fta
-
-                  -- -- XXX: Type `t` is trivial so the check below would just
-                  -- --      restrict fta's K-vars to be true ...
-                  --
-                  -- _       <- subType l Nothing gy fta t
-                  --
-                  Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized fta] gy
-
-        Nothing ->
-          if onlyCtxTyped e then do
-              g' <- fmap snd <$> consExpr g e (Just t)
-              TR.mapM (cgEnvAdds l "consVarDecl" [SI n lc a Initialized t]) g'
-          else
-              mseq (consExpr g e (Just t)) $ \(y,gy) -> do
-                eT      <- cgSafeEnvFindTyM y gy
-                _       <- subType l Nothing gy eT t
-                Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized t] gy
-
+    go b (SI n lc a _ t) = do
+      t' <- freshenType g l b t
+      if onlyCtxTyped e then do
+          g' <- fmap snd <$> consExpr g e (Just t')
+          TR.mapM (cgEnvAdds l "consVarDecl" [SI n lc a Initialized t']) g'
+      else
+          mseq (consExpr g e (Just t')) $ \(y,gy) -> do
+            eT      <- cgSafeEnvFindTyM y gy
+            _       <- subType l Nothing gy eT t'
+            Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized t'] gy
 
 consVarDecl g v@(VarDecl l _ Nothing) =
   case varDeclSymbol v of
@@ -800,7 +780,7 @@ consExpr g (CondExpr l e e1 e2) (Just t)
         (Just (x1, g1'), Just (x2, g2')) -> do
             t1            <- cgSafeEnvFindTyM x1 g1'
             t2            <- cgSafeEnvFindTyM x2 g2'
-            (xf, gf, tf)  <- freshTy' l g' (toType t)
+            (xf, gf, tf)  <- freshTyCondExpr l g' (toType t)
             _             <- subType l Nothing g1' t1 tf
             _             <- subType l Nothing g2' t2 tf
             return         $ Just (xf, gf)
@@ -1092,7 +1072,7 @@ consWhile
 --       }
 --
 consWhile g l cond body = do
-    (gI, tIs) <- freshTyPhis l g xs ts                      -- (a) (b)
+    (gI, tIs) <- freshTyPhis l g (zipWith si xs ts)        -- (a) (b)
     _         <- consWhileBase l xs tIs g                   -- (c)
     mseq (consExpr gI cond Nothing) $ \(xc, gc) -> do       -- (d)
       z     <- consStmt (envAddGuard xc True gc) body       -- (e)
@@ -1101,6 +1081,7 @@ consWhile g l cond body = do
       return $ Just (envAddGuard xc False gc')
   where
       (xs, xs', ts) = unzip3 [ x_ | PhiLoopTC x_ <- fFact l ]
+      si x t = SI (F.symbol x) Local WriteLocal Initialized t
 
 consWhileBase l xs tIs g = do
     baseT <-  mapM (`cgSafeEnvFindTyM` g) xs
@@ -1162,8 +1143,8 @@ envJoin l g (Just g1) (Just g2) = do
     sOr s1 s2 = s1 { v_type = tOr [v_type s1, v_type s2] }
 
     checkPhi g_ s_ s1 s2 = do
-        (g', r_)  <- freshTyPhi l g_ s_
-        ts        <- zipWithM (cgSafeEnvFindTyM . v_name) [s1,s2] [g1,g2]
+        (g', [r_])  <- freshTyPhis l g_ [s_]
+        ts          <- zipWithM (cgSafeEnvFindTyM . v_name) [s1,s2] [g1,g2]
         zipWithM_ (\l_ g_ -> subType l Nothing g_ l_ r_) ts [g1,g2]
         return g'
 

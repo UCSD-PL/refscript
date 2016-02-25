@@ -1,15 +1,15 @@
 /// <reference path="libs/types.ts"/>
 
 module ts {
-    export interface StringSet extends Map<any> { }
+    // export interface StringSet extends Map<any> { }
 
-    /*@ forEach :: forall T U . (array: IArray<T>, callback: (element: T) => U) => { U | 0 < 1 } + undefined */
-    export function forEach<T, U>(array: T[], callback: (element: T) => U): U {
+    /*@ forEach :: <T, U>(array: IArray<T>, callback: (element: T) => U) => U + undefined */
+    export function forEach<T, U>(array: IArray<T>, callback: (element: T) => U): U {
         /*@ result :: U + undefined */
-        var result: U;
+        let result: U;
         if (array) {
-            var cnt = false;
-            for (var i = 0, len = array.length; i < len && cnt; i++) {
+            let cnt = false;
+            for (let i = 0, len = array.length; i < len && cnt; i++) {
                 if (result = callback(array[i]))
                     cnt = false;
             }
@@ -20,8 +20,8 @@ module ts {
     // /*@  contains :: forall T . (array: IArray<T>, value: T) => { boolean | 0 < 1 } */
     // export function contains<T>(array: T[], value: T): boolean {
     //     if (array) {
-    //         var len = array.length;
-    //         for (var i = 0; i < len; i++) {
+    //         let len = array.length;
+    //         for (let i = 0; i < len; i++) {
     //             if (array[i] === value) {
     //                 return true;
     //             }
@@ -33,8 +33,8 @@ module ts {
     // /*@  indexOf :: forall T . (array: IArray<T>, value: T) => { number | 0 < 1 } */
     // export function indexOf<T>(array: T[], value: T): number {
     //     if (array) {
-    //         var len = array.length;
-    //         for (var i = 0; i < len; i++) {
+    //         let len = array.length;
+    //         for (let i = 0; i < len; i++) {
     //             if (array[i] === value) {
     //                 return i;
     //             }
@@ -46,11 +46,11 @@ module ts {
     // /*@ filter :: forall T . (array: IArray<T>, f: (T) => boolean) => { MArray<T> | 0 < 1 } + undefined */
     // export function filter<T>(array: T[], f: (x: T) => boolean): T[] {
     //     /*@ result :: MArray<T> + undefined */
-    //     var result: T[];
+    //     let result: T[];
     //     if (array) {
-    //     var result_1 = [];    //PV: modification
-    //         for (var i = 0, len = array.length; i < len; i++) {
-    //             var item = array[i];
+    //     let result_1 = [];    //PV: modification
+    //         for (let i = 0, len = array.length; i < len; i++) {
+    //             let item = array[i];
     //             if (f(item)) {
     //                 result_1.push(item);
     //             }
@@ -63,11 +63,11 @@ module ts {
     // /*@ map :: forall T U . (array: IArray<T>, f: (x:T)=>U) => {MArray<U> | 0 < 1} + undefined */
     // export function map<T, U>(array: T[], f: (x: T) => U): U[] {
     //   /*@ result :: MArray<U> + undefined */
-    //     var result: U[];
+    //     let result: U[];
     //     if (array) {
-    //         var result_0 = [];
-    //         var len = array.length;
-    //         for (var i = 0; i < len; i++) {
+    //         let result_0 = [];
+    //         let len = array.length;
+    //         for (let i = 0; i < len; i++) {
     //             result_0.push(f(array[i]));
     //         }
     //         result = result_0;
@@ -80,16 +80,16 @@ module ts {
     //     if (!array2 || !array2.length) return array1;
     //     if (!array1 || !array1.length) return array2;
     //     /*@ arr1 :: IArray<T> */
-    //     var arr1 = array1;
+    //     let arr1 = array1;
     //     /*@ arr2 :: IArray<T> */
-    //     var arr2 = array2;
+    //     let arr2 = array2;
     //     return arr1.concat(arr2);
     // }
     //
     // /*@ sum :: (array: IArray<{{[s:string]:number} | hasProperty(prop, v)}>, prop: string) => { number | 0 < 1 } */
     // export function sum(array: any[], prop: string): number {
-    //     var result = 0;
-    //     for (var i = 0; i < array.length; i++) {
+    //     let result = 0;
+    //     for (let i = 0; i < array.length; i++) {
     //         result += <number>(array[i][prop]);
     //     }
     //     return result;
@@ -97,12 +97,12 @@ module ts {
     //
     // /*@ binarySearch :: (array: { IArray<number> | (len v) > 1 }, value: number) => { number | ((0 <= v && v < (len array)) || v = -1) } */
     // export function binarySearch(array: number[], value: number): number {
-    //     var low = 0;
-    //     var high = array.length - 1;
+    //     let low = 0;
+    //     let high = array.length - 1;
     //     while (low <= high) {
-    //         var middle = low + ((high - low) >> 1);
+    //         let middle = low + ((high - low) >> 1);
     //         assume(low <= middle && middle <= high);
-    //         var midValue = array[middle];
+    //         let midValue = array[middle];
     //         if (midValue === value) {
     //             return middle;
     //         }
@@ -127,7 +127,7 @@ module ts {
     //
     // /*@ isEmpty :: forall T . (map: Map<Immutable,T>) => { boolean | 0 < 1 } */
     // export function isEmpty<T>(map: Map<T>) {
-    //     for (var id in map) {
+    //     for (let id in map) {
     //         if (hasProperty(map, id)) {
     //             return false;
     //         }
@@ -139,8 +139,8 @@ module ts {
     // /*@ forEachValue :: forall T U . (map: Map<Immutable,T>, callback: (value: T) => U) => { U | 0 < 1 } + undefined */
     // export function forEachValue<T, U>(map: Map<T>, callback: (value: T) => U): U {
     //     /*@ result :: U + undefined */
-    //     var result: U;
-    //     for (var id in map) {
+    //     let result: U;
+    //     for (let id in map) {
     //         result = callback(map[id]);
     //     }
     //     return result;
@@ -150,8 +150,8 @@ module ts {
     // /*@ forEachKey :: forall T U . (map: Map<Immutable,T>, callback: (key: string) => U) => { U | 0 < 1 } + undefined */
     // export function forEachKey<T, U>(map: Map<T>, callback: (key: string) => U): U {
     //     /*@ result :: U + undefined */
-    //     var result: U;
-    //     for (var id in map) {
+    //     let result: U;
+    //     for (let id in map) {
     //         result = callback(id);
     //     }
     //     return result;
@@ -160,9 +160,9 @@ module ts {
     // /*@ mapToArray :: forall T . (map: Map<Immutable,T>) => { MArray<T> | 0 < 1 } */
     // export function mapToArray<T>(map: Map<T>): T[] {
     //     /*@ result :: MArray<T> */
-    //     var result: T[] = [];
+    //     let result: T[] = [];
     //
-    //     for (var id in map) {
+    //     for (let id in map) {
     //         result.push(map[id]);
     //     }
     //
@@ -186,9 +186,9 @@ module ts {
     // /*@ arrayToMap :: forall T . (array: IArray<T>, makeKey: (value: T) => string) => { Map<Mutable,T> | 0 < 1 } */
     // export function arrayToMap<T>(array: T[], makeKey: (value: T) => string): Map<T> {
     //     /*@ readonly makeKeyLoc :: # */
-    //     var makeKeyLoc = makeKey;
+    //     let makeKeyLoc = makeKey;
     //     /*@ readonly result :: Map<Mutable,T> */
-    //     var result: Map<T> = _toMap({});
+    //     let result: Map<T> = _toMap({});
     //     forEach(array, function(value:T) /*@ <anonymous> (value: T) => void */ {
     //         result[makeKeyLoc(value)] = value;
     //     });

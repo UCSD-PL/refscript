@@ -10,11 +10,11 @@ module ts {
 //  RefScript
 
 
-/*@ alias INode        = Node<Immutable>        */
-/*@ alias ISymbol      = ts.Symbol<Immutable>   */
-/*@ alias IType        = Type<Immutable>        */
-/*@ alias ISignature   = Signature<Immutable>   */
-/*@ alias IDeclaration = Declaration<Immutable> */
+type INode        = Node<Immutable>
+type ISymbol      = ts.Symbol<Immutable>
+type IType        = Type<Immutable>
+type ISignature   = Signature<Immutable>
+type IDeclaration = Declaration<Immutable>
 
 /*@ predicate non_zero                           (b) = (b /= lit "#x00000000" (BitVec (Size32 obj))) */
 
@@ -118,12 +118,12 @@ module ts {
 /////////////////////////////////////////////////////////////////////////
 
 
-    export interface Map<T> {
+    export interface Map<M extends ReadOnly, T> {
         [index: string]: T;
     }
 
 
-    export interface TextRange {
+    export interface TextRange<M extends ReadOnly> {
         pos: number;
         end: number;
     }
@@ -355,333 +355,333 @@ module ts {
         Static           = 0x00000040,  // Property/Method
         MultiLine        = 0x00000080,  // Multi-line array or object literal
         Synthetic        = 0x00000100,  // Synthetic node (for full fidelity)
-        DeclarationFile  = 0x00000200,  // Node is a .d.ts file
+        DeclarationFile  = 0x00000200,  // Node<M> is a .d.ts file
 
         // TODO
         // Modifier = Export | Ambient | Public | Private | Static
     }
 
-    export interface Node extends TextRange {
-        /*@ kind : [Immutable] SyntaxKind<Immutable> */
+    export interface Node<M extends ReadOnly> extends TextRange<M> {
+        /*@ (Immutable) kind: SyntaxKind<Immutable> */
         kind: SyntaxKind;
 
-        /*@ flags : [Immutable] bitvector32 */
+        /*@ (Immutable) flags: bitvector32 */
         flags: NodeFlags;
 
-        /*@ id?: [Mutable] number */
-        id?: number;                  // Unique id (used to look up NodeLinks)
+        /*@ (Mutable) id?: number */
+        id?: number;                    // Unique id (used to look up NodeLinks)
 
         /*@ parent?: INode */
-        parent?: Node;                // Parent node (initialized by binding)
+        parent?: Node<M>;               // Parent node (initialized by binding)
 
-        symbol?: Symbol;              // Symbol declared by node (initialized by binding)
-        locals?: SymbolTable;         // Locals associated with node (initialized by binding)
-        nextContainer?: Node;         // Next container in declaration order (initialized by binding)
-        localSymbol?: Symbol;         // Local symbol declared by node (initialized by binding only for exported nodes)
+        symbol?: Symbol<M>;             // Symbol declared by node (initialized by binding)
+        locals?: SymbolTable<M>;        // Locals associated with node (initialized by binding)
+        nextContainer?: Node<M>;        // Next container in declaration order (initialized by binding)
+        localSymbol?: Symbol<M>;        // Local symbol declared by node (initialized by binding only for exported nodes)
     }
 
-    export interface NodeArray<T> extends Array<T>, TextRange { }
+    export interface NodeArray<M extends ReadOnly, T> extends Array<M, T>, TextRange<M> { }
 
-    export interface Identifier extends Node {
+    export interface Identifier<M extends ReadOnly> extends Node<M> {
         text: string;                 // Text of identifier (with escapes converted to characters)
     }
 
-    export interface QualifiedName extends Node {
+    export interface QualifiedName<M extends ReadOnly> extends Node<M> {
         // Must have same layout as PropertyAccess
-        left: EntityName;
-        right: Identifier;
+        left: EntityName<M>;
+        right: Identifier<M>;
     }
 
-    export interface EntityName extends Node {
+    export interface EntityName<M extends ReadOnly> extends Node<M> {
         // Identifier, QualifiedName, or Missing
     }
 
-    export interface ParsedSignature {
-        typeParameters?: NodeArray<TypeParameterDeclaration>;
-        parameters: NodeArray<ParameterDeclaration>;
-        type?: TypeNode;
+    export interface ParsedSignature<M extends ReadOnly> {
+        typeParameters?: NodeArray<M, TypeParameterDeclaration<M>>;
+        parameters: NodeArray<M, ParameterDeclaration<M>>;
+        type?: TypeNode<M>;
     }
 
-    export interface Declaration extends Node {
-       name?: Identifier;
+    export interface Declaration<M extends ReadOnly> extends Node<M> {
+       name?: Identifier<M>;
     }
 
-    export interface TypeParameterDeclaration extends Declaration {
-        constraint?: TypeNode;
+    export interface TypeParameterDeclaration<M extends ReadOnly> extends Declaration<M> {
+        constraint?: TypeNode<M>;
     }
 
-    export interface SignatureDeclaration extends Declaration, ParsedSignature { }
+    export interface SignatureDeclaration<M extends ReadOnly> extends Declaration<M>, ParsedSignature<M> { }
 
-    export interface VariableDeclaration extends Declaration {
-        type?: TypeNode;
-        initializer?: Expression;
+    export interface VariableDeclaration<M extends ReadOnly> extends Declaration<M> {
+        type?: TypeNode<M>;
+        initializer?: Expression<M>;
     }
 
-    export interface PropertyDeclaration extends VariableDeclaration { }
+    export interface PropertyDeclaration<M extends ReadOnly> extends VariableDeclaration<M> { }
 
-    export interface ParameterDeclaration extends VariableDeclaration { }
+    export interface ParameterDeclaration<M extends ReadOnly> extends VariableDeclaration<M> { }
 
-    export interface FunctionDeclaration extends Declaration, ParsedSignature {
-        body?: Node;  // Block or Expression
+    export interface FunctionDeclaration<M extends ReadOnly> extends Declaration<M>, ParsedSignature<M> {
+        body?: Node<M>;  // Block or Expression
     }
 
-    export interface MethodDeclaration extends FunctionDeclaration { }
+    export interface MethodDeclaration<M extends ReadOnly> extends FunctionDeclaration<M> { }
 
-    export interface ConstructorDeclaration extends FunctionDeclaration { }
+    export interface ConstructorDeclaration<M extends ReadOnly> extends FunctionDeclaration<M> { }
 
-    export interface AccessorDeclaration extends FunctionDeclaration { }
+    export interface AccessorDeclaration<M extends ReadOnly> extends FunctionDeclaration<M> { }
 
-    export interface TypeNode extends Node { }
+    export interface TypeNode<M extends ReadOnly> extends Node<M> { }
 
-    export interface TypeReferenceNode extends TypeNode {
-        typeName: EntityName;
-        typeArguments?: NodeArray<TypeNode>;
+    export interface TypeReferenceNode<M extends ReadOnly> extends TypeNode<M> {
+        typeName: EntityName<M>;
+        typeArguments?: NodeArray<M, TypeNode<M>>;
     }
 
-    export interface TypeQueryNode extends TypeNode {
-        exprName: EntityName;
+    export interface TypeQueryNode<M extends ReadOnly> extends TypeNode<M> {
+        exprName: EntityName<M>;
     }
 
-    export interface TypeLiteralNode extends TypeNode {
-        members: NodeArray<Node>;
+    export interface TypeLiteralNode<M extends ReadOnly> extends TypeNode<M> {
+        members: NodeArray<M, Node<M>>;
     }
 
-    export interface ArrayTypeNode extends TypeNode {
-        elementType: TypeNode;
+    export interface ArrayTypeNode<M extends ReadOnly> extends TypeNode<M> {
+        elementType: TypeNode<M>;
     }
 
-    export interface StringLiteralTypeNode extends TypeNode {
+    export interface StringLiteralTypeNode<M extends ReadOnly> extends TypeNode<M> {
         text: string;
     }
 
-    export interface Expression extends Node {
-        contextualType?: Type;  // Used to temporarily assign a contextual type during overload resolution
+    export interface Expression<M extends ReadOnly> extends Node<M> {
+        contextualType?: Type<M>;  // Used to temporarily assign a contextual type during overload resolution
     }
 
-    export interface UnaryExpression extends Expression {
+    export interface UnaryExpression<M extends ReadOnly> extends Expression<M> {
         operator: SyntaxKind;
-        operand: Expression;
+        operand: Expression<M>;
     }
 
-    export interface BinaryExpression extends Expression {
-        left: Expression;
+    export interface BinaryExpression<M extends ReadOnly> extends Expression<M> {
+        left: Expression<M>;
         operator: SyntaxKind;
-        right: Expression;
+        right: Expression<M>;
     }
 
-    export interface ConditionalExpression extends Expression {
-        condition: Expression;
-        whenTrue: Expression;
-        whenFalse: Expression;
+    export interface ConditionalExpression<M extends ReadOnly> extends Expression<M> {
+        condition: Expression<M>;
+        whenTrue: Expression<M>;
+        whenFalse: Expression<M>;
     }
 
-    export interface FunctionExpression extends Expression, FunctionDeclaration {
-        body: Node; // Required, whereas the member inherited from FunctionDeclaration is optional
+    export interface FunctionExpression<M extends ReadOnly> extends Expression<M>, FunctionDeclaration<M> {
+        body: Node<M>; // Required, whereas the member inherited from FunctionDeclaration is optional
     }
 
     // The text property of a LiteralExpression stores the interpreted value of the literal in text form. For a StringLiteral
     // this means quotes have been removed and escapes have been converted to actual characters. For a NumericLiteral, the
     // stored value is the toString() representation of the number. For example 1, 1.00, and 1e0 are all stored as just "1".
-    export interface LiteralExpression extends Expression {
+    export interface LiteralExpression<M extends ReadOnly> extends Expression<M> {
         text: string;
     }
 
-    export interface ParenExpression extends Expression {
-        expression: Expression;
+    export interface ParenExpression<M extends ReadOnly> extends Expression<M> {
+        expression: Expression<M>;
     }
 
-    export interface ArrayLiteral extends Expression {
-        elements: NodeArray<Expression>;
+    export interface ArrayLiteral<M extends ReadOnly> extends Expression<M> {
+        elements: NodeArray<M, Expression<M>>;
     }
 
-    export interface ObjectLiteral extends Expression {
-        properties: NodeArray<Node>;
+    export interface ObjectLiteral<M extends ReadOnly> extends Expression<M> {
+        properties: NodeArray<M, Node<M>>;
     }
 
-    export interface PropertyAccess extends Expression {
-        left: Expression;
-        right: Identifier;
+    export interface PropertyAccess<M extends ReadOnly> extends Expression<M> {
+        left: Expression<M>;
+        right: Identifier<M>;
     }
 
-    export interface IndexedAccess extends Expression {
-        object: Expression;
-        index: Expression;
+    export interface IndexedAccess<M extends ReadOnly> extends Expression<M> {
+        object: Expression<M>;
+        index: Expression<M>;
     }
 
-    export interface CallExpression extends Expression {
-        func: Expression;
-        typeArguments?: NodeArray<TypeNode>;
-        arguments: NodeArray<Expression>;
+    export interface CallExpression<M extends ReadOnly> extends Expression<M> {
+        func: Expression<M>;
+        typeArguments?: NodeArray<M, TypeNode<M>>;
+        arguments: NodeArray<M, Expression<M>>;
     }
 
-    export interface NewExpression extends CallExpression { }
+    export interface NewExpression<M extends ReadOnly> extends CallExpression<M> { }
 
-    export interface TypeAssertion extends Expression {
-        type: TypeNode;
-        operand: Expression;
+    export interface TypeAssertion<M extends ReadOnly> extends Expression<M> {
+        type: TypeNode<M>;
+        operand: Expression<M>;
     }
 
-    export interface Statement extends Node { }
+    export interface Statement<M extends ReadOnly> extends Node<M> { }
 
-    export interface Block extends Statement {
-        statements: NodeArray<Statement>;
+    export interface Block<M extends ReadOnly> extends Statement<M> {
+        statements: NodeArray<M, Statement<M>>;
     }
 
-    export interface VariableStatement extends Statement {
-        declarations: NodeArray<VariableDeclaration>;
+    export interface VariableStatement<M extends ReadOnly> extends Statement<M> {
+        declarations: NodeArray<M, VariableDeclaration<M>>;
     }
 
-    export interface ExpressionStatement extends Statement {
-        expression: Expression;
+    export interface ExpressionStatement<M extends ReadOnly> extends Statement<M> {
+        expression: Expression<M>;
     }
 
-    export interface IfStatement extends Statement {
-        expression: Expression;
-        thenStatement: Statement;
-        elseStatement?: Statement;
+    export interface IfStatement<M extends ReadOnly> extends Statement<M> {
+        expression: Expression<M>;
+        thenStatement: Statement<M>;
+        elseStatement?: Statement<M>;
     }
 
-    export interface IterationStatement extends Statement {
-        statement: Statement;
+    export interface IterationStatement<M extends ReadOnly> extends Statement<M> {
+        statement: Statement<M>;
     }
 
-    export interface DoStatement extends IterationStatement {
-        expression: Expression;
+    export interface DoStatement<M extends ReadOnly> extends IterationStatement<M> {
+        expression: Expression<M>;
     }
 
-    export interface WhileStatement extends IterationStatement {
-        expression: Expression;
+    export interface WhileStatement<M extends ReadOnly> extends IterationStatement<M> {
+        expression: Expression<M>;
     }
 
-    export interface ForStatement extends IterationStatement {
-        declarations?: NodeArray<VariableDeclaration>;
-        initializer?: Expression;
-        condition?: Expression;
-        iterator?: Expression;
+    export interface ForStatement<M extends ReadOnly> extends IterationStatement<M> {
+        declarations?: NodeArray<M, VariableDeclaration<M>>;
+        initializer?: Expression<M>;
+        condition?: Expression<M>;
+        iterator?: Expression<M>;
     }
 
-    export interface ForInStatement extends IterationStatement {
-        declaration?: VariableDeclaration;
-        variable?: Expression;
-        expression: Expression;
+    export interface ForInStatement<M extends ReadOnly> extends IterationStatement<M> {
+        declaration?: VariableDeclaration<M>;
+        variable?: Expression<M>;
+        expression: Expression<M>;
     }
 
-    export interface BreakOrContinueStatement extends Statement {
-        label?: Identifier;
+    export interface BreakOrContinueStatement<M extends ReadOnly> extends Statement<M> {
+        label?: Identifier<M>;
     }
 
-    export interface ReturnStatement extends Statement {
-        expression?: Expression;
+    export interface ReturnStatement<M extends ReadOnly> extends Statement<M> {
+        expression?: Expression<M>;
     }
 
-    export interface WithStatement extends Statement {
-        expression: Expression;
-        statement: Statement;
+    export interface WithStatement<M extends ReadOnly> extends Statement<M> {
+        expression: Expression<M>;
+        statement: Statement<M>;
     }
 
-    export interface SwitchStatement extends Statement {
-        expression: Expression;
-        clauses: NodeArray<CaseOrDefaultClause>;
+    export interface SwitchStatement<M extends ReadOnly> extends Statement<M> {
+        expression: Expression<M>;
+        clauses: NodeArray<M, CaseOrDefaultClause<M>>;
     }
 
-    export interface CaseOrDefaultClause extends Node {
-        expression?: Expression;
-        statements: NodeArray<Statement>;
+    export interface CaseOrDefaultClause<M extends ReadOnly> extends Node<M> {
+        expression?: Expression<M>;
+        statements: NodeArray<M, Statement<M>>;
     }
 
-    export interface LabelledStatement extends Statement {
-        label: Identifier;
-        statement: Statement;
+    export interface LabelledStatement<M extends ReadOnly> extends Statement<M> {
+        label: Identifier<M>;
+        statement: Statement<M>;
     }
 
-    export interface ThrowStatement extends Statement {
-        expression: Expression;
+    export interface ThrowStatement<M extends ReadOnly> extends Statement<M> {
+        expression: Expression<M>;
     }
 
-    export interface TryStatement extends Statement {
-        tryBlock: Block;
-        catchBlock?: CatchBlock;
-        finallyBlock?: Block;
+    export interface TryStatement<M extends ReadOnly> extends Statement<M> {
+        tryBlock: Block<M>;
+        catchBlock?: CatchBlock<M>;
+        finallyBlock?: Block<M>;
     }
 
-    export interface CatchBlock extends Block {
-        variable: Identifier;
+    export interface CatchBlock<M extends ReadOnly> extends Block<M> {
+        variable: Identifier<M>;
     }
 
-    export interface ClassDeclaration extends Declaration {
-        typeParameters?: NodeArray<TypeParameterDeclaration>;
-        baseType?: TypeReferenceNode;
-        implementedTypes?: NodeArray<TypeReferenceNode>;
-        members: NodeArray<Node>;
+    export interface ClassDeclaration<M extends ReadOnly> extends Declaration<M> {
+        typeParameters?: NodeArray<M, TypeParameterDeclaration<M>>;
+        baseType?: TypeReferenceNode<M>;
+        implementedTypes?: NodeArray<M, TypeReferenceNode<M>>;
+        members: NodeArray<M, Node<M>>;
     }
 
-    export interface InterfaceDeclaration extends Declaration {
-        typeParameters?: NodeArray<TypeParameterDeclaration>;
-        baseTypes?: NodeArray<TypeReferenceNode>;
-        members: NodeArray<Node>;
+    export interface InterfaceDeclaration<M extends ReadOnly> extends Declaration<M> {
+        typeParameters?: NodeArray<M, TypeParameterDeclaration<M>>;
+        baseTypes?: NodeArray<M, TypeReferenceNode<M>>;
+        members: NodeArray<M, Node<M>>;
     }
 
-    export interface EnumMember extends Declaration {
-        initializer?: Expression;
+    export interface EnumMember<M extends ReadOnly> extends Declaration<M> {
+        initializer?: Expression<M>;
     }
 
-    export interface EnumDeclaration extends Declaration {
-        members: NodeArray<EnumMember>;
+    export interface EnumDeclaration<M extends ReadOnly> extends Declaration<M> {
+        members: NodeArray<M, EnumMember<M>>;
     }
 
-    export interface ModuleDeclaration extends Declaration {
-        body: Node;  // Block or ModuleDeclaration
+    export interface ModuleDeclaration<M extends ReadOnly> extends Declaration<M> {
+        body: Node<M>;  // Block or ModuleDeclaration
     }
 
-    export interface ImportDeclaration extends Declaration {
-        entityName?: EntityName;
-        externalModuleName?: LiteralExpression;
+    export interface ImportDeclaration<M extends ReadOnly> extends Declaration<M> {
+        entityName?: EntityName<M>;
+        externalModuleName?: LiteralExpression<M>;
     }
 
-    export interface ExportAssignment extends Statement {
-        exportName: Identifier;
+    export interface ExportAssignment<M extends ReadOnly> extends Statement<M> {
+        exportName: Identifier<M>;
     }
 
-    export interface FileReference extends TextRange {
+    export interface FileReference<M extends ReadOnly> extends TextRange<M> {
         filename: string;
     }
 
-    export interface Comment extends TextRange {
+    export interface Comment<M extends ReadOnly> extends TextRange<M> {
         hasTrailingNewLine?: boolean;
     }
 
-    export interface SourceFile extends Block {
+    export interface SourceFile<M extends ReadOnly> extends Block<M> {
         filename: string;
         text: string;
         getLineAndCharacterFromPosition(position: number): { line: number; character: number };
         getPositionFromLineAndCharacter(line: number, character: number): number;
         amdDependencies: string[];
-        referencedFiles: FileReference[];
-        syntacticErrors: Diagnostic[];
-        semanticErrors: Diagnostic[];
+        referencedFiles: Array<M, FileReference<M>>;
+        syntacticErrors: Array<M, Diagnostic<M>>;
+        semanticErrors: Array<M, Diagnostic<M>>;
         hasNoDefaultLib: boolean;
-        externalModuleIndicator: Node; // The first node that causes this file to be an external module
+        externalModuleIndicator: Node<M>; // The first node that causes this file to be an external module
         nodeCount: number;
         identifierCount: number;
         symbolCount: number;
         isOpen: boolean;
         version: string;
         languageVersion: ScriptTarget;
-        identifiers: Map<string>;
+        identifiers: Map<M, string>;
     }
 
-    export interface Program {
-        getSourceFile(filename: string): SourceFile;
-        getSourceFiles(): SourceFile[];
-        getCompilerOptions(): CompilerOptions;
-        getCompilerHost(): CompilerHost;
-        getDiagnostics(sourceFile?: SourceFile): Diagnostic[];
-        getGlobalDiagnostics(): Diagnostic[];
-        getTypeChecker(fullTypeCheckMode: boolean): TypeChecker;
+    export interface Program<M extends ReadOnly> {
+        getSourceFile(filename: string): SourceFile<M>;
+        getSourceFiles(): Array<M, SourceFile<M>>;
+        getCompilerOptions(): CompilerOptions<M>;
+        getCompilerHost(): CompilerHost<M>;
+        getDiagnostics(sourceFile?: SourceFile<M>): Array<M, Diagnostic<M>>;
+        getGlobalDiagnostics(): Array<M, Diagnostic<M>>;
+        getTypeChecker(fullTypeCheckMode: boolean): TypeChecker<M>;
         getCommonSourceDirectory(): string;
     }
 
-    export interface SourceMapSpan {
+    export interface SourceMapSpan<M extends ReadOnly> {
         /** Line number in the js file*/
         emittedLine: number;
         /** Column number in the js file */
@@ -696,7 +696,7 @@ module ts {
         sourceIndex: number;
     }
 
-    export interface SourceMapData {
+    export interface SourceMapData<M extends ReadOnly> {
         /** Where the sourcemap file is written */
         sourceMapFilePath: string;
         /** source map url written in the js file */
@@ -715,15 +715,15 @@ module ts {
         /** Source map's mapping field - encoded source map spans*/
         sourceMapMappings: string;
         /** Raw source map spans that were encoded into the sourceMapMappings*/
-        sourceMapDecodedMappings: SourceMapSpan[];
+        sourceMapDecodedMappings: Array<M, SourceMapSpan<M>>;
     }
 
-    export interface EmitResult {
-        errors: Diagnostic[];
-        sourceMaps: SourceMapData[];  // Array of sourceMapData if compiler emitted sourcemaps
+    export interface EmitResult<M extends ReadOnly> {
+        errors: Array<M, Diagnostic<M>>;
+        sourceMaps: Array<M, SourceMapData<M>>;  // Array of sourceMapData if compiler emitted sourcemaps
     }
 
-    export interface TypeChecker {
+    export interface TypeChecker<M extends ReadOnly> {
 
 
 // TODO: Gradually add these
@@ -754,9 +754,9 @@ module ts {
 //         getContextualType(node: Node): Type;
     }
 
-    export interface TextWriter {
+    export interface TextWriter<M extends ReadOnly> {
         write(s: string): void;
-        writeSymbol(symbol: Symbol, enclosingDeclaration?: Node, meaning?: SymbolFlags): void;
+        writeSymbol(symbol: Symbol<M>, enclosingDeclaration?: Node<M>, meaning?: SymbolFlags): void;
         writeLine(): void;
         increaseIndent(): void;
         decreaseIndent(): void;
@@ -776,31 +776,31 @@ module ts {
         CannotBeNamed
     }
 
-    export interface SymbolAccessiblityResult {
+    export interface SymbolAccessiblityResult<M extends ReadOnly> {
         accessibility: SymbolAccessibility;
         errorSymbolName?: string // Optional symbol name that results in error
         errorModuleName?: string // If the symbol is not visible from module, module's name
-        aliasesToMakeVisible?: ImportDeclaration[]; // aliases that need to have this symbol visible
+        aliasesToMakeVisible?: Array<M, ImportDeclaration<M>>; // aliases that need to have this symbol visible
     }
 
-    export interface EmitResolver {
-        getProgram(): Program;
-        getLocalNameOfContainer(container: Declaration): string;
-        getExpressionNamePrefix(node: Identifier): string;
-        getPropertyAccessSubstitution(node: PropertyAccess): string;
-        getExportAssignmentName(node: SourceFile): string;
-        isReferencedImportDeclaration(node: ImportDeclaration): boolean;
-        isTopLevelValueImportedViaEntityName(node: ImportDeclaration): boolean;
-        getNodeCheckFlags(node: Node): NodeCheckFlags;
-        getEnumMemberValue(node: EnumMember): number;
+    export interface EmitResolver<M extends ReadOnly> {
+        getProgram(): Program<M>;
+        getLocalNameOfContainer(container: Declaration<M>): string;
+        getExpressionNamePrefix(node: Identifier<M>): string;
+        getPropertyAccessSubstitution(node: PropertyAccess<M>): string;
+        getExportAssignmentName(node: SourceFile<M>): string;
+        isReferencedImportDeclaration(node: ImportDeclaration<M>): boolean;
+        isTopLevelValueImportedViaEntityName(node: ImportDeclaration<M>): boolean;
+        getNodeCheckFlags(node: Node<M>): NodeCheckFlags;
+        getEnumMemberValue(node: EnumMember<M>): number;
         shouldEmitDeclarations(): boolean;
-        isDeclarationVisible(node: Declaration): boolean;
-        isImplementationOfOverload(node: FunctionDeclaration): boolean;
-        writeTypeAtLocation(location: Node, enclosingDeclaration: Node, flags: TypeFormatFlags, writer: TextWriter): void;
-        writeReturnTypeOfSignatureDeclaration(signatureDeclaration: SignatureDeclaration, enclosingDeclaration: Node, flags: TypeFormatFlags, writer: TextWriter): void;
-        writeSymbol(symbol: Symbol, enclosingDeclaration: Node, meaning: SymbolFlags, writer: TextWriter): void;
-        isSymbolAccessible(symbol: Symbol, enclosingDeclaration: Node, meaning: SymbolFlags): SymbolAccessiblityResult;
-        isImportDeclarationEntityNameReferenceDeclarationVisibile(entityName: EntityName): SymbolAccessiblityResult;
+        isDeclarationVisible(node: Declaration<M>): boolean;
+        isImplementationOfOverload(node: FunctionDeclaration<M>): boolean;
+        writeTypeAtLocation(location: Node<M>, enclosingDeclaration: Node<M>, flags: TypeFormatFlags, writer: TextWriter<M>): void;
+        writeReturnTypeOfSignatureDeclaration(signatureDeclaration: SignatureDeclaration<M>, enclosingDeclaration: Node<M>, flags: TypeFormatFlags, writer: TextWriter<M>): void;
+        writeSymbol(symbol: Symbol<M>, enclosingDeclaration: Node<M>, meaning: SymbolFlags, writer: TextWriter<M>): void;
+        isSymbolAccessible(symbol: Symbol<M>, enclosingDeclaration: Node<M>, meaning: SymbolFlags): SymbolAccessiblityResult<M>;
+        isImportDeclarationEntityNameReferenceDeclarationVisibile(entityName: EntityName<M>): SymbolAccessiblityResult<M>;
     }
 
     export enum SymbolFlags {
@@ -874,51 +874,50 @@ module ts {
 //         Export                  = ExportNamespace | ExportType | ExportValue,
     }
 
-    export interface Symbol {
+    export interface Symbol<M extends ReadOnly> {
 
-        /*@ flags : [Immutable] { v: bitvector32 | [(mask_symbolflags_transient(v)) <=>  extends_interface(this,"TransientSymbol")] } */
+        /*@ (Immutable) flags: { v: bitvector32 | [(mask_symbolflags_transient(v)) <=>  extends_interface(this,"TransientSymbol")] } */
         flags: SymbolFlags;            // Symbol flags
 
         name: string;                  // Name of symbol
 
-        /*@ id : [Mutable] number */
+        /*@ (Mutable) id: number */
         id?: number;                   // Unique id (used to look up SymbolLinks)
 
-        /*@ mergeId : [Mutable] number */
+        /*@ (Mutable) mergeId: number */
         mergeId?: number;              // Merge id (used to look up merged symbol)
 
         /*@ declarations : IArray<IDeclaration> */
-        declarations?: Declaration[];  // Declarations associated with this symbol
+        declarations?: Array<M, Declaration<M>>;  // Declarations associated with this symbol
 
-        /*@ parent?: [Mutable] ISymbol */
-        parent?: Symbol;               // Parent symbol
-        members?: SymbolTable;         // Class, interface or literal instance members
-        exports?: SymbolTable;         // Module exports
-        exportSymbol?: Symbol;         // Exported symbol associated with this symbol
-        valueDeclaration?: Declaration // First value declaration of the symbol
+        /*@ (Mutable) parent?: ISymbol */
+        parent?: Symbol<M>;               // Parent symbol
+        members?: SymbolTable<M>;         // Class, interface or literal instance members
+        exports?: SymbolTable<M>;         // Module exports
+        exportSymbol?: Symbol<M>;         // Exported symbol associated with this symbol
+        valueDeclaration?: Declaration<M> // First value declaration of the symbol
     }
 
-    export interface SymbolLinks {
-        target?: Symbol;               // Resolved (non-alias) target of an alias
-        type?: Type;                   // Type of value symbol
-        declaredType?: Type;           // Type of class, interface, enum, or type parameter
-        mapper?: TypeMapper;           // Type mapper for instantiation alias
+    export interface SymbolLinks<M extends ReadOnly> {
+        target?: Symbol<M>;               // Resolved (non-alias) target of an alias
+        type?: Type<M>;                   // Type of value symbol
+        declaredType?: Type<M>;           // Type of class, interface, enum, or type parameter
+        mapper?: TypeMapper<M>;           // Type mapper for instantiation alias
         referenced?: boolean;          // True if alias symbol has been referenced as a value
-        exportAssignSymbol?: Symbol;   // Symbol exported from external module
+        exportAssignSymbol?: Symbol<M>;   // Symbol exported from external module
     }
 
-    export interface TransientSymbol extends Symbol, SymbolLinks { }
+    export interface TransientSymbol<M extends ReadOnly> extends Symbol<M>, SymbolLinks<M> { }
 
     // export interface SymbolTable {
-    export interface SymbolTable extends Map<Symbol> {
+    export interface SymbolTable<M extends ReadOnly> extends Map<M, Symbol<M>> {
 
-        /*@ [index: string]: ISymbol */
-        [index: string]: Symbol;
+        [index: string]: Symbol<Immutable>;
 
     }
 
     export enum NodeCheckFlags {
-        TypeChecked    = 0x00000001,  // Node has been type checked
+        TypeChecked    = 0x00000001,  // Node<M> has been type checked
         LexicalThis    = 0x00000002,  // Lexical 'this' reference
         CaptureThis    = 0x00000004,  // Lexical 'this' used in body
         EmitExtends    = 0x00000008,  // Emit __extends
@@ -927,13 +926,13 @@ module ts {
         ContextChecked = 0x00000040,  // Contextual types have been assigned
     }
 
-    export interface NodeLinks {
-        resolvedType?: Type;            // Cached type of type node
-        resolvedSignature?: Signature;  // Cached signature of signature node or call expression
-        resolvedSymbol?: Symbol;        // Cached name resolution result
-        flags?: NodeCheckFlags;         // Set of flags specific to Node
+    export interface NodeLinks<M extends ReadOnly> {
+        resolvedType?: Type<M>;            // Cached type of type node
+        resolvedSignature?: Signature<M>;  // Cached signature of signature node or call expression
+        resolvedSymbol?: Symbol<M>;        // Cached name resolution result
+        flags?: NodeCheckFlags;            // Set of flags specific to Node
         enumMemberValue?: number;       // Constant value of enum member
-        /*@ isIllegalTypeReferenceInConstraint?: [Mutable] boolean */
+        /*@ (Mutable) isIllegalTypeReferenceInConstraint?: boolean */
         isIllegalTypeReferenceInConstraint?: boolean; // Is type reference in constraint refers to the type parameter from the same list
         isVisible?: boolean;            // Is this node visible
         localModuleName?: string;       // Local name for module instance
@@ -967,90 +966,81 @@ module ts {
     }
 
     // Properties common to all types
-    export interface Type {
+    export interface Type<M extends ReadOnly> {
 
-        /*@ flags : [Immutable] { v: bitvector32 | type_flags(v,this) } */
-        flags: TypeFlags;  // Flags
+        /*@ (Immutable) flags: { v: bitvector32 | type_flags(v,this) } */
+        flags: TypeFlags;       // Flags
 
-        id: number;        // Unique ID
+        id: number;             // Unique ID
 
-        /*@ symbol? : [Immutable] ISymbol + undefined */
-        symbol?: Symbol;   // Symbol associated with type (if any)
+        /*@ (Immutable) symbol?: ISymbol */
+        symbol?: Symbol<M>;     // Symbol associated with type (if any)
     }
 
     // Intrinsic types (TypeFlags.Intrinsic)
-    export interface IntrinsicType extends Type {
+    export interface IntrinsicType<M extends ReadOnly> extends Type<M> {
         intrinsicName: string;  // Name of intrinsic type
     }
 
     // String literal types (TypeFlags.StringLiteral)
-    export interface StringLiteralType extends Type {
+    export interface StringLiteralType<M extends ReadOnly> extends Type<M> {
         text: string;  // Text of string literal
     }
 
     // Object types (TypeFlags.ObjectType)
-    export interface ObjectType extends Type { }
+    export interface ObjectType<M extends ReadOnly> extends Type<M> { }
 
-    export interface ApparentType extends Type {
+    export interface ApparentType<M extends ReadOnly> extends Type<M> {
         // This property is not used. It is just to make the type system think ApparentType
         // is a strict subtype of Type.
         _apparentTypeBrand: any;
     }
 
     // Class and interface types (TypeFlags.Class and TypeFlags.Interface)
-    export interface InterfaceType extends ObjectType {
-        typeParameters: TypeParameter[];           // Type parameters (undefined if non-generic)
-        baseTypes: ObjectType[];                   // Base types
-        declaredProperties: Symbol[];              // Declared members
-        declaredCallSignatures: Signature[];       // Declared call signatures
-        declaredConstructSignatures: Signature[];  // Declared construct signatures
-        declaredStringIndexType: Type;             // Declared string index type
-        declaredNumberIndexType: Type;             // Declared numeric index type
+    export interface InterfaceType<M extends ReadOnly> extends ObjectType<M> {
+        typeParameters             : Array<M, TypeParameter<M>>; // Type parameters (undefined if non-generic)
+        baseTypes                  : Array<M, ObjectType<M>>;    // Base types
+        declaredProperties         : Array<M, Symbol<M>>;        // Declared members
+        declaredCallSignatures     : Array<M, Signature<M>>;     // Declared call signatures
+        declaredConstructSignatures: Array<M, Signature<M>>;     // Declared construct signatures
+        declaredStringIndexType    : Type<M>;                    // Declared string index type
+        declaredNumberIndexType    : Type<M>;                    // Declared numeric index type
     }
 
     // Type references (TypeFlags.Reference)
-    export interface TypeReference extends ObjectType {
-        target: GenericType;    // Type reference target
-
-        /*@ typeArguments : [Immutable] IArray<IType> */
-        typeArguments: Type[];  // Type reference type arguments
+    export interface TypeReference<M extends ReadOnly> extends ObjectType<M> {
+        target: GenericType<M>;             // Type reference target
+        /*@ (Immutable) typeArguments: IArray<IType> */
+        typeArguments: IArray<IType>;   // Type reference type arguments
     }
 
     // Generic class and interface types
-    export interface GenericType extends InterfaceType, TypeReference {
+    export interface GenericType<M extends ReadOnly> extends InterfaceType<M>, TypeReference<M> {
 
         // TODO : make the Map<...> work as well
 
-        /*@ instantiations: [Immutable] { [x:string]: TypeReference<Immutable> } */
-        instantiations: Map<TypeReference>;   // Generic instantiation cache
+        /*@ (Immutable) instantiations: (Mutable) { [x:string]: TypeReference<Immutable> } */
+        instantiations: Map<M, TypeReference<M>>;           // Generic instantiation cache
 
-        openReferenceTargets: GenericType[];  // Open type reference targets
-        openReferenceChecks: Map<boolean>;    // Open type reference check cache
+        openReferenceTargets: Array<M, GenericType<M>>;     // Open type reference targets
+        openReferenceChecks: Map<M, boolean>;               // Open type reference check cache
     }
 
     // Resolved object type
-    export interface ResolvedObjectType extends ObjectType {
-        /*@ members : [InheritedMut] SymbolTable<Immutable> */
-        members: SymbolTable;              // Properties by name
-
-        /*@ properties  : [InheritedMut] IArray<ISymbol> */
-        properties: Symbol[];              // Properties
-
-        /*@ callSignatures : [InheritedMut] IArray<ISignature> */
-        callSignatures: Signature[];       // Call signatures of type
-
-        /*@ constructSignatures : [InheritedMut] IArray<ISignature> */
-        constructSignatures: Signature[];  // Construct signatures of type
-
-        stringIndexType: Type;             // String index type
-        numberIndexType: Type;             // Numeric index type
+    export interface ResolvedObjectType<M extends ReadOnly> extends ObjectType<M> {
+        members: SymbolTable<Immutable>;                    // Properties by name
+        properties: IArray<ISymbol>;                        // Properties
+        callSignatures: IArray<ISignature>;                 // Call signatures of type
+        constructSignatures: IArray<ISignature>;            // Construct signatures of type
+        stringIndexType: Type<M>;                           // String index type
+        numberIndexType: Type<M>;                           // Numeric index type
     }
 
     // Type parameters (TypeFlags.TypeParameter)
-    export interface TypeParameter extends Type {
-        constraint: Type;        // Constraint
-        target?: TypeParameter;  // Instantiation target
-        mapper?: TypeMapper;     // Instantiation mapper
+    export interface TypeParameter<M extends ReadOnly> extends Type<M> {
+        constraint: Type<M>;                                // Constraint
+        target?: TypeParameter<M>;                          // Instantiation target
+        mapper?: TypeMapper<M>;                             // Instantiation mapper
     }
 
     export enum SignatureKind {
@@ -1058,18 +1048,18 @@ module ts {
         Construct,
     }
 
-    export interface Signature {
-        declaration: SignatureDeclaration;  // Originating declaration
-        typeParameters: TypeParameter[];    // Type parameters (undefined if non-generic)
-        parameters: Symbol[];               // Parameters
-        resolvedReturnType: Type;           // Resolved return type
-        minArgumentCount: number;           // Number of non-optional parameters
-        hasRestParameter: boolean;          // True if last parameter is rest parameter
-        hasStringLiterals: boolean;         // True if instantiated
-        target?: Signature;                 // Instantiation target
-        mapper?: TypeMapper;                // Instantiation mapper
-        erasedSignatureCache?: Signature;   // Erased version of signature (deferred)
-        isolatedSignatureType?: ObjectType; // A manufactured type that just contains the signature for purposes of signature comparison
+    export interface Signature<M extends ReadOnly> {
+        declaration: SignatureDeclaration<M>;       // Originating declaration
+        typeParameters: Array<M, TypeParameter<M>>; // Type parameters (undefined if non-generic)
+        parameters: Array<M, Symbol<M>>;            // Parameters
+        resolvedReturnType: Type<M>;                // Resolved return type
+        minArgumentCount: number;                   // Number of non-optional parameters
+        hasRestParameter: boolean;                  // True if last parameter is rest parameter
+        hasStringLiterals: boolean;                 // True if instantiated
+        target?: Signature<M>;                      // Instantiation target
+        mapper?: TypeMapper<M>;                     // Instantiation mapper
+        erasedSignatureCache?: Signature<M>;        // Erased version of signature (deferred)
+        isolatedSignatureType?: ObjectType<M>;      // A manufactured type that just contains the signature for purposes of signature comparison
     }
 
     export enum IndexKind {
@@ -1077,18 +1067,17 @@ module ts {
         Number,
     }
 
-    export interface TypeMapper {
-        /*@ forall M . (t: Type<M>) => Type<M> */
-        (t: Type): Type;
+    export interface TypeMapper<M extends ReadOnly> {
+        <N extends ReadOnly>(t: Type<N>): Type<N>;
     }
 
-    export interface InferenceContext {
-        typeParameters: TypeParameter[];
-        inferences: Type[][];
-        inferredTypes: Type[];
+    export interface InferenceContext<M extends ReadOnly> {
+        typeParameters: Array<M, TypeParameter<M>>;
+        inferences: Array<M, Array<M, Type<M>>>;
+        inferredTypes: Array<M, Type<M>>;
     }
 
-    export interface DiagnosticMessage {
+    export interface DiagnosticMessage<M extends ReadOnly> {
         key: string;
         category: DiagnosticCategory;
         code: number;
@@ -1098,15 +1087,15 @@ module ts {
     // It is built from the bottom up, leaving the head to be the "main" diagnostic.
     // While it seems that DiagnosticMessageChain is structurally similar to DiagnosticMessage,
     // the difference is that messages are all preformatted in DMC.
-    export interface DiagnosticMessageChain {
+    export interface DiagnosticMessageChain<M extends ReadOnly> {
         messageText: string;
         category: DiagnosticCategory;
         code: number;
-        next?: DiagnosticMessageChain;
+        next?: DiagnosticMessageChain<M>;
     }
 
-    export interface Diagnostic {
-        file: SourceFile;
+    export interface Diagnostic<M extends ReadOnly> {
+        file: SourceFile<M>;
         start: number;
         length: number;
         messageText: string;
@@ -1120,7 +1109,7 @@ module ts {
         Message,
     }
 
-    export interface CompilerOptions {
+    export interface CompilerOptions<M extends ReadOnly> {
         charset?: string;
         codepage?: number;
         declaration?: boolean;
@@ -1157,19 +1146,19 @@ module ts {
         ES5,
     }
 
-    export interface ParsedCommandLine {
-        options: CompilerOptions;
+    export interface ParsedCommandLine<M extends ReadOnly> {
+        options: CompilerOptions<M>;
         filenames: string[];
-        errors: Diagnostic[];
+        errors: Array<M, Diagnostic<M>>;
     }
 
-    export interface CommandLineOption {
+    export interface CommandLineOption<M extends ReadOnly> {
         name: string;
-        type: any;                          // "string", "number", "boolean", or an object literal mapping named values to actual values
-        shortName?: string;                 // A short pneumonic for convenience - for instance, 'h' can be used in place of 'help'.
-        description?: DiagnosticMessage;    // The message describing what the command line switch does
-        paramName?: DiagnosticMessage;      // The name to be used for a non-boolean option's parameter.
-        error?: DiagnosticMessage;          // The error given when the argument does not fit a customized 'type'.
+        type: any;                              // "string", "number", "boolean", or an object literal mapping named values to actual values
+        shortName?: string;                     // A short pneumonic for convenience - for instance, 'h' can be used in place of 'help'.
+        description?: DiagnosticMessage<M>;     // The message describing what the command line switch does
+        paramName?: DiagnosticMessage<M>;       // The name to be used for a non-boolean option's parameter.
+        error?: DiagnosticMessage<M>;           // The error given when the argument does not fit a customized 'type'.
     }
 
     export enum CharacterCodes {
@@ -1307,14 +1296,14 @@ module ts {
 //         verticalTab = 0x0B,           // \v
     }
 
-    export interface CancellationToken {
+    export interface CancellationToken<M extends ReadOnly> {
         isCancellationRequested(): boolean;
     }
 
-    export interface CompilerHost {
-        getSourceFile(filename: string, languageVersion: ScriptTarget, onError?: (message: string) => void): SourceFile;
+    export interface CompilerHost<M extends ReadOnly> {
+        getSourceFile(filename: string, languageVersion: ScriptTarget, onError?: (message: string) => void): SourceFile<M>;
         getDefaultLibFilename(): string;
-        getCancellationToken? (): CancellationToken;
+        getCancellationToken? (): CancellationToken<M>;
         writeFile(filename: string, data: string, writeByteOrderMark: boolean, onError?: (message: string) => void): void;
         getCurrentDirectory(): string;
         getCanonicalFileName(fileName: string): string;

@@ -59,7 +59,7 @@ import           System.FilePath.Posix           (dropExtension)
 import           Text.PrettyPrint.HughesPJ       hiding (first)
 
 
-import           Debug.Trace                     hiding (traceShow)
+-- import           Debug.Trace                     hiding (traceShow)
 
 type Result = (A.UAnnSol RefType, F.FixResult Error)
 
@@ -1132,20 +1132,13 @@ envJoin :: AnnLq -> CGEnv -> Maybe CGEnv -> Maybe CGEnv -> CGM (Maybe CGEnv)
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
 envJoin l g (Just g1) (Just g2) = do
-
     s1s   <-  mapM (safeEnvFindSI l g1) xs    -- SI entry at the end of the 1st branch
     s2s   <-  mapM (safeEnvFindSI l g2) xs    -- SI entry at the end of the 2nd branch
-
     g'    <- foldM (\g_ (s1, s2) -> checkPhi g_ (siJoin g1 s1 s2) s1 s2) g (zip s1s s2s)
-
-
     return $ Just g'
-
   where
-
     -- SSAed Φ-vars before the conditional and at the end of the branches
     xs        = [ x | PhiVar x <- fFact l]
-    sOr s1 s2 = s1 { v_type = tOr [v_type s1, v_type s2] }
 
     checkPhi g_ s_ s1 s2 = do
         (g', [r_])  <- freshTyPhis l g_ [s_]
@@ -1153,18 +1146,10 @@ envJoin l g (Just g1) (Just g2) = do
         zipWithM_ (\l_ g_ -> subType l Nothing g_ l_ r_) ts [g1,g2]
         return g'
 
-    joinGrds  = F.pOr $ map (F.pAnd . cge_guards) [g1, g2]
-
 siJoin g s1 s2
     | isSubtype g (v_type s1) (v_type s2) = s2
     | isSubtype g (v_type s2) (v_type s1) = s1
     | otherwise = s1 { v_type = tOr [v_type s1, v_type s2] }
-
-tyJoin g t1 t2
-    | isSubtype g t1 t2 = t2
-    | isSubtype g t2 t1 = t1
-    | otherwise         = tOr [t1, t2]
-
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

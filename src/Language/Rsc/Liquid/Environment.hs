@@ -53,7 +53,7 @@ import           Control.Monad
 import           Data.Default
 import qualified Data.HashMap.Strict             as HM
 import qualified Data.List                       as L
-import           Data.Maybe                      (catMaybes, fromMaybe)
+import           Data.Maybe                      (catMaybes)
 import qualified Data.Traversable                as T
 import           Debug.Trace                     hiding (traceShow)
 import           Language.Fixpoint.Misc
@@ -506,7 +506,7 @@ freshenVI _ _ v@(SI _ Exported _ _ _)
 freshenVI g l v@(SI x loc a@WriteGlobal i t)
   | isTrivialRefType t  = freshTy "freshenVI" (toType t) >>= (SI x loc a i <$>) . wellFormed l g
   | otherwise           = return v
-freshenVI g l v@(SI x loc a i t)
+freshenVI g l (SI x loc a i t)
   = SI x loc a i <$> freshTyFun g l t
 
 

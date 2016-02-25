@@ -1143,27 +1143,16 @@ envJoin :: Unif r
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
 envJoin l γ (Just γ1) (Just γ2) = do
-
     s1s   <- mapM (safeEnvFindSI l γ1) xs    -- SI entry at the end of the 1st branch
     s2s   <- mapM (safeEnvFindSI l γ2) xs    -- SI entry at the end of the 2nd branch
-
     return $ Just $ foldl (\γ' (s1, s2) -> tcEnvAdd (siJoin γ1 s1 s2) γ') γ (zip s1s s2s)
-
   where
     xs        = [ x | PhiVar x <- fFact l ]
-    sOr s1 s2 = tOr [v_type s1, v_type s2]
 
 siJoin γ s1 s2
     | isSubtype γ (v_type s1) (v_type s2) = s2
     | isSubtype γ (v_type s2) (v_type s1) = s1
     | otherwise = s1 { v_type = tOr [v_type s1, v_type s2] }
-
-tyJoin γ t1 t2
-    | isSubtype γ t1 t2 = t2
-    | isSubtype γ t2 t1 = t1
-    | otherwise         = tOr [t1, t2]
-
-
 
 --------------------------------------------------------------------------------
 envLoopJoin :: Unif r => AnnTc r -> TCEnv r -> TCEnvO r -> TCM r (TCEnv r)

@@ -1,10 +1,13 @@
 
 /*@ main :: (xx: posint) => { v: number | v > xx } */
 function main(xx: number): number {
-    /*@ readonly */
-    let x = xx;
+
+    /*@ global */
+    let x_ = xx;
+
     let plus: (a: number) => number = function (a) {
-        return a + x;
+        return a + x_;
     };
+
     return plus(xx);
 }

@@ -23,7 +23,6 @@ module Language.Rsc.Liquid.Types (
 
   -- * Manipulating RefType
   , rTypeValueVar
-  , singleton
 
   -- * Manipulating Reft
   , noKVars
@@ -39,9 +38,8 @@ module Language.Rsc.Liquid.Types (
   , rawStringSymbol
 
   -- * 'this' related substitutions
-  , substThis, substThisWithSelf, substThisCtor
+  , substThis, substThisCtor
 
-  , qualifySymbol
   , mkQualSym
   , mkOffsetSym
 
@@ -143,11 +141,6 @@ pSingleton t p  = t `strengthen` (F.propReft p)
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-singleton :: F.Expression x => RefType -> x -> RefType
---------------------------------------------------------------------------------
-singleton t x = toplevel (const (F.uexprReft x)) t
-
---------------------------------------------------------------------------------
 noKVars :: F.Reft -> F.Reft
 --------------------------------------------------------------------------------
 noKVars (F.Reft (x, p)) = F.Reft (x, dropKs p)
@@ -199,7 +192,6 @@ rawStringSymbol = F.locAt "RSC.Types.rawStringSymbol"
                 . F.symbol
 
 
-
 --------------------------------------------------------------------------------
 -- | Helpers for extracting specifications from @Rsc@ @Statement@
 --------------------------------------------------------------------------------
@@ -231,113 +223,27 @@ getFunctionIds :: Statement a -> [Id a]
 getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
 
 
-
--- NEW -- --------------------------------------------------------------------------------
--- NEW -- unionCheck :: IsLocated l => l -> CGEnv -> RefType -> [RefType] -> Either [Error] [RefType]
--- NEW -- --------------------------------------------------------------------------------
--- NEW -- unionCheck l γ t ts
--- NEW --   | not $ null samePrims = Left $ uncurry (errorUnionMergePrims l t) <$> samePrims
--- NEW --   | not $ null sameVars  = Left $ uncurry (errorUnionMergeVars l t) <$> sameVars
--- NEW --   | not $ null sameAnds  = Left $ uncurry (errorUnionMergeAnds l t) <$> sameAnds
--- NEW --   | not $ null sameObjs  = Left $ uncurry (errorUnionMergeObjs l t) <$> sameObjs
--- NEW --   | not $ null sameTys   = Left $ uncurry (errorUnionMergeTys l t) <$> sameTys
--- NEW --   | not $ null sameMods  = Left $ uncurry (errorUnionMergeMods l t) <$> sameMods
--- NEW --   | length alls > 0      = Left [ errorUnionMergeAlls l t ]
--- NEW --   | length funs > 0      = Left [ errorUnionMergeFuns l t ]
--- NEW --   | length exps > 0      = Left [ bugUnionMergeExps l t ]
--- NEW --   | otherwise            = Right $ prims ++ vars ++ ands ++ refs ++ objs ++ tys ++ mods ++ funs
--- NEW --
--- NEW --   where
--- NEW --     sub   = isSubtype γ
--- NEW --     -- no unions here
--- NEW --     prims = [ t | t@(TPrim _ _ ) <- ts ]
--- NEW --     vars  = [ t | t@(TVar _ _  ) <- ts ]
--- NEW --     ands  = [ t | t@(TAnd _    ) <- ts ]
--- NEW --     refs  = [ t | t@(TRef _ _  ) <- ts ]
--- NEW --     objs  = [ t | t@(TObj _ _  ) <- ts ]
--- NEW --     tys   = [ t | t@(TClass _  ) <- ts ]
--- NEW --     mods  = [ t | t@(TMod _    ) <- ts ]
--- NEW --     alls  = [ t | t@(TAll _ _  ) <- ts ]
--- NEW --     funs  = [ t | t@(TFun _ _ _) <- ts ]
--- NEW --     exps  = [ t | t@(TExp _    ) <- ts ]
--- NEW --
--- NEW --     iprims = zip [0..] prims
--- NEW --     samePrims = [ (t1, t2) | (i1, t1@(TPrim p1 _)) <- iprims, (i2, t2@(TPrim p2 _)) <- iprims, p1 == p2, i1 /= i2 ]
--- NEW --
--- NEW --     ivars = zip [0..] vars
--- NEW --     sameVars = [ (t1, t2) | (i1, t1@(TVar v1 _)) <- ivars, (i2, t2@(TVar v2 _)) <- ivars, v1 == v2, i1 /= i2 ]
--- NEW --
--- NEW --     iands = zip [0..] ands
--- NEW --     sameAnds = [ (t1, t2) | (i1, t1@(TAnd _)) <- iands, (i2, t2@(TAnd _)) <- iands, i1 /= i2 ]
--- NEW --
--- NEW --     iobjs = zip [0..] $ refs ++ objs
--- NEW --     sameObjs = [ (t1, t2) | (i1, t1) <- iobjs, (i2, t2) <- iobjs, i1 /= i2, t1 `sub` t2 || t2 `sub` t1 ]
--- NEW --
--- NEW --     itys = zip [0..] tys
--- NEW --     sameTys = [ (t1, t2) | (i1, t1@(TClass n1)) <- itys, (i2, t2@(TClass n2)) <- itys
--- NEW --                           , i1 /= i2, t1 `sub` t2 || t2 `sub` t1 ]
--- NEW --
--- NEW --     imods = zip [0..] mods
--- NEW --     sameMods = [ (t1, t2) | (i1, t1@(TMod m1)) <- imods, (i2, t2@(TMod m2)) <- imods, i1 /= i2, m1 == m2 ]
-
-
-
 -------------------------------------------------------------------------------
 substThis :: (F.Expression x, F.Subable t) => x -> t -> t
 -------------------------------------------------------------------------------
 substThis x = F.subst (F.mkSubst [(thisSym, F.expr x)])
 
 -------------------------------------------------------------------------------
-substThisWithSelf :: RefType -> RefType
+substThisCtor :: RefType -> RefType
 -------------------------------------------------------------------------------
-substThisWithSelf t = substThis (rTypeValueVar t) t
+substThisCtor ft =
+  case bkFun ft of
+    Just (vs, bs, rt) -> mkFun (vs, bs, substThis (rTypeValueVar rt) rt)
+    Nothing           -> ft
 
-
-substThisCtor ft | Just (vs, bs, rt) <- bkFun ft
-                 = mkFun (vs, bs, substThisWithSelf rt)
-                 | otherwise
-                 = ft
-
-
--- substOffsetThis = emapReft (\_ -> V.trans vs () ()) []
---   where
---     vs     = V.defaultVisitor { V.txExpr = tx }
---     tx _ (F.EApp o [ F.EVar x, F.ESym (F.SL f) ])
---            | F.symbol o == offsetSym, F.symbol x == thisSym
---            = F.eVar f
---     tx _ e = e
---
---
--- -- | Substitute occurences of 'this' in type @t'@, given that the receiver
--- --   object is bound to symbol @x@ and it has a type @t@ under @g@.
--- -------------------------------------------------------------------------------
--- substThis' :: (IsLocated a, F.Symbolic a)
---            => CGEnv -> (a, RefType) -> RefType -> RefType
--- -------------------------------------------------------------------------------
--- substThis' g (x,t) = F.subst su
---   where
---     su            = F.mkSubst $ (this, F.expr $ F.symbol x) : fieldSu
---     this          = F.symbol $ builtinOpId BIThis
---
---     fieldSu       | Just (TCons _ fs _) <- expandType Coercive g t
---                   = [ subPair f | ((f,InstanceMember), FieldSig _ _ m _) <- M.toList fs
---                                 , isImmutable m ]
---                   | otherwise
---                   = []
---     qFld x f      = F.qualifySymbol (F.symbol x) f
---     subPair f     = (qFld this f, F.expr $ qFld x f)
---
---
-
+-------------------------------------------------------------------------------
 qualifySymbol :: F.Symbol -> F.Symbol -> F.Symbol
+-------------------------------------------------------------------------------
 qualifySymbol (symbolText -> m) x'@(symbolText -> x)
   | isQualified x  = x'
-  -- | isParened x    = symbol (wrapParens (m `mappend` "." `mappend` stripParens x))
   | otherwise      = F.symbol (m `mappend` "." `mappend` x)
 
 isQualified y = "." `T.isInfixOf` y
--- wrapParens x  = "(" `mappend` x `mappend` ")"
-
 
 -------------------------------------------------------------------------------
 mkQualSym :: (F.Symbolic x, F.Symbolic f) => x -> f -> F.Symbol
@@ -348,6 +254,4 @@ mkQualSym x f = F.symbol x `qualifySymbol` F.symbol f
 mkOffsetSym :: (F.Symbolic f, F.Expression x) => x -> f -> F.Expr
 -------------------------------------------------------------------------------
 mkOffsetSym x f = F.mkEApp offsetLocSym [F.expr x, F.expr $ symbolText $ F.symbol f]
-
-
 

@@ -28,7 +28,6 @@ module Language.Rsc.Liquid.Environment (
   , freshenCHA
 
   , cgEnvAdds
-  , cgSafeEnvFindTyM
   , cgEnvFindReturn
   , cgEnvFindTy
   , cgEnvAddFresh
@@ -94,16 +93,17 @@ instance PP CGEnv where
 
 
 
--- Only include the "singleton" refinement in the case where Assignability is
+-- Only include the "sngl" refinement in the case where Assignability is
 -- either ReadOnly of WriteLocal (SSAed)
 ---------------------------------------------------------------------------------------
 envFindTyWithAsgn :: (EnvKey x, F.Expression x) => x -> CGEnv -> Maybe CGEnvEntry
 ---------------------------------------------------------------------------------------
-envFindTyWithAsgn x (envNames -> γ) = fmap singleton (envFindTy x γ)
+envFindTyWithAsgn x (envNames -> γ) = fmap sngl (envFindTy x γ)
   where
-    singleton v@(SI _ _ WriteGlobal Initialized   _) = v
-    singleton v@(SI _ _ WriteGlobal Uninitialized t) = v { v_type = orUndef t }
-    singleton v = v { v_type = uSingleton (v_type v) x }
+    sngl v@(SI _ _ RdOnly      Initialized   t) = v { v_type = uSingleton t x }
+    sngl v@(SI _ _ WriteLocal  Initialized   t) = v { v_type = uSingleton t x }
+    sngl v@(SI _ _ WriteGlobal Uninitialized t) = v { v_type = orUndef t }
+    sngl v@(SI _ _ _           _             _) = v
 
 ---------------------------------------------------------------------------------------
 cgEnvFindReturn :: CGEnv -> RefType
@@ -280,15 +280,6 @@ envGetContextTypArgs n g a f αs
 
 
 -- | Monadic environment search wrappers
-
---------------------------------------------------------------------------------
-cgSafeEnvFindTyM :: (EnvKey x, F.Expression x) => x -> CGEnv -> CGM RefType
---------------------------------------------------------------------------------
-cgSafeEnvFindTyM x (envNames -> γ)
-  | Just t <- envFindTy x γ
-  = return $ v_type t
-  | otherwise
-  = cgError $ bugEnvFindTy (srcPos x) x
 
 --------------------------------------------------------------------------------
 cgEnvAddFreshWithInit
@@ -525,11 +516,11 @@ freshenVI g l v@(SI x loc a i t)
 --   | otherwise          = return v
 
 --------------------------------------------------------------------------------
-freshenType :: IsLocated l => CGEnv -> l -> Bool -> RefType -> CGM RefType
+freshenType :: IsLocated l => CGEnv -> l -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-freshenType g l b t
-  | b && isTrivialRefType t = freshTy "ft-WG" t >>= wellFormed l g
-  | otherwise               = return t
+freshenType g l t
+  | isTrivialRefType t = freshTy "ft-WG" t >>= wellFormed l g
+  | otherwise          = return t
 
 -- | 1. Instantiates fresh types (at call-site)
 --   2. Adds well-formedness constraints for instantiated type variables
@@ -630,7 +621,7 @@ envTyAdds msg l xts g = cgEnvAdds l msg' sis g
 traceTypePP l msg act = do
     z <- act
     case z of
-      Just (x,g) -> do  t <- cgSafeEnvFindTyM x g
+      Just (x,g) -> do  t <- safeEnvFindTy l g x
                         return $ Just $ trace (str x t) (x,g)
       Nothing -> return Nothing
   where

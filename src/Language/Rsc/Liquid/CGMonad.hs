@@ -218,26 +218,6 @@ cgError = throwE
 -- | Environment API
 --------------------------------------------------------------------------------
 
--------------------------------------------------------------------------------
--- resolveTypeM :: IsLocated a => a -> CGEnv -> AbsName -> CGM (TypeDecl F.Reft)
--------------------------------------------------------------------------------
-resolveTypeM l γ x
-  | Just t <- resolveTypeInEnv γ x
-  = return t
-  | otherwise
-  = die $ bugClassDefNotFound (srcPos l) x
-
-
--- IN FIXPOINT meetReft (F.Reft (v, ras)) (F.Reft (v', ras'))
--- IN FIXPOINT   | v == v'            = F.Reft (v , L.nubBy cmp $ ras  ++ ras')
--- IN FIXPOINT   | v == F.dummySymbol = F.Reft (v', L.nubBy cmp $ ras' ++ (ras `F.subst1`  (v , F.EVar v')))
--- IN FIXPOINT   | otherwise          = F.Reft (v , L.nubBy cmp $ ras  ++ (ras' `F.subst1` (v', F.EVar v )))
--- IN FIXPOINT   where
--- IN FIXPOINT     cmp = (==) `on` (show . F.toFix)
-
-
-
-
 --------------------------------------------------------------------------------
 addAnnot       :: (IsLocated l, F.Symbolic x) => l -> x -> RefType -> CGM ()
 --------------------------------------------------------------------------------

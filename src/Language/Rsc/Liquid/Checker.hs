@@ -332,7 +332,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign v@(LVar _ x) e))
 
       -- This is the first time we initialize this variable
       Just (SI n lc WriteGlobal Uninitialized t) -> do
-          t' <- freshenType g l True t
+          t' <- freshenType g l t
           mseq (consExprT g e t') $ \(_, g') ->
             Just <$> cgEnvAdds l "consAsgn-0" [SI n lc WriteGlobal Initialized t'] g'
 
@@ -341,11 +341,11 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign v@(LVar _ x) e))
 
       Just (SI n lc a i t) ->
           mseq (consExprT g e t) $ \(x', g') -> do
-            t_     <- cgSafeEnvFindTyM x' g'
+            t_     <- safeEnvFindTy l g' x'
             Just  <$> cgEnvAdds l "consAsgn-1" [SI n lc a i t_] g'
       Nothing ->
           mseq (consExpr g e Nothing) $ \(x', g') -> do
-            t      <- cgSafeEnvFindTyM x' g'
+            t      <- safeEnvFindTy l g' x'
             Just  <$> cgEnvAdds l "consAsgn-1" [SI (F.symbol x) Local WriteLocal Initialized t] g'
 
 -- e1.f = e2
@@ -354,9 +354,9 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign v@(LVar _ x) e))
 --
 --   TODO: add indexer updates
 --
-consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
+consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot l1 e1 f) e2))
   = mseq (consExpr g e1 Nothing) $ \(x1,g1) -> do
-      t1        <- cgSafeEnvFindTyM x1 g1
+      t1        <- safeEnvFindTy l1 g1 x1
       m1o       <- pure (getMutability (envCHA g1) t1)
       m1fo      <- pure (getFieldMutability (envCHA g1) t1 f)
       case (m1o, m1fo) of
@@ -395,7 +395,7 @@ consStmt g (IfSingleStmt l b s)
 
 -- if e { s1 } else { s2 }
 consStmt g (IfStmt l e s1 s2) =
-  mseq (cgSafeEnvFindTyM (builtinOpId BITruthy) g
+  mseq (safeEnvFindTy l g (builtinOpId BITruthy)
         >>= consCall g l (builtinOpId BITruthy) [(e, Nothing)]) $ \(xe,ge) -> do
     g1' <- (`consStmt` s1) $ envAddGuard xe True ge
     g2' <- (`consStmt` s2) $ envAddGuard xe False ge
@@ -416,7 +416,7 @@ consStmt g (ReturnStmt l Nothing)
 -- return e
 consStmt g (ReturnStmt l (Just e))
   = mseq (consExpr g e (Just rt)) $ \(y,gy) -> do
-      eT  <- cgSafeEnvFindTyM y gy
+      eT  <- safeEnvFindTy l gy y
       _   <- subType l Nothing gy eT rt
       return Nothing
   where
@@ -473,30 +473,35 @@ consVarDecl :: CGEnv -> VarDecl AnnLq -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
 consVarDecl g v@(VarDecl l x (Just e)) =
   case varDeclSymbol v of
-
-    Left err -> cgError err
-
-      -- Local (no type annotation)
-    Right Nothing ->
-        mseq (consExpr g e Nothing) $ \(y,gy) -> do
-          eT      <- cgSafeEnvFindTyM y gy
-          Just   <$> cgEnvAdds l "cvd" [SI (F.symbol x) Local WriteLocal Initialized eT] gy
-
-    Right (Just s@(SI _ _ WriteLocal  _ _)) -> go True s
-    Right (Just s@(SI _ _ WriteGlobal _ _)) -> go True s
-    Right (Just s@(SI _ _ RdOnly      _ _)) -> go True s
+    Left err                                -> cgError err
+    Right Nothing                           -> goInfer WriteLocal Nothing -- Local (no type annotation)
+    Right (Just s@(SI _ _ WriteLocal  _ t)) -> goRO   s t
+    Right (Just s@(SI _ _ WriteGlobal _ t)) -> goRest s t
+    Right (Just s@(SI _ _ RdOnly      _ t)) -> goRO   s t
     Right (Just   (SI _ _ _           _ _)) -> cgError $ errorVarDeclAnnot (srcPos l) x
+
   where
-    go b (SI n lc a _ t) = do
-      t' <- freshenType g l b t
-      if onlyCtxTyped e then do
-          g' <- fmap snd <$> consExpr g e (Just t')
-          TR.mapM (cgEnvAdds l "consVarDecl" [SI n lc a Initialized t']) g'
-      else
-          mseq (consExpr g e (Just t')) $ \(y,gy) -> do
-            eT      <- cgSafeEnvFindTyM y gy
-            _       <- subType l Nothing gy eT t'
-            Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized t'] gy
+
+    goInfer a s = mseq (consExpr g e s) $ \(y,gy) -> do
+                    eT    <- safeEnvFindTy l gy y
+                    Just <$> cgEnvAdds l "cvd" [si x a eT] gy
+
+    goRO _ t@TPrim{} = goInfer RdOnly (Just t)
+    goRO s t         = freshenType g l t >>= go s
+
+    goRest s t     = freshenType g l t >>= go s
+
+    go (SI n lc a _ _) t
+      | onlyCtxTyped e
+      = do  g' <- fmap snd <$> consExpr g e (Just t)
+            TR.mapM (cgEnvAdds l "consVarDecl" [SI n lc a Initialized t]) g'
+      | otherwise
+      = mseq (consExpr g e (Just t)) $ \(y,gy) -> do
+          eT      <- safeEnvFindTy l gy y
+          _       <- subType l Nothing gy eT t
+          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized t] gy
+
+    si x a = SI (F.symbol x) Local a Initialized
 
 consVarDecl g v@(VarDecl l _ Nothing) =
   case varDeclSymbol v of
@@ -669,7 +674,7 @@ consExpr g (Cast_ l e) s
 
       -- Type-cast
       CType s  -> mseq (consExpr g e (Just $ ofType s)) $ \(x, g') -> do
-                    t   <- cgSafeEnvFindTyM x g'
+                    t   <- safeEnvFindTy l g' x
                     _   <- subType l Nothing g' t (ofType s)
                     case narrowType g' t s of
                       Just t' -> Just <$> cgEnvAddFresh "cast_" l t' g'
@@ -751,14 +756,14 @@ consExpr g (VarRef l x) _
     tInfo = envFindTyWithAsgn x g
 
 consExpr g (PrefixExpr l o e) _
-  = do opTy <- cgSafeEnvFindTyM (prefixOpId o) g
+  = do opTy <- safeEnvFindTy l g (prefixOpId o)
        consCall g l (prefixOpId o) [(e,Nothing)] opTy
 
 consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
   = mseq (consExpr g e2 Nothing) $ \(x, g') -> do
-       t            <- cgSafeEnvFindTyM x g'
+       t            <- safeEnvFindTy l g' x
        case t of
-         TClass x_  -> do opTy <- cgSafeEnvFindTyM (infixOpId o) g
+         TClass x_  -> do opTy <- safeEnvFindTy l g (infixOpId o)
                           consCall g l (infixOpId o) (zwNth [e1, StringLit l2 (cc x_)]) opTy
          _          -> cgError $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
   where
@@ -766,7 +771,7 @@ consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
     cc (BGen (QN _ s) _) = symbolString s
 
 consExpr g (InfixExpr l o e1 e2) _
-  = do opTy <- cgSafeEnvFindTyM (infixOpId o) g
+  = do opTy <- safeEnvFindTy l g (infixOpId o)
        consCall g l (infixOpId o) (zwNth [e1, e2]) opTy
 
 -- | e ? e1 : e2
@@ -778,15 +783,15 @@ consExpr g (CondExpr l e e1 e2) (Just t)
         (Nothing, _) -> return z2
         (_, Nothing) -> return z1
         (Just (x1, g1'), Just (x2, g2')) -> do
-            t1            <- cgSafeEnvFindTyM x1 g1'
-            t2            <- cgSafeEnvFindTyM x2 g2'
+            t1            <- safeEnvFindTy l g1' x1
+            t2            <- safeEnvFindTy l g2' x2
             (xf, gf, tf)  <- freshTyCondExpr l g' (toType t)
             _             <- subType l Nothing g1' t1 tf
             _             <- subType l Nothing g2' t2 tf
             return         $ Just (xf, gf)
   where
     checkCond = do
-        t   <- cgSafeEnvFindTyM (builtinOpId BITruthy) g
+        t   <- safeEnvFindTy l g (builtinOpId BITruthy)
         consCall g l (builtinOpId BITruthy) [(e, Nothing)] t
 
 consExpr _ e@(CondExpr l _ _ _) Nothing
@@ -803,7 +808,7 @@ consExpr g (CallExpr l (SuperRef _) _) _
   where
 
 -- | e.m(es)
-consExpr g (CallExpr l em@(DotRef _ e f) es) _
+consExpr g (CallExpr l em@(DotRef l1 e f) es) _
   -- | isVariadicCall f = cgError (unimplemented l "Variadic" ex)
   | otherwise        = checkNonVariadic
 
@@ -813,7 +818,7 @@ consExpr g (CallExpr l em@(DotRef _ e f) es) _
 
     checkNonVariadic =
       mseq (consExpr g e Nothing) $ \(xR, g') -> do
-        tR  <- cgSafeEnvFindTyM xR g'
+        tR  <- safeEnvFindTy l1 g' xR
         case getProp l g' xR f tR of
           Left e  -> cgError e
           Right p -> checkWithProp xR g' p
@@ -841,7 +846,7 @@ consExpr g (CallExpr l em@(DotRef _ e f) es) _
 --
 consExpr g (CallExpr l e es) _
   = mseq (consExpr g e Nothing) $ \(x, g') ->
-      do  ft <- cgSafeEnvFindTyM x g'
+      do  ft <- safeEnvFindTy l g' x
           consCall g' l (builtinOpId BICallExpr) (es `zip` nths) ft
 
 -- | e.f
@@ -851,7 +856,7 @@ consExpr g (CallExpr l e es) _
 --
 consExpr g0 (DotRef l e f) _
   = mseq (consExpr g0 e Nothing) $ \(x, g1) -> do
-      te <- cgSafeEnvFindTyM x g1
+      te <- safeEnvFindTy l g1 x
       case getProp l g1 x f te of
         Right tf -> checkAccess g1 x tf
         Left  e  -> cgError e
@@ -886,7 +891,7 @@ consExpr g0 (DotRef l e f) _
 --
 consExpr g (BracketRef l e1 e2) _
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
-      opTy  <- cgSafeEnvFindTyM (builtinOpId BIBracketRef) g'
+      opTy  <- safeEnvFindTy l g' (builtinOpId BIBracketRef)
       consCall g' l (builtinOpId BIBracketRef) ([vr x1, e2] `zip` nths) opTy
   where
     vr  = VarRef $ getAnnotation e1
@@ -894,7 +899,7 @@ consExpr g (BracketRef l e1 e2) _
 -- | e1[e2] = e3
 --
 consExpr g (AssignExpr l OpAssign (LBracket _ e1 e2) e3) _
-  = do  opTy <- cgSafeEnvFindTyM (builtinOpId BIBracketAssign) g
+  = do  opTy <- safeEnvFindTy l g (builtinOpId BIBracketAssign)
         consCall g l (builtinOpId BIBracketAssign) ([e1,e2,e3] `zip` nths) opTy
 
 -- | [e1,...,en]
@@ -908,7 +913,7 @@ consExpr g e@(ArrayLit l es) to
 --
 consExpr g (ObjectLit l pes) to
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      ts      <- mapM (`cgSafeEnvFindTyM` g') xes
+      ts      <- mapM (safeEnvFindTy l g') xes
       t       <- pure (TObj tUQ (tmsFromList (zipWith toFI ps ts)) fTop)
       Just   <$> cgEnvAddFresh "ObjectLit" l t g'
   where
@@ -924,12 +929,12 @@ consExpr g (ObjectLit l pes) to
 --
 consExpr g (NewExpr l e es) s
   = mseq (consExpr g e Nothing) $ \(x,g1) -> do
-      t <- cgSafeEnvFindTyM x g1
+      t <- safeEnvFindTy l g1 x
       case extractCtor g1 t of
         Just ct ->
             let ct' = substThisCtor ct in
             mseq (consCall g1 l (builtinOpId BICtor) (es `zip` nths) ct') $ \(x, g2) -> do
-              tNew    <- cgSafeEnvFindTyM x g2
+              tNew    <- safeEnvFindTy l g2 x
               tNew'   <- pure (adjustCtxMut tNew s)
               tNew''  <- pure (substThis (rTypeValueVar tNew') tNew')
               Just   <$> cgEnvAddFresh "18" l tNew'' g2
@@ -976,7 +981,7 @@ consCall :: CGEnv -> AnnLq -> Identifier -> [(Expression AnnLq, Maybe RefType)]
 --------------------------------------------------------------------------------
 consCall g l fn ets ft@(validOverloads g l fn -> fts)
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      ts <- mapM (`cgSafeEnvFindTyM` g') xes
+      ts <- mapM (safeEnvFindTy l g') xes
       case fts of
         ft : _ -> consCheckArgs l g' fn ft ts xes
         _      -> cgError $ errorNoMatchCallee (srcPos l) fn ts ft
@@ -1084,7 +1089,7 @@ consWhile g l cond body = do
       si x t = SI (F.symbol x) Local WriteLocal Initialized t
 
 consWhileBase l xs tIs g = do
-    baseT <-  mapM (`cgSafeEnvFindTyM` g) xs
+    baseT <-  mapM (safeEnvFindTy l g) xs
     zipWithM_ (subType l Nothing g) baseT tIs
 
 -- Return the type binding that should be propagated. The var is the output
@@ -1144,7 +1149,7 @@ envJoin l g (Just g1) (Just g2) = do
 
     checkPhi g_ s_ s1 s2 = do
         (g', [r_])  <- freshTyPhis l g_ [s_]
-        ts          <- zipWithM (cgSafeEnvFindTyM . v_name) [s1,s2] [g1,g2]
+        ts          <- zipWithM (\g_ -> safeEnvFindTy l g_ . v_name) [g1,g2] [s1,s2]
         zipWithM_ (\l_ g_ -> subType l Nothing g_ l_ r_) ts [g1,g2]
         return g'
 

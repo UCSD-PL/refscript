@@ -15,10 +15,16 @@ module Language.Rsc.Environment (
 
 
   -- * Operations
-  , chkEnvFindTy, chkEnvFindTy'
-  , safeEnvFindTy, safeEnvFindSI
-  , envFindBound, envFindBoundOpt
-  , resolveModuleInEnv, resolveTypeInEnv, resolveEnumInEnv
+  , chkEnvFindTy
+  , chkEnvFindTy'
+  , safeEnvFindTy
+  , safeEnvFindSI
+  , envFindBound
+  , envFindBoundOpt
+  , resolveModuleInEnv
+  , resolveTypeInEnv
+  , resolveEnumInEnv
+  , resolveTypeM
   , toFgn
 
   -- Global definitions
@@ -151,6 +157,17 @@ resolveEnumInEnv    :: (PPR r, CheckingEnvironment r t) => t r -> AbsName -> May
 resolveModuleInEnv (envCHA -> c) = resolveModule c
 resolveTypeInEnv   (envCHA -> c) = resolveType c
 resolveEnumInEnv   (envCHA -> c) = resolveEnum c
+
+
+--------------------------------------------------------------------------------
+resolveTypeM :: (Monad m, IsLocated a, PPR r, CheckingEnvironment r t)
+             => a -> t r -> AbsName -> m (TypeDecl r)
+--------------------------------------------------------------------------------
+resolveTypeM l γ x =
+  case resolveTypeInEnv γ x of
+    Just t  -> return t
+    Nothing -> die $ bugClassDefNotFound (srcPos l) x
+
 
 --------------------------------------------------------------------------------
 toFgn :: Env (SymInfoQ q r) -> Env (SymInfoQ q r)

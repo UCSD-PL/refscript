@@ -10,6 +10,7 @@ function twice<A>(f:(a:A)=>A, x0:A): A{
 function main(x:number,y:boolean):number{
 	let yr = idt(y);
 	let xr = idt(x);
+
 	/*@ readonly */
 	let z = (yr) ? 1 : 10;
 

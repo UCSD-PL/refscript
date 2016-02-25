@@ -6,14 +6,25 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
-module Language.Rsc.Typecheck.Environment
-    ( TCEnv(..), TCEnvO
-    , initModuleEnv, initGlobalEnv
-    , initClassCtorEnv, initClassMethEnv
+module Language.Rsc.Typecheck.Environment (
+
+      TCEnv(..), TCEnvO
+
+    -- * Create env
+    , initModuleEnv
+    , initGlobalEnv
+    , initClassCtorEnv
+    , initClassMethEnv
     , initCallableEnv
-    , tcEnvFindTy, resolveTypeM, tcEnvFindTyForAsgn
-    , tcEnvFindReturn, tcEnvAdd, tcEnvAdds
+
+    -- * Search env
+    , tcEnvFindTy
+    , tcEnvFindTyForAsgn
+    , tcEnvFindReturn
+    , tcEnvAdd
+    , tcEnvAdds
     , tcEnvAddBounds
+
     , Unif
     ) where
 
@@ -225,11 +236,6 @@ tcEnvFindTyForAsgn    :: (Unif r, F.Symbolic x) => x -> TCEnv r -> Maybe (SymInf
 tcEnvFindTyForAsgn x γ = envFindTy x $ tce_names γ
 
 tcEnvFindReturn = v_type . envFindReturn . tce_names
-
-resolveTypeM l γ x
-  = case resolveTypeInEnv γ x of
-      Just t  -> return t
-      Nothing -> die $ bugClassDefNotFound (srcPos l) x
 
 --------------------------------------------------------------------------------
 tcEnvAddBounds :: [BTVar r] -> TCEnv r -> TCEnv r

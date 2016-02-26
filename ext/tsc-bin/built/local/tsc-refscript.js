@@ -25889,16 +25889,17 @@ var ts;
         AnnotationKind[AnnotationKind["MethodRawSpec"] = 8] = "MethodRawSpec";
         AnnotationKind[AnnotationKind["ConstructorRawSpec"] = 9] = "ConstructorRawSpec";
         AnnotationKind[AnnotationKind["CallRawSpec"] = 10] = "CallRawSpec";
-        AnnotationKind[AnnotationKind["CastRawSpec"] = 11] = "CastRawSpec";
-        AnnotationKind[AnnotationKind["ExportRawSpec"] = 12] = "ExportRawSpec";
-        AnnotationKind[AnnotationKind["AssignabilityRawSpec"] = 13] = "AssignabilityRawSpec";
-        AnnotationKind[AnnotationKind["MeasureRawSpec"] = 14] = "MeasureRawSpec";
-        AnnotationKind[AnnotationKind["TypeAliasRawSpec"] = 15] = "TypeAliasRawSpec";
-        AnnotationKind[AnnotationKind["PredicateAliasRawSpec"] = 16] = "PredicateAliasRawSpec";
-        AnnotationKind[AnnotationKind["QualifierRawSpec"] = 17] = "QualifierRawSpec";
-        AnnotationKind[AnnotationKind["InvariantRawSpec"] = 18] = "InvariantRawSpec";
-        AnnotationKind[AnnotationKind["OptionRawSpec"] = 19] = "OptionRawSpec";
-        AnnotationKind[AnnotationKind["TypeSignatureRawSpec"] = 20] = "TypeSignatureRawSpec";
+        AnnotationKind[AnnotationKind["IndexRawSpec"] = 11] = "IndexRawSpec";
+        AnnotationKind[AnnotationKind["CastRawSpec"] = 12] = "CastRawSpec";
+        AnnotationKind[AnnotationKind["ExportRawSpec"] = 13] = "ExportRawSpec";
+        AnnotationKind[AnnotationKind["AssignabilityRawSpec"] = 14] = "AssignabilityRawSpec";
+        AnnotationKind[AnnotationKind["MeasureRawSpec"] = 15] = "MeasureRawSpec";
+        AnnotationKind[AnnotationKind["TypeAliasRawSpec"] = 16] = "TypeAliasRawSpec";
+        AnnotationKind[AnnotationKind["PredicateAliasRawSpec"] = 17] = "PredicateAliasRawSpec";
+        AnnotationKind[AnnotationKind["QualifierRawSpec"] = 18] = "QualifierRawSpec";
+        AnnotationKind[AnnotationKind["InvariantRawSpec"] = 19] = "InvariantRawSpec";
+        AnnotationKind[AnnotationKind["OptionRawSpec"] = 20] = "OptionRawSpec";
+        AnnotationKind[AnnotationKind["TypeSignatureRawSpec"] = 21] = "TypeSignatureRawSpec";
     })(ts.AnnotationKind || (ts.AnnotationKind = {}));
     var AnnotationKind = ts.AnnotationKind;
     (function (AnnotContext) {
@@ -26026,6 +26027,14 @@ var ts;
         return CallAnnotation;
     })(Annotation);
     ts.CallAnnotation = CallAnnotation;
+    var IndexAnnotation = (function (_super) {
+        __extends(IndexAnnotation, _super);
+        function IndexAnnotation(sourceSpan, content) {
+            _super.call(this, sourceSpan, AnnotationKind.IndexRawSpec, content);
+        }
+        return IndexAnnotation;
+    })(Annotation);
+    ts.IndexAnnotation = IndexAnnotation;
     var ExportedAnnotation = (function (_super) {
         __extends(ExportedAnnotation, _super);
         function ExportedAnnotation(sourceSpan) {
@@ -26223,6 +26232,13 @@ var ts;
         return [new CallAnnotation(srcSpan, s)];
     }
     ts.makeCallAnnotations = makeCallAnnotations;
+    function makeIndexAnnotations(s, srcSpan) {
+        var tokens = stringTokens(s);
+        if (isReservedAnnotationPrefix(tokens[0]))
+            throw new Error("[refscript] Invalid call annotation: " + s);
+        return [new IndexAnnotation(srcSpan, s)];
+    }
+    ts.makeIndexAnnotations = makeIndexAnnotations;
     function makeTypeSignatureAnnotation(s, srcSpan) {
         var tokens = stringTokens(s);
         if (!tokens || tokens.length < 2 || tokens[0] !== "interface")
@@ -27393,6 +27409,26 @@ var ts;
                                 else {
                                     var callSignature = checker.getSignatureFromDeclaration(member);
                                     return [checker.methodToRscString(callSignature, member)];
+                                }
+                            case ts.SyntaxKind.IndexSignature:
+                                var indexAnnotations = nodeAnnotations(member, ts.makeIndexAnnotations);
+                                if (indexAnnotations.length === 0) {
+                                    var indexSignature = checker.getSignatureFromDeclaration(member);
+                                    var containerType = checker.getTypeAtLocation(node);
+                                    var strIndexType = checker.getIndexTypeOfType(containerType, 0);
+                                    var symbol = "x";
+                                    if (strIndexType) {
+                                        var strIdxTy = checker.typeToString(strIndexType, member);
+                                        var content = "[" + symbol + ": string]: " + strIdxTy;
+                                        indexAnnotations.push(new ts.IndexAnnotation(nodeToSrcSpan(member), content));
+                                    }
+                                    var numIndexType = checker.getIndexTypeOfType(containerType, 1);
+                                    if (numIndexType) {
+                                        var numIdxTy = checker.typeToString(numIndexType, member);
+                                        var content = "[" + symbol + ": number]: " + numIdxTy;
+                                        indexAnnotations.push(new ts.IndexAnnotation(nodeToSrcSpan(member), content));
+                                    }
+                                    return indexAnnotations.map(function (c) { return c.content; });
                                 }
                             default:
                                 return [];

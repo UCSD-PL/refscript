@@ -155,62 +155,61 @@ module ts {
         return result;
     }
 
-    // /*@ mapToArray :: forall T . (map: Map<Immutable,T>) => { MArray<T> | 0 < 1 } */
-    // export function mapToArray<T>(map: Map<T>): T[] {
-    //     /*@ result :: MArray<T> */
-    //     let result: T[] = [];
-    //
-    //     for (let id in map) {
-    //         result.push(map[id]);
-    //     }
-    //
-    //     return result;
-    // }
-    //
-    // /**
-    //  * Creates a map from the elements of an array.
-    //  *
-    //  * @param array the array of input elements.
-    //  * @param makeKey a function that produces a key for a given element.
-    //  *
-    //  * This function makes no effort to avoid collisions; if any two elements produce
-    //  * the same key with the given 'makeKey' function, then the element with the higher
-    //  * index in the array will be the one associated with the produced key.
-    //  */
-    //
-    // /*@ _toMap :: forall S T M . (obj: S) => Map<M,T> */
-    // declare function _toMap(obj: any): Map<any>;
-    //
-    // /*@ arrayToMap :: forall T . (array: IArray<T>, makeKey: (value: T) => string) => { Map<Mutable,T> | 0 < 1 } */
-    // export function arrayToMap<T>(array: T[], makeKey: (value: T) => string): Map<T> {
-    //     /*@ readonly makeKeyLoc :: # */
-    //     let makeKeyLoc = makeKey;
-    //     /*@ readonly result :: Map<Mutable,T> */
-    //     let result: Map<T> = _toMap({});
-    //     forEach(array, function(value:T) /*@ <anonymous> (value: T) => void */ {
-    //         result[makeKeyLoc(value)] = value;
-    //     });
-    //     return result;
-    // }
-    //
-    // /*@ compareValues :: forall T . (a:T, b:T) => { number | 0 < 1 } */
-    // export function compareValues<T>(a: T, b: T): number {
-    //     if (a === b) return 0;
-    //     if (a === undefined) return -1;
-    //     if (b === undefined) return 1;
-    //     return a < b ? -1 : 1;
-    // }
-    //
-    // export interface ObjectAllocator {
-    //     getNodeConstructor(kind: SyntaxKind): { new (): Node };
+    export function mapToArray<T>(map: Map<Immutable, T>): MArray<T> {
+        /*@ result :: MArray<T> */
+        let result: T[] = [];
+
+        for (let id in map) {
+            result.push(map[id]);
+        }
+
+        return result;
+    }
+
+    /**
+     * Creates a map from the elements of an array.
+     *
+     * @param array the array of input elements.
+     * @param makeKey a function that produces a key for a given element.
+     *
+     * This function makes no effort to avoid collisions; if any two elements produce
+     * the same key with the given 'makeKey' function, then the element with the higher
+     * index in the array will be the one associated with the produced key.
+     */
+
+     /*@ _toMap :: <S, T>(obj: S) => Map<Mutable, T> */
+    declare function _toMap<S>(obj: S): Map<Mutable, any>;
+
+    export function arrayToMap<T>(array: IArray<T>, makeKey: (value: T) => string): Map<Mutable, T> {
+        /*@ readonly */
+        let makeKeyLoc = makeKey;
+        /*@ readonly result :: Map<Mutable,T> */
+        let result: Map<Mutable, T> = _toMap({});
+
+        let ff: (value: T) => void = function (value) {
+            result[makeKeyLoc(value)] = value;
+        }
+        forEach(array, ff);
+        return result;
+    }
+
+    export function compareValues<T>(a: T, b: T): number {
+        if (a === b) return 0;
+        if (a === undefined) return -1;
+        if (b === undefined) return 1;
+        return (a < b) ? (-1) : 1;
+    }
+
+    // export interface ObjectAllocator<M extends ReadOnly> {
+    //     getNodeConstructor(kind: SyntaxKind): { new (): Node<M> };
     //     getSymbolConstructor(): {
-    //       /*@ new (flags: SymbolFlags, name: string) => { v: ISymbol | keyVal(v, "flags") = flags } */
-    //       new (flags: SymbolFlags, name: string): Symbol
+    //       /*@ new (flags: SymbolFlags, name: string): { v: ISymbol | keyVal(v, "flags") = flags } */
+    //       new (flags: SymbolFlags, name: string): Symbol<M>
     //     };
-    //     getTypeConstructor(): { new (checker: TypeChecker, flags: TypeFlags): Type };
-    //     getSignatureConstructor(): { new (checker: TypeChecker): Signature };
+    //     getTypeConstructor(): { new (checker: TypeChecker<M>, flags: TypeFlags): Type<M> };
+    //     getSignatureConstructor(): { new (checker: TypeChecker<M>): Signature<M> };
     // }
-    //
+
     // /*@ newType :: forall M . (checker: TypeChecker<Immutable>, flags: bitvector32) => { Type<M> | type_flags(flags,v) } */
     // export declare function newType(checker: TypeChecker, flags: TypeFlags): Type;
 }

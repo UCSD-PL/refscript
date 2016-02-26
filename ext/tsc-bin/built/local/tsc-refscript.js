@@ -27229,6 +27229,7 @@ var ts;
                     case ts.SyntaxKind.InKeyword:
                     case ts.SyntaxKind.BarToken:
                     case ts.SyntaxKind.SlashToken:
+                    case ts.SyntaxKind.GreaterThanGreaterThanToken:
                         return new ts.RsInfixExpr(nodeToSrcSpan(node), [], new ts.RsInfixOp(ts.getTextOfNode(node.operatorToken)), nodeToRsExp(state, node.left), nodeToRsExp(state, node.right));
                     case ts.SyntaxKind.EqualsToken:
                         return new ts.RsAssignExpr(nodeToSrcSpan(node), [], new ts.RsAssignOp(ts.getTextOfNode(node.operatorToken)), nodeToRsLval(state, node.left), nodeToRsExp(state, node.right));

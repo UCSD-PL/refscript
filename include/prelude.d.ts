@@ -106,11 +106,12 @@ declare function builtin_OpBOr(x: number, y: number): number;
 //     (a: bitvector32, b: bitvector32) => { v: bitvector32 | v = bvand(a,b) }
 //  */
 // declare function builtin_OpBAnd(a: number, b: number): number;
-// declare function builtin_OpLShift(a: number, b: number): number;
-// /*@ builtin_OpSpRShift ::
-//     (a: { number | v >= 0 }, b: { number | v >= 0}) => { number | v >= 0 }
-//  */
-// declare function builtin_OpSpRShift(a: number, b: number): number;
+
+declare function builtin_OpLShift(a: number, b: number): number;
+
+
+/*@ builtin_OpSpRShift :: (a: { number | v >= 0 }, b: { number | v >= 0}) => { number | v >= 0 } */
+declare function builtin_OpSpRShift(a: number, b: number): number;
 // declare function builtin_OpZfRShift(a: number, b: number): number;
 //
 // /*   predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */

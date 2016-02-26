@@ -29,15 +29,13 @@ module Language.Rsc.Typecheck.Environment (
     ) where
 
 import           Data.Data
-import           Language.Fixpoint.Misc         (safeZip)
-import qualified Language.Fixpoint.Types        as F
-import           Language.Fixpoint.Types.Errors (die)
+import           Language.Fixpoint.Misc       (safeZip)
+import qualified Language.Fixpoint.Types      as F
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
-import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc
 import           Language.Rsc.Names

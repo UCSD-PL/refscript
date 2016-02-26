@@ -9,7 +9,8 @@ module ts {
         let result: U;
         if (array) {
             let cnt = false;
-            for (let i = 0, len = array.length; i < len && cnt; i++) {
+            let len = array.length;
+            for (let i = 0; i < len && cnt; i++) {
                 if (result = callback(array[i]))
                     cnt = false;
             }
@@ -17,64 +18,63 @@ module ts {
         return result;
     }
 
-    // /*@  contains :: forall T . (array: IArray<T>, value: T) => { boolean | 0 < 1 } */
-    // export function contains<T>(array: T[], value: T): boolean {
-    //     if (array) {
-    //         let len = array.length;
-    //         for (let i = 0; i < len; i++) {
-    //             if (array[i] === value) {
-    //                 return true;
-    //             }
-    //         }
-    //     }
-    //     return false;
-    // }
-    //
-    // /*@  indexOf :: forall T . (array: IArray<T>, value: T) => { number | 0 < 1 } */
-    // export function indexOf<T>(array: T[], value: T): number {
-    //     if (array) {
-    //         let len = array.length;
-    //         for (let i = 0; i < len; i++) {
-    //             if (array[i] === value) {
-    //                 return i;
-    //             }
-    //         }
-    //     }
-    //     return -1;
-    // }
-    //
-    // /*@ filter :: forall T . (array: IArray<T>, f: (T) => boolean) => { MArray<T> | 0 < 1 } + undefined */
-    // export function filter<T>(array: T[], f: (x: T) => boolean): T[] {
-    //     /*@ result :: MArray<T> + undefined */
-    //     let result: T[];
-    //     if (array) {
-    //     let result_1 = [];    //PV: modification
-    //         for (let i = 0, len = array.length; i < len; i++) {
-    //             let item = array[i];
-    //             if (f(item)) {
-    //                 result_1.push(item);
-    //             }
-    //         }
-    //         result = result_1;
-    //     }
-    //     return result;
-    // }
-    //
-    // /*@ map :: forall T U . (array: IArray<T>, f: (x:T)=>U) => {MArray<U> | 0 < 1} + undefined */
-    // export function map<T, U>(array: T[], f: (x: T) => U): U[] {
-    //   /*@ result :: MArray<U> + undefined */
-    //     let result: U[];
-    //     if (array) {
-    //         let result_0 = [];
-    //         let len = array.length;
-    //         for (let i = 0; i < len; i++) {
-    //             result_0.push(f(array[i]));
-    //         }
-    //         result = result_0;
-    //     }
-    //     return result;
-    // }
-    //
+    export function contains<T>(array: IArray<T>, value: T): boolean {
+        if (array) {
+            let len = array.length;
+            for (let i = 0; i < len; i++) {
+                if (array[i] === value) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    export function indexOf<T>(array: IArray<T>, value: T): number {
+        if (array) {
+            let len = array.length;
+            for (let i = 0; i < len; i++) {
+                if (array[i] === value) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    /*@ filter :: <T>(array: IArray<T>, f: (x: T) => boolean) => MArray<T> + undefined */
+    export function filter<T>(array: IArray<T>, f: (x: T) => boolean): MArray<T> {
+        /*@ result :: MArray<T> + undefined */
+        let result: MArray<T>;
+        if (array) {
+            let result_1: MArray<T> = [];    //PV: modification
+            let len = array.length;
+            for (let i = 0; i < len; i++) {
+                let item = array[i];
+                if (f(item)) {
+                    result_1.push(item);
+                }
+            }
+            result = result_1;
+        }
+        return result;
+    }
+
+    /*@ map :: <T, U>(array: IArray<T>, f: (x: T) => U) => UArray<U> + undefined */
+    export function map<T, U>(array: IArray<T>, f: (x: T) => U): MArray<U> {
+        /*@ result :: MArray<U> + undefined */
+        let result: MArray<U>;
+        if (array) {
+            let result_0: MArray<U> = [];
+            let len = array.length;
+            for (let i = 0; i < len; i++) {
+                result_0.push(f(array[i]));
+            }
+            result = result_0;
+        }
+        return result;
+    }
+
     // /*@ concatenate :: forall T M . ( array1: IArray<T> + undefined, array2: IArray<T> + undefined) => { IArray<T> + undefined | 0 < 1 } */
     // export function concatenate<T>(array1: T[], array2: T[]): T[] {
     //     if (!array2 || !array2.length) return array1;

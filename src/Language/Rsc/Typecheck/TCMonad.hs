@@ -379,7 +379,7 @@ castM :: Unif r => TCEnv r -> Expression (AnnSSA r) -> Consume
 --------------------------------------------------------------------------------
 castM γ e consume t1 t2
   -- = case ltracePP e ("castM on " ++ ppshow e ++ "  ::  " ++ ppshow t1 ++
-  --     " <: " ++ ppshow t2) $ convert (srcPos e) γ cfg t1 t2 of
+  --    " <: " ++ ppshow t2) $ convert (srcPos e) γ cfg t1 t2 of
   = case convert (srcPos e) γ cfg t1 t2 of
       ConvOK      -> return e
       ConvWith _  -> typecastM γ e (toType t2)

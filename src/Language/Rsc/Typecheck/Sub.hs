@@ -102,18 +102,19 @@ instance PP ConversionResult where
 data SubtypingResult  = SubOK | NoSub [Error] deriving (Eq, Ord, Show)
 
 instance PP SubtypingResult where
-  pp SubOK      = pp "subtypes"
+  pp SubOK     = pp "subtypes"
   pp (NoSub _) = pp "no subtypes"
 
 instance Monoid SubtypingResult where
   mempty                        = SubOK
   mappend (NoSub e1) (NoSub e2) = NoSub $ e1 ++ e2
-  mappend _          (NoSub e2) = NoSub e2
-  mappend (NoSub e1) _          = NoSub e1
-  mappend _          _          = SubOK
+  mappend SubOK      (NoSub e2) = NoSub e2
+  mappend (NoSub e1) SubOK      = NoSub e1
+  mappend SubOK      SubOK      = SubOK
 
 
-subOrs [] = SubOK
+subOrs [ ]    = SubOK
+subOrs [x]    = x
 subOrs (x:xs) = subOr x (subOrs xs)
 
 subOr SubOK    _       = SubOK
@@ -188,8 +189,6 @@ subtype l γ c (TOr ts1 _) t2
 subtype l γ c t1 (TOr ts2 _)
   = subOrs (map (subtype l γ c t1) ts2)
 
-  where
-
 -- | Objects
 subtype l γ c t1 t2
   | maybeTObj t1, maybeTObj t2 = subtypeObj' l γ c t1 t2
@@ -263,6 +262,8 @@ subtypeObj l _ _ t1 t2@(TRef (Gen _ []) _)
 
 -- | Type Reference subtyping
 subtypeObj l γ c (TRef g1@(Gen x1 (m1:t1s)) _) (TRef (Gen x2 (m2:t2s)) _)
+  -- = case ltracePP l (ppshow m1 ++ " vs " ++ ppshow m2 ++ " FROM " ++
+  --    ppshow t1 ++  " VS " ++ ppshow t2) $ subtype l γ c m1 m2 of
   = case subtype l γ c m1 m2 of
       SubOK   -> checkBaseType
       NoSub e -> NoSub e

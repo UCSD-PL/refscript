@@ -194,7 +194,7 @@ splitC (Sub g i t1@(TRef n1@(Gen x1 [_]) _) t2@(TRef (Gen x2 [_]) r2))
 
 -- | Normal case
 --
-splitC s@(Sub g i t1@(TRef n1@(Gen x1 (_ :t1s)) r1)
+splitC s@(Sub g i t1@(TRef n1@(Gen x1 (m1:t1s)) r1)
                   t2@(TRef    (Gen x2 (m2:t2s)) _ ))
 
   -- Trivial case (do not descend)
@@ -205,15 +205,23 @@ splitC s@(Sub g i t1@(TRef n1@(Gen x1 (_ :t1s)) r1)
   -- Same name
   --
   | x1 == x2
-  = if isSubtype g m2 tMU then
-      do  cs    <- bsplitC g i' t1 t2
-          cs'   <- concatMapM splitC $ safeZipWith "splitc-5" (Sub g i') t1s t2s
-          cs''  <- concatMapM splitC $ safeZipWith "splitc-6" (Sub g i') t2s t1s
-          return $ cs ++ cs' ++ cs''
+
+    -- Check mutability modifiers
+  = if not (isSubtypeWithUq g m1 m2) then
+        splitIncompatC g i' tVoid
+
+    -- Mutable container
+    else if isSubtype g m2 tMU then
+        do  cs    <- bsplitC g i' t1 t2
+            cs'   <- concatMapM splitC $ safeZipWith "splitc-5" (Sub g i') t1s t2s
+            cs''  <- concatMapM splitC $ safeZipWith "splitc-6" (Sub g i') t2s t1s
+            return $ cs ++ cs' ++ cs''
+
+    -- Container not mutable through this ref
     else
-      do  cs    <- bsplitC g i' t1 t2
-          cs'   <- concatMapM splitC $ safeZipWith "splitc-4" (Sub g i') t1s t2s
-          return $ cs ++ cs'
+        do  cs    <- bsplitC g i' t1 t2
+            cs'   <- concatMapM splitC $ safeZipWith "splitc-4" (Sub g i') t1s t2s
+            return $ cs ++ cs'
 
   -- Upcast
   --
@@ -267,7 +275,7 @@ splitC (Sub g i t1 _) = splitIncompatC g i t1
 --------------------------------------------------------------------------------
 splitIncompatC :: CGEnv -> a -> RefType -> CGM [F.SubC a]
 --------------------------------------------------------------------------------
-splitIncompatC g i t = bsplitC g i t (mkBot t)
+splitIncompatC g i t = bsplitC g i t $ mkBot t
 
 --------------------------------------------------------------------------------
 mkBot :: (F.Reftable r) => RType r -> RType r

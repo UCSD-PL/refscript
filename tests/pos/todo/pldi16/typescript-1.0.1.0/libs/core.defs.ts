@@ -29,12 +29,12 @@ module ts {
     export declare function binarySearch(array: number[], value: number): number;
 
     /*@ hasProperty :: forall T M . (map: Map<M,T>, key: string) => { boolean | Prop(v) <=> (hasDirectProperty(key,map) && hasProperty(key,map)) } */
-    export declare function hasProperty<T>(map: Map<T>, key: string): boolean;
+    export declare function hasProperty_<T>(map: Map<T>, key: string): boolean;
     //// TODO
 
     /*@ getProperty :: forall T . (map: Map<Immutable,T>, key: string) => { T | 0 < 1 } */
     export declare function getProperty<T>(map: Map<T>, key: string): T;
-    //// TODO 
+    //// TODO
 
     /*  qualif HSqualif(s:Str,v:a): hasProperty(s,v) */
     /*  qualif EPqualif(s:Str,v:a): enumProp(s,v) */
@@ -52,7 +52,7 @@ module ts {
     /*@ forEachKey :: forall T U . (map: Map<Immutable,T>, callback: (key: string) => U) => { U | 0 < 1 } + undefined */
     export declare function forEachKey<T, U>(map: Map<T>, callback: (key: string) => U): U;
 
-    /*@ lookUp :: forall T . (map: Map<Immutable,T>, key: string) => { T | hasProperty(key,map) } + undefined */ 
+    /*@ lookUp :: forall T . (map: Map<Immutable,T>, key: string) => { T | hasProperty(key,map) } + undefined */
     export declare function lookUp<T>(map: Map<T>, key: string): T;
     //// TODO
 
@@ -65,21 +65,21 @@ module ts {
     /*@ getLocaleSpecificMessage :: (message: string) => { string | 0 < 1 } */
     export declare function getLocaleSpecificMessage(message: string): string;
     //// TODO
- 
+
     /*@ compareValues :: forall T . (a:T, b:T) => { number | 0 < 1 } */
     export declare function compareValues<T>(a: T, b: T): number;
 
     // PV: added object types with constructor signature instead of constructor func sig
     export interface ObjectAllocator {
         getNodeConstructor(kind: SyntaxKind): { new (): Node };
-        getSymbolConstructor(): { 
+        getSymbolConstructor(): {
           /*@ new (flags: SymbolFlags, name: string) => { v: ISymbol | offset(v, "flags") = flags } */
-          new (flags: SymbolFlags, name: string): Symbol 
+          new (flags: SymbolFlags, name: string): Symbol
         };
         getTypeConstructor(): { new (checker: TypeChecker, flags: TypeFlags): Type };
         getSignatureConstructor(): { new (checker: TypeChecker): Signature };
     }
-      
+
     /*@ newType :: forall M . (checker: TypeChecker<Immutable>, flags: bitvector32) => { Type<M> | type_flags(flags,v) } */
     export declare function newType(checker: TypeChecker, flags: TypeFlags): Type;
 

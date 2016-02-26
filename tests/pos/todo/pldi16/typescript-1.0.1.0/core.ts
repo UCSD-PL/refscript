@@ -1,5 +1,8 @@
 /// <reference path="libs/types.ts"/>
 
+/*@ qualif HSqualif(s: Str, v: a): hasProperty v s */
+/*@ qualif EPqualif(s: Str, v: a): enumProp v s */
+
 module ts {
     // export interface StringSet extends Map<any> { }
 
@@ -60,7 +63,7 @@ module ts {
         return result;
     }
 
-    /*@ map :: <T, U>(array: IArray<T>, f: (x: T) => U) => UArray<U> + undefined */
+    /*@ map :: <T, U>(array: IArray<T>, f: (x: T) => U) => MArray<U> + undefined */
     export function map<T, U>(array: IArray<T>, f: (x: T) => U): MArray<U> {
         /*@ result :: MArray<U> + undefined */
         let result: MArray<U>;
@@ -75,88 +78,83 @@ module ts {
         return result;
     }
 
-    // /*@ concatenate :: forall T M . ( array1: IArray<T> + undefined, array2: IArray<T> + undefined) => { IArray<T> + undefined | 0 < 1 } */
-    // export function concatenate<T>(array1: T[], array2: T[]): T[] {
-    //     if (!array2 || !array2.length) return array1;
-    //     if (!array1 || !array1.length) return array2;
-    //     /*@ arr1 :: IArray<T> */
-    //     let arr1 = array1;
-    //     /*@ arr2 :: IArray<T> */
-    //     let arr2 = array2;
-    //     return arr1.concat(arr2);
-    // }
-    //
-    // /*@ sum :: (array: IArray<{{[s:string]:number} | hasProperty(prop, v)}>, prop: string) => { number | 0 < 1 } */
-    // export function sum(array: any[], prop: string): number {
-    //     let result = 0;
-    //     for (let i = 0; i < array.length; i++) {
-    //         result += <number>(array[i][prop]);
-    //     }
-    //     return result;
-    // }
-    //
-    // /*@ binarySearch :: (array: { IArray<number> | (len v) > 1 }, value: number) => { number | ((0 <= v && v < (len array)) || v = -1) } */
-    // export function binarySearch(array: number[], value: number): number {
-    //     let low = 0;
-    //     let high = array.length - 1;
-    //     while (low <= high) {
-    //         let middle = low + ((high - low) >> 1);
-    //         assume(low <= middle && middle <= high);
-    //         let midValue = array[middle];
-    //         if (midValue === value) {
-    //             return middle;
-    //         }
-    //         else if (midValue > value) {
-    //             high = middle - 1;
-    //         }
-    //         else {
-    //             low = middle + 1;
-    //         }
-    //     }
-    //     return -1; // ~low;     // PV: Not sure what the purpose of ~low is.
-    // }
-    //
-    // /*@ hasProperty :: forall T M . (map: Map<M,T>, key: string) => { boolean | Prop(v) <=> (hasDirectProperty(key,map) && hasProperty(key,map)) } */
-    // export declare function hasProperty<T>(map: Map<T>, key: string): boolean;
-    //
-    // /*@ getProperty :: forall T . (map: Map<Immutable,T>, key: string) => { T | 0 < 1 } */
-    // export declare function getProperty<T>(map: Map<T>, key: string): T;
-    //
-    // /*@  qualif HSqualif<A>(s: string, v: A): hasProperty(s,v) */
-    // /*@  qualif EPqualif<A>(s: string, v: A): enumProp(s,v) */
-    //
-    // /*@ isEmpty :: forall T . (map: Map<Immutable,T>) => { boolean | 0 < 1 } */
-    // export function isEmpty<T>(map: Map<T>) {
-    //     for (let id in map) {
-    //         if (hasProperty(map, id)) {
-    //             return false;
-    //         }
-    //     }
-    //     return true;
-    // }
-    //
-    //
-    // /*@ forEachValue :: forall T U . (map: Map<Immutable,T>, callback: (value: T) => U) => { U | 0 < 1 } + undefined */
-    // export function forEachValue<T, U>(map: Map<T>, callback: (value: T) => U): U {
-    //     /*@ result :: U + undefined */
-    //     let result: U;
-    //     for (let id in map) {
-    //         result = callback(map[id]);
-    //     }
-    //     return result;
-    // }
-    //
-    //
-    // /*@ forEachKey :: forall T U . (map: Map<Immutable,T>, callback: (key: string) => U) => { U | 0 < 1 } + undefined */
-    // export function forEachKey<T, U>(map: Map<T>, callback: (key: string) => U): U {
-    //     /*@ result :: U + undefined */
-    //     let result: U;
-    //     for (let id in map) {
-    //         result = callback(id);
-    //     }
-    //     return result;
-    // }
-    //
+    /*@ concatenate :: <T>( array1: IArray<T> + undefined, array2: IArray<T> + undefined) => IArray<T> + undefined */
+    export function concatenate<T>(array1: T[], array2: T[]): T[] {
+        if (!array2 || !array2.length) return array1;
+        if (!array1 || !array1.length) return array2;
+        /*@ arr1 :: IArray<T> */
+        let arr1 = array1;
+        /*@ arr2 :: IArray<T> */
+        let arr2 = array2;
+        return arr1.concat(arr2);
+    }
+
+    /*@ sum :: (array: IArray<{ (Immutable) {[s:string]:number} | hasProperty v prop }>, prop: string) => number */
+    export function sum(array: any[], prop: string): number {
+        let result = 0;
+        for (let i = 0; i < array.length; i++) {
+            result += <number>(array[i][prop]);
+        }
+        return result;
+    }
+
+    /*@ binarySearch :: (array: { IArray<number> | (len v > 1) }, value: number) => { number | ((0 <= v && v < len array) || (v = -1)) } */
+    export function binarySearch(array: number[], value: number): number {
+        let low = 0;
+        let high = array.length - 1;
+        while (low <= high) {
+            let middle = low + ((high - low) >> 1);
+            assume(low <= middle && middle <= high);
+            let midValue = array[middle];
+            if (midValue === value) {
+                return middle;
+            }
+            else if (midValue > value) {
+                high = middle - 1;
+            }
+            else {
+                low = middle + 1;
+            }
+        }
+        return -1; // ~low;     // PV: Not sure what the purpose of ~low is.
+    }
+
+    /*@ hasProperty_ :: <M extends ReadOnly, T>(map: Map<M,T>, key: string) => { boolean | Prop(v) <=> (hasDirectProperty map key && hasProperty map key) } */
+    export declare function hasProperty_<M extends ReadOnly, TT>(map: Map<M, TT>, key: string): boolean;
+
+    /*@ getProperty :: <M extends ReadOnly, T>(map: Map<Immutable,T>, key: string) => T */
+    export declare function getProperty<M extends ReadOnly, T>(map: Map<M, T>, key: string): T;
+
+    /*@ isEmpty :: <T>(map: Map<Immutable,T>) => boolean */
+    export function isEmpty<M extends ReadOnly, T>(map: Map<M, T>) {
+        for (let id in map) {
+            if (hasProperty_(map, id)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /*@ forEachValue :: <T, U>(map: Map<Immutable,T>, callback: (value: T) => U) => U + undefined */
+    export function forEachValue<M extends ReadOnly, T, U>(map: Map<M, T>, callback: (value: T) => U): U {
+        /*@ result :: U + undefined */
+        let result: U;
+        for (let id in map) {
+            result = callback(map[id]);
+        }
+        return result;
+    }
+
+    /*@ forEachKey :: <T, U>(map: Map<Immutable,T>, callback: (key: string) => U) => U + undefined */
+    export function forEachKey<T, U>(map: Map<Immutable, T>, callback: (key: string) => U): U {
+        /*@ result :: U + undefined */
+        let result: U;
+        for (let id in map) {
+            result = callback(id);
+        }
+        return result;
+    }
+
     // /*@ mapToArray :: forall T . (map: Map<Immutable,T>) => { MArray<T> | 0 < 1 } */
     // export function mapToArray<T>(map: Map<T>): T[] {
     //     /*@ result :: MArray<T> */

@@ -8,8 +8,9 @@ class Packet<M extends ReadOnly> {
 /*@ foo :: (curr: Packet<Mutable>) => Packet<Mutable> + undefined */
 export function foo(curr) {
     let next = curr.link;
-    /*@ curr1 :: Packet<Mutable> + undefined */
+    /*@ local curr1 :: Packet<Mutable> + undefined */
     let curr1 = curr;
-    if (next) curr1 = next;
+    if (next)
+        curr1 = next;
     return curr1;
 }

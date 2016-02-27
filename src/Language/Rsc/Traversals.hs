@@ -89,21 +89,22 @@ efoldTypeMembers' g f h (TM m sm c k s n) γ z =
     nl  = map snd $ maybeToList n
 
 
--- | Accumulate moudules (only descend down modules)
+-- | Accumulate moudules
 --------------------------------------------------------------------------------
-accumModuleStmts :: IsLocated a => [Statement a] -> [(AbsPath, [Statement a])]
+accumModuleStmts :: IsLocated a
+  => [Statement a] -> [(AbsPath, SrcSpan, [Statement a])]
 --------------------------------------------------------------------------------
 accumModuleStmts ss = foldStmts moduleVis emptyPath [acc0] ss
   where
-    acc0      = (emptyPath, ss)
-    moduleVis = defaultVisitor { endExpr = eE, endStmt = eS
-                               , ctxStmt = cS, accStmt = aS }
-    eS ModuleStmt{} = False
-    eS _            = True
-    eE _            = True
+    acc0      = (emptyPath, dummySpan, ss)
+    moduleVis = defaultVisitor { -- endExpr = eE, endStmt = eS,
+                                 ctxStmt = cS, accStmt = aS }
+    -- eS ModuleStmt{} = False
+    -- eS _            = True
+    -- eE _            = True
     cS ctx (ModuleStmt _ x _ ) = extendAbsPath ctx (F.symbol x)
     cS ctx _                   = ctx
-    aS ctx (ModuleStmt _ _ ms) = [(ctx, ms)]
+    aS ctx (ModuleStmt l _ ms) = [(ctx, srcPos l, ms)]
     aS _   _                   = []
 
 
@@ -115,9 +116,9 @@ accumNamesAndPaths
 accumNamesAndPaths stmts = (namesSet, modulesSet)
   where
     allModStmts = accumModuleStmts stmts
-    modulesSet  = H.fromList [ ap | (ap, _) <- allModStmts ]
-    namesSet    = H.fromList [ nm | (ap,ss) <- allModStmts
-                                  , nm      <- accumAbsNames ap ss ]
+    modulesSet  = H.fromList [ ap | (ap, _, _ ) <- allModStmts ]
+    namesSet    = H.fromList [ nm | (ap, _, ss) <- allModStmts
+                                  , nm          <- accumAbsNames ap ss ]
 
 --------------------------------------------------------------------------------
 accumAbsNames :: IsLocated a => AbsPath -> [Statement a] -> [AbsName]

@@ -182,8 +182,8 @@ errorDeadCast l               = mkErr l $ text "Deadcast inserted."
 -- Lookup
 errorEnumLookup l e n         = mkErr l $ text $ printf "Cannot find member '%s' in enumeration '%s'" (ppshow n) (ppshow e)
 errorPrimLookup l f t         = mkErr l $ text "Cannot find member" <+> ticks (pp f) <+> text "in primitive type" <+> pp t
-errorMemLookup l m t          = mkErr l $ text $ printf "Cannot find member '%s' in type '%s'" (ppshow m) (ppshow t)
-errorGenericLookup l f t      = mkErr l $ text $ printf "Cannot find member '%s' in type '%s'" (ppshow f) (ppshow t)
+errorMemLookup l m t          = mkErr l $ text "Cannot find member" <+> ticks (pp m) <+> text "in type: " $+$ nest 2 (pp t)
+errorGenericLookup l f t      = mkErr l $ text "Cannot find member" <+> ticks (pp f) <+> text "in type: " $+$ nest 2 (pp t)
 errorAmbientLookup l t f      = mkErr l $ text $ printf "Cannot find member '%s' in ambient element '%s'" (ppshow f) (ppshow t)
 errorUnionLookup l t f        = mkErr l $ text $ printf "Cannot find member '%s' in any part of the union '%s'" (ppshow f) (ppshow t)
 
@@ -276,4 +276,7 @@ bugArrayBIType l f t          = mkErr l $ text $ printf "[BUG] Inconsistent buil
 errorMultipleVarDeclAnns l x  = mkErr l $ text "Cannot have multple variable declaration annotations for variable" <+> ticks (pp x) <> text "."
 errorJoinSymInfo l s1 s2      = mkErr l $ text "Cannot combine the following annotations:" $+$
                                                  nest 2 (pp s1) $+$ text "and" $+$ nest 2 (pp s2)
+errorDupModule l ls m         = mkErr l $ text "Cannot handle multiply defined modules. Module" <+> ticks (pp m) <+>
+                                          text "is also defined in the following locations:" $+$
+                                          nest 2 (vcat $ map (pp . sourceSpanSrcSpan) ls)
 

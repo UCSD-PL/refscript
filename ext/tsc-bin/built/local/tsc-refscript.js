@@ -26954,10 +26954,6 @@ var ts;
                 });
                 return annotations;
             }
-            function prefixGlobalAnnotations(srcSpan, node, ast) {
-                var globalAnnotations = accumulateGlobalAnnotations(node);
-                return new ts.RsList([new ts.RsEmptyStmt(srcSpan, globalAnnotations), ast]);
-            }
             function nodeToRsExp(state, node) {
                 switch (node.kind) {
                     case ts.SyntaxKind.BinaryExpression:
@@ -27248,6 +27244,7 @@ var ts;
                     case ts.SyntaxKind.BarToken:
                     case ts.SyntaxKind.SlashToken:
                     case ts.SyntaxKind.GreaterThanGreaterThanToken:
+                    case ts.SyntaxKind.AmpersandToken:
                         return new ts.RsInfixExpr(nodeToSrcSpan(node), [], new ts.RsInfixOp(ts.getTextOfNode(node.operatorToken)), nodeToRsExp(state, node.left), nodeToRsExp(state, node.right));
                     case ts.SyntaxKind.EqualsToken:
                         return new ts.RsAssignExpr(nodeToSrcSpan(node), [], new ts.RsAssignOp(ts.getTextOfNode(node.operatorToken)), nodeToRsLval(state, node.left), nodeToRsExp(state, node.right));

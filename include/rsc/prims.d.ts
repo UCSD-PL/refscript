@@ -101,11 +101,9 @@ declare function builtin_OpLAnd(x: any, y: any): any;
 declare function builtin_OpBOr(x: number, y: number): number;
 
 // declare function builtin_OpBXor(a: number, b: number): number;
-//
-// /*@ builtin_OpBAnd ::
-//     (a: bitvector32, b: bitvector32) => { v: bitvector32 | v = bvand(a,b) }
-//  */
-// declare function builtin_OpBAnd(a: number, b: number): number;
+
+/*@ builtin_OpBAnd :: (a: bitvector32, b: bitvector32) => { v: bitvector32 | v = bvand a b } */
+declare function builtin_OpBAnd(a: number, b: number): number;
 
 declare function builtin_OpLShift(a: number, b: number): number;
 

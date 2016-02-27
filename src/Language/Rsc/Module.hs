@@ -18,7 +18,10 @@ module Language.Rsc.Module (
 
 import           Control.Monad                  (foldM, liftM, void)
 import           Data.Default
+import           Data.Function                  (on)
 import           Data.Generics
+import           Data.List                      (groupBy)
+import           Language.Fixpoint.Misc         (fst3, snd3)
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations
@@ -98,13 +101,21 @@ type ModuleEnv r = QEnv (ModuleDef r)
 moduleEnv :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (ModuleEnv r)
 --------------------------------------------------------------------------------
 moduleEnv (Rsc { code = Src stmts }) =
-    (qenvFromList . map toQEnvList) `liftM` mapM mkMod (accumModuleStmts stmts)
+    case dups of
+      []   -> (qenvFromList . map toQEnvList) `liftM` mapM mkMod mods
+      errs -> Left (F.Unsafe errs)
   where
+
+    mods        = accumModuleStmts stmts
+
+    dups        = map (\(m:ms) -> dupErr m ms)    -- Report Errors
+                $ filter ((1 <) . length)         -- Gather multiply occurring ones
+                $ groupBy (on (==) fst3) mods     -- Of all modules
+
+    dupErr m ms = errorDupModule (snd3 m) (map snd3 ms) (fst3 m)
+
     toQEnvList p  = (m_path p, p)
-    mkMod (p,s)   = ModuleDef <$> varEnv p s
-                              <*> typeEnv s
-                              <*> enumEnv s
-                              <*> return p
+    mkMod (p, _, s) = ModuleDef <$> varEnv p s <*> typeEnv s <*> enumEnv s <*> return p
 
     -- | Variables
     varEnv p =  return . symEnv' . SL . vStmts p

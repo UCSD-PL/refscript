@@ -1,11 +1,11 @@
 /// <reference path="types.ts"/>
 
-module ts {
+module cts {
 
-    export interface StringSet<M extends ReadOnly> extends Map<M, string> { }
+    export interface StringSet<M extends ReadOnly> extends ts.Map<M, string> { }
 
-    /*@ lookUp :: <T>(map: Map<Immutable,T>, key: string) => { T | hasProperty map key } + undefined */
-    export declare function lookUp<T>(map: Map<Immutable, T>, key: string): T;
+    /*@ lookUp :: <T>(map: ts.Map<Immutable,T>, key: string) => { T | hasProperty map key } + undefined */
+    export declare function lookUp<T>(map: ts.Map<Immutable, T>, key: string): T;
     //// TODO
 
     export declare function getLocaleSpecificMessage(message: string): string;
@@ -33,38 +33,38 @@ module ts {
     /*@ binarySearch :: (array: { IArray<number> | (len v > 1) }, value: number) => { number | ((0 <= v && v < len array) || (v = -1)) } */
     export declare function binarySearch(array: number[], value: number): number;
 
-    /*@ hasProperty_ :: <M extends ReadOnly, T>(map: Map<M,T>, key: string) => { boolean | Prop(v) <=> (hasDirectProperty map key && hasProperty map key) } */
-    export declare function hasProperty_<M extends ReadOnly, TT>(map: Map<M, TT>, key: string): boolean;
+    /*@ hasProperty_ :: <M extends ReadOnly, T>(map: ts.Map<M,T>, key: string) => { boolean | Prop(v) <=> (hasDirectProperty map key && hasProperty map key) } */
+    export declare function hasProperty_<M extends ReadOnly, TT>(map: ts.Map<M, TT>, key: string): boolean;
 
-    /*@ getProperty :: <M extends ReadOnly, T>(map: Map<Immutable,T>, key: string) => T */
-    export declare function getProperty<M extends ReadOnly, T>(map: Map<M, T>, key: string): T;
+    /*@ getProperty :: <M extends ReadOnly, T>(map: ts.Map<Immutable,T>, key: string) => T */
+    export declare function getProperty<M extends ReadOnly, T>(map: ts.Map<M, T>, key: string): T;
 
-    /*@ isEmpty :: <T>(map: Map<Immutable,T>) => boolean */
-    export declare function isEmpty<M extends ReadOnly, T>(map: Map<M, T>): boolean;
+    /*@ isEmpty :: <T>(map: ts.Map<Immutable,T>) => boolean */
+    export declare function isEmpty<M extends ReadOnly, T>(map: ts.Map<M, T>): boolean;
 
-    /*@ forEachValue :: <T, U>(map: Map<Immutable,T>, callback: (value: T) => U) => U + undefined */
-    export declare function forEachValue<M extends ReadOnly, T, U>(map: Map<M, T>, callback: (value: T) => U): U;
+    /*@ forEachValue :: <T, U>(map: ts.Map<Immutable,T>, callback: (value: T) => U) => U + undefined */
+    export declare function forEachValue<M extends ReadOnly, T, U>(map: ts.Map<M, T>, callback: (value: T) => U): U;
 
-    /*@ forEachKey :: <T, U>(map: Map<Immutable,T>, callback: (key: string) => U) => U + undefined */
-    export declare function forEachKey<T, U>(map: Map<Immutable, T>, callback: (key: string) => U): U;
+    /*@ forEachKey :: <T, U>(map: ts.Map<Immutable,T>, callback: (key: string) => U) => U + undefined */
+    export declare function forEachKey<T, U>(map: ts.Map<Immutable, T>, callback: (key: string) => U): U;
 
-    export declare function mapToArray<T>(map: Map<Immutable, T>): MArray<T>;
+    export declare function mapToArray<T>(map: ts.Map<Immutable, T>): MArray<T>;
 
-     /*@ _toMap :: <S, T>(obj: S) => Map<Mutable, T> */
-    declare function _toMap<S>(obj: S): Map<Mutable, any>;
+     /*@ _toMap :: <S, T>(obj: S) => ts.Map<Mutable, T> */
+    declare function _toMap<S>(obj: S): ts.Map<Mutable, any>;
 
-    export declare function arrayToMap<T>(array: IArray<T>, makeKey: (value: T) => string): Map<Mutable, T>;
+    export declare function arrayToMap<T>(array: IArray<T>, makeKey: (value: T) => string): ts.Map<Mutable, T>;
 
     export declare function compareValues<T>(a: T, b: T): number;
 
     export interface ObjectAllocator<M extends ReadOnly> {
-        getNodeConstructor(kind: SyntaxKind): new () => Node<M>;
-        /*@ getSymbolConstructor(): { new (flags: SymbolFlags, name: string): { v: ISymbol | keyVal(v, "flags") = flags } } */
-        getSymbolConstructor()    : new (flags: SymbolFlags, name: string) => Symbol<M>;
-        getTypeConstructor()      : new (checker: TypeChecker<M>, flags: TypeFlags) => Type<M>;
-        getSignatureConstructor() : new (checker: TypeChecker<M>) => Signature<M>;
+        getNodeConstructor(kind: ts.SyntaxKind): new () => ts.Node<M>;
+        /*@ getSymbolConstructor(): { new (flags: ts.SymbolFlags, name: string): { v: ISymbol | offset v "flags" = flags } } */
+        getSymbolConstructor()    : new (flags: ts.SymbolFlags, name: string) => ts.Symbol<M>;
+        getTypeConstructor()      : new (checker: ts.TypeChecker<M>, flags: ts.TypeFlags) => ts.Type<M>;
+        getSignatureConstructor() : new (checker: ts.TypeChecker<M>) => ts.Signature<M>;
     }
 
-    /*@ newType :: <M>(checker: TypeChecker<Immutable>, flags: bitvector32) => { Type<M> | type_flags(flags,v) } */
-    export declare function newType<M extends ReadOnly>(checker: TypeChecker<Immutable>, flags: TypeFlags): Type<M>;
+    /*@ newType :: <M>(checker: ts.TypeChecker<Immutable>, flags: bitvector32) => { ts.Type<M> | type_flags(flags,v) } */
+    export declare function newType<M extends ReadOnly>(checker: ts.TypeChecker<Immutable>, flags: ts.TypeFlags): ts.Type<M>;
 }

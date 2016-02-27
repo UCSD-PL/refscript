@@ -13,6 +13,7 @@ type ISymbolLinks = ts.SymbolLinks<Immutable>
 type IType        = ts.Type<Immutable>
 type ISignature   = ts.Signature<Immutable>
 type IDeclaration = ts.Declaration<Immutable>
+type ISourceFile  = ts.SourceFile<Immutable>
 
 /*@ predicate non_zero                           (b) = (b /= lit "#x00000000" (BitVec (Size32))) */
 
@@ -315,18 +316,20 @@ module ts {
         // VariableDeclaration,
         // FunctionDeclaration,
         // FunctionBlock,
-        // ClassDeclaration,
-        // InterfaceDeclaration,
-        // EnumDeclaration,
-        // ModuleDeclaration,
+        ClassDeclaration,
+        InterfaceDeclaration,
+        EnumDeclaration,
+        ModuleDeclaration,
         // ModuleBlock,
-        // ImportDeclaration,
+        ImportDeclaration,
         // ExportAssignment,
         // // Enum
         // EnumMember,
-        // // Top-level nodes
-        // SourceFile,
-        // Program,
+
+        // Top-level nodes
+        SourceFile,
+        Program,
+
         // // Synthesized list
         // SyntaxList,
         // // Enum value count

@@ -6,6 +6,7 @@
 module ts {
     // export interface StringSet extends Map<any> { }
 
+
     /*@ forEach :: <T, U>(array: IArray<T>, callback: (element: T) => U) => U + undefined */
     export function forEach<T, U>(array: IArray<T>, callback: (element: T) => U): U {
         /*@ result :: U + undefined */
@@ -200,16 +201,14 @@ module ts {
         return (a < b) ? (-1) : 1;
     }
 
-    // export interface ObjectAllocator<M extends ReadOnly> {
-    //     getNodeConstructor(kind: SyntaxKind): { new (): Node<M> };
-    //     getSymbolConstructor(): {
-    //       /*@ new (flags: SymbolFlags, name: string): { v: ISymbol | keyVal(v, "flags") = flags } */
-    //       new (flags: SymbolFlags, name: string): Symbol<M>
-    //     };
-    //     getTypeConstructor(): { new (checker: TypeChecker<M>, flags: TypeFlags): Type<M> };
-    //     getSignatureConstructor(): { new (checker: TypeChecker<M>): Signature<M> };
-    // }
+    export interface ObjectAllocator<M extends ReadOnly> {
+        getNodeConstructor(kind: SyntaxKind): new () => Node<M>;
+        /*@ getSymbolConstructor(): { new (flags: SymbolFlags, name: string): { v: ISymbol | keyVal(v, "flags") = flags } } */
+        getSymbolConstructor()    : new (flags: SymbolFlags, name: string) => Symbol<M>;
+        getTypeConstructor()      : new (checker: TypeChecker<M>, flags: TypeFlags) => Type<M>;
+        getSignatureConstructor() : new (checker: TypeChecker<M>) => Signature<M>;
+    }
 
-    // /*@ newType :: forall M . (checker: TypeChecker<Immutable>, flags: bitvector32) => { Type<M> | type_flags(flags,v) } */
-    // export declare function newType(checker: TypeChecker, flags: TypeFlags): Type;
+    /*@ newType :: <M>(checker: TypeChecker<Immutable>, flags: bitvector32) => { Type<M> | type_flags(flags,v) } */
+    export declare function newType<M extends ReadOnly>(checker: TypeChecker<Immutable>, flags: TypeFlags): Type<M>;
 }

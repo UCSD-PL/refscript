@@ -2,19 +2,15 @@
 
 // <reference path="scanner.ts"/>
 
-module ts {
-
-
 /////////////////////////////////////////////////////////////////////////
 //
 //  RefScript
 
-
-type INode        = Node<Immutable>
+type INode        = ts.Node<Immutable>
 type ISymbol      = ts.Symbol<Immutable>
-type IType        = Type<Immutable>
-type ISignature   = Signature<Immutable>
-type IDeclaration = Declaration<Immutable>
+type IType        = ts.Type<Immutable>
+type ISignature   = ts.Signature<Immutable>
+type IDeclaration = ts.Declaration<Immutable>
 
 /*@ predicate non_zero                           (b) = (b /= lit "#x00000000" (BitVec (Size32 obj))) */
 
@@ -91,6 +87,7 @@ type IDeclaration = Declaration<Immutable>
 /*@ predicate mask_symbolflags_namespacemodule   (v) = (non_zero(bvand v (lit "#x00000100" (BitVec (Size32 obj))))) */
 /*@ predicate mask_symbolflags_typeliteral       (v) = (non_zero(bvand v (lit "#x00000200" (BitVec (Size32 obj))))) */
 /*@ predicate mask_symbolflags_objectliteral     (v) = (non_zero(bvand v (lit "#x00000400" (BitVec (Size32 obj))))) */
+/*@ qualif AAAAAAA(v: int): v = 1 */
 /*@ predicate mask_symbolflags_method            (v) = (non_zero(bvand v (lit "#x00000800" (BitVec (Size32 obj))))) */
 /*@ predicate mask_symbolflags_constructor       (v) = (non_zero(bvand v (lit "#x00001000" (BitVec (Size32 obj))))) */
 /*@ predicate mask_symbolflags_getaccessor       (v) = (non_zero(bvand v (lit "#x00002000" (BitVec (Size32 obj))))) */
@@ -113,10 +110,13 @@ type IDeclaration = Declaration<Immutable>
                                 (mask_typeflags_reference (v) =>  extends_interface(o,"TypeReference"))
  */
 
-
 //
 /////////////////////////////////////////////////////////////////////////
 
+
+
+
+module ts {
 
     export interface Map<M extends ReadOnly, T> {
         [index: string]: T;

@@ -12535,17 +12535,19 @@ var ts;
                             }
                             return;
                         }
-                        if (resolved.constructSignatures.length === 1 && !resolved.callSignatures.length) {
-                            if (flags & 64) {
-                                writePunctuation(writer, ts.SyntaxKind.OpenParenToken);
+                        if (!refscript) {
+                            if (resolved.constructSignatures.length === 1 && !resolved.callSignatures.length) {
+                                if (flags & 64) {
+                                    writePunctuation(writer, ts.SyntaxKind.OpenParenToken);
+                                }
+                                writeKeyword(writer, ts.SyntaxKind.NewKeyword);
+                                writeSpace(writer);
+                                buildSignatureDisplay(resolved.constructSignatures[0], writer, enclosingDeclaration, globalFlagsToPass | 8, symbolStack);
+                                if (flags & 64) {
+                                    writePunctuation(writer, ts.SyntaxKind.CloseParenToken);
+                                }
+                                return;
                             }
-                            writeKeyword(writer, ts.SyntaxKind.NewKeyword);
-                            writeSpace(writer);
-                            buildSignatureDisplay(resolved.constructSignatures[0], writer, enclosingDeclaration, globalFlagsToPass | 8, symbolStack);
-                            if (flags & 64) {
-                                writePunctuation(writer, ts.SyntaxKind.CloseParenToken);
-                            }
-                            return;
                         }
                     }
                     writePunctuation(writer, ts.SyntaxKind.OpenBraceToken);

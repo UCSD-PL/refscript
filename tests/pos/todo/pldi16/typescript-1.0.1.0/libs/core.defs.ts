@@ -2,85 +2,69 @@
 
 module ts {
 
-    export interface StringSet extends Map<any> { }
+    export interface StringSet<M extends ReadOnly> extends Map<M, string> { }
 
-    /*@ forEach :: forall T U . (array: IArray<T>, callback: (element: T) => U) => { U | 0 < 1 } + undefined */
-    export declare function forEach<T, U>(array: T[], callback: (element: T) => U): U;
-
-    /*@  contains :: forall T . (array: IArray<T>, value: T) => { boolean | 0 < 1 } */
-    export declare function contains<T>(array: T[], value: T): boolean;
-
-    /*@  indexOf :: forall T . (array: IArray<T>, value: T) => { number | 0 < 1 } */
-    export declare function indexOf<T>(array: T[], value: T): number;
-
-    /*@  filter :: forall T . (array: IArray<T>, f: (T) => boolean) => { MArray<T> | 0 < 1 } + undefined */
-    export declare function filter<T>(array: T[], f: (x: T) => boolean): T[];
-
-    /*@ map :: forall T U . (array: IArray<T>, f: (x:T)=>U) => {MArray<U> | 0 < 1} + undefined */
-    export declare function map<T, U>(array: T[], f: (x: T) => U): U[];
-
-    /*@ concatenate :: forall T M . ( array1: IArray<T> + undefined, array2: IArray<T> + undefined) => { IArray<T> + undefined | 0 < 1 } */
-    export declare function concatenate<T>(array1: T[], array2: T[]): T[];
-
-    /*@ sum :: (array: IArray<{{[s:string]:number} | hasProperty(prop, v)}>, prop: string) => { number | 0 < 1 } */
-    export declare function sum(array: any[], prop: string): number;
-
-    /*@ binarySearch :: (array: { IArray<number> | (len v) > 1 }, value: number) => { number | ((0 <= v && v < (len array)) || v = -1) } */
-    export declare function binarySearch(array: number[], value: number): number;
-
-    /*@ hasProperty :: forall T M . (map: Map<M,T>, key: string) => { boolean | Prop(v) <=> (hasDirectProperty(key,map) && hasProperty(key,map)) } */
-    export declare function hasProperty_<T>(map: Map<T>, key: string): boolean;
+    /*@ lookUp :: <T>(map: Map<Immutable,T>, key: string) => { T | hasProperty map key } + undefined */
+    export declare function lookUp<T>(map: Map<Immutable, T>, key: string): T;
     //// TODO
 
-    /*@ getProperty :: forall T . (map: Map<Immutable,T>, key: string) => { T | 0 < 1 } */
-    export declare function getProperty<T>(map: Map<T>, key: string): T;
-    //// TODO
-
-    /*  qualif HSqualif(s:Str,v:a): hasProperty(s,v) */
-    /*  qualif EPqualif(s:Str,v:a): enumProp(s,v) */
-
-    /*@ isEmpty :: forall T . (map: Map<Immutable,T>) => { boolean | 0 < 1 } */
-    export declare function isEmpty<T>(map: Map<T>): boolean;
-
-    /*@ clone :: forall T . (T) => { T | 0 < 1 } */
-    export declare function clone<T>(object: T): T;
-    //// TODO -- barely typed
-
-    /*@ forEachValue :: forall T U . (map: Map<Immutable,T>, callback: (value: T) => U) => { U | 0 < 1 } + undefined */
-    export declare function forEachValue<T, U>(map: Map<T>, callback: (value: T) => U): U;
-
-    /*@ forEachKey :: forall T U . (map: Map<Immutable,T>, callback: (key: string) => U) => { U | 0 < 1 } + undefined */
-    export declare function forEachKey<T, U>(map: Map<T>, callback: (key: string) => U): U;
-
-    /*@ lookUp :: forall T . (map: Map<Immutable,T>, key: string) => { T | hasProperty(key,map) } + undefined */
-    export declare function lookUp<T>(map: Map<T>, key: string): T;
-    //// TODO
-
-    /*@ mapToArray :: forall T . (map: Map<Immutable,T>) => { MArray<T> | 0 < 1 } */
-    export declare function mapToArray<T>(map: Map<T>): T[];
-
-    /*@ arrayToMap :: forall T . (array: IArray<T>, makeKey: (value: T) => string) => { Map<Mutable,T> | 0 < 1 } */
-    export declare function arrayToMap<T>(array: T[], makeKey: (value: T) => string): Map<T>;
-
-    /*@ getLocaleSpecificMessage :: (message: string) => { string | 0 < 1 } */
     export declare function getLocaleSpecificMessage(message: string): string;
     //// TODO
 
-    /*@ compareValues :: forall T . (a:T, b:T) => { number | 0 < 1 } */
+    /*@ forEach :: <T, U>(array: IArray<T>, callback: (element: T) => U) => U + undefined */
+    export declare function forEach<T, U>(array: IArray<T>, callback: (element: T) => U): U;
+
+    export declare function contains<T>(array: IArray<T>, value: T): boolean;
+
+    export declare function indexOf<T>(array: IArray<T>, value: T): number;
+
+    /*@ filter :: <T>(array: IArray<T>, f: (x: T) => boolean) => MArray<T> + undefined */
+    export declare function filter<T>(array: IArray<T>, f: (x: T) => boolean): MArray<T>;
+
+    /*@ map :: <T, U>(array: IArray<T>, f: (x: T) => U) => MArray<U> + undefined */
+    export declare function map<T, U>(array: IArray<T>, f: (x: T) => U): MArray<U>;
+
+    /*@ concatenate :: <T>( array1: IArray<T> + undefined, array2: IArray<T> + undefined) => IArray<T> + undefined */
+    export declare function concatenate<T>(array1: T[], array2: T[]): T[];
+
+    /*@ sum :: (array: IArray<{ (Immutable) {[s:string]:number} | hasProperty v prop }>, prop: string) => number */
+    export declare function sum(array: any[], prop: string): number;
+
+    /*@ binarySearch :: (array: { IArray<number> | (len v > 1) }, value: number) => { number | ((0 <= v && v < len array) || (v = -1)) } */
+    export declare function binarySearch(array: number[], value: number): number;
+
+    /*@ hasProperty_ :: <M extends ReadOnly, T>(map: Map<M,T>, key: string) => { boolean | Prop(v) <=> (hasDirectProperty map key && hasProperty map key) } */
+    export declare function hasProperty_<M extends ReadOnly, TT>(map: Map<M, TT>, key: string): boolean;
+
+    /*@ getProperty :: <M extends ReadOnly, T>(map: Map<Immutable,T>, key: string) => T */
+    export declare function getProperty<M extends ReadOnly, T>(map: Map<M, T>, key: string): T;
+
+    /*@ isEmpty :: <T>(map: Map<Immutable,T>) => boolean */
+    export declare function isEmpty<M extends ReadOnly, T>(map: Map<M, T>): boolean;
+
+    /*@ forEachValue :: <T, U>(map: Map<Immutable,T>, callback: (value: T) => U) => U + undefined */
+    export declare function forEachValue<M extends ReadOnly, T, U>(map: Map<M, T>, callback: (value: T) => U): U;
+
+    /*@ forEachKey :: <T, U>(map: Map<Immutable,T>, callback: (key: string) => U) => U + undefined */
+    export declare function forEachKey<T, U>(map: Map<Immutable, T>, callback: (key: string) => U): U;
+
+    export declare function mapToArray<T>(map: Map<Immutable, T>): MArray<T>;
+
+     /*@ _toMap :: <S, T>(obj: S) => Map<Mutable, T> */
+    declare function _toMap<S>(obj: S): Map<Mutable, any>;
+
+    export declare function arrayToMap<T>(array: IArray<T>, makeKey: (value: T) => string): Map<Mutable, T>;
+
     export declare function compareValues<T>(a: T, b: T): number;
 
-    // PV: added object types with constructor signature instead of constructor func sig
-    export interface ObjectAllocator {
-        getNodeConstructor(kind: SyntaxKind): { new (): Node };
-        getSymbolConstructor(): {
-          /*@ new (flags: SymbolFlags, name: string) => { v: ISymbol | offset(v, "flags") = flags } */
-          new (flags: SymbolFlags, name: string): Symbol
-        };
-        getTypeConstructor(): { new (checker: TypeChecker, flags: TypeFlags): Type };
-        getSignatureConstructor(): { new (checker: TypeChecker): Signature };
+    export interface ObjectAllocator<M extends ReadOnly> {
+        getNodeConstructor(kind: SyntaxKind): new () => Node<M>;
+        /*@ getSymbolConstructor(): { new (flags: SymbolFlags, name: string): { v: ISymbol | keyVal(v, "flags") = flags } } */
+        getSymbolConstructor()    : new (flags: SymbolFlags, name: string) => Symbol<M>;
+        getTypeConstructor()      : new (checker: TypeChecker<M>, flags: TypeFlags) => Type<M>;
+        getSignatureConstructor() : new (checker: TypeChecker<M>) => Signature<M>;
     }
 
-    /*@ newType :: forall M . (checker: TypeChecker<Immutable>, flags: bitvector32) => { Type<M> | type_flags(flags,v) } */
-    export declare function newType(checker: TypeChecker, flags: TypeFlags): Type;
-
+    /*@ newType :: <M>(checker: TypeChecker<Immutable>, flags: bitvector32) => { Type<M> | type_flags(flags,v) } */
+    export declare function newType<M extends ReadOnly>(checker: TypeChecker<Immutable>, flags: TypeFlags): Type<M>;
 }

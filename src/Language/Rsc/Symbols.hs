@@ -34,7 +34,7 @@ import           Control.Exception              (throw)
 import           Data.Generics
 import           Data.List                      (findIndex)
 import qualified Data.Map.Strict                as M
-import           Data.Maybe                     (fromMaybe)
+import           Data.Maybe                     (catMaybes, fromMaybe)
 import           Language.Fixpoint.Misc         (safeZip)
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
@@ -46,6 +46,7 @@ import           Language.Rsc.Locations
 import           Language.Rsc.Misc              (foldM1)
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty.Common
+import           Language.Rsc.Pretty.Errors
 import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
@@ -125,27 +126,37 @@ symbols s = SL [ (fSrc <$> n, k, SI (F.symbol n) loc a i t)
                  , (loc, t)    <- annToType fact ]
   where
     annToType (ClassAnn   l (TS _ b _)) = [(l, TClass b)]       -- Class
-    annToType (SigAnn     l t         ) = [(l, t)]              -- Function
-    annToType (VarAnn     l _ (Just t)) = [(l, t)]              -- Variables
+    annToType (SigAnn   x l t         ) = [(l, t)]              -- Function
+    annToType (VarAnn   x l _ (Just t)) = [(l, t)]              -- Variables
     annToType (ModuleAnn  l q         ) = [(l, TMod q)]         -- Modules
     annToType _                         = [ ]
 
 
 --------------------------------------------------------------------------------
-varDeclSymbol
-  :: (F.Reftable r, PP (SymInfo r))
-  => VarDecl (AnnR r) -> Either Error (Maybe (SymInfo r))
+varDeclSymbol :: (F.Reftable r, PP (SymInfo r))
+              => VarDecl (AnnR r) -> Either Error (Maybe (SymInfo r))
 --------------------------------------------------------------------------------
 varDeclSymbol (VarDecl l x eo) =
-    case syms of
-      [ ] -> Right Nothing
-      [s] -> Right (Just s)
-      ss  | all (isTFun . v_type) ss -> Just <$> foldM1 (concatSymInfo l) ss
-      _   -> Left (errorMultipleVarDeclAnns l x)
+    case nmErrs of
+      []   -> catSymInfo sis
+      errs -> Left (catErrors errs)
   where
-    syms = [SI (F.symbol x) loc a init t | VarAnn loc a (Just t) <- fFact l]
-    init | Just _ <- eo = Initialized
-         | otherwise    = Uninitialized
+    xSym    = F.symbol x
+    sis     = [SI y loc a init t | VarAnn y loc a (Just t) <- fFact l]
+    init    | Just _ <- eo = Initialized | otherwise = Uninitialized
+    nmErrs  = catMaybes [toDerr a y xSym | SI y _ a _ _ <- sis, y /= xSym]
+
+    catSymInfo [ ] = Right Nothing
+    catSymInfo [s] = Right (Just s)
+    catSymInfo ss  | all (isTFun . v_type) ss
+                   = Just <$> foldM1 (concatSymInfo l) ss
+                   | otherwise
+                   = Left (errorMultipleVarDeclAnns l x)
+
+    toDerr _          y x | y == x              = Nothing
+    toDerr WriteLocal y x | y `F.isPrefixOfSym` x = Nothing
+    toDerr _          y x = Just (errorDeclMismatch l y x)
+
 
 
 --------------------------------------------------------------------------------
@@ -155,20 +166,17 @@ varDeclSymbol (VarDecl l x eo) =
 type SymEnv r = Env (SymInfo r)
 
 --------------------------------------------------------------------------------
-symEnv :: F.Reftable r => [Statement (AnnR r)] -> SymEnv r
+symEnv :: F.Reftable r => [Statement (AnnR r)] -> Either Error (SymEnv r)
 --------------------------------------------------------------------------------
 symEnv = symEnv' . symbols
 
 --------------------------------------------------------------------------------
-symEnv' :: F.Reftable r => SymList r -> SymEnv r
+symEnv' :: F.Reftable r => SymList r -> Either Error (SymEnv r)
 --------------------------------------------------------------------------------
-symEnv' = envMap snd
-        . envFromListWithKey mergeSymInfo
-        . concatMap f
-        . M.toList
-        . foldl merge M.empty
-        . s_list
+symEnv' sl = envMap snd <$> envFromListWithKeyM mergeSymInfo vs
   where
+    vs = concatMap f $ M.toList $ foldl merge M.empty $ s_list sl
+
     merge ms (x, k, v) = M.insertWith (++) (F.symbol x) [(k,v)] ms
 
     f (s, vs) = [(s, (k, v)) | (k@FuncDeclKind  , v) <- vs] ++
@@ -178,14 +186,15 @@ symEnv' = envMap snd
                 [(s, (k, v)) | (k@EnumDeclKind  , v) <- vs]
 
 --------------------------------------------------------------------------------
-mergeSymInfo :: F.Reftable r => F.Symbol -> (SyntaxKind, SymInfo r)
-                                         -> (SyntaxKind, SymInfo r)
-                                         -> (SyntaxKind, SymInfo r)
+mergeSymInfo :: F.Reftable r
+  => F.Symbol -> (SyntaxKind, SymInfo r) -> (SyntaxKind, SymInfo r)
+  -> Either Error (SyntaxKind, SymInfo r)
 --------------------------------------------------------------------------------
 mergeSymInfo _ (k1, SI m1 l1 a1 i1 t1) (k2, SI m2 l2 a2 i2 t2)
   | m1 == m2, l1 == l2, k1 == k2, a1 == a2, i1 == i2
-  = (k1, SI m1 l1 a1 i1 (t1 `mappend` t2))
-mergeSymInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
+  = Right (k1, SI m1 l1 a1 i1 (t1 `mappend` t2))
+
+mergeSymInfo x _ _ = Left (errorDuplicateKey (srcPos x) x)
 
 
 concatSymInfo l s1@(SI m1 l1 a1 i1 t1) s2@(SI m2 l2 a2 i2 t2)

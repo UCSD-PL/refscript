@@ -2,7 +2,7 @@
 /*@ qualif UBound(v: int, x:a) : v < (len x) */
 
 export function minIndex(aa: IArray<number>): number {
-    /*@ readonly a :: IArray<number>*/
+    /*@ readonly aaaaaa :: IArray<number>*/
     let aaaaaa = aa;
 
     if (aaaaaa.length <= 0)

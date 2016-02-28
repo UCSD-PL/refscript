@@ -516,11 +516,11 @@ freshenVI g l (SI x loc a i t)
 --   | otherwise          = return v
 
 --------------------------------------------------------------------------------
-freshenType :: IsLocated l => CGEnv -> l -> RefType -> CGM RefType
+freshenType :: IsLocated l => CGEnv -> l -> Locality -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-freshenType g l t
-  | isTrivialRefType t = freshTy "ft-WG" t >>= wellFormed l g
-  | otherwise          = return t
+freshenType g l loc t
+  | isTrivialRefType t, loc /= Exported = freshTy "ft-WG" t >>= wellFormed l g
+  | otherwise                           = return t
 
 -- | 1. Instantiates fresh types (at call-site)
 --   2. Adds well-formedness constraints for instantiated type variables

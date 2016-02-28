@@ -37,10 +37,10 @@ scrapeQuals (Rsc { code = Src ss }) =
   where
     tbv = defaultVisitor { accStmt = gos, accCElt = goe, ctxStmt = ctx }
 
-    gos c (FunctionStmt l x _ _)     = [(qualify c x, t) | SigAnn _ t <- fFact l]
-    gos c (VarDeclStmt _ vds)        = [(qualify c x, t) | VarDecl l x _       <- vds
-                                                         , VarAnn _ _ (Just t) <- fFact l]
-    gos _ _                          = []
+    gos c (FunctionStmt l x _ _) = [(qualify c x, t) | SigAnn _ _ t          <- fFact l]
+    gos c (VarDeclStmt _ vds)    = [(qualify c x, t) | VarDecl l x _         <- vds
+                                                     , VarAnn _ _ _ (Just t) <- fFact l]
+    gos _ _                      = []
 
     goe c (Constructor l _ _)        = [(qualify c x, t) | CtorAnn  t <- fFact l, let x = Id l "ctor" ]
     goe c (MemberVarDecl l _ x _)    = [(qualify c x, t) | MemberAnn (T.FI _ _ _ t) <- fFact l ]

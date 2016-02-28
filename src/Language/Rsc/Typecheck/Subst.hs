@@ -103,11 +103,11 @@ instance Free (Fact r) where
   -- free (PhiVarTy (_,t))     = free t
   free (TypInst _ _ ts)     = free ts
   free (EltOverload _ t t') = free [t, t']
-  free (VarAnn _ _ t )      = free t
+  free (VarAnn _ _ _ t )    = free t
   free (MemberAnn f)        = free f
   free (CtorAnn c)          = free c
   free (UserCast t)         = free t
-  free (SigAnn _ c)         = free c
+  free (SigAnn _ _ c)       = free c
   free (ClassAnn _ t)       = free t --  foldr S.delete (free $ e ++ i) vs
   free (InterfaceAnn t)     = free t --  foldr S.delete (free $ e ++ i) vs
   -- TODO: TypeCast
@@ -162,11 +162,11 @@ instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
   -- apply θ (PhiVarTy (v,t))     = PhiVarTy . (v,) $ apply θ t
   apply θ (TypInst i ξ ts)     = TypInst i ξ     $ apply θ ts
   apply θ (EltOverload ξ t t') = EltOverload ξ (apply θ t) (apply θ t')
-  apply θ (VarAnn l a t)       = VarAnn l a      $ apply θ t
+  apply θ (VarAnn x l a t)     = VarAnn x l a    $ apply θ t
   apply θ (MemberAnn f)        = MemberAnn       $ apply θ f
   apply θ (CtorAnn t)          = CtorAnn         $ apply θ t
   apply θ (UserCast t)         = UserCast        $ apply θ t
-  apply θ (SigAnn l t)         = SigAnn l        $ apply θ t
+  apply θ (SigAnn x l t)       = SigAnn x l      $ apply θ t
   apply θ (ClassAnn l t)       = ClassAnn l      $ apply θ t
   apply θ (InterfaceAnn t)     = InterfaceAnn    $ apply θ t
   -- TODO: TypeCast

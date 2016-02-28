@@ -11,6 +11,12 @@ module Language.Rsc.Environment (
 
   -- * Environments
     CheckingEnvironment (..)
+
+  -- * TC Env
+  , TCEnv(..), TCEnvO
+
+
+  -- * Liquid env
   , CGEnvR (..), CGEnv, CGEnvEntry
 
 
@@ -46,6 +52,7 @@ import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Symbols
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
+
 
 
 -------------------------------------------------------------------------------
@@ -88,6 +95,45 @@ class CheckingEnvironment r t where
   --   * Enclosing function's id
   --
   envFnId   :: t r -> Int
+
+
+
+--------------------------------------------------------------------------------
+-- | TC Environment
+--------------------------------------------------------------------------------
+
+data TCEnv r  = TCE {
+    tce_names  :: Env (SymInfo r)
+  , tce_bounds :: Env (RType r)
+  , tce_ctx    :: IContext
+  , tce_path   :: AbsPath
+  , tce_cha    :: ClassHierarchy r
+  , tce_mut    :: Maybe (MutabilityR r)
+  , tce_this   :: Maybe (RType r)
+  , tce_fnid   :: Int
+  }
+  deriving (Functor)
+
+--   We define this alias as the "output" type for typechecking any entity
+--   that can create or affect binders (e.g. @VarDecl@ or @Statement@)
+--   @Nothing@ means if we definitely hit a "return"
+--   @Just γ'@ means environment extended with statement binders
+
+type TCEnvO r = Maybe (TCEnv r)
+
+instance CheckingEnvironment r TCEnv where
+  envNames  = tce_names
+  envBounds = tce_bounds
+  envPath   = tce_path
+  envCtx    = tce_ctx
+  envCHA    = tce_cha
+  envMut    = tce_mut
+  envThis   = tce_this
+  envFnId   = tce_fnid
+--
+-- instance PPR r => PP (TCEnv r) where
+--   pp γ = pp (tce_names γ)
+--
 
 
 -------------------------------------------------------------------------------------

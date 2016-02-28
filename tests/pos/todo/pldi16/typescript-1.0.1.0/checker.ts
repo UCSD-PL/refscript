@@ -12,19 +12,19 @@ module checker_ts {
     let nextNodeId = 1;
     /*@ nextMergeId :: posint */
     let nextMergeId = 1;
-
-    /*@ getDeclarationOfKind :: (symbol: ISymbol, kind: ts.SyntaxKind) => { ts.Declaration<Immutable> | offset(v,"kind") = kind } + undefined */
-    export function getDeclarationOfKind(symbol: ISymbol, kind: ts.SyntaxKind): IDeclaration {
-        let declarations = symbol.declarations;
-        for (let i = 0; i < declarations.length; i++) {
-            let declaration = declarations[i];
-            if (declaration.kind === kind) {
-                return declaration;
-            }
-        }
-
-        return undefined;
-    }
+    //
+    // /* @ getDeclarationOfKind :: (symbol: ISymbol, kind: ts.SyntaxKind) => { ts.Declaration<Immutable> | offset(v,"kind") = kind } + undefined */
+    // export function getDeclarationOfKind(symbol: ISymbol, kind: ts.SyntaxKind): IDeclaration {
+    //     let declarations = symbol.declarations;
+    //     for (let i = 0; i < declarations.length; i++) {
+    //         let declaration = declarations[i];
+    //         if (declaration.kind === kind) {
+    //             return declaration;
+    //         }
+    //     }
+    //
+    //     return undefined;
+    // }
 
 
 
@@ -90,33 +90,31 @@ module checker_ts {
     /*@ createSymbol :: <M extends ReadOnly>(flags: number     , name: string) => ts.Symbol<M> */
     declare function createSymbol<M extends ReadOnly>(flags: ts.SymbolFlags, name: string): ts.Symbol<M>
 
-    /*@ getExcludedSymbolFlags :: (flags: ts.SymbolFlags) => bitvector32 */
-    export function getExcludedSymbolFlags(flags: ts.SymbolFlags): ts.SymbolFlags {
-        let result = 0x00000000; // 0;
-        //TODO: undefined below
-        //if (flags & SymbolFlags.Variable)      result = result | SymbolFlags.VariableExcludes;
-        //if (flags & SymbolFlags.Property)      result = result | SymbolFlags.PropertyExcludes;
-        //if (flags & SymbolFlags.EnumMember)    result = result | SymbolFlags.EnumMemberExcludes;
-        //if (flags & SymbolFlags.Function)      result = result | SymbolFlags.FunctionExcludes;
-        //if (flags & SymbolFlags.Class)         result = result | SymbolFlags.ClassExcludes;
-        //if (flags & SymbolFlags.Interface)     result = result | SymbolFlags.InterfaceExcludes;
-        //if (flags & SymbolFlags.Enum)          result = result | SymbolFlags.EnumExcludes;
-        //if (flags & SymbolFlags.ValueModule)   result = result | SymbolFlags.ValueModuleExcludes;
-        //if (flags & SymbolFlags.Method)        result = result | SymbolFlags.MethodExcludes;
-        //if (flags & SymbolFlags.GetAccessor)   result = result | SymbolFlags.GetAccessorExcludes;
-        //if (flags & SymbolFlags.SetAccessor)   result = result | SymbolFlags.SetAccessorExcludes;
-        //if (flags & SymbolFlags.TypeParameter) result = result | SymbolFlags.TypeParameterExcludes;
-        //if (flags & SymbolFlags.Import)        result = result | SymbolFlags.ImportExcludes;
-        return result ;
-    }
+    // /*@ getExcludedSymbolFlags :: (flags: ts.SymbolFlags) => bitvector32 */
+    // export function getExcludedSymbolFlags(flags: ts.SymbolFlags): ts.SymbolFlags {
+    //     let result = 0x00000000; // 0;
+    //     //TODO: undefined below
+    //     //if (flags & SymbolFlags.Variable)      result = result | SymbolFlags.VariableExcludes;
+    //     //if (flags & SymbolFlags.Property)      result = result | SymbolFlags.PropertyExcludes;
+    //     //if (flags & SymbolFlags.EnumMember)    result = result | SymbolFlags.EnumMemberExcludes;
+    //     //if (flags & SymbolFlags.Function)      result = result | SymbolFlags.FunctionExcludes;
+    //     //if (flags & SymbolFlags.Class)         result = result | SymbolFlags.ClassExcludes;
+    //     //if (flags & SymbolFlags.Interface)     result = result | SymbolFlags.InterfaceExcludes;
+    //     //if (flags & SymbolFlags.Enum)          result = result | SymbolFlags.EnumExcludes;
+    //     //if (flags & SymbolFlags.ValueModule)   result = result | SymbolFlags.ValueModuleExcludes;
+    //     //if (flags & SymbolFlags.Method)        result = result | SymbolFlags.MethodExcludes;
+    //     //if (flags & SymbolFlags.GetAccessor)   result = result | SymbolFlags.GetAccessorExcludes;
+    //     //if (flags & SymbolFlags.SetAccessor)   result = result | SymbolFlags.SetAccessorExcludes;
+    //     //if (flags & SymbolFlags.TypeParameter) result = result | SymbolFlags.TypeParameterExcludes;
+    //     //if (flags & SymbolFlags.Import)        result = result | SymbolFlags.ImportExcludes;
+    //     return result ;
+    // }
 
-    /*@ readonly */
-    export let recordMergedSymbol = function(target: ISymbol, source: ISymbol): void {
-        if (!source.mergeId) source.mergeId = nextMergeId++;
-        mergedSymbols[source.mergeId] = target;
-    }
+    // export let recordMergedSymbol = function(target: ISymbol, source: ISymbol): void {
+    //     if (!source.mergeId) source.mergeId = nextMergeId++;
+    //     mergedSymbols[source.mergeId] = target;
+    // }
 
-    /*@ readonly */
     export let getSymbolLinks = function(symbol: ISymbol): ISymbolLinks {
         if (symbol.flags & ts.SymbolFlags.Transient) return <ts.TransientSymbol<Immutable>>symbol;
         if (!symbol.id) symbol.id = nextSymbolId++;
@@ -125,176 +123,22 @@ module checker_ts {
         else { let o = {}; symbolLinks[symbol.id] = o; return o; }
     }
 
-    /*@ readonly */
-    export let getNodeLinks = function(node: INode): INodeLinks {
-        let node_id = node.id;
-        if (!node_id) {
-            node_id = nextNodeId++;
-            node.id = node_id;
-            /*@ local node_id_0 :: number + undefined */
-            let node_id_0 = node_id;
-            node_id = node_id_0;
-        }
-        let n = nodeLinks[node_id];
-        if(n) { return n; }
-        else { let o = {}; nodeLinks[<number>node_id] = o; return o; }
-    }
+    // export let getNodeLinks = function(node: INode): INodeLinks {
+    //     let node_id = node.id;
+    //     if (!node_id) {
+    //         node_id = nextNodeId++;
+    //         node.id = node_id;
+    //         /*@ local node_id_0 :: number + undefined */
+    //         let node_id_0 = node_id;
+    //         node_id = node_id_0;
+    //     }
+    //     let n = nodeLinks[node_id];
+    //     if(n) { return n; }
+    //     else { let o = {}; nodeLinks[<number>node_id] = o; return o; }
+    // }
+    //
+    //
 
-    /*@ getAncestor :: (node: INode + undefined, kind: ts.SyntaxKind) => undefined + INode */
-    let getAncestor = function(node: INode, kind: ts.SyntaxKind): INode {
-        if (kind === ts.SyntaxKind.ClassDeclaration) {
-            while (typeof node !== "undefined") {
-                if (node.kind === ts.SyntaxKind.ClassDeclaration) {
-                    //return <ClassDeclaration>node;
-                    return <INode>node;
-                }
-                else if (kind === ts.SyntaxKind.EnumDeclaration      ||
-                         kind === ts.SyntaxKind.InterfaceDeclaration ||
-                         kind === ts.SyntaxKind.ModuleDeclaration    ||
-                         kind === ts.SyntaxKind.ImportDeclaration) {
-                    // early exit cases - declarations cannot be nested in classes
-                    return undefined;
-                }
-                else {
-                    node = node.parent;
-                }
-            }
-        }
-        else {
-            while (node) {
-                if (node.kind === kind) {
-                    return <INode>node;
-                }
-                else {
-                    node = node.parent;
-                }
-            }
-        }
-
-        return undefined;
-    }
-
-    /*@ getSourceFile :: (node: INode + undefined) => undefined + ts.SourceFile<Immutable> */
-    export let getSourceFile = function(node: INode): ts.SourceFile<Immutable> {
-        let ancestor = getAncestor(node, ts.SyntaxKind.SourceFile);
-        if (ancestor) {
-            return <ts.SourceFile<Immutable>> (<ts.Node<Immutable>>ancestor);
-        } else {
-            return undefined;
-        }
-    }
-
-    /*@ createType :: (flags: bitvector32) => { ts.Type<Unique> | type_flags flags v } */
-    let createType = function(flags: ts.TypeFlags): ts.Type<Unique> {
-        /*@ result :: ts.Type<Unique> */
-        let result = cts.newType(checker, flags);
-        result.id = typeCount++;
-        return result;
-    }
-
-    /*@ createObjectType :: ( kind: { bitvector32 | mask_typeflags_anonymous(v) || mask_typeflags_reference(v) }
-                               , symbol: ISymbol + undefined
-                           ) => { ts.ObjectType<Unique> | type_flags(kind,v) } */
-    let createObjectType = function<M extends ReadOnly>(kind: ts.TypeFlags, symbol?: ISymbol): ts.ObjectType<M> {
-        let type = <ts.ObjectType<Unique>>createType(kind);
-        // TODO
-        // type.symbol = symbol;
-        return type;
-    }
-
-
-    //////////////////////////////////////////////
-    ///
-    ///
-    ///
-
-
-            /*@ resolveObjectTypeMembers :: (type: ObjectType<Immutable>) => { ResolvedObjectType<Immutable> | 0 < 1 } */
-            declare function resolveObjectTypeMembers(type: ObjectType): ResolvedObjectType;
-
-            /*@ getPropertiesOfType :: (type: IType) => { IArray<ISymbol> | 0 < 1 } */
-            function getPropertiesOfType(type: Type): Symbol[] {
-                if (type.flags & TypeFlags.ObjectType) {
-                    return resolveObjectTypeMembers(<ObjectType>type).properties;
-                }
-                return emptyArray();
-            }
-
-            /*@ getTypeListId :: (types: IArray<IType>) => { number | 0 < 1 } */
-            declare function getTypeListId(types: Type[]);
-
-            /*@ createTypeReference :: (target: GenericType<Immutable>, typeArguments: IArray<IType>) => { TypeReference<Immutable> | 0 < 1 } */
-            function createTypeReference(target: GenericType, typeArguments: Type[]): TypeReference {
-                let id = getTypeListId(typeArguments);
-                let type = target.instantiations[id.toString()];
-                if (!type) {
-                    assume(target.symbol);         // TODO: Remove this assumption
-                    /*@ type1 :: TypeReference<UniqueMutable> */
-                    let type1 = <TypeReference>createObjectType(TypeFlags.Reference, target.symbol);
-                    let tmp = target.instantiations;
-                    // tmp[id] = type1;            // TODO: Cannot assign a UniqueMutable variable
-                    type1.target = target;
-                    type1.typeArguments = typeArguments;
-                    return type1;
-                }
-                return type;
-            }
-
-            /*@ isTypeParameterReferenceIllegalInConstraint :: (typeReferenceNode: TypeReferenceNode<Immutable>, typeParameterSymbol: ISymbol) => { boolean | 0 < 1 } */
-            function isTypeParameterReferenceIllegalInConstraint(typeReferenceNode: TypeReferenceNode, typeParameterSymbol: Symbol): boolean {
-                let links = getNodeLinks(typeReferenceNode);
-                let links_isIllegalTypeReferenceInConstraint_tmp = links.isIllegalTypeReferenceInConstraint;
-                // if (links.isIllegalTypeReferenceInConstraint !== undefined) {
-                if (typeof links_isIllegalTypeReferenceInConstraint_tmp !== "undefined") {
-                    return links_isIllegalTypeReferenceInConstraint_tmp;
-                }
-
-                // bubble up to the declaration
-                /*@ currentNode :: INode */
-                let currentNode: Node = typeReferenceNode;
-                // forEach === exists
-                /*@ _check :: (d: Declaration<Immutable>) => boolean */
-                function _check(d: Declaration): boolean { return d.parent === currentNode.parent }
-                let cnt = true;     // PV: adding explicit check
-                while (cnt && !forEach(typeParameterSymbol.declarations, _check)) {
-                    let cp = currentNode.parent;
-                    if (cp) { currentNode = cp; } else { cnt = false; }
-                }
-                // if last step was made from the type parameter this means that path has started somewhere in constraint which is illegal
-                links_isIllegalTypeReferenceInConstraint_tmp = currentNode.kind === SyntaxKind.TypeParameter;
-                links.isIllegalTypeReferenceInConstraint = links_isIllegalTypeReferenceInConstraint_tmp;
-                return links_isIllegalTypeReferenceInConstraint_tmp;
-            }
-
-            /*@ instantiateList :: forall M T . (items: IArray<T>, mapper: TypeMapper<Immutable>, instantiator: (item: T, mapper: TypeMapper<Immutable>) => T) => MArray<T> */
-            function instantiateList<T>(items: T[], mapper: TypeMapper, instantiator: (item: T, mapper: TypeMapper) => T): T[] {
-                if (items && items.length) {
-                    let result: T[] = [];
-                    for (let i = 0; i < items.length; i++) {
-                        result.push(instantiator(items[i], mapper));
-                    }
-                    return result;
-                }
-                return items;
-            }
-
-            /*@ identityMapper :: (type: IType) => IType */
-            function identityMapper(type: Type): Type {
-                return type;
-            }
-
-            /*@ instantiateSignature :: /\ (signature: ISignature, mapper: TypeMapper<Immutable>) => { ISignature | 0 < 1 }
-                                        /\ (signature: ISignature, mapper: TypeMapper<Immutable>, eraseTypeParameters: boolean) => { ISignature | 0 < 1 } */
-            declare function instantiateSignature(signature: Signature, mapper: TypeMapper, eraseTypeParameters?: boolean): Signature;
-
-            /*@ instantiateSymbol :: (symbol: ISymbol, mapper: TypeMapper<Immutable>) => { ISymbol | 0 < 1 } */
-            declare function instantiateSymbol(symbol: Symbol, mapper: TypeMapper): Symbol;
-
-            /*@ instantiateAnonymousType :: (type: ObjectType<Immutable>, mapper: TypeMapper<Immutable>) => { ObjectType<Mutable> | 0 < 1 } */
-            declare function instantiateAnonymousType(type: ObjectType, mapper: TypeMapper): ObjectType;
-
-            /*@ instantiateType :: (type: IType, mapper: TypeMapper<Immutable>) => { IType | 0 < 1 } */
-            declare function instantiateType(type: Type, mapper: TypeMapper): Type;
 
 
 

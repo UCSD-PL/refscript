@@ -8,10 +8,8 @@
 
 module Language.Rsc.Typecheck.Environment (
 
-      TCEnv(..), TCEnvO
-
     -- * Create env
-    , initModuleEnv
+      initModuleEnv
     , initGlobalEnv
     , initClassCtorEnv
     , initClassMethEnv
@@ -29,8 +27,9 @@ module Language.Rsc.Typecheck.Environment (
     ) where
 
 import           Data.Data
-import           Language.Fixpoint.Misc       (safeZip)
-import qualified Language.Fixpoint.Types      as F
+import           Language.Fixpoint.Misc         (safeZip)
+import qualified Language.Fixpoint.Types        as F
+import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
@@ -43,74 +42,31 @@ import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.Symbols
 import           Language.Rsc.Typecheck.Subst
+import           Language.Rsc.Typecheck.TCMonad
 import           Language.Rsc.Typecheck.Types
+import           Language.Rsc.Typecheck.Unify   (Unif)
 import           Language.Rsc.Types
 
 -- import           Debug.Trace
 
-
-type Unif r = ( PP r
-              , F.Reftable r
-              , ExprReftable F.Expr r
-              , ExprReftable Int r
-              , ExprReftable F.Symbol r
-              , Free (Fact r)
-              , Typeable r
-              , Data r
-              )
-
---------------------------------------------------------------------------------
--- | Typecheck Environment
---------------------------------------------------------------------------------
-
-data TCEnv r  = TCE {
-    tce_names  :: Env (SymInfo r)
-  , tce_bounds :: Env (RType r)
-  , tce_ctx    :: IContext
-  , tce_path   :: AbsPath
-  , tce_cha    :: ClassHierarchy r
-  , tce_mut    :: Maybe (MutabilityR r)
-  , tce_this   :: Maybe (RType r)
-  , tce_fnid   :: Int
-  }
-  deriving (Functor)
-
---   We define this alias as the "output" type for typechecking any entity
---   that can create or affect binders (e.g. @VarDecl@ or @Statement@)
---   @Nothing@ means if we definitely hit a "return"
---   @Just γ'@ means environment extended with statement binders
-
-type TCEnvO r = Maybe (TCEnv r)
-
-instance CheckingEnvironment r TCEnv where
-  envNames  = tce_names
-  envBounds = tce_bounds
-  envPath   = tce_path
-  envCtx    = tce_ctx
-  envCHA    = tce_cha
-  envMut    = tce_mut
-  envThis   = tce_this
-  envFnId   = tce_fnid
-
-instance (Unif r) => PP (TCEnv r) where
-  pp γ = pp (tce_names γ)
 
 --------------------------------------------------------------------------------
 -- | Environment initialization
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-initGlobalEnv :: Unif r => TcRsc r -> ClassHierarchy r -> TCEnv r
+initGlobalEnv :: Unif r => TcRsc r -> ClassHierarchy r -> TCM r (TCEnv r)
 --------------------------------------------------------------------------------
-initGlobalEnv (Rsc { code = Src ss }) cha =
-    TCE nms bnds ctx pth cha mut tThis (-1)
+initGlobalEnv (Rsc { code = Src ss }) cha = do
+    nms   <- either fatal return (symEnv ss)
+    return $ TCE nms bnds ctx pth cha mut tThis fId
   where
-    nms   = symEnv ss
     bnds  = mempty
     ctx   = emptyContext
     pth   = emptyPath
     mut   = Nothing
     tThis = Nothing
+    fId   = (-1)
 
 -- This will be called *last* on every contructor, method, function.
 -- It is transparent to the incoming environment's: path, cha, mut, this
@@ -123,17 +79,21 @@ initCallableEnv :: (IsLocated l, Unif r)
                 -> IOverloadSig r
                 -> [Id (AnnTc r)]
                 -> [Statement (AnnTc r)]
-                -> TCEnv r
+                -> TCM r (TCEnv r)
 --------------------------------------------------------------------------------
-initCallableEnv l γ f fty xs s
-  = TCE nms bnds ctx pth cha mut tThis (fId l)
-  & tcEnvAdds arg
-  & tcEnvAdds varBs
-  & tcEnvAdds tyBs
+initCallableEnv l γ f fty xs s = do
+    locs    <- either fatal return (symEnv s)
+    let nms1 = locs `mappend` nms0  -- favors first
+    let nms  = envAddReturn f (SI rSym Local ReturnVar Initialized t) nms1
+
+    return   $ tcEnvAdds arg
+             $ tcEnvAdds varBs
+             $ tcEnvAdds tyBs
+             $ TCE nms bnds ctx pth cha mut tThis (fId l)
   where
-    nms   = toFgn (envNames γ)
-          & mappend (symEnv s)
-          & envAddReturn f (SI rSym Local ReturnVar Initialized t)
+
+    nms0  = toFgn (envNames γ)
+    siRet = SI rSym Local ReturnVar Initialized t
 
     rSym  = returnSymbol
     tyBs  = [(Loc (srcPos l) α, SI (F.symbol α) Local Ambient Initialized $ tVar α) | α <- αs]
@@ -184,18 +144,22 @@ initClassMethEnv m (TS _ (BGen nm bs) _) γ = tcEnvAdd eThis γ'
 
 
 --------------------------------------------------------------------------------
-initModuleEnv :: (Unif r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnTc r)] -> TCEnv r
+initModuleEnv :: (Unif r, F.Symbolic n, PP n)
+              => TCEnv r -> n -> [Statement (AnnTc r)] -> TCM r (TCEnv r)
 --------------------------------------------------------------------------------
-initModuleEnv γ n s = TCE nms bnds ctx pth cha mut tThis fnId
+initModuleEnv γ n s = do
+    nms1    <- either fatal return (symEnv s)
+    let nms  = nms1 `mappend` nms0
+    return   $ TCE nms bnds ctx pth cha mut tThis fnId
   where
-    nms   = symEnv s `mappend` toFgn (envNames γ)
-    bnds  = envBounds γ
-    ctx   = envCtx γ
-    pth   = extendAbsPath (envPath γ) n
-    cha   = envCHA γ
-    mut   = Nothing -- 'this' gets out of scope when entering a module
-    tThis = Nothing
-    fnId  = envFnId γ
+    nms0     = toFgn (envNames γ)
+    bnds     = envBounds γ
+    ctx      = envCtx γ
+    pth      = extendAbsPath (envPath γ) n
+    cha      = envCHA γ
+    mut      = Nothing -- 'this' gets out of scope when entering a module
+    tThis    = Nothing
+    fnId     = envFnId γ
 
 
 

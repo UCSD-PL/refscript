@@ -30,7 +30,7 @@ function minIndex(zzzzz) {
     //     can add an annotation to make `a` readonly.
 
 
-    /*@ readonly aa :: { IArray<number> | 0 < len v } */
+    /*@ readonly ra :: { IArray<number> | 0 < len v } */
     let ra = zzzzz;
 
     let step: (i: number, min: number) => number = function (i, min){

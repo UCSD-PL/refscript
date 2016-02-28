@@ -115,11 +115,11 @@ transFact f = go
   where
     go αs xs (TypInst x y ts)    = TypInst x y   $ trans f αs xs <$> ts
     go αs xs (EltOverload x m t) = EltOverload x (trans f αs xs m) (trans f αs xs t)
-    go αs xs (VarAnn l a t)      = VarAnn l a    $ trans f αs xs <$> t
+    go αs xs (VarAnn x l a t)    = VarAnn x l a  $ trans f αs xs <$> t
     go αs xs (MemberAnn t)       = MemberAnn     $ trans f αs xs t
     go αs xs (CtorAnn t)         = CtorAnn       $ trans f αs xs t
     go αs xs (UserCast t)        = UserCast      $ trans f αs xs t
-    go αs xs (SigAnn l t)        = SigAnn l      $ trans f αs xs t
+    go αs xs (SigAnn x l t)      = SigAnn x l    $ trans f αs xs t
     go αs xs (ClassAnn l ts)     = ClassAnn l    $ trans f αs xs ts
     go αs xs (ClassInvAnn r)     = ClassInvAnn   $ rTypeR   -- PV: a little indirect
                                                  $ trans f αs xs
@@ -224,11 +224,11 @@ ntransFact f g = go
     go (ModuleAnn l m)     = ModuleAnn l   <$> g m
     go (TypInst x y ts)    = TypInst x y   <$> mapM (ntrans f g) ts
     go (EltOverload x m t) = EltOverload x <$> ntrans f g m <*> ntrans f g t
-    go (VarAnn l a t)      = VarAnn l a    <$> T.mapM (ntrans f g) t
+    go (VarAnn x l a t)    = VarAnn x l a  <$> T.mapM (ntrans f g) t
     go (MemberAnn t)       = MemberAnn     <$> ntrans f g t
     go (CtorAnn t)         = CtorAnn       <$> ntrans f g t
     go (UserCast t)        = UserCast      <$> ntrans f g t
-    go (SigAnn l t)        = SigAnn l      <$> ntrans f g t
+    go (SigAnn x l t)      = SigAnn x l    <$> ntrans f g t
     go (ClassAnn l t)      = ClassAnn l    <$> ntrans f g t
     go (InterfaceAnn t)    = InterfaceAnn  <$> ntrans f g t
 

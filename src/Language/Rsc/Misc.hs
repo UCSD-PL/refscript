@@ -34,6 +34,9 @@ module Language.Rsc.Misc (
   -- Maybe
   , maybeM, maybeM_, fromJust', maybeToEither, mseq, nths, zwNth
 
+  -- Either
+  , mapLeft
+
   -- Container operations
   , isProperSubsetOf, isEqualSet, isProperSubmapOf
   , equalKeys
@@ -270,7 +273,8 @@ zwNth = (`zip` nths)
 
 s1 <//> s2 = s1 ++ "\n" ++ s2
 
-
+mapLeft f (Left a) = Left (f a)
+mapLeft _ x        = x
 
 
 -- (>>=>) :: IO (Either a b) -> (b -> IO c) -> IO (Either a c)

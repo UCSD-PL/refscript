@@ -11,7 +11,8 @@ module Language.Rsc.Core.Env (
     Env, QEnv
 
   -- * Env API
-  , envFromList, envFromListConcat, envFromList', envFromListWithKey
+  , envFromList, envFromListConcat, envFromList'
+  , envFromListWithKey, envFromListWithKeyM
   , envToList
   , envAdd, envAdds
   , envDel, envDels
@@ -44,6 +45,7 @@ module Language.Rsc.Core.Env (
   ) where
 
 import           Control.Arrow                 (first)
+import           Control.Monad                 (foldM)
 import           Data.Data
 import qualified Data.HashMap.Strict           as M
 import qualified Data.List                     as L
@@ -123,6 +125,16 @@ envFromListWithKey merge = L.foldl' step mempty
     step γ (i, t)  = case envFindTy i γ of
                        Nothing -> envAdd i t γ
                        Just t' -> envAdd i (merge i t t') γ
+
+envFromListWithKeyM ::
+  (Monad m, F.Symbolic x, IsLocated x) =>
+  (x -> a -> a -> m a) -> [(x, a)] -> m (F.SEnv (Located a))
+envFromListWithKeyM merge ls = foldM step mempty ls
+  where
+    step γ (i, t)  = case envFindTy i γ of
+      Nothing -> return (envAdd i t γ)
+      Just t' -> merge i t t' >>= \x -> return (envAdd i x γ)
+
 
 envIntersectWith  :: (a -> b -> c) -> Env a -> Env b -> Env c
 envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))

@@ -279,4 +279,6 @@ errorJoinSymInfo l s1 s2      = mkErr l $ text "Cannot combine the following ann
 errorDupModule l ls m         = mkErr l $ text "Cannot handle multiply defined modules. Module" <+> ticks (pp m) <+>
                                           text "is also defined in the following locations:" $+$
                                           nest 2 (vcat $ map (pp . sourceSpanSrcSpan) ls)
+errorDeclMismatch l x y       = mkErr l $ text "Annotation on symbol" <+> ticks (pp x) <+>
+                                          text "does not match declared symbol" <+> ticks (pp y) <> text "."
 

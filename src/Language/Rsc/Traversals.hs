@@ -90,6 +90,9 @@ efoldTypeMembers' g f h (TM m sm c k s n) γ z =
 
 
 -- | Accumulate moudules
+--
+--   Returns a list of all modules and their top-level statements
+--
 --------------------------------------------------------------------------------
 accumModuleStmts :: IsLocated a
   => [Statement a] -> [(AbsPath, SrcSpan, [Statement a])]

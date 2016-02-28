@@ -29,7 +29,7 @@ import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc              (concatMapM, single)
+import           Language.Rsc.Misc              (concatMapM, mapLeft, single)
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Pretty.Types      ()
@@ -98,27 +98,30 @@ type ModuleEnv r = QEnv (ModuleDef r)
 --    * m_types with: classes and interfaces
 --
 --------------------------------------------------------------------------------
-moduleEnv :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (ModuleEnv r)
+moduleEnv :: (PPR r, Typeable r, Data r) => BareRsc r -> Either Error (ModuleEnv r)
 --------------------------------------------------------------------------------
 moduleEnv (Rsc { code = Src stmts }) =
     case dups of
       []   -> (qenvFromList . map toQEnvList) `liftM` mapM mkMod mods
-      errs -> Left (F.Unsafe errs)
+      errs -> Left (catErrors errs)
   where
+    mods  = accumModuleStmts stmts
 
-    mods        = accumModuleStmts stmts
-
-    dups        = map (\(m:ms) -> dupErr m ms)    -- Report Errors
-                $ filter ((1 <) . length)         -- Gather multiply occurring ones
-                $ groupBy (on (==) fst3) mods     -- Of all modules
+    dups  = map     (\(m:ms) -> dupErr m ms)  -- Report Errors
+          $ filter  ((1 <) . length)          -- Gather multiply occurring ones
+          $ groupBy (on (==) fst3) mods       -- Of all modules
 
     dupErr m ms = errorDupModule (snd3 m) (map snd3 ms) (fst3 m)
 
     toQEnvList p  = (m_path p, p)
-    mkMod (p, _, s) = ModuleDef <$> varEnv p s <*> typeEnv s <*> enumEnv s <*> return p
+
+    mkMod (p, _, s) = ModuleDef <$> varEnv p s
+                                <*> typeEnv s
+                                <*> enumEnv s
+                                <*> return p
 
     -- | Variables
-    varEnv p =  return . symEnv' . SL . vStmts p
+    varEnv p s = symEnv' . SL . vStmts p $ s
     vStmts p s = concatMap (vStmt p) s
 
     vStmt _ (VarDeclStmt _ vds)
@@ -127,14 +130,14 @@ moduleEnv (Rsc { code = Src stmts }) =
           , SI (sym x) loc a Uninitialized t
           )
           | VarDecl l x _ <- vds
-          , VarAnn loc a (Just t) <- fFact l
+          , VarAnn _ loc a (Just t) <- fFact l
         ]
     vStmt _ (FunctionStmt l x _ _)
       = [ ( ss x
           , FuncDeclKind
           , SI (sym x) loc Ambient Initialized t
           )
-          | SigAnn loc t <- fFact l
+          | SigAnn _ loc t <- fFact l
         ]
     vStmt _ (ClassStmt l x _)
       = [ ( ss x
@@ -147,12 +150,14 @@ moduleEnv (Rsc { code = Src stmts }) =
     vStmt p (ModuleStmt l x _)
       = [ ( ss x
           , ModuleDeclKind
-          , SI (sym x) Local Ambient Initialized (TMod (pathInPath l p x)))
+          , SI (sym x) Local Ambient Initialized (modTy l p x)
+          )
         ]
     vStmt p (EnumStmt _ x _)
       = [ ( ss x
           , EnumDeclKind
-          , SI (sym x) Local Ambient Initialized (TRef (Gen (QN p $ F.symbol x) []) fTop))
+          , SI (sym x) Local Ambient Initialized (enumTy p x)
+          )
         ]
     vStmt _ _ = []
 
@@ -175,16 +180,19 @@ moduleEnv (Rsc { code = Src stmts }) =
     ss  = fmap fSrc
     sym = F.symbol
 
+    enumTy p x = TRef (Gen (QN p $ sym x) []) fTop
+    modTy l p x = TMod (pathInPath l p x)
+
 --------------------------------------------------------------------------------
-toDeclaration :: PPR r => Statement (AnnR r) -> Either FError (Id SrcSpan, TypeDecl r)
+toDeclaration :: PPR r => Statement (AnnR r) -> Either Error (Id SrcSpan, TypeDecl r)
 --------------------------------------------------------------------------------
 toDeclaration (ClassStmt l c cs)
   | [ts] <- cAnn
   = case extractTypeMembers l cs of
-      Left e   -> Left  (F.Unsafe [e])
+      Left e   -> Left e
       Right tm -> Right (cc, TD ts cInv tm)
   | otherwise
-  = Left (F.Unsafe [errorClassAnnot l c])
+  = Left (errorClassAnnot l c)
   where
     cc     = fmap fSrc c
     cAnn   =         [ ts | ClassAnn _ ts <- fFact l ]
@@ -192,11 +200,11 @@ toDeclaration (ClassStmt l c cs)
 
 toDeclaration (InterfaceStmt l c)
   | [t] <- ifaceAnns  = Right (fmap fSrc c,t)
-  | otherwise         = Left $ F.Unsafe [errorInterfaceAnnot l c]
+  | otherwise         = Left (errorInterfaceAnnot l c)
   where
     ifaceAnns = [ t | InterfaceAnn t <- fFact l ]
 
-toDeclaration s = Left $ F.Unsafe [errorStatementeAnnot (getAnnotation s) s]
+toDeclaration s = Left (errorStatementeAnnot (getAnnotation s) s)
 
 
 ---------------------------------------------------------------------------------

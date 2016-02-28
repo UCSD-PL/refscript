@@ -95,7 +95,9 @@ instance Functor ClassHierarchy where
 --------------------------------------------------------------------------------
 mkCHA :: (PPR r, Typeable r, Data r) => BareRsc r -> Either FError (ClassHierarchy r)
 --------------------------------------------------------------------------------
-mkCHA rsc = moduleEnv rsc >>= pure . fromModuleDef
+mkCHA rsc = case moduleEnv rsc of
+  Left e  -> Left  $ F.Unsafe [e]
+  Right m -> Right $ fromModuleDef m
 
 
 --------------------------------------------------------------------------------

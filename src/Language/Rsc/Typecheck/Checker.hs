@@ -109,14 +109,13 @@ typeCheck cfg pgm cha = EitherIO $ do
 --------------------------------------------------------------------------------
 tcRsc :: Unif r => TcRsc r -> ClassHierarchy r -> TCM r (TcRsc r)
 --------------------------------------------------------------------------------
-tcRsc p@(Rsc {code = Src fs}) cha
-  = do  _       <- checkTypes cha
-        (fs',_) <- tcStmts γ fs
-        fs''    <- patch fs'
-        ast_cnt <- getAstCount
-        return   $ p { code = Src fs'', maxId = ast_cnt }
-  where
-    γ = initGlobalEnv p cha
+tcRsc p@(Rsc {code = Src fs}) cha = do
+    γ       <-  initGlobalEnv p cha
+    _       <- checkTypes cha
+    (fs',_) <- tcStmts γ fs
+    fs''    <- patch fs'
+    ast_cnt <- getAstCount
+    return   $ p { code = Src fs'', maxId = ast_cnt }
 
 
 -- | Patch annotation on the AST
@@ -173,7 +172,7 @@ tcCallable :: (Unif r, IsLocated l, PP l)
            -> TCM r [Statement (AnnTc r)]
 --------------------------------------------------------------------------------
 tcCallable γ l f xs body fty
-  = do  γ'    <- pure (initCallableEnv l γ f fty xs body)
+  = do  γ'    <- initCallableEnv l γ f fty xs body
         body' <- addReturnStmt l γ' body
         tcFunBody γ' l body'
 
@@ -186,7 +185,7 @@ addReturnStmt l γ body
 tcFunBody γ l body
   = do  z <- tcStmts γ body
         case z of
-          (b, Just _) | rt /= tVoid -> fatal er b
+          (b, Just _) | rt /= tVoid -> fatal er
           (b, _     ) | otherwise   -> return b
   where
     er = errorMissingReturn (srcPos l)
@@ -357,8 +356,9 @@ tcStmt γ (ClassStmt l x ce)
     (ceS, ceI) = partition isStaticClassElt ce
 
 -- | module M { ... }
-tcStmt γ (ModuleStmt l n body)
-  = (ModuleStmt l n *** return (Just γ)) <$>  tcStmts (initModuleEnv γ n body) body
+tcStmt γ (ModuleStmt l n body) = do
+    γ1 <- initModuleEnv γ n body
+    (ModuleStmt l n *** return (Just γ)) <$>  tcStmts γ1 body
 
 -- | enum M { ... }
 tcStmt γ (EnumStmt l n body)
@@ -382,44 +382,48 @@ tcVarDecl :: Unif r => TCEnv r -> VarDecl (AnnTc r) -> TCM r (VarDecl (AnnTc r),
 --------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e)) =
   case varDeclSymbol v of
-    Left err -> tcError err
+    Left err -> fatal err
 
-    Right Nothing ->
+    Right Nothing -> do
       -- Local (no type annotation)
-        do  (e', to) <- tcExprW γ e
-            sio      <- pure (SI (F.symbol x) Local WriteLocal Initialized <$> to)
-            return (VarDecl l x (Just e'), tcEnvAddo γ x sio)
+        (e', to) <- tcExprW γ e
+        sio      <- pure (SI xSym Local WriteLocal Initialized <$> to)
+        return      (VarDecl l x (Just e'), tcEnvAddo γ x sio)
 
       -- Local (with type annotation)
-    Right (Just (SI y lc WriteLocal _ t)) ->
-        do  (e', t') <- tcExprT γ e t
-            return ( VarDecl l x $ Just e'
-                   , Just $ tcEnvAdd (SI y lc WriteLocal Initialized t') γ)
+    Right (Just (SI y lc WriteLocal _ t)) -> do
+        (e', t') <- tcExprT γ e t
+        return ( VarDecl l x $ Just e'
+               , Just $ tcEnvAdd (SI xSym lc WriteLocal Initialized t') γ)
 
       -- Global
-    Right (Just s@(SI _ _ WriteGlobal _ t)) ->
+    Right (Just s@(SI y _ WriteGlobal _ t)) -> do
         -- PV: the global variable should be in scope already,
         --     since it is being hoisted to the beginning of the
         --     scope.
-        do  (e', _)  <- tcExprT γ e t
-            return    $ (VarDecl l x (Just e'), Just $ tcEnvAdd s γ)
+        (e', _)  <- tcExprT γ e t
+        return      (VarDecl l x (Just e'), Just $ tcEnvAdd s γ)
 
       -- ReadOnly
-    Right (Just (SI y lc RdOnly _ t)) ->
-        do  ([e'], Just t') <- tcNormalCallWCtx γ l (builtinOpId BIExprT) [(e, Just t)] (idTy t)
-            return ( VarDecl l x $ Just e'
-                   , Just $ tcEnvAdd (SI y lc RdOnly Initialized t') γ)
+    Right (Just (SI y lc RdOnly _ t)) -> do
+        ([e'], Just t') <- tcNormalCallWCtx γ l (builtinOpId BIExprT) [(e, Just t)] (idTy t)
+        return ( VarDecl l x $ Just e'
+               , Just $ tcEnvAdd (SI xSym lc RdOnly Initialized t') γ)
 
-    c -> fatal (unimplemented l "tcVarDecl" ("case: " ++ ppshow c)) (v, Just γ)
+    c -> fatal (unimplemented l "tcVarDecl" ("case: " ++ ppshow c))
+  where
+    xSym = F.symbol x
 
 tcVarDecl γ v@(VarDecl l x Nothing) =
   case varDeclSymbol v of
-    Left err -> tcError err
+    Left err -> fatal err
 
     Right (Just (SI y lc Ambient _ t)) ->
-          return $ (v, Just $ tcEnvAdds [(x, SI y lc Ambient Initialized t)] γ)
+        return $ (v, Just $ tcEnvAdds [(x, SI xSym lc Ambient Initialized t)] γ)
 
-    Right _ -> fatal (bug l "TC-tcVarDecl: this shouldn't happen") (v, Just γ)
+    Right _ -> fatal (bug l "TC-tcVarDecl: this shouldn't happen")
+  where
+    xSym = F.symbol x
 
 --------------------------------------------------------------------------------
 tcStaticClassElt
@@ -439,7 +443,7 @@ tcStaticClassElt γ (TD sig _ ms) c@(MemberMethDecl l True x xs body) =
         body' <- foldM (tcCallable γ l x xs) body its
         return $ MemberMethDecl l True x xs body'
     Nothing ->
-        fatal (errorClassEltAnnot (srcPos l) (sig) x) c
+        fatal (errorClassEltAnnot (srcPos l) (sig) x)
 
 -- | Static field
 --
@@ -451,10 +455,10 @@ tcStaticClassElt γ (TD sig _ ms) c@(MemberVarDecl l True x (Just e)) =
         ([e'],_) <- tcNormalCall γ l (builtinOpId BIFieldInit) [(e, Just t)] (mkInitFldTy t)
         return $ MemberVarDecl l True x $ Just e'
     Nothing ->
-        fatal (errorClassEltAnnot (srcPos l) sig x) c
+        fatal (errorClassEltAnnot (srcPos l) sig x)
 
 tcStaticClassElt _ _ c@(MemberVarDecl l True x Nothing)
-  = fatal (unsupportedStaticNoInit (srcPos l) x) c
+  = fatal (unsupportedStaticNoInit (srcPos l) x)
 
 tcStaticClassElt _ _ c = error (show $ pp "tcStaticClassElt - not a static element: " $+$ pp c)
 
@@ -512,7 +516,7 @@ tcInstanceClassElt γ (TD sig _ ms) c@(MemberMethDecl l False x xs bd)
         bd'          <- foldM (\b (m,t) -> tcCallable (mkEnv m) l x xs b t) bd mts'
         return        $ MemberMethDecl l False x xs bd'
   | otherwise
-  = fatal (errorClassEltAnnot (srcPos l) (sig) x) c
+  = fatal (errorClassEltAnnot (srcPos l) (sig) x)
   where
     mkEnv m     = initClassMethEnv m sig γ
 
@@ -653,7 +657,7 @@ tcExpr _ e@(NullLit _) _
 tcExpr γ e@(ThisRef l) _
   = case tcEnvFindTy thisSym γ of
       Just t  -> return (e, t)
-      Nothing -> fatal (errorUnboundId (fSrc l) "this") (e, tBot)
+      Nothing -> fatal (errorUnboundId (fSrc l) "this")
 
 tcExpr γ e@(VarRef l x) _
   -- | `undefined`
@@ -708,7 +712,7 @@ tcExpr γ e@(CallExpr _ _ _) s
 -- | [e1,..,en]
 tcExpr γ e@(ArrayLit l es) to
   = arrayLitTy l γ e to (length es) >>= \case
-      Left ee    -> fatal ee (e, tBot)
+      Left ee    -> fatal ee
       Right opTy -> first (ArrayLit l) <$> tcNormalCallWD γ l (builtinOpId BIArrayLit) es opTy
 
 -- | { f1: e1, ..., fn: tn }
@@ -778,7 +782,7 @@ tcExpr γ e@(NewExpr _ _ _) s
 tcExpr γ e@(SuperRef l) _
   = case tcEnvFindTy (builtinOpId BISuper) γ of
       Just t  -> return (e,t)
-      Nothing -> fatal (errorSuper (fSrc l)) (e, tBot)
+      Nothing -> fatal (errorSuper (fSrc l))
 
 -- | function (x,..) {  }
 tcExpr γ e@(FuncExpr l fo xs body) tCtxO
@@ -787,9 +791,9 @@ tcExpr γ e@(FuncExpr l fo xs body) tCtxO
         body' <- foldM (tcCallable γ l f xs) body ts
         return $ (FuncExpr l fo xs body', ft)
   | otherwise
-  = fatal (errorNoFuncAnn $ srcPos l) (e, tBot)
+  = fatal (errorNoFuncAnn $ srcPos l)
   where
-    funTy | [ft] <- [ t | SigAnn _ t <- fFact l ] = Just ft
+    funTy | [ft] <- [ t | SigAnn _ _ t <- fFact l ] = Just ft
           | Just ft <- tCtxO = Just ft
           | otherwise        = Nothing
     f     = maybe (F.symbol "<anonymous>") F.symbol fo
@@ -815,7 +819,7 @@ tcCall γ c@(PrefixExpr l o e) _
        z    <- tcNormalCallWD γ l (prefixOpId o) [e] opTy
        case z of
          ([e'], t) -> return (PrefixExpr l o e', t)
-         _         -> fatal (impossible l "tcCall PrefixExpr") (c, tBot)
+         _         -> fatal (impossible l "tcCall PrefixExpr")
 
 -- | `e1 o e2`
 tcCall γ c@(InfixExpr l o@OpInstanceof e1 e2) _
@@ -827,7 +831,7 @@ tcCall γ c@(InfixExpr l o@OpInstanceof e1 e2) _
                                  tcNormalCallWD γ l (infixOpId o) args opTy
                       -- TODO: add qualified name
                 return (InfixExpr l o e1' e2', t')
-         _  -> fatal (unimplemented l "tcCall-instanceof" $ ppshow e2) (c,tBot)
+         _  -> fatal (unimplemented l "tcCall-instanceof" $ ppshow e2)
   where
     l2 = getAnnotation e2
 
@@ -836,7 +840,7 @@ tcCall γ c@(InfixExpr l o e1 e2) _
        z    <- tcNormalCallWD γ l (infixOpId o) [e1, e2'] opTy
        case z of
          ([e1', e2'], t) -> return (InfixExpr l o e1' e2', t)
-         _ -> fatal (impossible (srcPos l) "tcCall InfixExpr") (c, tBot)
+         _ -> fatal (impossible (srcPos l) "tcCall InfixExpr")
   where
     e2' | o `elem` [OpIn] = enableUnique e2
         | otherwise          = e2
@@ -847,14 +851,14 @@ tcCall γ c@(InfixExpr l o e1 e2) _
 tcCall γ e@(BracketRef l e1 e2) _
   = runFailM (tcExpr γ e1 Nothing) >>= \case
       -- Enumeration
-      Right (_, t) | isEnumType (envCHA γ) t -> fatal (unimplemented (srcPos l) msg e) (e, tBot)
+      Right (_, t) | isEnumType (envCHA γ) t -> fatal (unimplemented (srcPos l) msg e)
       -- Default
       _ -> safeEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
   where
     msg     = "Support for dynamic access of enumerations"
     call ty = tcNormalCallWD γ l (builtinOpId BIBracketRef) [e1, e2] ty >>= \case
           ([e1', e2'], t) -> return (BracketRef l e1' e2', t)
-          _ -> fatal (impossible (srcPos l) "tcCall BracketRef") (e, tBot)
+          _ -> fatal (impossible (srcPos l) "tcCall BracketRef")
 
 -- | `e1[e2] = e3`
 tcCall γ e@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3) _
@@ -862,7 +866,7 @@ tcCall γ e@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3) _
        z <- tcNormalCallWD γ l (builtinOpId BIBracketAssign) [e1,e2,e3] opTy
        case z of
          ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
-         _ -> fatal (impossible (srcPos l) "tcCall AssignExpr") (e, tBot)
+         _ -> fatal (impossible (srcPos l) "tcCall AssignExpr")
 
 -- | `new e(e1,...,en)`
 tcCall γ c@(NewExpr l e es) s
@@ -873,7 +877,7 @@ tcCall γ c@(NewExpr l e es) s
             tNew'       <- pure (adjustCtxMut tNew s)
             return (NewExpr l e' es', tNew')
          Nothing ->
-            fatal (errorConstrMissing (srcPos l) t) (c, tBot)
+            fatal (errorConstrMissing (srcPos l) t)
 
 -- | e.f
 --
@@ -884,7 +888,9 @@ tcCall γ ef@(DotRef l e0 f) _
     checkAccess (Right (_, tRcvr))
       | isArrayLen tRcvr = checkArrayLength
       | otherwise        = checkProp (getProp l γ F.dummySymbol f tRcvr)
-    checkAccess (Left er) = fatal er (ef, tBot)
+
+    checkAccess (Left (TCErr Fatal    e)) = fatal e
+    checkAccess (Left (TCErr NonFatal e)) = tcError e
 
     -- `array.length`
     checkArrayLength
@@ -934,8 +940,9 @@ tcCall γ (CallExpr l em@(DotRef l1 e0 f) es) _
     -- Non-variadic
     checkNonVariadic =
       runFailM (tcExpr γ ue Nothing) >>= \case
-        Right (_, te) -> checkMemberAccess te
-        Left e        -> tcError e
+        Right (_, te)           -> checkMemberAccess te
+        Left (TCErr Fatal    e) -> fatal e
+        Left (TCErr NonFatal e) -> tcError e
 
     -- Check all corresponding type members `tms`
     checkMemberAccess te =
@@ -977,7 +984,7 @@ tcCall γ ex@(CallExpr l e es) _ = do
        -- return       (CallExpr l e' es', t)
 
 tcCall _ e _
-  = fatal (unimplemented (srcPos e) "tcCall" e) (e, tBot)
+  = fatal (unimplemented (srcPos e) "tcCall" e)
 
 --------------------------------------------------------------------------------
 -- | @tcNormalCall@ resolves overloads and returns cast-wrapped versions of

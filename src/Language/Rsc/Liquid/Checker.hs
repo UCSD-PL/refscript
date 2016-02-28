@@ -197,12 +197,12 @@ consRsc p@(Rsc {code = Src fs}) cha
 initGlobalEnv :: RefScript -> ClassHierarchy F.Reft -> CGM CGEnv
 --------------------------------------------------------------------------------
 initGlobalEnv pgm@(Rsc { code = Src ss }) cha = do
+    nms   <- either cgError return (symEnv ss)
     let g  = CGE nms bnds ctx pth cha fenv grd cst mut thisT (-1)
     cha'  <- freshenCHA g (envCHA   g)
     nms'  <- freshenEnv g (envNames g)
     return $ g { cge_cha = cha', cge_names = nms' }
   where
-    nms    = symEnv ss
     bnds   = mempty
     ctx    = emptyContext
     pth    = mkAbsPath []
@@ -217,21 +217,23 @@ initGlobalEnv pgm@(Rsc { code = Src ss }) cha = do
 initModuleEnv :: F.Symbolic n => CGEnv -> n -> [Statement AnnLq] -> CGM CGEnv
 --------------------------------------------------------------------------------
 initModuleEnv g n s = do
-    let g' = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
-    nms'  <- freshenEnv g' (envNames g')
-    return $ g' { cge_names = nms' }
+    nms1    <- either cgError return (symEnv s)
+    let nms  = nms1 `mappend` nms0
+    let g'   = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
+    nms'    <- freshenEnv g' (envNames g')
+    return   $ g' { cge_names = nms' }
   where
-    nms    = symEnv s `mappend` toFgn (envNames g)
-    bnds   = envBounds g
-    ctx    = cge_ctx g
-    pth    = extendAbsPath (cge_path g) n
-    cha    = cge_cha g
-    fenv   = cge_fenv g
-    grd    = cge_guards g
-    cst    = cge_consts g
-    mut    = Nothing
-    thisT  = Nothing
-    fnId   = cge_fnid g
+    nms0     = toFgn (envNames g)
+    bnds     = envBounds g
+    ctx      = cge_ctx g
+    pth      = extendAbsPath (cge_path g) n
+    cha      = cge_cha g
+    fenv     = cge_fenv g
+    grd      = cge_guards g
+    cst      = cge_consts g
+    mut      = Nothing
+    thisT    = Nothing
+    fnId     = cge_fnid g
 
 -- | `initCallableEnv l f i xs (αs, ts, t) g`
 --
@@ -250,35 +252,38 @@ initCallableEnv :: (PP x, IsLocated x)
                 -> CGM CGEnv
 --------------------------------------------------------------------------------
 initCallableEnv l g f fty xs s = do
-    let g0 = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
-    nms'  <- freshenEnv g0 nms
-    let g1 = g0 { cge_names = nms' }
-    g2    <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-0") params g1
-    g3    <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-1") [arg] g2
-    return g3
-  where
-             -- No FP binding for these
-    nms    = envAddReturn f (SI rSym Local ReturnVar Initialized t)
-           $ envAdds tyBs
-           $ mappend (symEnv s)
-           $ toFgn (envNames g)
-    rSym   = returnSymbol
-    bnds   = envAdds [(v,tv) | BTV v _ (Just tv) <- bs] $ cge_bounds g
-    ctx    = pushContext i (cge_ctx g)
-    pth    = cge_path g
-    cha    = cge_cha g
-    fenv   = cge_fenv g
-    grd    = []
-    cst    = cge_consts g
-    mut    = cge_mut g
-    thisT  = cge_this g
+    nms1   <- either cgError return (symEnv s)
+    let nms = envAddReturn f (SI rSym Local ReturnVar Initialized t)
+            $ envAdds tyBs
+            $ nms1 `mappend` nms0
 
-    tyBs   = [(Loc (srcPos l) α, SI (F.symbol α) Local Ambient Initialized $ tVar α) | α <- αs]
-    params = [ SI (F.symbol x) Local WriteLocal Initialized t_ |
-               (x, t_) <- safeZip "initCallableEnv" xs ts ]
-    arg    = mkArgumentsSI l ts
-    ts     = map b_type xts
-    αs     = map btvToTV bs
+    let g0  = CGE nms bnds ctx pth cha fenv grd cst mut thisT fnId
+    nms'   <- freshenEnv g0 nms
+    let g1  = g0 { cge_names = nms' }
+    g2     <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-0") params g1
+    g3     <- cgEnvAdds l ("init-func-" ++ ppshow f ++ "-1") [arg] g2
+    return    g3
+  where
+
+    nms0    = toFgn (envNames g)
+              -- No FP binding for these
+    rSym    = returnSymbol
+    bnds    = envAdds [(v,tv) | BTV v _ (Just tv) <- bs] $ cge_bounds g
+    ctx     = pushContext i (cge_ctx g)
+    pth     = cge_path g
+    cha     = cge_cha g
+    fenv    = cge_fenv g
+    grd     = []
+    cst     = cge_consts g
+    mut     = cge_mut g
+    thisT   = cge_this g
+
+    tyBs    = [(Loc (srcPos l) α, SI (F.symbol α) Local Ambient Initialized $ tVar α) | α <- αs]
+    params  = [ SI (F.symbol x) Local WriteLocal Initialized t_ |
+                (x, t_) <- safeZip "initCallableEnv" xs ts ]
+    arg     = mkArgumentsSI l ts
+    ts      = map b_type xts
+    αs      = map btvToTV bs
     (i, (bs,xts,t)) = fty
     fnId   = fId l
 
@@ -332,7 +337,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign v@(LVar _ x) e))
 
       -- This is the first time we initialize this variable
       Just (SI n lc WriteGlobal Uninitialized t) -> do
-          t' <- freshenType g l t
+          t' <- freshenType g l lc t
           mseq (consExprT g e t') $ \(_, g') ->
             Just <$> cgEnvAdds l "consAsgn-0" [SI n lc WriteGlobal Initialized t'] g'
 
@@ -484,24 +489,23 @@ consVarDecl g v@(VarDecl l x (Just e)) =
 
     goInfer a s = mseq (consExpr g e s) $ \(y,gy) -> do
                     eT    <- safeEnvFindTy l gy y
-                    Just <$> cgEnvAdds l "cvd" [si x a eT] gy
+                    Just <$> cgEnvAdds l "cvd" [si a eT] gy
 
     goRO _ t@TPrim{} = goInfer RdOnly (Just t)
-    goRO s t         = freshenType g l t >>= go s
+    goRO s t         = freshenType g l (v_loc s) t >>= go s
 
-    goRest s t     = freshenType g l t >>= go s
+    goRest s t       = freshenType g l (v_loc s) t >>= go s
 
     go (SI n lc a _ _) t
-      | onlyCtxTyped e
-      = do  g' <- fmap snd <$> consExpr g e (Just t)
-            TR.mapM (cgEnvAdds l "consVarDecl" [SI n lc a Initialized t]) g'
-      | otherwise
-      = mseq (consExpr g e (Just t)) $ \(y,gy) -> do
-          eT      <- safeEnvFindTy l gy y
-          _       <- subType l Nothing gy eT t
-          Just   <$> cgEnvAdds l "consVarDecl" [SI n lc a Initialized t] gy
+      | onlyCtxTyped e = fmap snd <$> consExpr g e (Just t) >>=
+                         TR.mapM (cgEnvAdds l "consVarDecl" [SI xSym lc a Initialized t])
+      | otherwise      = mseq (consExpr g e (Just t)) $ \(y,gy) -> do
+                           eT      <- safeEnvFindTy l gy y
+                           _       <- subType l Nothing gy eT t
+                           Just   <$> cgEnvAdds l "consVarDecl" [SI xSym lc a Initialized t] gy
 
-    si x a = SI (F.symbol x) Local a Initialized
+    si a = SI xSym Local a Initialized
+    xSym = F.symbol x
 
 consVarDecl g v@(VarDecl l _ Nothing) =
   case varDeclSymbol v of

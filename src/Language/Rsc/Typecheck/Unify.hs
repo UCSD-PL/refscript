@@ -4,27 +4,40 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
-module Language.Rsc.Typecheck.Unify (unifys, unassigned) where
+module Language.Rsc.Typecheck.Unify (
+    unifys
+  , unassigned
+  , Unif (..)
+  ) where
 
-import           Control.Monad                      (foldM)
-import           Data.Function                      (on)
-import qualified Data.HashMap.Strict                as HM
-import qualified Data.HashSet                       as S
-import qualified Data.List                          as L
-import qualified Language.Fixpoint.Types            as F
+import           Control.Monad                  (foldM)
+import           Data.Function                  (on)
+import qualified Data.HashMap.Strict            as HM
+import qualified Data.HashSet                   as S
+import qualified Data.List                      as L
+import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Types.Errors
+import           Language.Rsc.Annotations
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc                  (mapPair)
-import           Language.Rsc.Pretty                ()
-import           Language.Rsc.Typecheck.Environment
+import           Language.Rsc.Misc              (mapPair)
+import           Language.Rsc.Pretty            ()
+import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 
 -- import           Debug.Trace
+
+type Unif r = ( PP r
+              , F.Reftable r
+              , ExprReftable F.Expr r
+              , ExprReftable Int r
+              , ExprReftable F.Symbol r
+              , Free (Fact r)
+              )
 
 -----------------------------------------------------------------------------
 -- | Unification

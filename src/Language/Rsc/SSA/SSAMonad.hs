@@ -203,7 +203,7 @@ initSsaVar g l x  = case varDeclAnnToAsgn l of
 varDeclToAsgn (VarDecl l _ _) = varDeclAnnToAsgn l
 
 varDeclAnnToAsgn l
-  | (a:_) <- [ a_ | VarAnn _ a_ _ <- fFact l ] = a
+  | (a:_) <- [ a_ | VarAnn _ _ a_ _ <- fFact l ] = a
   | otherwise = WriteLocal
 
 -------------------------------------------------------------------------------------

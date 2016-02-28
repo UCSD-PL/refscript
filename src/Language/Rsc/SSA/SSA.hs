@@ -88,9 +88,9 @@ ssaStmts g ss = fmap (mapSnd flattenBlock) $ ssaSeqOpt ssaStmt g ss'
 
     isAmbDeclStmt (VarDeclStmt _ vds)  = any isAmbDecl vds
     isAmbDeclStmt _                    = False
-    isAmbDecl     (VarDecl l _ _ )     = any isAmbient (fFact l)
-    isAmbient     (VarAnn _ Ambient _) = True
-    isAmbient     _                    = False
+    isAmbDecl   (VarDecl l _ _ )       = any isAmbient (fFact l)
+    isAmbient   (VarAnn _ _ Ambient _) = True
+    isAmbient   _                      = False
 
 
 -------------------------------------------------------------------------------------

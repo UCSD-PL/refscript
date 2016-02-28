@@ -21,6 +21,7 @@ module Language.Rsc.Typecheck.TCMonad (
   , runFailM, runMaybeM
 
   -- * Errors
+  , Severity (..), TCError (..)
   , fatal, tcError, tcWrap
 
   -- * Freshness
@@ -51,23 +52,24 @@ module Language.Rsc.Typecheck.TCMonad (
   )  where
 
 
-import           Control.Monad.Except               (catchError)
+import           Control.Monad.Except             (catchError)
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
-import           Data.Either                        (partitionEithers)
-import           Data.Function                      (on)
-import qualified Data.HashMap.Strict                as M
-import qualified Data.IntMap.Strict                 as I
-import           Data.List                          (isPrefixOf)
-import           Data.Maybe                         (catMaybes)
+import           Data.Either                      (partitionEithers)
+import           Data.Function                    (on)
+import qualified Data.HashMap.Strict              as M
+import qualified Data.IntMap.Strict               as I
+import           Data.List                        (isPrefixOf)
+import           Data.Maybe                       (catMaybes)
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types            as F
+import qualified Language.Fixpoint.Types          as F
 import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.CmdLine
 import           Language.Rsc.Core.Env
+import           Language.Rsc.Environment
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
 import           Language.Rsc.Misc
@@ -75,14 +77,14 @@ import           Language.Rsc.Module
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
-import           Language.Rsc.Typecheck.Environment
+-- import           Language.Rsc.Typecheck.Environment
 import           Language.Rsc.Typecheck.Sub
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Typecheck.Unify
 import           Language.Rsc.Types
 import           Language.Rsc.TypeUtilities
-import qualified System.Console.CmdArgs.Verbosity   as V
+import qualified System.Console.CmdArgs.Verbosity as V
 
 
 --------------------------------------------------------------------------------
@@ -121,7 +123,10 @@ data TCState r = TCS {
 
   }
 
-type TCM r     = ExceptT Error (State (TCState r))
+
+data TCError = TCErr { severity :: Severity, _err :: Error }
+
+type TCM r   = ExceptT TCError (State (TCState r))
 
 --------------------------------------------------------------------------------
 whenLoud :: TCM r () -> TCM r ()
@@ -200,21 +205,27 @@ extSubst bs = getSubst >>= setSubst . (`mappend` θ)
 -- | Error handling
 --------------------------------------------------------------------------------
 
+data Severity = Fatal | NonFatal
+
 -- | tcError produces a *recoverable* error (e.g. in a dead-cast environment)
 --------------------------------------------------------------------------------
 tcError :: Error -> TCM r a
 --------------------------------------------------------------------------------
-tcError = throwE
+tcError = throwE . TCErr NonFatal
 
 --------------------------------------------------------------------------------
 tcWrap :: TCM r a -> TCM r (Either Error a)
 --------------------------------------------------------------------------------
-tcWrap act = fmap Right act `catchError` (return . Left)
+tcWrap act = catchError (fmap Right act)
+                        (\e -> case e of
+                                 TCErr Fatal    _  -> throwE e  -- propagate
+                                 TCErr NonFatal e' -> return (Left e'))
 
 --------------------------------------------------------------------------------
-fatal   :: Error -> a -> TCM r a
+fatal   :: Error -> TCM r a
 --------------------------------------------------------------------------------
-fatal err x = modify (\st -> st { tc_errors = err : tc_errors st}) >> return x
+fatal err = modify (\st -> st { tc_errors = err : tc_errors st}) >>
+            throwE (TCErr Fatal err)
 
 
 --------------------------------------------------------------------------------
@@ -232,7 +243,7 @@ freshTyArgs a n ξ bs t
 freshSubst :: Unif r => AnnTc r -> Int -> IContext -> [BTVar r] -> TCM r ([BTVar r], RSubst r)
 --------------------------------------------------------------------------------
 freshSubst a@(FA _ l _) n ξ bs
-  = do when (not $ uniqueBy (on (==) btv_sym) bs) $ fatal (errorUniqueTypeParams l) ()
+  = do unless (uniqueBy (on (==) btv_sym) bs) (fatal (errorUniqueTypeParams l))
        fbs       <- mapM (freshTVar l) bs
        _         <- setTyArgs a n ξ fbs
        _         <- extSubst fbs
@@ -268,12 +279,12 @@ addAnn l f = modify $ \st -> st {
     }
 
 -------------------------------------------------------------------------------
-execute ::  Unif r => Config -> V.Verbosity -> TcRsc r -> TCM r a -> Either (F.FixResult Error) a
+execute :: Unif r => Config -> V.Verbosity -> TcRsc r -> TCM r a -> Either (F.FixResult Error) a
 -------------------------------------------------------------------------------
-execute cfg verb pgm act
-  = case runState (runExceptT act) $ initState cfg verb pgm of
-      (Left err, _) -> Left $ F.Unsafe [err]
-      (Right x, st) -> applyNonNull (Right x) (Left . F.Unsafe) (reverse $ tc_errors st)
+execute cfg verb pgm act =
+  case runExceptT act `runState` initState cfg verb pgm of
+    (Left err, _) -> Left $ F.Unsafe [_err err]
+    (Right x, st) -> applyNonNull (Right x) (Left . F.Unsafe) (reverse $ tc_errors st)
 
 -------------------------------------------------------------------------------
 initState :: Unif r => Config -> V.Verbosity -> TcRsc r -> TCState r
@@ -399,9 +410,11 @@ castMC γ e = castM γ e (consumable e || isUniqueEnabled e)
 
 -- | Run the monad `a` in the current state. This action will not alter the state.
 --------------------------------------------------------------------------------
-runFailM :: Unif r => TCM r a -> TCM r (Either Error a)
+runFailM :: Unif r => TCM r a -> TCM r (Either TCError a)
 --------------------------------------------------------------------------------
-runFailM a = fst . runState (runExceptT a) <$> get
+runFailM a = do st        <- get
+                let (b, _) = runState (runExceptT a) st
+                return       b
 
 --------------------------------------------------------------------------------
 runMaybeM :: Unif r => TCM r a -> TCM r (Maybe a)

@@ -27398,7 +27398,7 @@ var ts;
                                 else {
                                     var propertyType = checker.getTypeAtLocation(member);
                                     var optionText = (member.questionToken) ? "?" : "";
-                                    return [ts.getTextOfNode(member.name) + ": " + checker.typeToString(propertyType, member, 1)];
+                                    return [ts.getTextOfNode(member.name) + optionText + ": " + checker.typeToString(propertyType, member, 1)];
                                 }
                             case ts.SyntaxKind.CallSignature:
                                 var callAnnotations = nodeAnnotations(member, ts.makeCallAnnotations);

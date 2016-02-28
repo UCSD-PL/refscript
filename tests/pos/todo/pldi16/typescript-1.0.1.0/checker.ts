@@ -90,7 +90,7 @@ module checker_ts {
     /*@ createSymbol :: <M extends ReadOnly>(flags: number     , name: string) => ts.Symbol<M> */
     declare function createSymbol<M extends ReadOnly>(flags: ts.SymbolFlags, name: string): ts.Symbol<M>
 
-    // /*@ getExcludedSymbolFlags :: (flags: ts.SymbolFlags) => bitvector32 */
+    // /* @ getExcludedSymbolFlags :: (flags: ts.SymbolFlags) => bitvector32 */
     // export function getExcludedSymbolFlags(flags: ts.SymbolFlags): ts.SymbolFlags {
     //     let result = 0x00000000; // 0;
     //     //TODO: undefined below
@@ -116,11 +116,17 @@ module checker_ts {
     // }
 
     export let getSymbolLinks = function(symbol: ISymbol): ISymbolLinks {
-        if (symbol.flags & ts.SymbolFlags.Transient) return <ts.TransientSymbol<Immutable>>symbol;
+        if (symbol.flags & ts.SymbolFlags.Transient) {
+            return <ts.TransientSymbol<Immutable>>symbol;
+        }
         if (!symbol.id) symbol.id = nextSymbolId++;
         let s = symbolLinks[symbol.id];
-        if(s) { return s; }
-        else { let o = {}; symbolLinks[symbol.id] = o; return o; }
+        if(s) {
+            return s;
+        }
+        else {
+            let o: ISymbolLinks = {}; symbolLinks[symbol.id] = o; return o;
+        }
     }
 
     // export let getNodeLinks = function(node: INode): INodeLinks {

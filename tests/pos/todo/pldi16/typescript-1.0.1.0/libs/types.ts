@@ -881,7 +881,7 @@ module ts {
 
     export interface Symbol<M extends ReadOnly> {
 
-        /*@ (Immutable) flags: { v: bitvector32 | [(mask_symbolflags_transient(v)) <=>  extends_interface(this,"TransientSymbol")] } */
+        /*@ (Immutable) flags: { v: bitvector32 | mask_symbolflags_transient v <=>  extends_interface this "TransientSymbol" } */
         flags: SymbolFlags;            // Symbol flags
 
         name: string;                  // Name of symbol

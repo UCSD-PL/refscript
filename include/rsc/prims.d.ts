@@ -111,7 +111,7 @@ declare function builtin_OpLShift(a: number, b: number): number;
 declare function builtin_OpSpRShift(a: number, b: number): number;
 // declare function builtin_OpZfRShift(a: number, b: number): number;
 //
-// /*   predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec (Size32 obj)))) */
+// /*   predicate bv_truthy(b) = (b /= (lit "#x00000000" (BitVec Size32))) */
 
 declare function builtin_BICtorExit(): void;
 
@@ -120,8 +120,8 @@ declare function builtin_BICtorExit(): void;
 /*@ builtin_PrefixTypeof :: <A>(x:A) => { v:string | ttag x = v } */
 declare function builtin_PrefixTypeof<A>(x: A): string;
 
-/*@ builtin_BITruthy :: (b: bitvector32) => { v: boolean | Prop v <=> b /= lit "#x00000000" (BitVec (Size32 obj)) } */
-/*@ builtin_BITruthy :: <A>(x:A)  => { v: boolean | Prop v <=> Prop x } */
+/*@ builtin_BITruthy :: (b: bitvector32) => { v: boolean | Prop v <=> b /= lit "#x00000000" (BitVec Size32) } */
+/*@ builtin_BITruthy :: <A>(x:A)         => { v: boolean | Prop v <=> Prop x } */
 declare function builtin_BITruthy<A>(x: A): boolean;
 
 /*@ builtin_BIFalsy  :: <A>(x:A) => { v:boolean | Prop v <=> not (Prop x) } */

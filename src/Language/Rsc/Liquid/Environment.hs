@@ -360,9 +360,8 @@ envAddGroup l msg ks g0 xts
 
     -- Union strengthening
     -- PV: Keep the `~~` here, because of potential sort mismatch
-    strOr a x t@(TOr ts r)
-      | a `elem` [WriteGlobal, ReturnVar] = t
-      | otherwise = TOr (map (`uSingleton` x) ts) r
+    strOr a x t@(TOr ts r) | a `elem` [WriteGlobal, ReturnVar] = t
+                           | otherwise = TOr (map (`uSingleton` x) ts) r
     strOr _ _ t = t
 
 

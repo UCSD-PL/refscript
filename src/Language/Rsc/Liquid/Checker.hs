@@ -265,27 +265,29 @@ initCallableEnv l g f fty xs s = do
     return    g3
   where
 
-    nms0    = toFgn (envNames g)
-              -- No FP binding for these
-    rSym    = returnSymbol
-    bnds    = envAdds [(v,tv) | BTV v _ (Just tv) <- bs] $ cge_bounds g
-    ctx     = pushContext i (cge_ctx g)
-    pth     = cge_path g
-    cha     = cge_cha g
-    fenv    = cge_fenv g
-    grd     = []
-    cst     = cge_consts g
-    mut     = cge_mut g
-    thisT   = cge_this g
+    nms0     = toFgn (envNames g)
+               -- No FP binding for these
+    rSym     = returnSymbol
+    bnds     = envAdds [(v,tv) | BTV v _ (Just tv) <- bs] $ cge_bounds g
+    ctx      = pushContext i (cge_ctx g)
+    pth      = cge_path g
+    cha      = cge_cha g
+    fenv     = cge_fenv g
+    grd      = []
+    cst      = cge_consts g
+    mut      = cge_mut g
+    thisT    = cge_this g
 
-    tyBs    = [(Loc (srcPos l) α, SI (F.symbol α) Local Ambient Initialized $ tVar α) | α <- αs]
-    params  = [ SI (F.symbol x) Local WriteLocal Initialized t_ |
-                (x, t_) <- safeZip "initCallableEnv" xs ts ]
-    arg     = mkArgumentsSI l ts
-    ts      = map b_type xts
-    αs      = map btvToTV bs
+    tyBs     = [lsia α   | α <- αs]
+    params   = [siw x t_ | (x, t_) <- safeZip "initCallableEnv" xs ts]
+    arg      = mkArgumentsSI l ts
+    ts       = map b_type xts
+    αs       = map btvToTV bs
+    fnId     = fId l
+    lsia x   = (Loc (srcPos l) x, sia x (tVar x))
+    sia  x t = SI (F.symbol x) Local Ambient    Initialized t
+    siw  x t = SI (F.symbol x) Local WriteLocal Initialized t
     (i, (bs,xts,t)) = fty
-    fnId   = fId l
 
 
 --------------------------------------------------------------------------------
@@ -402,6 +404,7 @@ consStmt g (IfSingleStmt l b s)
 consStmt g (IfStmt l e s1 s2) =
   mseq (safeEnvFindTy l g (builtinOpId BITruthy)
         >>= consCall g l (builtinOpId BITruthy) [(e, Nothing)]) $ \(xe,ge) -> do
+
     g1' <- (`consStmt` s1) $ envAddGuard xe True ge
     g2' <- (`consStmt` s2) $ envAddGuard xe False ge
     envJoin l g g1' g2'
@@ -678,7 +681,7 @@ consExpr g (Cast_ l e) s
 
       -- Type-cast
       CType s  -> mseq (consExpr g e (Just $ ofType s)) $ \(x, g') -> do
-                    t   <- safeEnvFindTy l g' x
+                    t   <- (`uSingleton` x) <$> safeEnvFindTy l g' x
                     _   <- subType l Nothing g' t (ofType s)
                     case narrowType g' t s of
                       Just t' -> Just <$> cgEnvAddFresh "cast_" l t' g'
@@ -745,14 +748,7 @@ consExpr g (VarRef l x) _
   = Just <$> cgEnvAddFresh "0" l t g
 
   | Just (SI _ _ _ _ t) <- tInfo
-
-  -- XXX: enable this??
-
-  = --  if F.tempPrefix `F.isPrefixOfSym` s then
-    --      return $ Just (x, g)
-    --  else do
-    --      addAnnot (srcPos l) x t
-        Just <$> cgEnvAddFresh "cons VarRef" l t g
+  = Just <$> cgEnvAddFresh "cons VarRef" l t g
 
   | otherwise
   = cgError $ errorUnboundId (fSrc l) x
@@ -858,7 +854,7 @@ consExpr g (CallExpr l e es) _
 --   Returns type: { v: _ | v = x.f }, if e => x and `f` is an immutable field
 --                 { v: _ | _       }, otherwise
 --
-consExpr g0 (DotRef l e f) _
+consExpr g0 ex@(DotRef l e f) _
   = mseq (consExpr g0 e Nothing) $ \(x, g1) -> do
       te <- safeEnvFindTy l g1 x
       case getProp l g1 x f te of

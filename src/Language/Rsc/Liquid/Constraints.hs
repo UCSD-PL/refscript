@@ -175,14 +175,12 @@ splitC s@(Sub g i t1 t2@(TOr ts _))
 
 -- | Narrowing:
 --
---  e.g. { Shape | r1 } <: { Circle | r2 }
+--   e.g. { Shape | r1 } <: { Circle | r2 }
 --
---  TODO: fix: use qualified name for narrowing ?
+--   TODO: fix: use qualified name for narrowing ?
 --
 splitC (Sub g i t1@(TRef n1@(Gen x1 [_]) _) t2@(TRef (Gen x2 [_]) r2))
-  | x1 /= x2
-  , isAncestorOf (envCHA g) x1 x2
-  , isClassType  (envCHA g) t1
+  | x1 /= x2, isAncestorOf (envCHA g) x1 x2
   = splitC (Sub g i t1 (TRef n1 r2 `strengthen` rtExt))
   where
 

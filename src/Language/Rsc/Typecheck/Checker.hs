@@ -869,7 +869,7 @@ tcCall γ e@(BracketRef l e1 e2) _
 -- | `e1[e2] = e3`
 tcCall γ e@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3) _
   = do opTy <- safeEnvFindTy l γ (builtinOpId BIBracketAssign)
-       z <- tcNormalCallWD γ l (builtinOpId BIBracketAssign) [e1,e2,e3] opTy
+       z <- tcNormalCallWD γ l (builtinOpId BIBracketAssign) [enableUnique e1,e2,e3] opTy
        case z of
          ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
          _ -> fatal (impossible (srcPos l) "tcCall AssignExpr")

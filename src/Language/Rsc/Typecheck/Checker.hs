@@ -177,10 +177,10 @@ tcCallable :: (Unif r, PP f, IsLocated f)
            -> IOverloadSig r
            -> TCM r [Statement (AnnTc r)]
 --------------------------------------------------------------------------------
-tcCallable γ l f xs body fty
-  = do  γ'    <- initCallableEnv l γ f fty xs body
-        body' <- addReturnStmt l γ' body
-        tcFunBody γ' l body'
+tcCallable γ l f xs body fty = do
+    γ'    <- initCallableEnv l γ f fty xs body
+    body' <- addReturnStmt l γ' body
+    tcFunBody γ' l body'
 
 addReturnStmt l γ body
   | isTVoid (tcEnvFindReturn γ)
@@ -188,11 +188,11 @@ addReturnStmt l γ body
   | otherwise
   = return body
 
-tcFunBody γ l body
-  = do  z <- tcStmts γ body
-        case z of
-          (b, Just _) | rt /= tVoid -> fatal er
-          (b, _     ) | otherwise   -> return b
+tcFunBody γ l body = do
+    z <- tcStmts γ body
+    case z of
+      (b, Just _) | rt /= tVoid -> fatal er
+      (b, _     ) | otherwise   -> return b
   where
     er = errorMissingReturn (srcPos l)
     rt = tcEnvFindReturn γ
@@ -753,14 +753,14 @@ tcExpr γ ex@(Cast l e) _
 --
 tcExpr γ (Cast_ l e) to
   = case tCasts ++ dCasts of
-      [ ] -> do (e', t)    <- tcExpr γ e to
-                case e' of
-                  Cast_ {} -> die (bugNestedCasts (srcPos l) e)
-                  _        -> (,t) . (`Cast_` e') <$> freshenAnn l
+      -- No casts in this context
+      [ ] -> do (e', t) <- tcExpr γ e to
+                l'      <- freshenAnn l
+                return     (Cast_ l' e', t)
 
-      [Right t] -> pure (Cast_ l e, ofType t)
+      -- [Right t] -> pure (Cast_ l e, ofType t)
 
-      [Left _ ] -> pure (Cast_ l e, tBot)
+      -- [Left _ ] -> pure (Cast_ l e, tBot)
 
       _         -> die $ bugNestedCasts (srcPos l) e
 

@@ -82,36 +82,38 @@ initCallableEnv :: (PP f, IsLocated f, Unif r)
                 -> TCM r (TCEnv r)
 --------------------------------------------------------------------------------
 initCallableEnv l γ f fty xs s = do
-    locs    <- either fatal return (symEnv s)
-    let nms1 = locs `mappend` nms0  -- favors first
-    let nms  = envAddReturn f (SI rSym Local ReturnVar Initialized t) nms1
+    locs      <- either fatal return (symEnv s)
+    let nms1   = locs `mappend` nms0  -- favors first
+    let nms    = envAddReturn f (SI rSym Local ReturnVar Initialized t) nms1
 
-    return   $ tcEnvAdds arg
-             $ tcEnvAdds varBs
-             $ tcEnvAdds tyBs
-             $ TCE nms bnds ctx pth cha mut tThis (fId l)
+    return     $ tcEnvAdds arg
+               $ tcEnvAdds varBs
+               $ tcEnvAdds tyBs
+               $ TCE nms bnds ctx pth cha mut tThis (fId l)
   where
 
-    nms0  = toFgn (envNames γ)
-    siRet = SI rSym Local ReturnVar Initialized t
+    (i, sig)   = fty
+    (bs,xts,t) = sig
 
-    rSym  = returnSymbol
-    tyBs  = [lsia α | α <- αs]
-    varBs = [ltracePP l f (x, siw x t) | (x, t) <- safeZip "initCallableEnv" xs ts]
-    arg   = [(getArgId (srcPos l), mkArgumentsSI l ts)]
-    bnds  = envAdds [(s,t) | BTV s _ (Just t) <- bs] $ envBounds γ
-    ctx   = pushContext i (envCtx γ)
-    pth   = envPath γ
-    cha   = envCHA γ
-    mut   = envMut γ
-    tThis = envThis γ
-    (i, (bs,xts,t)) = fty
-    ts        = map b_type xts
-    αs        = map btvToTV bs
+    nms0       = toFgn (envNames γ)
+    siRet      = SI rSym Local ReturnVar Initialized t
 
-    lsia x    = (Loc (srcPos l) x, sia x (tVar x))
-    sia  x t  = SI (F.symbol x) Local Ambient    Initialized t
-    siw  x t  = SI (F.symbol x) Local WriteLocal Initialized t
+    rSym       = returnSymbol
+    tyBs       = [lsia α | α <- αs]
+    varBs      = [(x, siw x t) | (x, t) <- safeZip "initCallableEnv" xs ts]
+    arg        = [(getArgId (srcPos l), mkArgumentsSI l ts)]
+    bnds       = envAdds [(s,t) | BTV s _ (Just t) <- bs] $ envBounds γ
+    ctx        = pushContext i (envCtx γ)
+    pth        = envPath γ
+    cha        = envCHA γ
+    mut        = envMut γ
+    tThis      = envThis γ
+    ts         = map b_type xts
+    αs         = map btvToTV bs
+
+    lsia x     = (Loc (srcPos l) x, sia x (tVar x))
+    sia  x t   = SI (F.symbol x) Local Ambient    Initialized t
+    siw  x t   = SI (F.symbol x) Local WriteLocal Initialized t
 
 
 -- | `initClassCtorEnv` makes `this` a Unique & Uninitialized binding

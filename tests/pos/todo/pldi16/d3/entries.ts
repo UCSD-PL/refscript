@@ -6,7 +6,7 @@
 
 /*@ d3_entries :: <T> ((Immutable){ [k:string]: T }) => { MArray<{ key: string; value: T } > | 0 < 1} */
 function d3_entries<T>(map) {
-    let entries = [];
+    let entries:MArray<{ key: string; value: T }> = [];
     for (let key in map) {
         entries.push({ key: key, value: <T>(map[key]) });
     }

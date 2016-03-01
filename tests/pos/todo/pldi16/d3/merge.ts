@@ -25,7 +25,8 @@ function d3_merge<T>(arrays: T[][]): T[] {
     //while (--m >= 0) {
     m--;
     while (m >= 0 && j > 0) {
-      merged[--j] = array[m];
+      j--;
+      merged[j] = array[m];
       m--;
     }
     n--;

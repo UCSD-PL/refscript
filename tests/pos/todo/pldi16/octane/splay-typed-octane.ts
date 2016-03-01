@@ -57,7 +57,7 @@ module SplayVERSION {
     function GeneratePayloadTree(depth:number, tag:string):PayloadTree<Immutable> {
         if (depth === 0) {
             return {
-                array: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+                array: <IArray<number>>[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
                 string: 'String for key ' + tag + ' in leaf node'
             };
         } else {
@@ -439,7 +439,7 @@ module SplayVERSION {
          * @param {function(SplayTree.Node)} f Visitor function.
          * @private
          */
-        /*@ traverse_ (f: (arg:MSplayTreeNode) => top) : void */
+        /*@ @Mutable traverse_ (f: (arg:MSplayTreeNode) => top) : void */
         public traverse_(f : (arg:MSplayTreeNode) => any) {
             /*@ local current :: MSplayTreeNode + null */
             let current = this;

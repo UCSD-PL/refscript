@@ -4,8 +4,8 @@
 /* d3_max_1 :: <T> (arr: IArray<T>) => { T + undefined | 0 < 1 } */
 /*@ d3_max_1 :: <T> (arr: IArray<T>) => { T | 0 < 1 } */
 function d3_max_1<T>(array: T[]) : any {
-  let i = 0,
-      n = array.length;
+  let i = 0;
+  let n = array.length;
   /*@ a :: T + undefined */
   let a;
   /*@ b :: T + undefined */
@@ -35,8 +35,8 @@ function d3_max_1<T>(array: T[]) : any {
 
 /*@ d3_max_2 :: <T,U> (arr: IArray<T>, f: (x:T, i:number) => U) => { U | 0 < 1 } */
 function d3_max_2 <T, U>(array:T[], f:(x:T, i:number) => U) : any {
-  let i = 0,
-      n = array.length;
+  let i = 0;
+  let n = array.length;
   /*@ a :: U + undefined */
   let a;
   /*@ b :: U + undefined */

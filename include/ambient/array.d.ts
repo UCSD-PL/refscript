@@ -29,7 +29,8 @@ interface Array<M extends ReadOnly, T> {
 
     slice(start?: number, end?: number): UArray<T>;
 
-    // sort(compareFn?: (a: T, b: T) => number): T[];
+    /*@ sort(compareFn:(a:T,b:T)=>number) : Array<M,T> */
+    sort(compareFn?: (a: T, b: T) => number): T[];
     // splice(start: number): T[];
     // splice(start: number, deleteCount: number, ...items: T[]): T[];
     // unshift(...items: T[]): number;

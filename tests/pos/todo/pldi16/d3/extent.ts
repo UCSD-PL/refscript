@@ -8,11 +8,11 @@
 
 /*@ d3_extent_1 :: <T> (NonEmptyIArray<T>) => #pair[T] */
 function d3_extent_1<T>(array: T[]): T[]{
-  let i = 0,
-      n = array.length,
-      b = array[0],
-      a = b,
-      c = b;
+  let i = 0;
+  let n = array.length;
+  let b = array[0];
+  let a = b;
+  let c = b;
 
   while (i < n) { 
       b = array[i];
@@ -28,11 +28,11 @@ function d3_extent_1<T>(array: T[]): T[]{
 
 /*@ d3_extent_2 :: <T,U> (NonEmptyIArray<T>, f: (x:T, i:number) => U) => #pair[U] */
 function d3_extent_2<T, U>(array: T[], f:(T, number) => U): U[] {
-  let i = 0,
-      n = array.length,
-      b = f.call(array, array[0], 0),
-      a = b,
-      c = b;
+  let i = 0;
+  let n = array.length;
+  let b = f.call(array, array[0], 0);
+  let a = b;
+  let c = b;
 
   while (i < n) { 
       b = f.call(array, array[i], i);

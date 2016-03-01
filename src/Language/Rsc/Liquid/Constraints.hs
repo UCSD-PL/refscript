@@ -245,6 +245,13 @@ splitC s@(Sub g i t1@(TPrim c1 _) t2@(TPrim c2 r2))
   where
     i' = addHist i s
 
+-- | S-Enum
+splitC s@(Sub g i t1@(TPrim TNumber r1) t2@(TRef _ r2))
+  | isEnumType (envCHA g) t2
+  = bsplitC g i' t1 t2
+  where
+    i' = addHist i s
+
 -- | S-Obj
 --
 splitC s@(Sub g i t1@(TObj m1 ms1 r1) t2@(TObj _ ms2 _))

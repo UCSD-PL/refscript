@@ -141,4 +141,71 @@ module checker_ts {
         else { let o: INodeLinks = {}; nodeLinks[<number>node_id] = o; return o; }
     }
 
+
+    /*@ getAncestor :: (node: INode + undefined, kind: ts.SyntaxKind) => undefined + { INode | offset v "kind" = kind } */
+    export declare let getAncestor: (node: INode, kind: ts.SyntaxKind) => INode;
+    // export let getAncestor = function(node: INode, kind: ts.SyntaxKind): INode {
+    //     if (kind === ts.SyntaxKind.ClassDeclaration) {
+    //         while (typeof node !== "undefined") {
+    //             if (node.kind === ts.SyntaxKind.ClassDeclaration) {
+    //                 //return <ClassDeclaration>node;
+    //                 return <INode>node;
+    //             }
+    //             else if (kind === ts.SyntaxKind.EnumDeclaration      ||
+    //                      kind === ts.SyntaxKind.InterfaceDeclaration ||
+    //                      kind === ts.SyntaxKind.ModuleDeclaration    ||
+    //                      kind === ts.SyntaxKind.ImportDeclaration) {
+    //                 // early exit cases - declarations cannot be nested in classes
+    //                 return undefined;
+    //             }
+    //             else {
+    //                 node = node.parent;
+    //             }
+    //         }
+    //     }
+    //     else {
+    //         while (node) {
+    //             if (node.kind === kind) {
+    //                 return <INode>node;
+    //             }
+    //             else {
+    //                 node = node.parent;
+    //             }
+    //         }
+    //     }
+    //
+    //     return undefined;
+    // }
+
+    /*@ getSourceFile :: (node: INode + undefined) => undefined + ts.SourceFile<Immutable> */
+    export let getSourceFile = function(node: INode): ts.SourceFile<Immutable> {
+        let ancestor = getAncestor(node, ts.SyntaxKind.SourceFile);
+        if (ancestor) {
+            return <ts.SourceFile<Immutable>> (<ts.Node<Immutable>>ancestor);
+        } else {
+            return undefined;
+        }
+    }
+
+
+    /*@ createType :: (flags: bitvector32) => { ts.Type<Unique> | type_flags flags v } */
+    let createType = function(flags: ts.TypeFlags): ts.Type<Unique> {
+        /*@ result :: ts.Type<Unique> */
+        let result = cts.newType(checker, flags);
+        result.id = typeCount++;
+        return result;
+    }
+
+    /*@ createObjectType :: ( kind: { bitvector32 | mask_typeflags_anonymous(v) || mask_typeflags_reference(v) }
+                               , symbol: ISymbol + undefined
+                           ) => { ts.ObjectType<Unique> | type_flags(kind,v) } */
+    let createObjectType = function<M extends ReadOnly>(kind: ts.TypeFlags, symbol?: ISymbol): ts.ObjectType<M> {
+        let type = <ts.ObjectType<Unique>>createType(kind);
+        // TODO
+        // type.symbol = symbol;
+        return type;
+    }
+
+
+
 }

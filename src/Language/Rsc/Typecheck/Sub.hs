@@ -193,6 +193,11 @@ subtype l γ c t1 (TOr ts2 _)
 subtype l γ c t1 t2
   | maybeTObj t1, maybeTObj t2 = subtypeObj' l γ c t1 t2
 
+-- | Enum
+subtype l γ _ (TPrim TNumber _) t2@(TRef _ _)
+  | isEnumType (envCHA γ) t2
+  = SubOK
+
 -- | Functions
 subtype l γ _ t1 t2
   | isTFun t1, isTFun t2 = subtypeFun l γ t1 t2

@@ -366,7 +366,7 @@ module ts {
     }
 
     export interface Node<M extends ReadOnly> extends TextRange<M> {
-        /*@ (Immutable) kind: SyntaxKind<Immutable> */
+        /*@ (Immutable) kind: SyntaxKind */
         kind: SyntaxKind;
 
         /*@ (Immutable) flags: bitvector32 */

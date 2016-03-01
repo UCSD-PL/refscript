@@ -32,7 +32,9 @@ import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Language.Rsc.Visitor
 
--- import           Debug.Trace                        hiding (traceShow)
+import qualified Data.Foldable                as FO
+import           Debug.Trace                  hiding (traceShow)
+import           Text.PrettyPrint.HughesPJ
 
 ----------------------------------------------------------------------------------
 ssaTransform
@@ -53,23 +55,31 @@ ssaTransform p cha = EitherIO $ do
 ----------------------------------------------------------------------------------
 ssaRsc :: PPR r => ClassHierarchy r -> BareRsc r -> SSAM r (SsaRsc r)
 ----------------------------------------------------------------------------------
-ssaRsc cha p@(Rsc { code = Src fs })
-  = do  setMeas   $ S.fromList $ F.symbol <$> envIds (consts p)
-        (_,fs1)  <- ssaStmts g fs
-        ssaAnns  <- getAnns
-        -- Replace the annotations to the respective nodes
-        let fs2 = (patch ssaAnns <$>) <$> fs1
-        -- Make sure NodeIds are unique!
-        fs3      <- reassignIds fs2
-        -- Update code and counter
-        ast_cnt  <- getCounter
-        return    $ p { code  = Src fs3
-                      , maxId = ast_cnt }
-    where
-      g = initGlobSsaEnv fs cha
-      patch ms    (FA i l fs) = FA i l (fs ++ IM.findWithDefault [] i ms)
-      stepRecount (FA _ l fs) = tick >>= \n -> return (FA n l fs)
-      reassignIds             = T.mapM $ T.mapM stepRecount
+ssaRsc cha p@(Rsc { code = Src fs }) = do
+
+    (_,fs1)  <- ssaStmts g fs
+
+    ssaAnns  <- getAnns
+
+    -- Replace the annotations to the respective nodes
+    let fs2   = (patch ssaAnns <$>) <$> fs1
+
+    -- Make sure NodeIds are unique!
+    fs3      <- reassignIds fs2
+
+    -- Update code and counter
+    ast_cnt  <- getCounter
+
+    return    $ p { code  = Src fs3
+                  , maxId = ast_cnt }
+  where
+    g = initGlobSsaEnv fs cha
+    patch ms    (FA i l fs) = FA i l (fs ++ IM.findWithDefault [] i ms)
+    stepRecount (FA _ l fs) = tick >>= \n -> return (FA n l fs)
+    reassignIds             = T.mapM $ T.mapM stepRecount
+
+
+    -- as ss' = vcat $ map (\s0 -> vcat (map (\a -> pp (fSrc a) <+> pp (fId a) $+$ nest 6 (vcat (map pp (fFact a)))) (FO.toList s0))) ss'
 
 
 -------------------------------------------------------------------------------------
@@ -408,9 +418,9 @@ ctorVisitor _ =
 
 
 -------------------------------------------------------------------------------------
-transSuper
-  :: IsLocated a
-  => a -> SsaEnv r -> [Expression (AnnSSA r)] -> SSAM r [Statement (AnnSSA r)]
+-- transSuper
+--   :: IsLocated a
+--   => a -> SsaEnv r -> [Expression (AnnSSA r)] -> SSAM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------------
 transSuper l g es
   = do  svs     <- superVS parent
@@ -440,14 +450,14 @@ transSuper l g es
 
     superVS n = VarDeclStmt <$> fr <*> (single <$> superVD n)
     superVD n = VarDecl  <$> fr
-                         <*> freshenIdSSA (builtinOpId BISuperVar)
+                         <*> freshenIdSSA' (builtinOpId BISuperVar)
                          <*> justM (NewExpr <$> fr <*> n <**> es)
     asgnS x = ExprStmt   <$> fr <*> asgnE x
     asgnE x = AssignExpr <$> fr
                          <*> return OpAssign
                          <*> (LDot <$> fr <*> (ThisRef <$> fr) <**> F.symbolSafeString x)
                          <*> (DotRef <$> fr
-                                     <*> (VarRef <$> fr <*> freshenIdSSA (builtinOpId BISuperVar))
+                                     <*> (VarRef <$> fr <*> freshenIdSSA' (builtinOpId BISuperVar))
                                      <*> (Id <$> fr <**> F.symbolSafeString x))
 
 
@@ -455,7 +465,7 @@ transSuper l g es
 ctorExit :: AnnSSA r -> [Id t] -> SSAM r (Statement (AnnSSA r))
 -------------------------------------------------------------------------------------
 ctorExit l ms = do
-    ctorExit    <- VarRef <$> fr <*> freshenIdSSA (builtinOpId BICtorExit)
+    ctorExit    <- VarRef <$> fr <*> freshenIdSSA' (builtinOpId BICtorExit)
     es          <- mapM (VarRef <$> fr <**>) ms'
     exitC       <- CallExpr <$> fr <**> ctorExit <**> es
     ReturnStmt <$> fr <**> Just exitC
@@ -519,7 +529,7 @@ ssaClassElt g c (Constructor l xs bd0) = do
 
     g'           = initCallableSsaEnv g xs bd0
 
-    symToVar     = freshenIdSSA . mkId . F.symbolString -- F.symbolSafeString
+    symToVar     = freshenIdSSA' . mkId . F.symbolString -- F.symbolSafeString
     cha          = ssaCHA g
     fields       | Just n <- curClass g
                  = sortBy c_sym (nonStaticFields cha n)   -- Sort alphabetically
@@ -558,7 +568,7 @@ preM (ClassStmt _ _ cs)
         let (ls1, xs1)     = unzip  [(l, mkCtorId l x)    | MemberVarDecl l False x Nothing  <- cs]
 
         -- Initialize the latter with `undefined`
-        us                <- mapM (\l -> VarRef <$> fr l <*> freshenIdSSA undefinedId) ls1
+        us                <- mapM (\l -> VarRef <$> fr l <*> freshenIdSSA' undefinedId) ls1
 
         xs'               <- mapM freshenIdSSA xs
         xs1'              <- mapM freshenIdSSA xs1
@@ -1017,7 +1027,7 @@ ssaVarDecl g v@(VarDecl l x Nothing) =
   case a of
     Ambient -> return (g, [], VarDecl l x Nothing)
     RdOnly  -> ssaError $ errorReadOnlyUninit l x
-    _       -> do vr <- VarRef <$> fr_ l <*> freshenIdSSA undefinedId
+    _       -> do vr <- VarRef <$> fr_ l <*> freshenIdSSA' undefinedId
                   ssaVarDecl g (VarDecl l x (Just vr))
   where
     a = varDeclToAsgn v
@@ -1102,7 +1112,7 @@ envJoin l g (Just g1) (Just g2) = do
                 $ envKeys (δ1 `mappend` δ2)
 
     phiAsgn (x, (x1, x2)) = do
-        xf       <- freshenIdSSA x
+        xf       <- freshenIdSSA' x
         (x', _)  <- updSsaEnv g l xf
         addAnn l (PhiVar x')
         s1      <- mkPhiAsgn l x' x1

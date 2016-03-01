@@ -32,6 +32,7 @@ module Language.Rsc.SSA.SSAMonad (
    , varDeclToAsgn
    , freshenAnn
    , freshenIdSSA
+   , freshenIdSSA'
    , findSsaEnv
    , safeFindSsaEnv
 
@@ -41,7 +42,6 @@ module Language.Rsc.SSA.SSAMonad (
 
    -- * Access Annotations
    , addAnn, getAnns
-   , setMeas, getMeas
    , getCHA
 
    -- * Queries
@@ -89,8 +89,6 @@ data SsaState r = SsaST {
     cnt  :: !Int                      -- ^ Counter for fresh ints
 
   , anns :: !(AnnInfo r)              -- ^ Map of annotation
-
-  , meas :: S.HashSet F.Symbol        -- ^ Measures
 
   }
 
@@ -207,7 +205,7 @@ varDeclAnnToAsgn l
   | otherwise = WriteLocal
 
 -------------------------------------------------------------------------------------
-updSsaEnv :: IsLocated l => SsaEnv r -> l -> Var r -> SSAM r (Var r, SsaEnv r)
+-- updSsaEnv :: IsLocated l => SsaEnv r -> l -> Var r -> SSAM r (Var r, SsaEnv r)
 -------------------------------------------------------------------------------------
 updSsaEnv g l x =
     go (getAssignability g x WriteLocal)
@@ -220,7 +218,7 @@ updSsaEnv g l x =
     go m@ReturnVar    = ssaError $ errorWriteImmutable l m x
 
 -------------------------------------------------------------------------------------
-updSsaEnvLocal :: IsLocated l => SsaEnv r -> l -> Var r -> SSAM r (Var r, SsaEnv r)
+-- updSsaEnvLocal :: IsLocated l => SsaEnv r -> l -> Var r -> SSAM r (Var r, SsaEnv r)
 -------------------------------------------------------------------------------------
 updSsaEnvLocal g l x = do
     x'    <- mkSSAId <$> freshenAnn l <*> pure x <*> tick
@@ -242,14 +240,21 @@ tick = do n     <- cnt <$> get
           return n
 
 -------------------------------------------------------------------------------------
-freshenAnn :: IsLocated l => l -> SSAM r (AnnSSA r)
+freshenAnn :: AnnSSA r -> SSAM r (AnnSSA r)
 -------------------------------------------------------------------------------------
-freshenAnn l = FA <$> tick <**> srcPos l <**> []
+freshenAnn l = FA <$> tick <**> fSrc l <**> fFact l
 
 -------------------------------------------------------------------------------------
-freshenIdSSA         :: IsLocated l => Id l -> SSAM r (Var r)
+-- freshenAnn' :: AnnSSA r -> SSAM r (AnnSSA r)
+-------------------------------------------------------------------------------------
+freshenAnn' l = FA <$> tick <**> srcPos l <**> []
+
+-------------------------------------------------------------------------------------
+-- freshenIdSSA         :: IsLocated l => Id l -> SSAM r (Var r)
 -------------------------------------------------------------------------------------
 freshenIdSSA (Id l x) = Id <$> freshenAnn l <*> return x
+
+freshenIdSSA' (Id l x) = Id <$> freshenAnn' l <*> return x
 
 -------------------------------------------------------------------------------------
 findSsaEnv   :: F.Symbolic x => SsaEnv r -> x -> Maybe (Var r)
@@ -276,9 +281,6 @@ isBIArgumentsVar g x =
     _           -> False
 
 addAnn l f = modify $ \st -> st { anns = IM.insertWith (++) (fId l) [f] (anns st) }
-
-setMeas m  = modify $ \st -> st { meas= m }
-getMeas    = meas   <$> get
 
 getAnns    = anns   <$> get
 
@@ -307,5 +309,5 @@ tryAction act = get >>= return . runState (runExceptT act)
 -------------------------------------------------------------------------------------
 initState :: BareRsc r -> SsaState r
 -------------------------------------------------------------------------------------
-initState p = SsaST (maxId p) IM.empty S.empty
+initState p = SsaST (maxId p) IM.empty
 

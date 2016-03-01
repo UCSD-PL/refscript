@@ -303,7 +303,7 @@ cgEnvAddFresh = cgEnvAddFreshWithInit Initialized
 freshId a = Id <$> freshenAnn a <*> fresh
 
 freshenAnn :: IsLocated l => l -> CGM AnnLq
-freshenAnn l = FA <$> cgTickAST <*> pure (srcPos l) <*> pure []
+freshenAnn l = FA <$> cgTickAST <**> srcPos l <**> []
 
 --------------------------------------------------------------------------------
 cgEnvAdds :: (IsLocated l, PP m) => l -> m -> [CGEnvEntry] -> CGEnv -> CGM CGEnv

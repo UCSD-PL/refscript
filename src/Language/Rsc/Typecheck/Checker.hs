@@ -16,6 +16,7 @@ module Language.Rsc.Typecheck.Checker (verifyFile, typeCheck) where
 import           Control.Arrow                      (first, second, (***))
 import           Control.Monad
 import           Data.Default
+import qualified Data.Foldable                      as FO
 import           Data.Function                      (on)
 import           Data.Generics
 import qualified Data.IntMap.Strict                 as I
@@ -51,9 +52,9 @@ import           Language.Rsc.Typecheck.Unify
 import           Language.Rsc.Types
 import           Language.Rsc.TypeUtilities
 import           Language.Rsc.Visitor
-import           Text.PrettyPrint.HughesPJ          (($+$))
+import           Text.PrettyPrint.HughesPJ          (nest, vcat, ($+$))
 
--- import           Debug.Trace                        hiding (traceShow)
+import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity   as V
 
@@ -110,12 +111,17 @@ typeCheck cfg pgm cha = EitherIO $ do
 tcRsc :: Unif r => TcRsc r -> ClassHierarchy r -> TCM r (TcRsc r)
 --------------------------------------------------------------------------------
 tcRsc p@(Rsc {code = Src fs}) cha = do
-    γ       <-  initGlobalEnv p cha
+    γ       <- initGlobalEnv p cha
     _       <- checkTypes cha
     (fs',_) <- tcStmts γ fs
     fs''    <- patch fs'
     ast_cnt <- getAstCount
     return   $ p { code = Src fs'', maxId = ast_cnt }
+
+  where
+
+    as ss' = vcat $ map (\s0 -> vcat (map (\a -> pp (fSrc a) $+$ nest 6 (vcat (map pp (fFact a)))) (FO.toList s0))) ss'
+
 
 
 -- | Patch annotation on the AST
@@ -731,7 +737,7 @@ tcExpr γ (ObjectLit l pes) to
 
 -- | <T>e
 tcExpr γ ex@(Cast l e) _
-  | [t] <- [ ct | UserCast ct <- fFact l ]
+  | [t] <- [ct | UserCast ct <- fFact l]
   = first (Cast l) <$> tcCast l γ e t
   | otherwise
   = die $  bugNoCasts (srcPos l) ex

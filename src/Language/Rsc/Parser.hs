@@ -39,6 +39,7 @@ import           Language.Rsc.Parser.Annotations
 import           Language.Rsc.Parser.Declarations ()
 import           Language.Rsc.Parser.Types
 import           Language.Rsc.Pretty.Common
+import           Language.Rsc.Pretty.Errors
 import           Language.Rsc.Program
 import           Language.Rsc.Transformations
 import           Language.Rsc.Typecheck.Types
@@ -46,7 +47,9 @@ import           Language.Rsc.Types
 import           Prelude                          hiding (mapM)
 import           Text.Parsec                      hiding (State, parse)
 import           Text.Parsec.Error                (errorMessages, showErrorMessages)
-import           Text.PrettyPrint.HughesPJ        (nest, ($+$))
+import           Text.PrettyPrint.HughesPJ        (nest, vcat, ($+$))
+
+import           Debug.Trace                      hiding (traceShow)
 
 --------------------------------------------------------------------------------
 -- | Parse File and Type Signatures
@@ -125,6 +128,10 @@ mkRelRsc ss = Rsc {
     starting_id       = 0
     (endingId, ss')   = mapAccumL (mapAccumL (\n -> (n+1,) . toBare n)) starting_id ss
     anns              = concatMap (FO.foldMap snd) ss
+
+
+
+    -- as = vcat $ map (\s0 -> vcat (map (\a -> pp (fSrc a) $+$ nest 6 (vcat (map pp (fFact a)))) (FO.toList s0))) ss'
 
 
 --------------------------------------------------------------------------------

@@ -133,7 +133,8 @@ isClassType cha n | TRef (Gen x _) _ <- n
 isEnumType :: ClassHierarchy r -> RType t -> Bool
 --------------------------------------------------------------------------------
 isEnumType (cModules -> mod) (TRef (Gen (QN p x) []) _)
-  | Just m <- qenvFindTy p mod = isJust $ envFindTy x $ m_enums m
+  | Just m <- qenvFindTy p mod
+  = isJust (envFindTy x ( m_enums m))
 isEnumType _ _ = False
 
 numberInterface      = mkAbsName [] $ F.symbol "Number"

@@ -39,7 +39,7 @@ import           Language.Rsc.Parser.Annotations
 import           Language.Rsc.Parser.Declarations ()
 import           Language.Rsc.Parser.Types
 import           Language.Rsc.Pretty.Common
-import           Language.Rsc.Pretty.Errors
+-- import           Language.Rsc.Pretty.Errors
 import           Language.Rsc.Program
 import           Language.Rsc.Transformations
 import           Language.Rsc.Typecheck.Types
@@ -47,9 +47,9 @@ import           Language.Rsc.Types
 import           Prelude                          hiding (mapM)
 import           Text.Parsec                      hiding (State, parse)
 import           Text.Parsec.Error                (errorMessages, showErrorMessages)
-import           Text.PrettyPrint.HughesPJ        (nest, vcat, ($+$))
+import           Text.PrettyPrint.HughesPJ        (nest, ($+$))
 
-import           Debug.Trace                      hiding (traceShow)
+-- import           Debug.Trace                      hiding (traceShow)
 
 --------------------------------------------------------------------------------
 -- | Parse File and Type Signatures

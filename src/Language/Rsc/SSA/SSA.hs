@@ -9,7 +9,6 @@ module Language.Rsc.SSA.SSA (ssaTransform) where
 import           Control.Monad
 import           Data.Default
 import           Data.Function                (on)
-import qualified Data.HashSet                 as S
 import qualified Data.IntMap.Strict           as IM
 import           Data.List                    (partition, sortBy)
 import           Data.Maybe                   (catMaybes)
@@ -32,9 +31,9 @@ import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Types
 import           Language.Rsc.Visitor
 
-import qualified Data.Foldable                as FO
-import           Debug.Trace                  hiding (traceShow)
-import           Text.PrettyPrint.HughesPJ
+-- import qualified Data.Foldable                as FO
+-- import           Debug.Trace                  hiding (traceShow)
+-- import           Text.PrettyPrint.HughesPJ
 
 ----------------------------------------------------------------------------------
 ssaTransform

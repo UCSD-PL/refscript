@@ -54,7 +54,6 @@ module Language.Rsc.SSA.SSAMonad (
 
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
-import qualified Data.HashSet                   as S
 import qualified Data.IntMap.Strict             as IM
 import           Data.Maybe                     (fromMaybe)
 import qualified Language.Fixpoint.Types        as F

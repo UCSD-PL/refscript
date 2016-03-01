@@ -1,6 +1,7 @@
 
 /*@ bar :: (IArray<number>) => void */
 function bar(a) {
+    
     a[0] = -1;
 }
 

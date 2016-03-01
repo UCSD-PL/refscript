@@ -30,7 +30,6 @@ module Language.Rsc.Symbols (
 
 ) where
 
-import           Control.Exception              (throw)
 import           Data.Generics
 import           Data.List                      (findIndex)
 import qualified Data.Map.Strict                as M
@@ -46,7 +45,6 @@ import           Language.Rsc.Locations
 import           Language.Rsc.Misc              (foldM1)
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty.Common
-import           Language.Rsc.Pretty.Errors
 import           Language.Rsc.Traversals
 import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.Types
@@ -126,8 +124,8 @@ symbols s = SL [ (fSrc <$> n, k, SI (F.symbol n) loc a i t)
                  , (loc, t)    <- annToType fact ]
   where
     annToType (ClassAnn   l (TS _ b _)) = [(l, TClass b)]       -- Class
-    annToType (SigAnn   x l t         ) = [(l, t)]              -- Function
-    annToType (VarAnn   x l _ (Just t)) = [(l, t)]              -- Variables
+    annToType (SigAnn   _ l t         ) = [(l, t)]              -- Function
+    annToType (VarAnn   _ l _ (Just t)) = [(l, t)]              -- Variables
     annToType (ModuleAnn  l q         ) = [(l, TMod q)]         -- Modules
     annToType _                         = [ ]
 

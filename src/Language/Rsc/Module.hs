@@ -29,7 +29,7 @@ import           Language.Rsc.AST
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Errors
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc              (concatMapM, mapLeft, single)
+import           Language.Rsc.Misc              (concatMapM, single)
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty.Common
 import           Language.Rsc.Pretty.Types      ()

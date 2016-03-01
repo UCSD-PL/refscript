@@ -26,22 +26,18 @@ module Language.Rsc.Typecheck.Environment (
     , Unif
     ) where
 
-import           Data.Data
 import           Language.Fixpoint.Misc         (safeZip)
 import qualified Language.Fixpoint.Types        as F
-import           Language.Fixpoint.Types.Errors
 import           Language.Rsc.Annotations
 import           Language.Rsc.AST
 import           Language.Rsc.ClassHierarchy
 import           Language.Rsc.Core.Env
 import           Language.Rsc.Environment
 import           Language.Rsc.Locations
-import           Language.Rsc.Misc
 import           Language.Rsc.Names
 import           Language.Rsc.Pretty
 import           Language.Rsc.Program
 import           Language.Rsc.Symbols
-import           Language.Rsc.Typecheck.Subst
 import           Language.Rsc.Typecheck.TCMonad
 import           Language.Rsc.Typecheck.Types
 import           Language.Rsc.Typecheck.Unify   (Unif)
@@ -84,7 +80,7 @@ initCallableEnv :: (PP f, IsLocated f, Unif r)
 initCallableEnv l γ f fty xs s = do
     locs      <- either fatal return (symEnv s)
     let nms1   = locs `mappend` nms0  -- favors first
-    let nms    = envAddReturn f (SI rSym Local ReturnVar Initialized t) nms1
+    let nms    = envAddReturn f siRet nms1
 
     return     $ tcEnvAdds arg
                $ tcEnvAdds varBs

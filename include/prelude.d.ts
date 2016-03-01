@@ -8,7 +8,7 @@ declare function builtin_BIBracketRef(a: any, n: any): any;
 
 /*@ builtin_BIBracketAssign :: <A>(x: UArray<A> , n: idx<x>, v: A) => void */
 /*@ builtin_BIBracketAssign :: <A>(x: MArray<A> , n: number, v: A) => void */
-/*@ builtin_BIBracketAssign :: <M extends ReadOnly, A>(x: Array<M,A>, n: number, v: A) => void */
+/*  builtin_BIBracketAssign :: <M extends ReadOnly, A>(x: Array<M,A>, n: number, v: A) => void */
 /*@ builtin_BIBracketAssign :: <A>(a: {[y: string]: A}, s: string, v: A) => void */
 declare function builtin_BIBracketAssign<A>(a: any, s: any, v: A): void;
 

@@ -7,7 +7,7 @@
 module Language.Rsc.Typecheck.Unify (
     unifys
   , unassigned
-  , Unif (..)
+  , Unif
   ) where
 
 import           Control.Monad                  (foldM)

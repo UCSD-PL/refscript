@@ -499,7 +499,7 @@ consVarDecl g v@(VarDecl l x (Just e)) =
 
     goRest s t       = freshenType g l (v_loc s) t >>= go s
 
-    go (SI n lc a _ _) t
+    go (SI _ lc a _ _) t
       | onlyCtxTyped e = fmap snd <$> consExpr g e (Just t) >>=
                          TR.mapM (cgEnvAdds l "consVarDecl" [SI xSym lc a Initialized t])
       | otherwise      = mseq (consExpr g e (Just t)) $ \(y,gy) -> do
@@ -854,7 +854,7 @@ consExpr g (CallExpr l e es) _
 --   Returns type: { v: _ | v = x.f }, if e => x and `f` is an immutable field
 --                 { v: _ | _       }, otherwise
 --
-consExpr g0 ex@(DotRef l e f) _
+consExpr g0 (DotRef l e f) _
   = mseq (consExpr g0 e Nothing) $ \(x, g1) -> do
       te <- safeEnvFindTy l g1 x
       case getProp l g1 x f te of

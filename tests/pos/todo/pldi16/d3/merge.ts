@@ -1,6 +1,6 @@
 /// <reference path="include/d3.d.ts" />
 
-/*@ d3_merge :: <T> (map: IArray<IArray<T>>) => {v: IArray<T> | 0 < 1}*/
+/*@ d3_merge :: <T> (map: IArray<IArray<T>>) => {v: MArray<T> | 0 < 1}*/
 
 function d3_merge<T>(arrays: T[][]): T[] {
   let n = arrays.length;
@@ -15,7 +15,7 @@ function d3_merge<T>(arrays: T[][]): T[] {
     i++;
   }
 
-  let merged: IArray<T> = new Array<T>(j);
+  let merged: MArray<T> = new Array<T>(j);
 
   //while (--n >= 0) {
   n--;

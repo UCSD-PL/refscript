@@ -1013,9 +1013,9 @@ module ts {
 
     // Type references (TypeFlags.Reference)
     export interface TypeReference<M extends ReadOnly> extends ObjectType<M> {
-        target: GenericType<M>;             // Type reference target
+        target: GenericType<Immutable>;                         // Type reference target
         /*@ (Immutable) typeArguments: IArray<IType> */
-        typeArguments: IArray<IType>;   // Type reference type arguments
+        typeArguments: IArray<IType>;                           // Type reference type arguments
     }
 
     // Generic class and interface types

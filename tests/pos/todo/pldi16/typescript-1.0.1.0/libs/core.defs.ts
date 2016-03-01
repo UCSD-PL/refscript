@@ -65,6 +65,6 @@ module cts {
         getSignatureConstructor() : new (checker: ts.TypeChecker<M>) => ts.Signature<M>;
     }
 
-    /*@ newType :: <M>(checker: ts.TypeChecker<Immutable>, flags: bitvector32) => { ts.Type<M> | type_flags(flags,v) } */
+    /*@ newType :: (checker: ts.TypeChecker<Immutable>, flags: bitvector32) => { ts.Type<Unique> | type_flags flags v } */
     export declare function newType<M extends ReadOnly>(checker: ts.TypeChecker<Immutable>, flags: ts.TypeFlags): ts.Type<M>;
 }

@@ -74,8 +74,8 @@ initGlobalEnv (Rsc { code = Src ss }) cha = do
 -- TODO: Shadow `this` binding (in case this is a class context)
 --
 --------------------------------------------------------------------------------
-initCallableEnv :: (IsLocated l, Unif r)
-                => AnnTc r -> TCEnv r -> l
+initCallableEnv :: (PP f, IsLocated f, Unif r)
+                => AnnTc r -> TCEnv r -> f
                 -> IOverloadSig r
                 -> [Id (AnnTc r)]
                 -> [Statement (AnnTc r)]
@@ -96,8 +96,8 @@ initCallableEnv l γ f fty xs s = do
     siRet = SI rSym Local ReturnVar Initialized t
 
     rSym  = returnSymbol
-    tyBs  = [(Loc (srcPos l) α, SI (F.symbol α) Local Ambient Initialized $ tVar α) | α <- αs]
-    varBs = [(x, SI (F.symbol x) Local WriteLocal Initialized t) | (x, t) <- safeZip "initCallableEnv" xs ts]
+    tyBs  = [lsia α | α <- αs]
+    varBs = [ltracePP l f (x, siw x t) | (x, t) <- safeZip "initCallableEnv" xs ts]
     arg   = [(getArgId (srcPos l), mkArgumentsSI l ts)]
     bnds  = envAdds [(s,t) | BTV s _ (Just t) <- bs] $ envBounds γ
     ctx   = pushContext i (envCtx γ)
@@ -106,8 +106,12 @@ initCallableEnv l γ f fty xs s = do
     mut   = envMut γ
     tThis = envThis γ
     (i, (bs,xts,t)) = fty
-    ts    = map b_type xts
-    αs    = map btvToTV bs
+    ts        = map b_type xts
+    αs        = map btvToTV bs
+
+    lsia x    = (Loc (srcPos l) x, sia x (tVar x))
+    sia  x t  = SI (F.symbol x) Local Ambient    Initialized t
+    siw  x t  = SI (F.symbol x) Local WriteLocal Initialized t
 
 
 -- | `initClassCtorEnv` makes `this` a Unique & Uninitialized binding

@@ -170,8 +170,8 @@ tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 -- (which needs to be set beforehand), with input arguments @xs@ and overload
 -- signature @fty@ (which includes the context number).
 --------------------------------------------------------------------------------
-tcCallable :: (Unif r, IsLocated l, PP l)
-           => TCEnv r -> AnnTc r -> l
+tcCallable :: (Unif r, PP f, IsLocated f)
+           => TCEnv r -> AnnTc r -> f
            -> [Id (AnnTc r)]
            -> [Statement (AnnTc r)]
            -> IOverloadSig r

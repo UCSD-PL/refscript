@@ -15,7 +15,7 @@ function d3_merge<T>(arrays: T[][]): T[] {
     i++;
   }
 
-  let merged:T[] = new Array<T>(j);
+  let merged: IArray<T> = new Array<T>(j);
 
   //while (--n >= 0) {
   n--;

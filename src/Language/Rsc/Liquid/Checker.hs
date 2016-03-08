@@ -94,8 +94,8 @@ solveConstraints cfg f cgi = liftIO $ do
     sol          <- pure (applySolution s)
     return          (A.SomeAnn anns sol, r')
   where
-    fpConf  = def { -- C.real        = real cfg
-                    C.ueqAllSorts = C.UAS True
+    fpConf  = def { C.linear      = not $ real cfg
+                  , C.ueqAllSorts = C.UAS True
                   , C.srcFile     = f
                   , C.save        = dumpDebug cfg
                   }

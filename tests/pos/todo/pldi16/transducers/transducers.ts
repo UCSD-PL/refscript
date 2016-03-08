@@ -134,8 +134,6 @@ function isObject(x:any) {
 /*@ isIterable :: <T> (x:ObjectK) => {boolean | Prop(v) <=> IsIter(x)} */
 function isIterable(x:any) {
     assume(false);
-    return true;
-    // PORT TODO:
     return ("ATATiterator" in x) || ("next" in x);
 }
 
@@ -1353,15 +1351,15 @@ function toFn<IN, INTER, OUT>(xf, builder) {
 // =============================================================================
 // Utilities
 
+// BC: helper function added for `first` below
+function _f(result:any, input:any): MQQ<any>
+{ return new QQ(input, 1); }
 /**
  * A transformer which simply returns the first input.
  * @method transducers.first
  * @return {Transducer} a transducer transformer
  */
-let first:Wrap<Mutable, any, any> = generalWrap(function(result:any, input:any)
-    /*@ <anonymous> (result:top, input:top) => {MQQ<top> | 0 < 1} */
-    { return new QQ(input, 1); }
-);
+let first:Wrap<Mutable, any, any> = generalWrap(_f);
 
 // =============================================================================
 // Exporting

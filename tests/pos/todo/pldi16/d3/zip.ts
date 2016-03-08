@@ -13,7 +13,7 @@
 // };
 
 
-/*@ d3_zipLength :: <T> (d:IArray<T>, i:number) => #nat */
+/*@ d3_zipLength :: <T> (d:IArray<T>, i:number) => nat */
 function d3_zipLength(d, i) {
   return d.length;
 }
@@ -25,7 +25,7 @@ d3.zip = function<T>(args)
   if (!n) return [];
 
   let m = d3.min(args, d3_zipLength);
-  let zips = new IArray<IArray<T>>(m);
+  let zips = new Array<IArray<T>>(m);
   for (let i = 0; i < m; i++) {
     let zip = new Array<T>(n);
     zips[i] = zip;

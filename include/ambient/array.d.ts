@@ -2,8 +2,8 @@
 interface Array<M extends ReadOnly, T> {
     length: number;
 
-    /*@ @Immutable __getLength(): { number | v = len this } */
-    /*@            __getLength(): number */
+    /*@ @Immutable __getLength(): { number | v = len this && v >= 0 } */
+    /*@            __getLength(): { number | v >= 0 } */
     __getLength(): number;
 
     /*@ @Mutable push(x: T): number */

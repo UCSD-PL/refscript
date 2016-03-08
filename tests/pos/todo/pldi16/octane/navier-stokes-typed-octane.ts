@@ -34,6 +34,7 @@ module NavierStokes {
     /*@ nsFrameCounter :: number */
     let nsFrameCounter = 0;
 
+module TopLevelFuncs {
     export function runNavierStokes()
     {
         let solverRO /*@ readonly */ = solver;
@@ -65,7 +66,7 @@ module NavierStokes {
         let solverRO /*@ readonly */ = new FluidField(null, 128, 128);
         solverRO.setIterations(20);
 
-        let dFunc: (f:Field<Immutable>) => void = function() {};
+        let dFunc: (f:Field<Immutable>) => void = function(f) {};
         solverRO.setDisplayFunction(dFunc);
         solverRO.setUICallback(prepareFrame);
         solverRO.reset();
@@ -90,14 +91,12 @@ module NavierStokes {
         }
     }
 
-    /*@ framesTillAddingPoints :: number */
-    let framesTillAddingPoints = 0;
-    /*@ framesBetweenAddingPoints :: number */
-    let framesBetweenAddingPoints = 5;
-
     /*@ prepareFrame :: ({v:Field<Mutable> | offset(v,"w") = 128 && offset(v,"h") = 128}) => void */
     function prepareFrame(field:Field<Mutable>)
     {
+        let framesTillAddingPoints = 0;
+        let framesBetweenAddingPoints = 5;
+
         if (framesTillAddingPoints === 0) {
             addPoints(field);
             framesTillAddingPoints = framesBetweenAddingPoints;
@@ -106,6 +105,7 @@ module NavierStokes {
             framesTillAddingPoints--;
         }
     }
+}
 
     // Code from Oliver Hunt (http://nerget.com/fluidSim/pressure.js) starts here.
     export class FluidField<M extends ReadOnly> {
@@ -149,12 +149,12 @@ module NavierStokes {
             this.height = height;
             this.rowSize = width + 2;
             this.size = size;
-            let dens      = new Array<number>(size);
-            let dens_prev = new Array<number>(size);
-            let u         = new Array<number>(size);
-            let u_prev    = new Array<number>(size);
-            let v         = new Array<number>(size);
-            let v_prev    = new Array<number>(size);
+            let dens      :IArray<number> = new Array<number>(size);
+            let dens_prev :IArray<number> = new Array<number>(size);
+            let u         :IArray<number> = new Array<number>(size);
+            let u_prev    :IArray<number> = new Array<number>(size);
+            let v         :IArray<number> = new Array<number>(size);
+            let v_prev    :IArray<number> = new Array<number>(size);
             for (let i = 0; i < size; i++) {
                 dens_prev[i] = 0; u_prev[i] = 0; v_prev[i] = 0; dens[i] = 0; u[i] = 0; v[i] = 0;
             }
@@ -169,13 +169,8 @@ module NavierStokes {
             this.visc = 1/2;//.
             this.dt = 1/10;//.
 
-            this.displayFunc = function(f:Field<Immutable>) 
-                /*@ <anonymous> (Field<Immutable>)=>void */ 
-                {}; //ORIG: null
-
-            this.uiCallback = function(field:Field<Mutable>) 
-                /*@ <anonymous> (Field<Mutable>)=>void */ 
-                {};
+            this.displayFunc = <(f:Field<Immutable>)=>void> function(f) {}; //ORIG: null
+            this.uiCallback = <(f:Field<Mutable>)=>void> function(field) {};
         }
 
             /*@ addFields (x:{v:IArray<number> | (len v) = this.size}, 

@@ -29,7 +29,11 @@ Refinement Types for TypeScript
 
 ### Regression testing
 
-    cd tests; ./regrtest.py; cd -
+    stack test
+
+### Run Benchmarks
+
+    stack test refscript:bench
 
 ### Fast load (using ghci)
 

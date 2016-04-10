@@ -232,7 +232,45 @@ module checker_ts {
         return type;
     }
 
+    export let isTypeParameterReferenceIllegalInConstraint = function(typeReferenceNode: ts.TypeReferenceNode<Immutable>, typeParameterSymbol: ISymbol): boolean {
+        let links = getNodeLinks(typeReferenceNode);
+        let links_isIllegalTypeReferenceInConstraint_tmp = links.isIllegalTypeReferenceInConstraint;
+        // if (links.isIllegalTypeReferenceInConstraint !== undefined) {
+        if (typeof links_isIllegalTypeReferenceInConstraint_tmp !== "undefined") {
+            return links_isIllegalTypeReferenceInConstraint_tmp;
+        }
+        // bubble up to the declaration
+        /*@ global */ let currentNode: INode = typeReferenceNode;
+        // forEach === exists
+        let _check: (d: IDeclaration) => boolean = function(d) { return d.parent === currentNode.parent }
+        let cnt = true;     // PV: adding explicit check
 
+        while (cnt && !cts.forEach(typeParameterSymbol.declarations, _check)) {
+            let cp = currentNode.parent;
+            if (cp) { currentNode = <INode>cp; } else { cnt = false; }
+        }
 
+        // if last step was made from the type parameter this means that path has started somewhere in constraint which is illegal
+        links_isIllegalTypeReferenceInConstraint_tmp = currentNode.kind === ts.SyntaxKind.TypeParameter;
+        links.isIllegalTypeReferenceInConstraint = links_isIllegalTypeReferenceInConstraint_tmp;
+        return links_isIllegalTypeReferenceInConstraint_tmp;
+    }
+
+    export function instantiateList<T>(items: IArray<T>,
+                                             mapper: ts.TypeMapper<Immutable>,
+                                             instantiator: (item: T, mapper: ts.TypeMapper<Immutable>) => T): MArray<T> {
+        if (items && items.length) {
+            /*@ result :: MArray<T> */
+            let result: MArray<T> = [];
+            for (let i = 0; i < items.length; i++) {
+                result.push(instantiator(items[i], mapper));
+            }
+            return result;
+        }
+        /*@ result :: MArray<T> */
+        let result: MArray<T> = [];
+        return result;
+        // return items;        // PV: replacing the original
+    }
 
 }

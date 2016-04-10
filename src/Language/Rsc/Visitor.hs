@@ -171,34 +171,34 @@ visitStmtM v = vS
             = accum acc >> lift (mStmt v s') >>= step c' where c'   = ctxStmt v c s
                                                                s'   = txStmt  v c' s
                                                                acc  = accStmt v c' s
-    step c (ExprStmt l e)           = ExprStmt     l <$> vE c e
-    step c (BlockStmt l ss)         = BlockStmt    l <$> (vS c <$$> ss)
-    step c (IfSingleStmt l b s)     = IfSingleStmt l <$> (vE c b) <*> (vS c s)
-    step c (IfStmt l b s1 s2)       = IfStmt       l <$> (vE c b)
-                                                     <*> (vS c s1)
-                                                     <*> (vS c s2)
-    step c (WhileStmt l b s)        = WhileStmt    l <$> (vE c b) <*> (vS c s)
-    step c (ForStmt l i t inc b)    = ForStmt      l <$> (visitFInit v c i)
-                                                     <*> (vE c <$$> t)
-                                                     <*> (vE c <$$> inc)
-                                                     <*> (vS c b)
-    step c (ForInStmt l i e b)      = ForInStmt    l <$> (visitFIInit v c i)
-                                                     <*> (vE c e)
-                                                     <*> (vS c b)
-    step c (VarDeclStmt l ds)       = VarDeclStmt  l <$> (visitVarDecl v c <$$> ds)
-    step c (ReturnStmt l e)         = ReturnStmt   l <$> (vE c <$$> e)
-    step c (FunctionStmt l f xs b)  = FunctionStmt l <$> (vI c f)
-                                                     <*> (vI c <$$> xs)
-                                                     <*> ((vS c <$$>) <$$> b)
-    step c (SwitchStmt l e cs)      = SwitchStmt   l <$> (vE c e) <*> (vC c <$$> cs)
-    step c (ClassStmt l x es)       = ClassStmt    l <$> (vI c x)
-                                                     <*> (visitClassElt v c <$$> es)
-    step c (ThrowStmt l e)          = ThrowStmt    l <$> (vE c e)
-    step c (ModuleStmt l m ss)      = ModuleStmt   l <$> (vI c m) <*> (vS c <$$> ss)
-    step _ s@(InterfaceStmt {})         = return s
-    step _ s@(EmptyStmt {})         = return s
-    step c (EnumStmt l n es)        = EnumStmt     l <$> (vI c n) <*> (vEE c <$$> es)
-    step _ s                        = throw $ unimplemented l "visitStatement" s  where l = srcPos s
+    step c   (ExprStmt l e)          = ExprStmt     l <$> vE c e
+    step c   (BlockStmt l ss)        = BlockStmt    l <$> (vS c <$$> ss)
+    step c   (IfSingleStmt l b s)    = IfSingleStmt l <$> (vE c b) <*> (vS c s)
+    step c   (IfStmt l b s1 s2)      = IfStmt       l <$> (vE c b)
+                                                      <*> (vS c s1)
+                                                      <*> (vS c s2)
+    step c   (WhileStmt l b s)       = WhileStmt    l <$> (vE c b) <*> (vS c s)
+    step c   (ForStmt l i t inc b)   = ForStmt      l <$> (visitFInit v c i)
+                                                      <*> (vE c <$$> t)
+                                                      <*> (vE c <$$> inc)
+                                                      <*> (vS c b)
+    step c   (ForInStmt l i e b)     = ForInStmt    l <$> (visitFIInit v c i)
+                                                      <*> (vE c e)
+                                                      <*> (vS c b)
+    step c   (VarDeclStmt l ds)      = VarDeclStmt  l <$> (visitVarDecl v c <$$> ds)
+    step c   (ReturnStmt l e)        = ReturnStmt   l <$> (vE c <$$> e)
+    step c   (FunctionStmt l f xs b) = FunctionStmt l <$> (vI c f)
+                                                      <*> (vI c <$$> xs)
+                                                      <*> ((vS c <$$>) <$$> b)
+    step c   (SwitchStmt l e cs)     = SwitchStmt   l <$> (vE c e) <*> (vC c <$$> cs)
+    step c   (ClassStmt l x es)      = ClassStmt    l <$> (vI c x)
+                                                      <*> (visitClassElt v c <$$> es)
+    step c   (ThrowStmt l e)         = ThrowStmt    l <$> (vE c e)
+    step c   (ModuleStmt l m ss)     = ModuleStmt   l <$> (vI c m) <*> (vS c <$$> ss)
+    step _ s@(InterfaceStmt {})      = return s
+    step _ s@(EmptyStmt {})          = return s
+    step c   (EnumStmt l n es)       = EnumStmt     l <$> (vI c n) <*> (vEE c <$$> es)
+    step _ s                         = throw $ unimplemented l "visitStatement" s  where l = srcPos s
 
 
 visitEnumElt v c (EnumElt l i n)    = EnumElt l      <$> visitId v c i <*> return n
@@ -217,30 +217,30 @@ visitExpr v = vE
              = accum acc >> lift (mExpr v s') >>= step c' where c'  = ctxExpr v c  e
                                                                 s'  = txExpr  v c' e
                                                                 acc = accExpr v c' e
-     step _ e@(BoolLit {})           = return e
-     step _ e@(IntLit {})            = return e
-     step _ e@(NumLit {})            = return e
-     step _ e@(HexLit {})            = return e
-     step _ e@(NullLit {})           = return e
-     step _ e@(StringLit {})         = return e
-     step _ e@(VarRef {})            = return e
-     step _ e@(ThisRef {})           = return e
-     step _ e@(SuperRef {})          = return e
-     step c (ArrayLit l es)          = ArrayLit l     <$> (vE c <$$> es)
-     step c (CondExpr l e1 e2 e3)    = CondExpr l     <$> (vE c e1) <*> (vE c e2) <*> (vE c e3)
-     step c (InfixExpr l o e1 e2)    = InfixExpr l o  <$> (vE c e1) <*> (vE c e2)
-     step c (PrefixExpr l o e)       = PrefixExpr l o <$> (vE c e)
-     step c (CallExpr l e es)        = CallExpr l     <$> (vE c e)  <*> (vE c <$$> es)
-     step c (ObjectLit l bs)         = ObjectLit l    <$> (mapSndM (vE c) <$$> bs)
-     step c (DotRef l e f)           = DotRef l       <$> (vE c e)  <*> (vI c f)
-     step c (BracketRef l e1 e2)     = BracketRef l   <$> (vE c e1) <*> (vE c e2)
-     step c (AssignExpr l o v e)     = AssignExpr l o <$> (vL c v)  <*> (vE c e)
-     step c (UnaryAssignExpr l o v)  = UnaryAssignExpr l o <$> (vL c v)
-     step c (FuncExpr l f xs ss)     = FuncExpr l <$> (vI c <$$> f) <*> (vI c <$$> xs) <*> (vS c <$$> ss)
-     step c (NewExpr l e es)         = NewExpr  l <$> (vE c e) <*> (vE c <$$> es)
-     step c (Cast l e)               = Cast l     <$> (vE c e)
-     step c (Cast_ l e)              = Cast_ l    <$> (vE c e)
-     step _ e                        = throw $ unimplemented l "visitExpr " e  where l = srcPos e
+     step _ e@(BoolLit {})            = return e
+     step _ e@(IntLit {})             = return e
+     step _ e@(NumLit {})             = return e
+     step _ e@(HexLit {})             = return e
+     step _ e@(NullLit {})            = return e
+     step _ e@(StringLit {})          = return e
+     step _ e@(VarRef {})             = return e
+     step _ e@(ThisRef {})            = return e
+     step _ e@(SuperRef {})           = return e
+     step c   (ArrayLit l es)         = ArrayLit l     <$> (vE c <$$> es)
+     step c   (CondExpr l e1 e2 e3)   = CondExpr l     <$> (vE c e1) <*> (vE c e2) <*> (vE c e3)
+     step c   (InfixExpr l o e1 e2)   = InfixExpr l o  <$> (vE c e1) <*> (vE c e2)
+     step c   (PrefixExpr l o e)      = PrefixExpr l o <$> (vE c e)
+     step c   (CallExpr l e es)       = CallExpr l     <$> (vE c e)  <*> (vE c <$$> es)
+     step c   (ObjectLit l bs)        = ObjectLit l    <$> (mapSndM (vE c) <$$> bs)
+     step c   (DotRef l e f)          = DotRef l       <$> (vE c e)  <*> (vI c f)
+     step c   (BracketRef l e1 e2)    = BracketRef l   <$> (vE c e1) <*> (vE c e2)
+     step c   (AssignExpr l o v e)    = AssignExpr l o <$> (vL c v)  <*> (vE c e)
+     step c   (UnaryAssignExpr l o v) = UnaryAssignExpr l o <$> (vL c v)
+     step c   (FuncExpr l f xs ss)    = FuncExpr l <$> (vI c <$$> f) <*> (vI c <$$> xs) <*> (vS c <$$> ss)
+     step c   (NewExpr l e es)        = NewExpr  l <$> (vE c e) <*> (vE c <$$> es)
+     step c   (Cast l e)              = Cast l     <$> (vE c e)
+     step c   (Cast_ l e)             = Cast_ l    <$> (vE c e)
+     step _ e                         = throw $ unimplemented l "visitExpr " e  where l = srcPos e
 
 visitClassElt :: (Monad m, Functor m, Monoid a, IsLocated b)
               => VisitorM m a ctx b -> ctx -> ClassElt b -> VisitT m a (ClassElt b)

@@ -11,7 +11,8 @@ module Language.Rsc.Transformations (
     Transformable (..), NameTransformable (..), AnnotTransformable (..)
   , transFmap, ntransFmap, ntransPure
   , emapReft, mapReftM
-  , replaceDotRef, replaceAbsolute
+  , replaceDotRef
+  , replaceAbsolute
   , fixFunBinders
   ) where
 

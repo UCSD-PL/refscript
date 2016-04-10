@@ -254,9 +254,9 @@ module ts {
         // Missing,
         // // Names
         // QualifiedName,
-        // // Signature elements
-        // TypeParameter,
-        // Parameter,
+        // Signature elements
+        TypeParameter,
+        Parameter,
         // // TypeMember
         // Property,
         // Method,

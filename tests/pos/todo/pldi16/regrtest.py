@@ -101,7 +101,6 @@ testSign  = [("pos", 0), ("neg", 1)]
 
 testCategories = [
         ("d3", []),
-        ("typescript-1.0.1.0", []),
         ("octane", []),
         ("transducers", [])      
     ]

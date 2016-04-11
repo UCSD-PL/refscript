@@ -12,9 +12,7 @@
         "./typings/**/*.d.ts"
     ],
     "files": [
-        "./build-prelude.ts",
         "./cleanup.ts",
-        "./runtests.ts",
         "./typings/bluebird/bluebird.d.ts",
         "./typings/colors/colors.d.ts",
         "./typings/glob/glob.d.ts",

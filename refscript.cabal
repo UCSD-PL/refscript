@@ -1,7 +1,7 @@
 name:                refscript
 version:             0.1.0.0
 Copyright:           2010-14 Regents of the University of California
-build-type:          Simple
+build-type:          Custom
 synopsis:            Refinement Types for TypeScript
 Description:         Refinement Types for TypeScript
 homepage:            https://github.com/UCSD-PL/refscript

@@ -13,7 +13,7 @@ TOP PRIORITY
 
 - Proper bidirectional checking at TC
 
-- SSA: Patching the annotations is probably not necessary - they can be dirrecly
+- SSA: Patching the annotations is probably not necessary - they can be directly
        applied to the nodes as the SSAed AST is being built.
 
        Perhaps the same with TC phase.

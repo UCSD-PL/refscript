@@ -2,8 +2,6 @@ TOP PRIORITY
 
 - Disallow use of `len v` for mutable arrays.
 
-- Bit Vectors
-
 -  Check variance of type parameters
 
 - W-F checks:
@@ -12,6 +10,8 @@ TOP PRIORITY
 - Validity check for function types:
     * Optional arguments should only occupy the end part of a type.
     * Refinements should not reference optional arguments.
+
+- Proper bidirectional checking at TC
 
 - SSA: Patching the annotations is probably not necessary - they can be dirrecly
        applied to the nodes as the SSAed AST is being built.

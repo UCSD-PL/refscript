@@ -123,7 +123,7 @@ resolveConflict _ a a' | a == a' = a
 --------------------------------------------------------------------------------
 visibleSyms :: F.Reftable r => [Statement (AnnR r)] -> [(Id SrcSpan, Assignability)]
 --------------------------------------------------------------------------------
-visibleSyms s = [ (fSrc <$> n, a) | (n,_,_,a,_) <- hoistBindings s ]
+visibleSyms s = [ (fSrc <$> n, a) | (n,_,_,a) <- hoistBindings s ]
 
 --------------------------------------------------------------------------------
 initGlobSsaEnv

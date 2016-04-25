@@ -31,7 +31,6 @@ module Language.Rsc.Liquid.Environment (
   , cgEnvFindReturn
   , cgEnvFindTy
   , cgEnvAddFresh
-  , cgEnvAddFreshWithInit
   , addInvariant
   , getClassInvariant
 
@@ -93,17 +92,15 @@ instance PP CGEnv where
 
 
 
--- Only include the "sngl" refinement in the case where Assignability is
--- either ReadOnly of WriteLocal (SSAed)
+-- We "selfify" for ReadOnly of WriteLocal (SSAed) vars
 ---------------------------------------------------------------------------------------
 envFindTyWithAsgn :: (EnvKey x, F.Expression x) => x -> CGEnv -> Maybe CGEnvEntry
 ---------------------------------------------------------------------------------------
 envFindTyWithAsgn x (envNames -> γ) = fmap sngl (envFindTy x γ)
   where
-    sngl v@(SI _ _ RdOnly      Initialized   t) = v { v_type = uSingleton t x }
-    sngl v@(SI _ _ WriteLocal  Initialized   t) = v { v_type = uSingleton t x }
-    sngl v@(SI _ _ WriteGlobal Uninitialized t) = v { v_type = orUndef t }
-    sngl v@(SI _ _ _           _             _) = v
+    sngl v@(SI _ _ RdOnly      t) = v { v_type = uSingleton t x }
+    sngl v@(SI _ _ WriteLocal  t) = v { v_type = uSingleton t x }
+    sngl v@(SI _ _ _           _) = v
 
 ---------------------------------------------------------------------------------------
 cgEnvFindReturn :: CGEnv -> RefType
@@ -150,7 +147,7 @@ checkSyms l m g ok t = efoldRType h f F.emptySEnv [] t
                = Nothing
                | s `elem` biExtra
                = Nothing
-               | Just (SI _ _ a _ _) <- chkEnvFindTy' s g
+               | Just (SI _ _ a _) <- chkEnvFindTy' s g
                = if a `elem` validAsgn
                    then Nothing
                    else Just $ errorAsgnInRef l s t a
@@ -228,7 +225,7 @@ initClassMethEnv l m (TS _ (BGen nm bs) _) g = do
               }
     bts   = [(s,t) | BTV s _ (Just t) <- bs]
     tThis = adjMut $ TRef (Gen nm (map btVar bs)) fTop
-    eThis = SI thisSym Local RdOnly Initialized tThis
+    eThis = SI thisSym Local RdOnly tThis
 
     adjMut (TRef (Gen n (_:ps)) r) = TRef (Gen n (m:ps)) r
     adjMut t                       = t
@@ -282,23 +279,15 @@ envGetContextTypArgs n g a f αs
 -- | Monadic environment search wrappers
 
 --------------------------------------------------------------------------------
-cgEnvAddFreshWithInit
-  :: IsLocated l
-  => Initialization -> String -> l -> RefType -> CGEnv -> CGM (Id AnnLq, CGEnv)
+cgEnvAddFresh :: IsLocated l => String -> l -> CGEnv -> RefType -> CGM (Id AnnLq, CGEnv)
 --------------------------------------------------------------------------------
-cgEnvAddFreshWithInit i msg l t g
-  = do x  <- freshId l
-       g' <- cgEnvAdds l ("cgEnvAddFresh: " ++ msg) [v x] g
-       addAnnot l x t
-       return (x, g')
+cgEnvAddFresh msg l g t = do
+    x  <- freshId l
+    g' <- cgEnvAdds l ("cgEnvAddFresh: " ++ msg) [v x] g
+    addAnnot l x t
+    return (x, g')
   where
-    v x = SI (F.symbol x) Local RdOnly i t
-
---------------------------------------------------------------------------------
-cgEnvAddFresh
-  :: IsLocated l => String -> l -> RefType -> CGEnv -> CGM (Id AnnLq, CGEnv)
---------------------------------------------------------------------------------
-cgEnvAddFresh = cgEnvAddFreshWithInit Initialized
+    v x = SI (F.symbol x) Local RdOnly t
 
 freshId a = Id <$> freshenAnn a <*> fresh
 
@@ -319,7 +308,7 @@ cgEnvAdds l msg xts g = foldM step g es
 --------------------------------------------------------------------------------
 objFields :: CGEnv -> CGEnvEntry -> [CGEnvEntry]
 --------------------------------------------------------------------------------
-objFields g e@(SI x loc a _ t)
+objFields g e@(SI x loc a t)
   | a `elem` [ WriteGlobal, ReturnVar ] = [e]
   | otherwise                           = e:xts
   where
@@ -331,8 +320,8 @@ objFields g e@(SI x loc a _ t)
         = []
 
     -- This should remain as is: x.f bindings are not going to change
-    mkSI f Opt tf = SI (mkQualSym x f) loc a Initialized $ ty tf f
-    mkSI f Req tf = SI (mkQualSym x f) loc a InitUnknown $ ty tf f
+    mkSI f Opt tf = SI (mkQualSym x f) loc a (orUndef $ ty tf f)
+    mkSI f Req tf = SI (mkQualSym x f) loc a (ty tf f)
 
     -- v = offset(x,"f")
     ty t f = substThis x $ t `eSingleton` mkOffsetSym x f
@@ -343,20 +332,19 @@ envAddGroup
   :: (IsLocated l, PP m)
   => l -> m -> [F.Symbol] -> CGEnv -> [CGEnvEntry] -> CGM CGEnv
 --------------------------------------------------------------------------------
-envAddGroup l msg ks g0 xts
-  = do  -- Flag any errors
-        _           <- mapM_ cgError errors
-        es          <- L.zipWith5 SI xs ls as is <$> zipWithM inv is ts
-        g1          <- foldM addFixpointBind g0 es
-        return       $ g1 { cge_names = envAdds (zip xs es) (cge_names g1) }
+envAddGroup l msg ks g0 xts = do
+    -- Flag any errors
+    _           <- mapM_ cgError errors
+    es          <- L.zipWith4 SI xs ls as <$> mapM inv ts
+    g1          <- foldM addFixpointBind g0 es
+    return       $ g1 { cge_names = envAdds (zip xs es) (cge_names g1) }
   where
-    errors           = concat (zipWith (\x -> checkSyms l msg g0 (x:ks)) xs ts)
+    errors       = concat (zipWith (checkSyms l msg g0 . (:ks)) xs ts)
 
-    (xs,ls,as,is,ts) = L.unzip5 [(x, loc, a, i, strOr a x t) | SI x loc a i t <- xts ]
+    (xs,ls,as,ts) = L.unzip4 [(x, loc, a, strOr a x t) | SI x loc a t <- xts ]
 
     -- Invariant strengthening
-    inv Initialized  = addInvariant g0
-    inv _            = return
+    inv = addInvariant g0
 
     -- Union strengthening
     -- PV: Keep the `~~` here, because of potential sort mismatch
@@ -372,35 +360,35 @@ envAddGroup l msg ks g0 xts
 addFixpointBind :: CGEnv -> CGEnvEntry -> CGM CGEnv
 --------------------------------------------------------------------------------
 -- No binding for globals or RetVal: shouldn't appear in refinements
-addFixpointBind g (SI _ _ WriteGlobal _ _) = return g
-addFixpointBind g (SI _ _ ReturnVar   _ _) = return g
-addFixpointBind g (SI x _ _           _ t)
-  = do  bs           <- getCgBinds
-        rbs          <- getCgRevBinds
-        let ibs0      = cge_fenv g
+addFixpointBind g (SI _ _ WriteGlobal _) = return g
+addFixpointBind g (SI _ _ ReturnVar   _) = return g
+addFixpointBind g (SI x _ _           t) = do
+    bs           <- getCgBinds
+    rbs          <- getCgRevBinds
+    let ibs0      = cge_fenv g
 
-        -- Remove the old binding from IBindEnv of the CGEnv
-        let ibs1      = case F.lookupSEnv x rbs of
-                          Just i  -> F.deleteIBindEnv i ibs0
-                          Nothing -> ibs0
+    -- Remove the old binding from IBindEnv of the CGEnv
+    let ibs1      = case F.lookupSEnv x rbs of
+                      Just i  -> F.deleteIBindEnv i ibs0
+                      Nothing -> ibs0
 
-        -- Add Type Invariants (XXX: again?)
-        t'           <- addInvariant g t
-        let r         = rTypeSortedReft t'
+    -- Add Type Invariants (XXX: again?)
+    t'           <- addInvariant g t
+    let r         = rTypeSortedReft t'
 
-        -- Update the Monad's BindEnv
-        let (i, bs')  = F.insertBindEnv x r bs
+    -- Update the Monad's BindEnv
+    let (i, bs')  = F.insertBindEnv x r bs
 
-        -- Update the Monad's (Sym -> Bid) mapping
-        let rbs'      = F.insertSEnv x i rbs
+    -- Update the Monad's (Sym -> Bid) mapping
+    let rbs'      = F.insertSEnv x i rbs
 
-        -- Set the Monad' envs
-        setCgBinds    bs'
-        setCgRevBinds rbs'
+    -- Set the Monad' envs
+    setCgBinds    bs'
+    setCgRevBinds rbs'
 
-        -- Update the CGEnv's IBindEnv
-        let ibs2      = F.insertsIBindEnv [i] ibs1
-        return        $ g { cge_fenv = ibs2 }
+    -- Update the CGEnv's IBindEnv
+    let ibs2      = F.insertsIBindEnv [i] ibs1
+    return        $ g { cge_fenv = ibs2 }
 
 
 -- | Get the conjunction of class invariants inherited from all ancestry
@@ -498,15 +486,15 @@ freshTyFun g l t
 --------------------------------------------------------------------------------
 freshenVI :: IsLocated l => CGEnv -> l -> SymInfo F.Reft -> CGM (SymInfo F.Reft)
 --------------------------------------------------------------------------------
-freshenVI _ _ v@(SI _ _ Ambient _ _)
+freshenVI _ _ v@(SI _ _ Ambient _)
   = return v
-freshenVI _ _ v@(SI _ Exported _ _ _)
+freshenVI _ _ v@(SI _ Exported _ _)
   = return v
-freshenVI g l v@(SI x loc a@WriteGlobal i t)
-  | isTrivialRefType t  = freshTy "freshenVI" (toType t) >>= (SI x loc a i <$>) . wellFormed l g
-  | otherwise           = return v
-freshenVI g l (SI x loc a i t)
-  = SI x loc a i <$> freshTyFun g l t
+freshenVI g l v@(SI x loc a@WriteGlobal t)
+  | isTrivialRefType t = freshTy "freshenVI" (toType t) >>= (SI x loc a <$>) . wellFormed l g
+  | otherwise          = return v
+freshenVI g l (SI x loc a t)
+  = SI x loc a <$> freshTyFun g l t
 
 
 
@@ -530,12 +518,12 @@ freshenType g l loc t
 --------------------------------------------------------------------------------
 freshTyInst :: AnnLq -> CGEnv -> [BTVar F.Reft] -> [RefType] -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-freshTyInst l g bs τs tbody
-  = do ts    <- mapM  (freshTy "freshTyInst") τs
-       _     <- mapM_ (wellFormed l g) ts
-       _     <- mapM_ ff (safeZip "freshTyInst" ts bs)
-       θ     <- pure (fromList (zip αs ts))
-       return $ apply θ tbody
+freshTyInst l g bs τs tbody = do
+    ts    <- mapM  (freshTy "freshTyInst") τs
+    _     <- mapM_ (wellFormed l g) ts
+    _     <- mapM_ ff (safeZip "freshTyInst" ts bs)
+    θ     <- pure (fromList (zip αs ts))
+    return $ apply θ tbody
   where
     ff (t, BTV _ _ (Just b)) = subType l Nothing g t b
     ff (_, BTV _ _ Nothing ) = return ()
@@ -546,23 +534,23 @@ freshTyInst l g bs τs tbody
 --------------------------------------------------------------------------------
 freshTyPhis :: F.Reftable r => AnnLq -> CGEnv -> [SymInfo r] -> CGM (CGEnv, [RefType])
 --------------------------------------------------------------------------------
-freshTyPhis l g es
-  = do  ts' <- mapM (freshTy "freshTyPhis") ts
-        g'  <- cgEnvAdds l "freshTyPhis" (L.zipWith5 SI xs ls as is ts') g
-        _   <- mapM (wellFormed l g') ts'
-        return (g', ts')
+freshTyPhis l g es = do
+    ts' <- mapM (freshTy "freshTyPhis") ts
+    g'  <- cgEnvAdds l "freshTyPhis" (L.zipWith4 SI xs ls as ts') g
+    _   <- mapM (wellFormed l g') ts'
+    return (g', ts')
   where
-    (xs,ls,as,is,ts) = L.unzip5 [ (F.symbol x,l,a,i,t) | SI x l a i t <- es ]
+    (xs,ls,as,ts) = L.unzip4 [ (F.symbol x,l,a,t) | SI x l a t <- es ]
 
 -- | Instantiate Fresh Type at conditional expression
 --------------------------------------------------------------------------------
 freshTyCondExpr :: AnnLq -> CGEnv -> Type -> CGM (Id AnnLq, CGEnv, RefType)
 --------------------------------------------------------------------------------
-freshTyCondExpr l g t
-  = do  t'      <- freshTy "freshTy'" t
-        (x, g') <- cgEnvAddFresh "freshTyCondExpr" l t' g
-        _       <- wellFormed l g' t'
-        return    $ (x, g', t')
+freshTyCondExpr l g t = do
+    t'      <- freshTy "freshTy'" t
+    (x, g') <- cgEnvAddFresh "freshTyCondExpr" l g t'
+    _       <- wellFormed l g' t'
+    return    $ (x, g', t')
 
 --------------------------------------------------------------------------------
 freshenCHA  :: CGEnv -> ClassHierarchy F.Reft -> CGM (ClassHierarchy F.Reft)
@@ -575,8 +563,8 @@ freshenEnv :: CGEnv -> Env CGEnvEntry -> CGM (Env CGEnvEntry)
 --------------------------------------------------------------------------------
 freshenEnv g nms = envFromList <$> mapM go (envToList nms)
   where
-    go (k, SI x loc a i v@TVar{}) = return (k, SI x loc a i v)
-    go (k, v                    ) = (k,) <$> freshenVI g (srcPos k) v
+    go (k, SI x loc a v@TVar{}) = return (k, SI x loc a v)
+    go (k, v                  ) = (k,) <$> freshenVI g (srcPos k) v
 
 --------------------------------------------------------------------------------
 freshenModuleDefM
@@ -614,7 +602,7 @@ freshenClassDeclM _ (x, d) = return (x, d)
 
 envTyAdds msg l xts g = cgEnvAdds l msg' sis g
   where
-    sis  = [ SI x Local WriteLocal Initialized t | B x _ t <- xts ]
+    sis  = [ SI x Local WriteLocal t | B x _ t <- xts ]
     msg' = msg ++ " - envTyAdds " ++ ppshow (srcPos l)
 
 traceTypePP l msg act = do

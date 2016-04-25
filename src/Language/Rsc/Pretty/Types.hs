@@ -168,11 +168,6 @@ instance PP EnumDef where
 instance PP IContext where
   pp (IC x) = text "Context: " <+> pp x
 
-instance PP Initialization where
-  pp Initialized   = text "init"
-  pp Uninitialized = text "non-init"
-  pp InitUnknown   = text "init-unknown"
-
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n αs xs body) = text "alias" <+> pp n <> withnull angles comma αs <>
                             withnull brackets comma xs <+> text "=" <+> pp body

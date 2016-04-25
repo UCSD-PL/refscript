@@ -219,50 +219,28 @@ type IOverloadSig r   = (IntCallSite, OverloadSig r)
 -- | Assignability
 --------------------------------------------------------------------------------
 {-
-   _________________________________________________________________________
-  |               |              |                |           |             |
-  |     Kind      |    Comment   | In refinements |   SSA-ed  | Initialized |
-  |_______________|______________|________________|___________|_____________|
-  |               |              |                |           |             |
-  |    RdOnly     |     RO       |        Y       |     N     |             |
-  |               |              |                |           |             |
-  |    Ambient    |   Ambient    |        Y       |     N     |      Y      |
-  |               |              |                |           |             |
-  |  WriteLocal   | Local scope  |        N       |     Y     |             |
-  |               |              |                |           |             |
-  | ForeignLocal  | Outer scope  |        N       |     N     |             |
-  |               |              |                |           |             |
-  |  WriteGlobal  | WR anywhere  |        N       |     N     |             |
-  |               |              |                |           |             |
-  |   ReturnVar   |  return var  |        _       |     N     |             |
-  |_______________|______________|________________|___________|_____________|
+   ___________________________________________________________
+  |               |              |                |           |
+  |     Kind      |    Comment   | In refinements |   SSA-ed  |
+  |_______________|______________|________________|___________|
+  |               |              |                |           |
+  |    RdOnly     |     RO       |        Y       |     N     |
+  |               |              |                |           |
+  |    Ambient    |   Ambient    |        Y       |     N     |
+  |               |              |                |           |
+  |  WriteLocal   | Local scope  |        N       |     Y     |
+  |               |              |                |           |
+  | ForeignLocal  | Outer scope  |        N       |     N     |
+  |               |              |                |           |
+  |  WriteGlobal  | WR anywhere  |        N       |     N     |
+  |               |              |                |           |
+  |   ReturnVar   |  return var  |        _       |     N     |
+  |_______________|______________|________________|___________|
 
 -}
 
 data Assignability = RdOnly | Ambient | WriteLocal | ForeignLocal | WriteGlobal | ReturnVar
                      deriving (Show, Eq, Data, Typeable)
-
-
-
-
---------------------------------------------------------------------------------
--- | Initialization
---------------------------------------------------------------------------------
-
-data Initialization =
-  --
-  -- Variable initialized
-  --
-    Initialized
-  --
-  -- Variable uninitialized (undefined)
-  --
-  | Uninitialized
-  --
-  -- Unknown status
-  --
-  | InitUnknown
-  deriving (Show, Eq, Data, Typeable)
 
 
 --------------------------------------------------------------------------------
@@ -347,12 +325,6 @@ instance Monoid (TypeMembersQ q r) where
     = TM (ps1  `mappend` ps2) (sps1 `mappend` sps2)
          (maybe c2 Just c1)   (maybe k2 Just k1)
          (maybe s2 Just s1)   (maybe n2 Just n1)
-
-instance Monoid Initialization where
-  mempty                                = InitUnknown
-  Initialized   `mappend` Initialized   = Initialized
-  Uninitialized `mappend` Uninitialized = Uninitialized
-  _             `mappend` _             = InitUnknown
 
 
 --------------------------------------------------------------------------------

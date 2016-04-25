@@ -2,10 +2,6 @@
 interface Array<M extends ReadOnly, T> {
     length: number;
 
-    /*@ @Immutable __getLength(): { number | v = len this && v >= 0 } */
-    /*@            __getLength(): { number | v >= 0 } */
-    __getLength(): number;
-
     /*@ @Mutable push(x: T): number */
     push(x: T): number;
     // push<N>(...items: Array<T>): number;
@@ -68,9 +64,9 @@ declare type ROArray<T> = Array<ReadOnly, T>;
 
 // XXX: Add Well formedness check for missing type params
 
-/*@ builtin_getLength ::                     <T>(a: IArray<T>) =>  { v: number | v >= 0 && v = (len a) } */
-/*@ builtin_getLength :: <M extends ReadOnly, T>(a: Array<M,T>) => { v: number | v >= 0 } */
-declare function builtin_getLength<M extends ReadOnly,T>(a: Array<M, T>): number;
+/*@ builtin_BIGetLength ::                     <T>(a: IArray<T>) =>  { v: number | v >= 0 && v = len a } */
+/*@ builtin_BIGetLength :: <M extends ReadOnly, T>(a: Array<M,T>) => { v: number | v >= 0 } */
+declare function builtin_BIGetLength<M extends ReadOnly,T>(a: Array<M, T>): number;
 
 interface ArrayConstructor<M extends ReadOnly> {
     // new (arrayLength?: number): any[];

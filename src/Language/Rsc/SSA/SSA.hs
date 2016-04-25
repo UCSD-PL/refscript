@@ -449,14 +449,14 @@ transSuper l g es
 
     superVS n = VarDeclStmt <$> fr <*> (single <$> superVD n)
     superVD n = VarDecl  <$> fr
-                         <*> freshenIdSSA' (builtinOpId BISuperVar)
+                         <*> freshenIdSSA' (builtinOpId BISuperVar :: Identifier)
                          <*> justM (NewExpr <$> fr <*> n <**> es)
     asgnS x = ExprStmt   <$> fr <*> asgnE x
     asgnE x = AssignExpr <$> fr
                          <*> return OpAssign
                          <*> (LDot <$> fr <*> (ThisRef <$> fr) <**> F.symbolSafeString x)
                          <*> (DotRef <$> fr
-                                     <*> (VarRef <$> fr <*> freshenIdSSA' (builtinOpId BISuperVar))
+                                     <*> (VarRef <$> fr <*> freshenIdSSA' (builtinOpId BISuperVar :: Identifier))
                                      <*> (Id <$> fr <**> F.symbolSafeString x))
 
 
@@ -464,7 +464,7 @@ transSuper l g es
 ctorExit :: AnnSSA r -> [Id t] -> SSAM r (Statement (AnnSSA r))
 -------------------------------------------------------------------------------------
 ctorExit l ms = do
-    ctorExit    <- VarRef <$> fr <*> freshenIdSSA' (builtinOpId BICtorExit)
+    ctorExit    <- VarRef <$> fr <*> freshenIdSSA' (builtinOpId BICtorExit :: Identifier)
     es          <- mapM (VarRef <$> fr <**>) ms'
     exitC       <- CallExpr <$> fr <**> ctorExit <**> es
     ReturnStmt <$> fr <**> Just exitC
@@ -528,7 +528,7 @@ ssaClassElt g c (Constructor l xs bd0) = do
 
     g'           = initCallableSsaEnv g xs bd0
 
-    symToVar     = freshenIdSSA' . mkId . F.symbolString -- F.symbolSafeString
+    symToVar x   = freshenIdSSA' (mkId (F.symbolString x) :: Identifier)
     cha          = ssaCHA g
     fields       | Just n <- curClass g
                  = sortBy c_sym (nonStaticFields cha n)   -- Sort alphabetically

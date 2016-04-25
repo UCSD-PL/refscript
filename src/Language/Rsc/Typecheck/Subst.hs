@@ -228,9 +228,6 @@ instance SubstitutableQ q r Assignability where
 instance SubstitutableQ q r Locality where
   apply _ s                 = s
 
-instance SubstitutableQ q r Initialization where
-  apply _ s                 = s
-
 instance (SubstitutableQ q r a, SubstitutableQ q r b, SubstitutableQ q r c) => SubstitutableQ q r (a,b,c) where
   apply θ (a,b,c)           = (apply θ a, apply θ b, apply θ c)
 

@@ -104,20 +104,21 @@ arrayLitTy l g _ Nothing n = mkUniqueArrTy l g n
 --
 mkImmArrTy l g t n = safeEnvFindTy l g ial >>= go
   where
-    ial = builtinOpId BIImmArrayLit
+    ial = builtinOpId BIImmArrayLit :: Id SrcSpan
     go (TAll (BTV s l _) (TFun [B x_ o_ t_] tOut r))
          = return $ Right $ mkAll [BTV s l (Just t)] (TFun (bs x_ o_ t_) (rt tOut) r)
     go _ = return $ Left  $ bugArrayBIType l ial t
 
     bs x_ o_ t_ = [ B (tox x_ i) o_ t_ | i <- [1..n] ]
-    rt t_       = F.subst1 t_ (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
+    rt t_       = F.subst1 t_ (F.symbol numArgs, F.expr (n::Int))
     tox x       = F.symbol . ((symbolString x) ++) . show
+    numArgs     = builtinOpId BINumArgs :: Id SrcSpan
 
 -- | mkUArray :: <A>(a: A): Array<Unique, A>
 --
 mkUniqueArrTy l g n = safeEnvFindTy l g ual >>= go
   where
-    ual = builtinOpId BIUniqueArrayLit
+    ual = builtinOpId BIUniqueArrayLit :: Id SrcSpan
     go (TAll α (TFun [B x_ o_ t_] rt r))
          = return $ Right $ mkAll [α] (TFun (bs x_ o_ t_) rt r)
     go t = return $ Left  $ bugArrayBIType l ual t
@@ -129,7 +130,7 @@ mkUniqueArrTy l g n = safeEnvFindTy l g ual >>= go
 --
 mkArrTy l g n = safeEnvFindTy l g al >>= go
   where
-    al = builtinOpId BIArrayLit
+    al = builtinOpId BIArrayLit :: Id SrcSpan
     go (TAll μ (TAll α (TFun [B x_ Req t_] rt r)))
         = return $ Right $ mkAll [μ,α] (TFun (bs x_ t_) rt r)
     go t = return $ Left  $ bugArrayBIType l al t
@@ -183,7 +184,7 @@ mkArrTy l g n = safeEnvFindTy l g al >>= go
 
 
 mkCondExprTy l g t
-  = do  opTy <- safeEnvFindTy l g (builtinOpId BICondExpr)
+  = do  opTy <- safeEnvFindTy l g (builtinOpId BICondExpr :: Id SrcSpan)
         case bkAll opTy of
           ([c, BTV α la _, BTV β lb _], TFun [B c_ oc_ tc_, B a_ oa_ ta_, B b_ ob_ tb_] rt r') ->
             return $ mkAll [c, BTV α la (Just t), BTV β lb (Just t)]

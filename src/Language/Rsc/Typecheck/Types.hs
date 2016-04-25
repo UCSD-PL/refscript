@@ -198,6 +198,8 @@ mkAll αs t            = tAnd $ go (reverse αs) <$> bkAnd t
     go (x:xs)         = go xs . TAll x
     go []             = id
 
+
+
 bkAll :: RTypeQ q r -> ([BTVarQ q r], RTypeQ q r)
 bkAll                 = go []
   where
@@ -486,7 +488,7 @@ mkInitFldTy t = mkFun ([], [B (F.symbol "f") Req t], tVoid)
 
 type Identifier = Id F.SrcSpan
 
-builtinOpId :: BuiltinOp -> Identifier
+builtinOpId :: Default a => BuiltinOp -> Id a
 builtinOpId BIUndefined      = builtinId "BIUndefined"
 builtinOpId BIBracketRef     = builtinId "BIBracketRef"
 builtinOpId BIBracketAssign  = builtinId "BIBracketAssign"
@@ -509,6 +511,7 @@ builtinOpId BICastExpr       = builtinId "BICastExpr"
 builtinOpId BISuper          = builtinId "BISuper"
 builtinOpId BISuperVar       = builtinId "BISuperVar"
 builtinOpId BICtor           = builtinId "BICtor"
+builtinOpId BIGetLength      = builtinId "BIGetLength"
 builtinOpId BIThis           = mkId "this"
 
 infixOpId OpLT              = builtinId "OpLT"
@@ -542,7 +545,7 @@ prefixOpId PrefixTypeof     = builtinId "PrefixTypeof"
 prefixOpId PrefixBNot       = builtinId "PrefixBNot"
 prefixOpId o                = errorstar $ "prefixOpId: Cannot handle: " ++ show o
 
-mkId      = Id F.dummySpan
+mkId x    = Id def x
 builtinId = mkId . ("builtin_" ++)
 
 

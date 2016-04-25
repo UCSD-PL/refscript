@@ -25,7 +25,7 @@ module Language.Rsc.Typecheck.TCMonad (
   , fatal, tcError, tcWrap
 
   -- * Freshness
-  , freshTyArgs, freshenAnn
+  , freshTyArgs, freshenAnn, freshenId
 
   -- * Substitutions
   , getSubst, setSubst, addSubst
@@ -333,7 +333,8 @@ isCastId (Id _ s) = castPrefix `isPrefixOf` s
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-unifyTypesM :: Unif r => SrcSpan -> TCEnv r -> [RType r] -> [RType r] -> TCM r (RSubst r)
+unifyTypesM
+  :: Unif r => SrcSpan -> TCEnv r -> [RType r] -> [RType r] -> TCM r (RSubst r)
 --------------------------------------------------------------------------------
 unifyTypesM l γ t1s t2s
   | length t1s == length t2s
@@ -431,6 +432,9 @@ freshenAnn (FA _ l a)
   = do n     <- tc_ast_cnt <$> get
        modify $ \st -> st {tc_ast_cnt = 1 + n}
        return $ FA n l a
+
+freshenId :: Id (AnnSSA r) -> TCM r (Id (AnnSSA r))
+freshenId (Id a x) = (`Id` x) <$> freshenAnn a
 
 -- | tcFunTys: "context-sensitive" function signature
 --------------------------------------------------------------------------------

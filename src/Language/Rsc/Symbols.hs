@@ -59,7 +59,6 @@ import           Language.Rsc.Types
 data SymInfoQ q r = SI { v_name :: F.Symbol
                        , v_loc  :: Locality
                        , v_asgn :: Assignability
-                       , v_init :: Initialization
                        , v_type :: RTypeQ q r
                        }
                        deriving (Data, Typeable, Functor)
@@ -70,8 +69,8 @@ instance F.Symbolic (SymInfoQ q r) where
   symbol = v_name
 
 
-symToField (SI n _ WriteGlobal _ t) = FI n Req tMU t
-symToField (SI n _ _           _ t) = FI n Req tIM t
+symToField (SI n _ WriteGlobal t) = FI n Req tMU t
+symToField (SI n _ _           t) = FI n Req tIM t
 
 setSiType s t = s { v_type = t }
 
@@ -80,15 +79,13 @@ setSiType s t = s { v_type = t }
 --------------------------------------------------------------------------------
 mkArgumentsSI :: (F.Reftable r, IsLocated l) => l -> [RType r] -> SymInfo r
 --------------------------------------------------------------------------------
-mkArgumentsSI l ts = SI getArgSym Local RdOnly Initialized
-                   $ TFun [] (immObjectLitTy [pLen] [tLen]) fTop
+mkArgumentsSI l ts = SI getArgSym Local RdOnly ty
   where
-    -- ts'            = take k ts
-    -- ps'            = PropNum l . toInteger <$> [0 .. k-1]
-    pLen           = PropId l $ lenId l
+    ty             = TFun [] (immObjectLitTy [pLen] [tLen]) fTop
+    pLen           = PropId l (lenId l)
     tLen           = tNum `strengthen` rLen
-    rLen           = F.ofReft $ F.uexprReft k
-    k              = fromMaybe (length ts) $ findIndex isTUndef ts
+    rLen           = F.ofReft (F.uexprReft k)
+    k              = fromMaybe (length ts) (findIndex isTUndef ts)
 
 --------------------------------------------------------------------------------
 immObjectLitTy :: F.Reftable r => [Prop l] -> [RType r] -> RType r
@@ -105,7 +102,7 @@ immObjectLitTy ps ts | length ps == length ts
 -- | Instances
 
 instance F.Reftable r => SubstitutableQ q r (SymInfoQ q r) where
-  apply θ (SI n l a i t) = SI n l a i $ apply θ t
+  apply θ (SI n l a t) = SI n l a $ apply θ t
 
 
 --------------------------------------------------------------------------------
@@ -118,10 +115,10 @@ newtype SymList r = SL { s_list :: [(Id SrcSpan, SyntaxKind, SymInfo r)] }
 --------------------------------------------------------------------------------
 symbols :: [Statement (AnnR r)] -> SymList r
 --------------------------------------------------------------------------------
-symbols s = SL [ (fSrc <$> n, k, SI (F.symbol n) loc a i t)
-                 | (n,l,k,a,i) <- hoistBindings s
-                 , fact        <- fFact l
-                 , (loc, t)    <- annToType fact ]
+symbols s = SL [ (fSrc <$> n, k, SI (F.symbol n) loc a t)
+                 | (n,l,k,a) <- hoistBindings s
+                 , fact      <- fFact l
+                 , (loc, t)  <- annToType fact ]
   where
     annToType (ClassAnn   l (TS _ b _)) = [(l, TClass b)]       -- Class
     annToType (SigAnn   _ l t         ) = [(l, t)]              -- Function
@@ -134,15 +131,14 @@ symbols s = SL [ (fSrc <$> n, k, SI (F.symbol n) loc a i t)
 varDeclSymbol :: (F.Reftable r, PP (SymInfo r))
               => VarDecl (AnnR r) -> Either Error (Maybe (SymInfo r))
 --------------------------------------------------------------------------------
-varDeclSymbol (VarDecl l x eo) =
+varDeclSymbol (VarDecl l x _) =
     case nmErrs of
       []   -> catSymInfo sis
       errs -> Left (catErrors errs)
   where
     xSym    = F.symbol x
-    sis     = [SI y loc a init t | VarAnn y loc a (Just t) <- fFact l]
-    init    | Just _ <- eo = Initialized | otherwise = Uninitialized
-    nmErrs  = catMaybes [toDerr a y xSym | SI y _ a _ _ <- sis, y /= xSym]
+    sis     = [SI y loc a t | VarAnn y loc a (Just t) <- fFact l]
+    nmErrs  = catMaybes [toDerr a y xSym | SI y _ a _ <- sis, y /= xSym]
 
     catSymInfo [ ] = Right Nothing
     catSymInfo [s] = Right (Just s)
@@ -188,16 +184,16 @@ mergeSymInfo :: F.Reftable r
   => F.Symbol -> (SyntaxKind, SymInfo r) -> (SyntaxKind, SymInfo r)
   -> Either Error (SyntaxKind, SymInfo r)
 --------------------------------------------------------------------------------
-mergeSymInfo _ (k1, SI m1 l1 a1 i1 t1) (k2, SI m2 l2 a2 i2 t2)
-  | m1 == m2, l1 == l2, k1 == k2, a1 == a2, i1 == i2
-  = Right (k1, SI m1 l1 a1 i1 (t1 `mappend` t2))
+mergeSymInfo _ (k1, SI m1 l1 a1 t1) (k2, SI m2 l2 a2 t2)
+  | m1 == m2, l1 == l2, k1 == k2, a1 == a2
+  = Right (k1, SI m1 l1 a1 (t1 `mappend` t2))
 
 mergeSymInfo x _ _ = Left (errorDuplicateKey (srcPos x) x)
 
 
-concatSymInfo l s1@(SI m1 l1 a1 i1 t1) s2@(SI m2 l2 a2 i2 t2)
-  | (m1, l1, a1, i1) == (m2, l2, a2, i2), isTFun t1, isTFun t2
-  = Right (SI m1 l1 a1 i1 (t1 `mappend` t2))
+concatSymInfo l s1@(SI m1 l1 a1 t1) s2@(SI m2 l2 a2 t2)
+  | (m1, l1, a1) == (m2, l2, a2), isTFun t1, isTFun t2
+  = Right (SI m1 l1 a1 (t1 `mappend` t2))
   | otherwise
   = Left (errorJoinSymInfo l s1 s2)
 

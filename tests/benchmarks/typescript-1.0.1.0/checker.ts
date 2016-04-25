@@ -4,14 +4,22 @@
 /*@ type nat = { number | v >= 0 } */
 
 
+
+/*@ nextSymbolId :: posint */
+let nextSymbolId = 1;
+/*@ nextNodeId :: posint */
+let nextNodeId = 1;
+/*@ nextMergeId :: posint */
+let nextMergeId = 1;
+
+
+/*@ global */ let mergedSymbols: MArray<ISymbol> = [];
+/*@ global */ let symbolLinks: MArray<ISymbolLinks> = [];
+/*@ global */ let nodeLinks: MArray<INodeLinks> = [];
+
+
 module checker_ts {
 
-    /*@ nextSymbolId :: posint */
-    let nextSymbolId = 1;
-    /*@ nextNodeId :: posint */
-    let nextNodeId = 1;
-    /*@ nextMergeId :: posint */
-    let nextMergeId = 1;
 
     /*@ getDeclarationOfKind :: (symbol: ISymbol, kind: ts.SyntaxKind) => { ts.Declaration<Immutable> | offset(v,"kind") = kind } + undefined */
     export function getDeclarationOfKind(symbol: ISymbol, kind: ts.SyntaxKind): IDeclaration {
@@ -80,10 +88,6 @@ module checker_ts {
     };
 
 
-    /*@ global */ let mergedSymbols: MArray<ISymbol> = [];
-    /*@ global */ let symbolLinks: MArray<ISymbolLinks> = [];
-    /*@ global */ let nodeLinks: MArray<INodeLinks> = [];
-
     /*@ createSymbol :: <M extends ReadOnly>(flags: bitvector32, name: string) => ts.Symbol<M> */
     /*@ createSymbol :: <M extends ReadOnly>(flags: number     , name: string) => ts.Symbol<M> */
     declare function createSymbol<M extends ReadOnly>(flags: ts.SymbolFlags, name: string): ts.Symbol<M>
@@ -127,7 +131,7 @@ module checker_ts {
         }
     }
 
-    export let getNodeLinks = function(node: INode): INodeLinks {
+    export function getNodeLinks(node: INode): INodeLinks {
         let node_id = node.id;
         if (!node_id) {
             node_id = nextNodeId++;
@@ -142,50 +146,50 @@ module checker_ts {
     }
 
 
-    /*@ getAncestor :: (node: INode + undefined, kind: ts.SyntaxKind) => undefined + { INode | offset v "kind" = kind } */
-    // export declare let getAncestor: (node: INode, kind: ts.SyntaxKind) => INode;
-    export let getAncestor = function(node: INode, kind: ts.SyntaxKind): INode {
-        if (kind === ts.SyntaxKind.ClassDeclaration) {
-            while (typeof node !== "undefined") {
-                if (node.kind === ts.SyntaxKind.ClassDeclaration) {
-                    //return <ClassDeclaration>node;
-                    return <INode>node;
-                }
-                else if (kind === ts.SyntaxKind.EnumDeclaration      ||
-                         kind === ts.SyntaxKind.InterfaceDeclaration ||
-                         kind === ts.SyntaxKind.ModuleDeclaration    ||
-                         kind === ts.SyntaxKind.ImportDeclaration) {
-                    // early exit cases - declarations cannot be nested in classes
-                    return undefined;
-                }
-                else {
-                    node = node.parent;
-                }
-            }
-        }
-        else {
-            while (node) {
-                if (node.kind === kind) {
-                    return <INode>node;
-                }
-                else {
-                    node = node.parent;
-                }
-            }
-        }
+//     /* @ getAncestor :: (node: INode + undefined, kind: ts.SyntaxKind) => undefined + { INode | offset v "kind" = kind } */
+//     // export declare let getAncestor: (node: INode, kind: ts.SyntaxKind) => INode;
+//     export let getAncestor = function(node: INode, kind: ts.SyntaxKind): INode {
+//         if (kind === ts.SyntaxKind.ClassDeclaration) {
+//             while (typeof node !== "undefined") {
+//                 if (node.kind === ts.SyntaxKind.ClassDeclaration) {
+//                     //return <ClassDeclaration>node;
+//                     return <INode>node;
+//                 }
+//                 else if (kind === ts.SyntaxKind.EnumDeclaration      ||
+//                          kind === ts.SyntaxKind.InterfaceDeclaration ||
+//                          kind === ts.SyntaxKind.ModuleDeclaration    ||
+//                          kind === ts.SyntaxKind.ImportDeclaration) {
+//                     // early exit cases - declarations cannot be nested in classes
+//                     return undefined;
+//                 }
+//                 else {
+//                     node = node.parent;
+//                 }
+//             }
+//         }
+//         else {
+//             while (node) {
+//                 if (node.kind === kind) {
+//                     return <INode>node;
+//                 }
+//                 else {
+//                     node = node.parent;
+//                 }
+//             }
+//         }
+//
+//         return undefined;
+//     }
 
-        return undefined;
-    }
-
-    /*@ getSourceFile :: (node: INode + undefined) => undefined + ts.SourceFile<Immutable> */
-    export let getSourceFile = function(node: INode): ts.SourceFile<Immutable> {
-        let ancestor = getAncestor(node, ts.SyntaxKind.SourceFile);
-        if (ancestor) {
-            return <ts.SourceFile<Immutable>> (<ts.Node<Immutable>>ancestor);
-        } else {
-            return undefined;
-        }
-    }
+//     /* @ getSourceFile :: (node: INode + undefined) => undefined + ts.SourceFile<Immutable> */
+//     export let getSourceFile = function(node: INode): ts.SourceFile<Immutable> {
+//         let ancestor = getAncestor(node, ts.SyntaxKind.SourceFile);
+//         if (ancestor) {
+//             return <ts.SourceFile<Immutable>> (<ts.Node<Immutable>>ancestor);
+//         } else {
+//             return undefined;
+//         }
+//     }
 
 
     /*@ createType :: (flags: bitvector32) => { ts.Type<Unique> | type_flags flags v } */
@@ -196,49 +200,53 @@ module checker_ts {
         return result;
     }
 
-    /*@ createObjectType :: ( kind: { bitvector32 | mask_typeflags_anonymous(v) || mask_typeflags_reference(v) }
-                               , symbol: ISymbol + undefined
-                           ) => { ts.ObjectType<Unique> | type_flags kind v } */
-    let createObjectType = function<M extends ReadOnly>(kind: ts.TypeFlags, symbol?: ISymbol): ts.ObjectType<M> {
-        let type = <ts.ObjectType<Unique>>createType(kind);
-        // TODO
-        // type.symbol = symbol;
-        return type;
-    }
+//     /* @ createObjectType :: ( kind: { bitvector32 | mask_typeflags_anonymous(v) || mask_typeflags_reference(v) }
+//                                , symbol: ISymbol + undefined
+//                            ) => { ts.ObjectType<Unique> | type_flags kind v } */
+//     let createObjectType = function<M extends ReadOnly>(kind: ts.TypeFlags, symbol?: ISymbol): ts.ObjectType<M> {
+//         let type = <ts.ObjectType<Unique>>createType(kind);
+//         // TODO
+//         // type.symbol = symbol;
+//         return type;
+//     }
+//
+//     export declare function resolveObjectTypeMembers(type: ts.ObjectType<Immutable>): ts.ResolvedObjectType<Immutable>;
 
-    export declare function resolveObjectTypeMembers(type: ts.ObjectType<Immutable>): ts.ResolvedObjectType<Immutable>;
+//     export let getPropertiesOfType = function(type: IType): IArray<ISymbol> {
+//         if (type.flags & ts.TypeFlags.ObjectType) {
+//             return resolveObjectTypeMembers(<ts.ObjectType<Immutable>>type).properties;
+//         }
+//         return emptyArray();
+//     }
+//
+//     export declare function getTypeListId(types: IArray<IType>): number;
+//
+//     export let createTypeReference = function(target: ts.GenericType<Immutable>, typeArguments: IArray<IType>): ts.TypeReference<Immutable> {
+//         let id = getTypeListId(typeArguments);
+//         let type = target.instantiations[id.toString()];
+//         if (!type) {
+//             assume(target.symbol);         // TODO: Remove this assumption
+//             let type1 = <ts.TypeReference<Unique>>createObjectType(ts.TypeFlags.Reference, target.symbol);
+//             let tmp = target.instantiations;
+//             // tmp[id] = type1;            // TODO: Cannot assign a Unique variable
+//             type1.target = target;
+//             type1.typeArguments = typeArguments;
+//             return type1;
+//         }
+//         return type;
+//     }
 
-    export let getPropertiesOfType = function(type: IType): IArray<ISymbol> {
-        if (type.flags & ts.TypeFlags.ObjectType) {
-            return resolveObjectTypeMembers(<ts.ObjectType<Immutable>>type).properties;
-        }
-        return emptyArray();
-    }
-
-    export declare function getTypeListId(types: IArray<IType>): number;
-
-    export let createTypeReference = function(target: ts.GenericType<Immutable>, typeArguments: IArray<IType>): ts.TypeReference<Immutable> {
-        let id = getTypeListId(typeArguments);
-        let type = target.instantiations[id.toString()];
-        if (!type) {
-            assume(target.symbol);         // TODO: Remove this assumption
-            let type1 = <ts.TypeReference<Unique>>createObjectType(ts.TypeFlags.Reference, target.symbol);
-            let tmp = target.instantiations;
-            // tmp[id] = type1;            // TODO: Cannot assign a Unique variable
-            type1.target = target;
-            type1.typeArguments = typeArguments;
-            return type1;
-        }
-        return type;
-    }
-
-    export let isTypeParameterReferenceIllegalInConstraint = function(typeReferenceNode: ts.TypeReferenceNode<Immutable>, typeParameterSymbol: ISymbol): boolean {
+    export function isTypeParameterReferenceIllegalInConstraint(typeReferenceNode: ts.TypeReferenceNode<Immutable>, typeParameterSymbol: ISymbol): boolean {
         let links = getNodeLinks(typeReferenceNode);
         let links_isIllegalTypeReferenceInConstraint_tmp = links.isIllegalTypeReferenceInConstraint;
+
         // if (links.isIllegalTypeReferenceInConstraint !== undefined) {
         if (typeof links_isIllegalTypeReferenceInConstraint_tmp !== "undefined") {
             return links_isIllegalTypeReferenceInConstraint_tmp;
         }
+
+        assert(false);
+
         // bubble up to the declaration
         /*@ global */ let currentNode: INode = typeReferenceNode;
         // forEach === exists
@@ -256,21 +264,21 @@ module checker_ts {
         return links_isIllegalTypeReferenceInConstraint_tmp;
     }
 
-    export function instantiateList<T>(items: IArray<T>,
-                                             mapper: ts.TypeMapper<Immutable>,
-                                             instantiator: (item: T, mapper: ts.TypeMapper<Immutable>) => T): MArray<T> {
-        if (items && items.length) {
-            /*@ result :: MArray<T> */
-            let result: MArray<T> = [];
-            for (let i = 0; i < items.length; i++) {
-                result.push(instantiator(items[i], mapper));
-            }
-            return result;
-        }
-        /*@ result :: MArray<T> */
-        let result: MArray<T> = [];
-        return result;
-        // return items;        // PV: replacing the original
-    }
+//     export function instantiateList<T>(items: IArray<T>,
+//                                              mapper: ts.TypeMapper<Immutable>,
+//                                              instantiator: (item: T, mapper: ts.TypeMapper<Immutable>) => T): MArray<T> {
+//         if (items && items.length) {
+//             /* @ result :: MArray<T> */
+//             let result: MArray<T> = [];
+//             for (let i = 0; i < items.length; i++) {
+//                 result.push(instantiator(items[i], mapper));
+//             }
+//             return result;
+//         }
+//         /* @ result :: MArray<T> */
+//         let result: MArray<T> = [];
+//         return result;
+//         // return items;        // PV: replacing the original
+//     }
 
 }

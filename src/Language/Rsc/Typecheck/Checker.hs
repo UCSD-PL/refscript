@@ -223,35 +223,34 @@ tcStmt  :: Unif r =>
 tcStmt γ s@(EmptyStmt _)
   = return (s, Just γ)
 
--- | interface Foo; (this definitions will be hoisted)
+-- | interface Foo (this definition will be hoisted)
 tcStmt γ s@(InterfaceStmt _ _)
   = return (s, Just γ)
 
 -- | x = e
-tcStmt γ s@(ExprStmt l (AssignExpr l1 OpAssign (LVar lx x) e))
-  = tcWrap check >>= tcSW γ s
+tcStmt γ s@(ExprStmt l (AssignExpr l1 OpAssign (LVar lx x) e)) =
+    tcWrap check >>= tcSW γ s
   where
-    check =
-      case info of
-        Just (SI _ _ WriteGlobal Uninitialized t) -> do
-            (e', _) <- tcExprT γ e t
-            γ'      <- pure (tcEnvAdd (SI xSym Local WriteGlobal Initialized t) γ)
-            return     (mkStmt e', Just γ')
+    check = case tcEnvFindSymInfo x γ of
+      -- Just (SI _ _ WriteGlobal t) -> do
+      --     (e', _) <- tcExprT γ e t
+      --     γ'      <- pure (tcEnvAdd (SI xSym Local WriteGlobal t) γ)
+      --     return     (mkStmt e', Just γ')
 
-        Just (SI _ _ WriteGlobal _ t) -> do
-            (e', _) <- tcExprT γ e t
-            return     (mkStmt e', Just γ)
+      Just (SI _ _ WriteGlobal t) -> do
+          (e', _) <- tcExprT γ e t
+          return     (mkStmt e', Just γ)
 
-        Just (SI _ _ a _ _) -> error $ "Could this happen- x = e ?? " ++ ppshow a
+      Just (SI _ _ a _) ->
+          error $ "Could this happen- x = e ?? " ++ ppshow a
 
-        Nothing -> do
-            (e', t) <- tcExpr γ e Nothing
-            γ'      <- pure (tcEnvAdd (SI xSym Local WriteLocal Initialized t) γ)
-            return     (mkStmt e', Just γ')
+      Nothing -> do
+          (e', t) <- tcExpr γ e Nothing
+          γ'      <- pure (tcEnvAdd (SI xSym Local WriteLocal t) γ)
+          return     (mkStmt e', Just γ')
 
     mkStmt  = ExprStmt l . AssignExpr l1 OpAssign (LVar lx x)
     xSym    = F.symbol x
-    info    = tcEnvFindTyForAsgn x γ
 
 
 -- | e1.f = e2
@@ -295,8 +294,8 @@ tcStmt γ (IfSingleStmt l b s)
 
 -- | if b { s1 } else { s2 }
 tcStmt γ s@(IfStmt l e s1 s2)
-  = do opTy         <- safeEnvFindTy l γ (builtinOpId BITruthy)
-       ([e'], z)    <- tcNormalCallW γ l (builtinOpId BITruthy) [e] opTy
+  = do opTy         <- safeEnvFindTy l γ (builtinOpId BITruthy :: Identifier)
+       ([e'], z)    <- tcNormalCallW γ l (builtinOpId BITruthy :: Identifier) [e] opTy
        case z of
          Just _  ->
             do  z1 <- tcStmt γ s1
@@ -368,16 +367,15 @@ tcStmt γ (ModuleStmt l n body) = do
     (ModuleStmt l n *** return (Just γ)) <$>  tcStmts γ1 body
 
 -- | enum M { ... }
-tcStmt γ (EnumStmt l n body)
-  = return (EnumStmt l n body, Just $ tcEnvAdd si γ)
+tcStmt γ (EnumStmt l n body) =
+    return (EnumStmt l n body, Just $ tcEnvAdd si γ)
   where
-    si    = SI nSym exprt RdOnly init tEnum
+    si    = SI nSym exprt RdOnly tEnum
     tEnum = TRef (Gen name []) fTop
     path  = envPath γ
     name  = QN path nSym
     nSym  = F.symbol n
     exprt = Exported      -- TODO: do this check
-    init  = Initialized   -- TODO: do this check
 
 -- OTHER (Not handled)
 tcStmt _ s
@@ -394,17 +392,17 @@ tcVarDecl γ v@(VarDecl l x (Just e)) =
     Right Nothing -> do
       -- Local (no type annotation)
         (e', to) <- tcExprW γ e
-        sio      <- pure (SI xSym Local WriteLocal Initialized <$> to)
+        sio      <- pure (SI xSym Local WriteLocal <$> to)
         return      (VarDecl l x (Just e'), tcEnvAddo γ x sio)
 
       -- Local (with type annotation)
-    Right (Just (SI _ lc WriteLocal _ t)) -> do
+    Right (Just (SI _ lc WriteLocal t)) -> do
         (e', t') <- tcExprT γ e t
         return ( VarDecl l x $ Just e'
-               , Just $ tcEnvAdd (SI xSym lc WriteLocal Initialized t') γ)
+               , Just $ tcEnvAdd (SI xSym lc WriteLocal t') γ)
 
       -- Global
-    Right (Just s@(SI _ _ WriteGlobal _ t)) -> do
+    Right (Just s@(SI _ _ WriteGlobal t)) -> do
         -- PV: the global variable should be in scope already,
         --     since it is being hoisted to the beginning of the
         --     scope.
@@ -412,21 +410,22 @@ tcVarDecl γ v@(VarDecl l x (Just e)) =
         return      (VarDecl l x (Just e'), Just $ tcEnvAdd s γ)
 
       -- ReadOnly
-    Right (Just (SI _ lc RdOnly _ t)) -> do
-        ([e'], Just t') <- tcNormalCallWCtx γ l (builtinOpId BIExprT) [(e, Just t)] (idTy t)
+    Right (Just (SI _ lc RdOnly t)) -> do
+        ([e'], Just t') <- tcNormalCallWCtx γ l exprTId [(e, Just t)] (idTy t)
         return ( VarDecl l x $ Just e'
-               , Just $ tcEnvAdd (SI xSym lc RdOnly Initialized t') γ)
+               , Just $ tcEnvAdd (SI xSym lc RdOnly t') γ)
 
     c -> fatal (unimplemented l "tcVarDecl" ("case: " ++ ppshow c))
   where
-    xSym = F.symbol x
+    xSym    = F.symbol x
+    exprTId = builtinOpId BIExprT :: Identifier
 
 tcVarDecl γ v@(VarDecl l x Nothing) =
   case varDeclSymbol v of
     Left err -> fatal err
 
-    Right (Just (SI _ lc Ambient _ t)) ->
-        return $ (v, Just $ tcEnvAdds [(x, SI xSym lc Ambient Initialized t)] γ)
+    Right (Just (SI _ lc Ambient t)) ->
+        return $ (v, Just $ tcEnvAdds [(x, SI xSym lc Ambient t)] γ)
 
     Right _ -> fatal (bug l "TC-tcVarDecl: this shouldn't happen")
   where
@@ -459,7 +458,7 @@ tcStaticClassElt γ (TD sig _ ms) (MemberVarDecl l True x (Just e)) =
     Just MI{} ->
         tcError $ bugStaticField l x sig
     Just (FI _ _ _ t) -> do
-        ([e'],_) <- tcNormalCall γ l (builtinOpId BIFieldInit) [(e, Just t)] (mkInitFldTy t)
+        ([e'],_) <- tcNormalCall γ l (builtinOpId BIFieldInit :: Identifier) [(e, Just t)] (mkInitFldTy t)
         return $ MemberVarDecl l True x $ Just e'
     Nothing ->
         fatal (errorClassEltAnnot (srcPos l) sig x)
@@ -485,11 +484,11 @@ tcInstanceClassElt γ typeDecl (Constructor l xs body) = do
   where
     TD sig@(TS _ (BGen nm bs) _) _ ms = typeDecl
     γ'     = tcEnvAdd viExit (initClassCtorEnv sig γ)
-    ctor   = builtinOpId BICtor
+    ctor   = builtinOpId BICtor :: Identifier
 
     thisT   = TRef (Gen nm (map btVar bs)) fTop
-    cExit   = builtinOpId BICtorExit
-    viExit  = SI (F.symbol cExit) Local Ambient Initialized $ mkFun (bs, xts, ret)
+    cExit   = builtinOpId BICtorExit :: Identifier
+    viExit  = SI (F.symbol cExit) Local Ambient $ mkFun (bs, xts, ret)
     ret     = thisT
 
     xts      = case expandType def (envCHA γ) thisT of
@@ -545,10 +544,11 @@ tcExprT γ e t
   | onlyCtxTyped e
   = tcExprWD γ e (Just t)
   | otherwise
-  = do  ([e'], _) <- tcNormalCall γ l (builtinOpId BIExprT) [(e, Just t)] (idTy t)
+  = do  ([e'], _) <- tcNormalCall γ l exprTId [(e, Just t)] (idTy t)
         return (e', t)
   where
-    l = getAnnotation e
+    l       = getAnnotation e
+    exprTId = builtinOpId BIExprT :: Identifier
 
 tcEnvAddo _ _ Nothing  = Nothing
 tcEnvAddo γ x (Just t) = Just (tcEnvAdds [(x, t)] γ)
@@ -693,8 +693,8 @@ tcExpr γ e@(VarRef l x) _
     to = tcEnvFindTy x γ
 
 tcExpr γ (CondExpr l e e1 e2) (Just t)
-  = do  opTy         <- safeEnvFindTy l γ (builtinOpId BITruthy)
-        ([e'], z)    <- tcNormalCallW γ l (builtinOpId BITruthy) [e] opTy
+  = do  opTy         <- safeEnvFindTy l γ (builtinOpId BITruthy :: Identifier)
+        ([e'], z)    <- tcNormalCallW γ l (builtinOpId BITruthy :: Identifier) [e] opTy
         case z of
           Just _  -> do
               (e1', _) <- tcWrap (tcExprT γ e1 t) >>= tcEW γ e1
@@ -787,7 +787,7 @@ tcExpr γ e@(NewExpr _ _ _) s
 
 -- | super
 tcExpr γ e@(SuperRef l) _
-  = case tcEnvFindTy (builtinOpId BISuper) γ of
+  = case tcEnvFindTy (builtinOpId BISuper :: Identifier) γ of
       Just t  -> return (e,t)
       Nothing -> fatal (errorSuper (fSrc l))
 
@@ -813,7 +813,7 @@ tcExpr _ e _
 tcCast :: Unif r => AnnTc r -> TCEnv r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
 --------------------------------------------------------------------------------
 tcCast l γ e tc
-  = do  ([e'],t') <- tcNormalCall γ l (builtinOpId BICastExpr) [(e, Just tc)] (castTy tc)
+  = do  ([e'],t') <- tcNormalCall γ l (builtinOpId BICastExpr :: Identifier) [(e, Just tc)] (castTy tc)
         return       (e', t')
 
 --------------------------------------------------------------------------------
@@ -822,7 +822,7 @@ tcCall :: Unif r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR 
 
 -- | `o e`
 tcCall γ (PrefixExpr l o e) _
-  = do opTy <- safeEnvFindTy l γ (prefixOpId o)
+  = do opTy <- safeEnvFindTy l γ (prefixOpId o :: Identifier)
        z    <- tcNormalCallWD γ l (prefixOpId o) [e] opTy
        case z of
          ([e'], t) -> return (PrefixExpr l o e', t)
@@ -833,7 +833,7 @@ tcCall γ (InfixExpr l o@OpInstanceof e1 e2) _
   = do (e2',t) <- tcExpr γ e2 Nothing
        case t of
          TClass (BGen (QN _ x) _)  ->
-            do  opTy <- safeEnvFindTy l γ (infixOpId o)
+            do  opTy <- safeEnvFindTy l γ (infixOpId o :: Identifier)
                 ([e1',_], t') <- let args = [e1, StringLit l2 (F.symbolSafeString x)] in
                                  tcNormalCallWD γ l (infixOpId o) args opTy
                       -- TODO: add qualified name
@@ -843,14 +843,14 @@ tcCall γ (InfixExpr l o@OpInstanceof e1 e2) _
     l2 = getAnnotation e2
 
 tcCall γ (InfixExpr l o e1 e2) _
-  = do opTy <- safeEnvFindTy l γ (infixOpId o)
-       z    <- tcNormalCallWD γ l (infixOpId o) [e1, e2'] opTy
+  = do opTy <- safeEnvFindTy l γ  (infixOpId o :: Identifier)
+       z    <- tcNormalCallWD γ l (infixOpId o :: Identifier) [e1, e2'] opTy
        case z of
          ([e1', e2'], t) -> return (InfixExpr l o e1' e2', t)
          _ -> fatal (impossible (srcPos l) "tcCall InfixExpr")
   where
     e2' | o `elem` [OpIn] = enableUnique e2
-        | otherwise          = e2
+        | otherwise       = e2
 
 -- | `e1[e2]` Special case for Enumeration, and object literals with numeric
 -- or string arguments.
@@ -860,17 +860,17 @@ tcCall γ e@(BracketRef l e1 e2) _
       -- Enumeration
       Right (_, t) | isEnumType (envCHA γ) t -> fatal (unimplemented (srcPos l) msg e)
       -- Default
-      _ -> safeEnvFindTy l γ (builtinOpId BIBracketRef) >>= call
+      _ -> safeEnvFindTy l γ (builtinOpId BIBracketRef :: Identifier) >>= call
   where
     msg     = "Support for dynamic access of enumerations"
-    call ty = tcNormalCallWD γ l (builtinOpId BIBracketRef) [e1, e2] ty >>= \case
+    call ty = tcNormalCallWD γ l (builtinOpId BIBracketRef :: Identifier) [e1, e2] ty >>= \case
           ([e1', e2'], t) -> return (BracketRef l e1' e2', t)
           _ -> fatal (impossible (srcPos l) "tcCall BracketRef")
 
 -- | `e1[e2] = e3`
 tcCall γ (AssignExpr l OpAssign (LBracket l1 e1 e2) e3) _
-  = do opTy <- safeEnvFindTy l γ (builtinOpId BIBracketAssign)
-       z <- tcNormalCallWD γ l (builtinOpId BIBracketAssign) [enableUnique e1,e2,e3] opTy
+  = do opTy <- safeEnvFindTy l γ (builtinOpId BIBracketAssign :: Identifier)
+       z <- tcNormalCallWD γ l (builtinOpId BIBracketAssign :: Identifier) [enableUnique e1,e2,e3] opTy
        case z of
          ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
          _ -> fatal (impossible (srcPos l) "tcCall AssignExpr")
@@ -880,7 +880,7 @@ tcCall γ (NewExpr l e es) s
   = do (e',t) <- tcExpr γ e Nothing
        case extractCtor γ t of
          Just ct -> do
-            (es', tNew) <- tcNormalCallWD γ l (builtinOpId BICtor) es ct
+            (es', tNew) <- tcNormalCallWD γ l (builtinOpId BICtor :: Identifier) es ct
             tNew'       <- pure (adjustCtxMut tNew s)
             return (NewExpr l e' es', tNew')
          Nothing ->
@@ -888,44 +888,53 @@ tcCall γ (NewExpr l e es) s
 
 -- | e.f
 --
-tcCall γ (DotRef l e0 f) _
-  = runFailM (tcExpr γ ue Nothing) >>= checkAccess
+tcCall γ (DotRef l e0 f) _ = do
+    tOpt <- runFailM (tcExpr γ ue Nothing)
+    case tOpt of
+      Right et -> checkAccess et
+      Left (TCErr Fatal e) -> fatal e
+      Left (TCErr NonFatal e) -> tcError e
   where
     ue = enableUnique e0
-    checkAccess (Right (_, tRcvr))
-      | isArrayLen tRcvr = checkArrayLength
-      | otherwise        = checkProp (getProp l γ F.dummySymbol f tRcvr)
 
-    checkAccess (Left (TCErr Fatal    e)) = fatal e
-    checkAccess (Left (TCErr NonFatal e)) = tcError e
+    checkAccess (_, tRcvr) = do
+        b <- unifyAndSubtypeM l γ tRcvr genArrTy
+        -- Is this an array '.length' access?
+        if b && F.symbol f == F.symbol "length" then
+            checkArrayLength
+        -- Otherwise, treat as normal access.
+        else
+            checkProp (getProp l γ F.dummySymbol f tRcvr)
 
-    -- `array.length`
-    checkArrayLength
-      = do  l1  <- freshenAnn l
-            l2  <- freshenAnn l
-            i   <- pure $ Id l2 "__getLength"
-            tcExpr γ (CallExpr l1 (DotRef l ue i) []) Nothing
+    -- `a.length`
+    checkArrayLength = do
+        l1  <- freshenAnn l
+        l2  <- freshenAnn l
+        i   <- freshenId (builtinOpId BIGetLength)
+        tcExpr γ (CallExpr l1 (VarRef l2 i) [ue]) Nothing
 
     -- Normal property access
     checkProp (Left er)   = tcError er
-    checkProp (Right tfs) = adjustOpt tfs . fst <$> tcExprT γ ue (rcvrTy tfs)
+    checkProp (Right tfs) = do
+        let (rTs, fs) = unzip tfs
+        (e0', _)     <- tcExprT γ ue (tOr rTs)
+        let t         = tyWithOpt fs
+        return          (DotRef l e0' f, t)
 
     -- Add `or undef` in case of an optional field access
-    adjustOpt tfs e_
-      | isOptional tfs
-      = (DotRef l e_ f, tOr $ tUndef : typesOf tfs)
-      | otherwise
-      = (DotRef l e_ f, tOr $          typesOf tfs)
+    tyWithOpt fs = case unzip [(t, o) | FI _ o _ t <- fs] of
+        (ts, os) | Opt `elem` os -> orUndef (tOr ts)
+                 | otherwise     -> tOr ts
 
-    isArrayLen t = isArrayType t && F.symbol f == F.symbol "length"
+    -- forall M T . Array<M,T>
+    genArrTy =  mkAll bvs (TRef (Gen arrayName vs) fTop)
+      where
+        bvs  = [BTV m def (Just tRO), BTV t def Nothing]
+        vs   = map tVar [TV  m def, TV t def]
+        m    = F.symbol "M"
+        t    = F.symbol "T"
 
-    isArrayType (TRef (Gen x _) _) = F.symbol x == F.symbol "Array"
-    isArrayType (TOr _ _) = True
-    isArrayType _ = False
 
-    isOptional tfs = Opt `elem` [ o | (_, FI _ o _ _) <- tfs ]
-    typesOf    tfs = [ t | (_, FI _ _ _ t) <- tfs]
-    rcvrTy         = tOr . map fst
 
 -- | `super(e1,...,en)`
 --
@@ -1146,6 +1155,28 @@ instantiateFTy l ξ fn ft@(bkAll -> (bs, t))
         return           $ (fbs, ts, t')
     where
       er      = tcError $ errorNonFunction (srcPos l) fn ft
+
+
+--------------------------------------------------------------------------------
+unifyAndSubtypeM
+  :: Unif r => AnnTc r -> TCEnv r -> RType r -> RType r -> TCM r Bool
+--------------------------------------------------------------------------------
+unifyAndSubtypeM l γ t1 t2 = do
+    eSubst <- unif
+    case eSubst of
+      Left _  -> return False
+      Right (t1', t2') -> return $ isSubtype γ t1' t2'
+  where
+    (bs1, t1') = bkAll t1
+    (bs2, t2') = bkAll t2
+    unif       = runFailM $ do
+        (_, t1'') <- freshTyArgs l 1 (envCtx γ) bs1 t1'
+        (_, t2'') <- freshTyArgs l 2 (envCtx γ) bs2 t2'
+        θ         <- unifyTypeM (srcPos l) γ t1'' t2''
+        return       (apply θ t1'', apply θ t2'')
+
+
+
 
 -- | envJoin
 --

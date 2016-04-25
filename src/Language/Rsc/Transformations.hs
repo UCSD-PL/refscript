@@ -98,7 +98,7 @@ instance Transformable ModuleDefQ where
     = ModuleDef (envMap (trans f αs xs) v) (envMap (trans f αs xs) t) e p
 
 instance Transformable SymInfoQ where
-  trans f αs xs (SI x l a i t) = SI x l a i $ trans f αs xs t
+  trans f αs xs (SI x l a t) = SI x l a $ trans f αs xs t
 
 instance Transformable FAnnQ where
   trans f αs xs (FA i s ys) = FA i s $ trans f αs xs <$> ys

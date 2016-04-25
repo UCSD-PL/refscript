@@ -267,8 +267,9 @@ subtypeObj l _ _ t1 t2@(TRef (Gen _ []) _)
 
 -- | Type Reference subtyping
 subtypeObj l γ c (TRef g1@(Gen x1 (m1:t1s)) _) (TRef (Gen x2 (m2:t2s)) _)
-  -- = case ltracePP l (ppshow m1 ++ " vs " ++ ppshow m2 ++ " FROM " ++
-  --    ppshow t1 ++  " VS " ++ ppshow t2) $ subtype l γ c m1 m2 of
+   -- = case ltracePP l
+   --     (ppshow m1  ++ " vs " ++ ppshow m2 ++ " FROM " ++
+   --      ppshow t1s ++ " vs " ++ ppshow t2s) $ subtype l γ c m1 m2 of
   = case subtype l γ c m1 m2 of
       SubOK   -> checkBaseType
       NoSub e -> NoSub e

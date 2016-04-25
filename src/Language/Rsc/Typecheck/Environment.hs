@@ -17,7 +17,7 @@ module Language.Rsc.Typecheck.Environment (
 
     -- * Search env
     , tcEnvFindTy
-    , tcEnvFindTyForAsgn
+    , tcEnvFindSymInfo
     , tcEnvFindReturn
     , tcEnvAdd
     , tcEnvAdds
@@ -92,7 +92,7 @@ initCallableEnv l γ f fty xs s = do
     (bs,xts,t) = sig
 
     nms0       = toFgn (envNames γ)
-    siRet      = SI rSym Local ReturnVar Initialized t
+    siRet      = SI rSym Local ReturnVar t
 
     rSym       = returnSymbol
     tyBs       = [lsia α | α <- αs]
@@ -108,11 +108,11 @@ initCallableEnv l γ f fty xs s = do
     αs         = map btvToTV bs
 
     lsia x     = (Loc (srcPos l) x, sia x (tVar x))
-    sia  x t   = SI (F.symbol x) Local Ambient    Initialized t
-    siw  x t   = SI (F.symbol x) Local WriteLocal Initialized t
+    sia  x t   = SI (F.symbol x) Local Ambient    t
+    siw  x t   = SI (F.symbol x) Local WriteLocal t
 
 
--- | `initClassCtorEnv` makes `this` a Unique & Uninitialized binding
+-- | `initClassCtorEnv` makes `this` a Unique binding
 --------------------------------------------------------------------------------
 initClassCtorEnv :: Unif r => TypeSigQ AK r -> TCEnv r -> TCEnv r
 --------------------------------------------------------------------------------
@@ -124,7 +124,7 @@ initClassCtorEnv (TS _ (BGen nm bs) _) γ = tcEnvAdd eThis γ'
               }
     bts   = [(s,t) | BTV s _ (Just t) <- bs]
     tThis = adjUQ (TRef (Gen nm (map btVar bs)) fTop)
-    eThis = SI thisSym Local RdOnly Uninitialized tThis
+    eThis = SI thisSym Local RdOnly tThis
     adjUQ (TRef (Gen n (_:ps)) r) = TRef (Gen n (tUQ:ps)) r
     adjUQ t                       = t
 
@@ -139,7 +139,7 @@ initClassMethEnv m (TS _ (BGen nm bs) _) γ = tcEnvAdd eThis γ'
               }
     bts   = [(s,t) | BTV s _ (Just t) <- bs]
     tThis = adjMut $ TRef (Gen nm (map btVar bs)) fTop
-    eThis = SI thisSym Local RdOnly Initialized tThis
+    eThis = SI thisSym Local RdOnly tThis
 
     adjMut (TRef (Gen n (_:ps)) r) = TRef (Gen n (m:ps)) r
     adjMut t                       = t
@@ -179,25 +179,12 @@ tcEnvAdd s γ = γ { tce_names = envAdd (F.symbol s) s $ tce_names γ }
 --------------------------------------------------------------------------------
 tcEnvFindTy :: (Unif r, F.Symbolic x, IsLocated x) => x -> TCEnv r -> Maybe (RType r)
 --------------------------------------------------------------------------------
-tcEnvFindTy x γ = fmap v_type (tcEnvFindTyWithAgsn x γ)
+tcEnvFindTy x γ = fmap v_type (tcEnvFindSymInfo x γ)
 
 --------------------------------------------------------------------------------
-tcEnvFindTyWithAgsn :: (Unif r, F.Symbolic x) => x -> TCEnv r -> Maybe (SymInfo r)
+tcEnvFindSymInfo :: (Unif r, F.Symbolic x) => x -> TCEnv r -> Maybe (SymInfo r)
 --------------------------------------------------------------------------------
-tcEnvFindTyWithAgsn x γ | Just t <- envFindTy x $ tce_names γ
-                        = Just $ adjustInit t
-                        | otherwise
-                        = Nothing
-  where
-    adjustInit s@(SI _ _ _ Initialized _) = s
-    adjustInit (SI n loc a _ t) = SI n loc a Uninitialized $ orUndef t
-
--- This is a variant of the above that doesn't add the ' + undefined' for
--- non-initialized variables.
---------------------------------------------------------------------------------
-tcEnvFindTyForAsgn    :: (Unif r, F.Symbolic x) => x -> TCEnv r -> Maybe (SymInfo r)
---------------------------------------------------------------------------------
-tcEnvFindTyForAsgn x γ = envFindTy x $ tce_names γ
+tcEnvFindSymInfo x γ = envFindTy x (tce_names γ)
 
 tcEnvFindReturn = v_type . envFindReturn . tce_names
 

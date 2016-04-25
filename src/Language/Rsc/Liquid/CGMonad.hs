@@ -274,10 +274,10 @@ instance F.Subable a => F.Subable (Env a) where
   syms x   = concat [ F.syms (F.symbol x) ++ F.syms t | (x, t) <- envToList x ]
 
 instance (PP r, F.Reftable r, F.Subable r) => F.Subable (SymInfo r) where
-  substa f (SI x l a i t) = SI x l a i $ F.substa f t
-  substf f (SI x l a i t) = SI x l a i $ F.substf f t
-  subst su (SI x l a i t) = SI x l a i $ F.subst su t
-  syms     (SI _ _ _ _ t) = F.syms t
+  substa f (SI x l a t) = SI x l a $ F.substa f t
+  substf f (SI x l a t) = SI x l a $ F.substf f t
+  subst su (SI x l a t) = SI x l a $ F.subst su t
+  syms     (SI _ _ _ t) = F.syms t
 
 
 -- errorLiquid l g t1 t2         = mkErr k $ printf "Liquid Type Error" where k = srcPos l

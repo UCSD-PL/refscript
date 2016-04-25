@@ -134,7 +134,7 @@ accumAbsNames (QP AK_ _ ss)  = concatMap go
     go _                    = []
 
 
-type BindInfo a = (Id a, a, SyntaxKind, Assignability, Initialization)
+type BindInfo a = (Id a, a, SyntaxKind, Assignability)
 
 -- | Returns all bindings in the scope of @s@ (functions, classes, modules, variables).
 --------------------------------------------------------------------------------
@@ -144,11 +144,11 @@ hoistBindings = snd . visitStmts vs ()
   where
     vs = scopeVisitor { accStmt = acs, accVDec = acv }
 
-    acs _ (FunctionStmt a x _ (Just _)) = [(x, a, FuncDeclKind  , RdOnly , Initialized)]
-    acs _ (FunctionStmt a x _ Nothing ) = [(x, a, FuncDeclKind  , Ambient, Initialized)]
-    acs _ (ClassStmt    a x _         ) = [(x, a, ClassDeclKind , RdOnly , Initialized)]
-    acs _ (ModuleStmt   a x _         ) = [(x, a, ModuleDeclKind, RdOnly , Initialized)]
-    acs _ (EnumStmt     a x _         ) = [(x, a, EnumDeclKind  , RdOnly , Initialized)]
+    acs _ (FunctionStmt a x _ (Just _)) = [(x, a, FuncDeclKind  , RdOnly )]
+    acs _ (FunctionStmt a x _ Nothing ) = [(x, a, FuncDeclKind  , Ambient)]
+    acs _ (ClassStmt    a x _         ) = [(x, a, ClassDeclKind , RdOnly )]
+    acs _ (ModuleStmt   a x _         ) = [(x, a, ModuleDeclKind, RdOnly )]
+    acs _ (EnumStmt     a x _         ) = [(x, a, EnumDeclKind  , RdOnly )]
     acs _ _                             = []
 
     acv _ _                             = []

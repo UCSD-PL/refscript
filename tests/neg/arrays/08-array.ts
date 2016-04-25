@@ -1,6 +1,6 @@
 
-/*@ qualif Length(v: int): len v = 3 */
-/*@ qualif Length(v: int): len v = 4 */
+/*@ qualif Length(v: a): len v = 3 */
+/*@ qualif Length(v: a): len v = 4 */
 
 let a: IArray<number> = [1,2,3];
 

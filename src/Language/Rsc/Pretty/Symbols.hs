@@ -17,7 +17,7 @@ import           Text.PrettyPrint.HughesPJ
 
 instance PPR r => PP (SymInfo r) where
   -- pp (SI _ _ a _ t) = brackets (pp a) <+> pp t
-  pp (SI x _ a _ t) = pp x <+> brackets (pp a) <> colon <+> pp t
+  pp (SI x _ a t) = pp x <+> brackets (pp a) <> colon <+> pp t
 
 instance PPR r => PP (SymList r) where
   pp = vcat . map pp . s_list

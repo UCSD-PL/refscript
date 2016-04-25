@@ -180,16 +180,16 @@ symbolId :: (IsLocated l, F.Symbolic x) => l -> x -> Id l
 symbolId l x = Id l $ symbolString $ F.symbol x
 
 returnName, lenName, argName, getArgName :: String
-returnName = "$result"
-lenName    = "length"
-argName    = "arguments"
-getArgName = "__getArguments"
+returnName    = "$result"
+lenName       = "length"
+argName       = "arguments"
+getArgName    = "__getArguments"
 
 returnId, lenId, argId, getArgId :: a -> Id a
-returnId l = Id l returnName
-lenId    l = Id l lenName
-argId    l = Id l argName
-getArgId l = Id l getArgName
+returnId    l = Id l returnName
+lenId       l = Id l lenName
+argId       l = Id l argName
+getArgId    l = Id l getArgName
 
 
 instance Eq (Id a) where
@@ -234,10 +234,10 @@ thisId l        = Id l "this"
 offsetSym, thisSym, protoSym, callSym, argSym, getArgSym :: F.Symbol
 thisSym    = "this"
 protoSym   = "__proto__"
-argSym     = "arguments"
 callSym    = "call"
-getArgSym  = F.symbol getArgName
 offsetSym  = "offset"
+argSym     = F.symbol argName
+getArgSym  = F.symbol getArgName
 
 ----------------------------------------------------------------------
 -- | Global Names

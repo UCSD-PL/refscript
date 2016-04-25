@@ -298,7 +298,7 @@ splitTM g i m1_ (TM p1 sp1 c1 k1 s1 n1) r1 (TM p2 sp2 c2 k2 s2 n2)
         -- Add a binding for the LHS, but replace the Unique mutabilities
         -- with the mutabilities that appear in the RHS
         --
-        (x, g') <- cgEnvAddFresh "splitTM" i t1' g
+        (x, g') <- cgEnvAddFresh "splitTM" i g t1'
         ps'     <- pure $ substThis x ps
         cs1     <- concatMapM (splitElt g' i) ps'
         cs2     <- concatMapM (splitElt g  i) sps

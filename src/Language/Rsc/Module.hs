@@ -125,40 +125,23 @@ moduleEnv (Rsc { code = Src stmts }) =
     vStmts p s = concatMap (vStmt p) s
 
     vStmt _ (VarDeclStmt _ vds)
-      = [ ( ss x
-          , VarDeclKind
-          , SI (sym x) loc a Uninitialized t
-          )
+      = [ ( ss x, VarDeclKind, SI (sym x) loc a t)
           | VarDecl l x _ <- vds
           , VarAnn _ loc a (Just t) <- fFact l
         ]
     vStmt _ (FunctionStmt l x _ _)
-      = [ ( ss x
-          , FuncDeclKind
-          , SI (sym x) loc Ambient Initialized t
-          )
+      = [ ( ss x, FuncDeclKind, SI (sym x) loc Ambient t)
           | SigAnn _ loc t <- fFact l
         ]
     vStmt _ (ClassStmt l x _)
-      = [ ( ss x
-          , ClassDeclKind
-          , SI (sym x) loc Ambient Initialized (TClass b)
-          )
+      = [ ( ss x, ClassDeclKind, SI (sym x) loc Ambient (TClass b))
           | ClassAnn loc (TS _ b _) <- fFact l
         ]
     -- TODO: Fix the Locality in the following two
     vStmt p (ModuleStmt l x _)
-      = [ ( ss x
-          , ModuleDeclKind
-          , SI (sym x) Local Ambient Initialized (modTy l p x)
-          )
-        ]
+      = [ ( ss x, ModuleDeclKind, SI (sym x) Local Ambient (modTy l p x))]
     vStmt p (EnumStmt _ x _)
-      = [ ( ss x
-          , EnumDeclKind
-          , SI (sym x) Local Ambient Initialized (enumTy p x)
-          )
-        ]
+      = [ ( ss x, EnumDeclKind, SI (sym x) Local Ambient (enumTy p x))]
     vStmt _ _ = []
 
     -- | Type Definitions

@@ -314,6 +314,7 @@ data BuiltinOp = BIUndefined
                | BIForInKeys
                | BICtorExit
                | BICtor
+               | BIGetLength
                | BIThis
                deriving (Eq, Ord, Show)
 

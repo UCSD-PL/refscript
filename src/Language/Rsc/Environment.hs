@@ -220,7 +220,7 @@ toFgn :: Env (SymInfoQ q r) -> Env (SymInfoQ q r)
 --------------------------------------------------------------------------------
 toFgn = envMap go
   where
-    go (SI n loc WriteLocal i t) = SI n loc ForeignLocal i t
+    go (SI n loc WriteLocal t) = SI n loc ForeignLocal t
     go v = v
 
 --------------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 name:                refscript
-version:             0.1.0.0
+version:             0.2.0
 Copyright:           2010-14 Regents of the University of California
 build-type:          Custom
 synopsis:            Refinement Types for TypeScript
@@ -261,4 +261,3 @@ test-suite regression
                     tasty-hunit,
                     tasty-rerun >= 1.1,
                     text
-

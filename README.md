@@ -7,16 +7,16 @@ Refinement Types for TypeScript
 ### Dependencies
 
 * [stack](https://github.com/commercialhaskell/stack) The Haskell Tool Stack
-* [Node.js](http://nodejs.org/) (tested version v4.2.1)
-* [Ocaml](http://caml.inria.fr/ocaml/release.en.html)
+* [Node.js](http://nodejs.org/)
 * [Z3 Binary](http://z3.codeplex.com/) version >= 4.3.2
 
-### Download and Build
+### Download
 
-    git clone https://github.com/UCSD-PL/refscript
+    git clone --recursive https://github.com/UCSD-PL/refscript
     cd refscript
-    git submodule init
-    git submodule update
+
+### Build
+
     stack setup
     stack build
 
@@ -29,7 +29,7 @@ Refinement Types for TypeScript
 
 ### Regression testing
 
-    stack test
+    stack test refscript:regression
 
 ### Run Benchmarks
 
@@ -151,7 +151,7 @@ let g:syntastic_typescript_checkers += ['liquid']
 let g:syntastic_javascript_checkers += ['liquid']
 ~~~~~
 
-+ To pass extra options to `rsc` add: 
++ To pass extra options to `rsc` add:
 
 ~~~~~
 let g:syntastic_typescript_liquid_args = '...'

@@ -35,6 +35,9 @@ Refinement Types for TypeScript
 
     stack test refscript:bench
 
+To run the complete set of benchmarks reported in our [PLDI'16 paper](http://arxiv.org/abs/1604.02480), please
+refer to branch `pldi16`.
+
 ### Fast load (using ghci)
 
     stack ghci refscript:exe:rsc

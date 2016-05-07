@@ -1,8 +1,8 @@
 
 /*@ foo :: (x: number, { number | v = x }) => number */
-function foo(x:number, y:number):number {
-  x = x + 1;
-  y = y + 1;
-  assert(x === y);
-  return x + y;
+export function foo(x: number, y: number): number {
+    x = x + 1;
+    y = y + 1;
+    assert(x === y);
+    return x + y;
 }

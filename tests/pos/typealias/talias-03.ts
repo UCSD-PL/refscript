@@ -1,9 +1,6 @@
 /*@ predicate gt x y   = x >= y                     */
-/*@ alias Nat          = {number | 0 <= v}          */
-/*@ alias iArray[T]    = #Array[#Immutable, T]      */
-/*@ alias mArray[T]    = #Array[#Mutable, T]        */
-/*@ alias iArrayN[T,n] = {v:#iArray[T] | len v = n} */
+/*@ type Nat          = {number | 0 <= v}          */
+/*@ type iArrayN<T,n> = {v: IArray<T> | len v = n } */
 
-
-/*@ ga :: #iArray[#Nat] */
-var ga = [0,10,20,30];
+/*@ ga :: IArray<Nat> */
+let ga = [0,10,20,30];

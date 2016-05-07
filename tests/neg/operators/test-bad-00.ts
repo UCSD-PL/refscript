@@ -1,8 +1,8 @@
 /*@ foo :: () => number */
 function foo()
 {
-  var x = 0;
-  var y = x + 1;
+  let x = 0;
+  let y = x + 1;
   assert(10 < y);
   return y
 }

@@ -1,12 +1,10 @@
 
-
-
-/*@ foo :: (x: undefined + { number | v > 1}, y: { number | v > 2}) => { number | v > 0 } */
-function foo(x,y) {
-  
-    var r = x || y;
-
-    return r; 
-
+/*@ foo :: (x: posint, y: { string | v = "0" }, z: boolean) => posint */
+export function foo(x: number, y: string, z: boolean) {
+    if (x && (y || z)) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
 }
-

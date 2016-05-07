@@ -1,0 +1,9 @@
+To get dependencies: 
+
+$ npm install
+$ tsd install
+
+
+To build:
+
+$ tsc

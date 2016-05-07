@@ -1,15 +1,18 @@
 
-/*@ minIndex :: (aa: IArray<number>) => {number | true} */
-function minIndex(aa){
+/*@ qualif UBound(v: int, x:a) : v < (len x) */
 
-  /*@ readonly a :: # */
-  var a = aa;
+export function minIndex(aa: IArray<number>): number {
+    /*@ readonly aaaaaa :: IArray<number>*/
+    let aaaaaa = aa;
 
-  if (a.length <= 0) return -1;
+    if (aaaaaa.length <= 0)
+        return -1;
 
-  function body(acc: number, cur: number, i: number) {
-      return cur < a[acc] ? i : acc;
-  };
+    let body: (acc: number, cur: number, i: number) => number = function (acc, cur, i) {
+        return cur < aaaaaa[acc] ? i : acc;
+    }
 
-  return a.reduce(body, 0);
+    return aaaaaa.reduce(body, 0);
+
+
 }

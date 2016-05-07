@@ -8,19 +8,19 @@ function myPlusOk(x, y){
 
 /*@ num_num :: (a:number, b:number) => {number | v = a - b } */
 function num_num(a, b){
-  var d = myPlusOk(a, b);
+  let d = myPlusOk(a, b);
   return d; 
 }
 
-/*@ str_str :: (string) => {string | true } */
+/*@ str_str :: (string) => {string | 0 < 1 } */
 function str_str(a){
-  var b = "dog";
+  let b = "dog";
   return  myPlusOk(a, b); 
 }
 
-/*@ num_str :: (number) => {string | true } */
+/*@ num_str :: (number) => {string | 0 < 1 } */
 function num_str(a){
-  var b = "dog";
+  let b = "dog";
   return myPlusOk(a, b); 
 }
 

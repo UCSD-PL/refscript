@@ -1,16 +1,15 @@
 
-/*@ interface MyList<A> */
-interface MyList<A> {
-  /*@ d :: A */
-  d: A;
-  /*@ n :: #MyList[A] */
-  n: MyList<A>;
+interface MyList<M extends ReadOnly, A> {
+    d: A;
+
+    /*@ n : MyList<M,A> + null */
+    n: MyList<M,A>;
 }
 
-/*@ a :: #MyList[number] */
-var a =  { d: 1, n: { d: 2, n: null } };
+let inner: MyList<Mutable, number> = { d: 2, n: null }
 
-var b = a;
+/*@ a :: MyList<Mutable, number> */
+let a =  { d: 1, n: inner };
 
-
-assert(a.d > 0); 
+let b = a;
+assert(a.d > 0);

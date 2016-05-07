@@ -1,12 +1,12 @@
 
-/*@ foo :: (x: { a: number; b: string }) => { number | v > 5 } */ 
+/*@ foo :: (x: (Mutable) { a: number; b: string }) => { number | v > 5 } */
 
 function foo(x) {
 
-  for (var i = 0; i < 5; i ++) {
-    x.b = i;  
-  }
+    for (let i = 0; i < 5; i++) {
+        x.b = i;
+    }
 
-  return x.a;
+    return x.a;
 
 }

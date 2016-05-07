@@ -1,4 +1,4 @@
-/*@ alias Pos       = {number | 0 < v }  */
+/*@ type Pos       = {number | 0 < v }  */
 
 /*@ bob :: IArray<Pos> */
-var bob = [10, 20, 30];
+let bob = [10, 20, 30];

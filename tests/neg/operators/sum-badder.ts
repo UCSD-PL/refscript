@@ -1,7 +1,7 @@
 
 /*@ sumLoop :: (number, number) => number */
 function sumLoop(acc, i){
-  var r = 0;
+  let r = 0;
   if (0 < i){
     r = sumLoop(acc, i - 1);
   } else {
@@ -12,7 +12,7 @@ function sumLoop(acc, i){
 
 /*@ main :: () => void */
 function main(){
-  var n = pos();
-  var m = sumLoop(0, n);
+  let n = pos();
+  let m = sumLoop(0, n);
   assert(m === n);
 }

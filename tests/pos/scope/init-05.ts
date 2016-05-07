@@ -1,17 +1,10 @@
 
-/*@ foo :: (cnd: boolean) => { number | true } + undefined */
-
-function foo(cnd: boolean): number {
- 
-  /*@ r :: number */
-  var r;
-  
-  if (cnd) {
-
-    r = 1;
-
-  }
-  return r;
-
+/*@ foo :: (cnd: boolean) => number + undefined */
+export function foo(cnd: boolean): number {
+    /*@ local r :: number + undefined */
+    let r;
+    if (cnd) {
+        r = 1;
+    }
+    return r;
 }
-

@@ -4,18 +4,18 @@
 "   Thanks to: http://lpaste.net/94999
 "
 
-let g:hdevtools_options = '-g-i../language-ecmascript/src -g-i../liquid-fixpoint/src -g-isrc -g-package-conf='.glob(finddir('.cabal-sandbox', './;').'/*-packages.conf.d').' \
-  \-g-XTypeSynonymInstances  
-  \-g-XFlexibleInstances 
-  \-g-XFlexibleContexts 
-  \-g-XDeriveDataTypeable  
-  \-g-XNoMonomorphismRestriction  
-  \-g-XDeriveGeneric 
-  \-g-XDeriveFunctor 
-  \-g-ScopedTypeVariables  
-  \-g-XDatatypeContexts 
-  \-g-XTupleSections 
-  \-g-Wall ' 
+"let g:hdevtools_options = '-g-i../language-ecmascript/src -g-i../liquid-fixpoint/src -g-isrc -g-package-conf='.glob(finddir('.cabal-sandbox', './;').'/*-packages.conf.d').' \
+"  \-g-XTypeSynonymInstances  
+"  \-g-XFlexibleInstances 
+"  \-g-XFlexibleContexts 
+"  \-g-XDeriveDataTypeable  
+"  \-g-XNoMonomorphismRestriction  
+"  \-g-XDeriveGeneric 
+"  \-g-XDeriveFunctor 
+"  \-g-ScopedTypeVariables  
+"  \-g-XDatatypeContexts 
+"  \-g-XTupleSections 
+"  \-g-Wall ' 
 
 let g:ctrlp_custom_ignore = {
   \ 'file': '\v(\.hs)@<!$'
@@ -25,3 +25,5 @@ let g:ctrlp_working_path_mode = 0
 
 let g:vim_annotations_offset = '/.liquid/'
 
+set foldlevelstart=99
+set foldlevel=99

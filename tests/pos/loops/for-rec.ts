@@ -1,17 +1,18 @@
-/*@ forloop :: forall A. (number, number, (number, A) => A, A) => A */
-function forloop(lo : number, hi : number, body : (number,any)=>any, acc : any) :any{
+
+function forloop<A>(lo : number, hi : number, body : (x: number, y: A) => A, acc : A): A {
 	if (lo < hi) {
-		var newAcc : any = body(lo, acc);
+		let newAcc = body(lo, acc);
 		return forloop(lo + 1, hi, body, newAcc);
 	}
 	return acc;
 }
 
-/*@ plus :: (number, number) => number */
-function plus(i:number, x:number) :number { return x + i ; }
+function plus(i: number, x: number) {
+	return x + i;
+}
 
 /*@ main :: ({n:number| n > 0}) => void */
-function main(n) : void {
-  var m = forloop(0, n, plus, n);
-  assert(m >= n);
+export function main(n) : void {
+  	let m = forloop(0, n, plus, n);
+  	assert(m >= n);
 }

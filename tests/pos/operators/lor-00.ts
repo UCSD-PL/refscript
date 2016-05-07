@@ -1,8 +1,12 @@
 
+export function foo(): void {
+    let a = _pos();
+    let b = random()
 
-
-/*@ foo :: (x:null, y:number) => { number | true } */
-function foo(x,y) {
-    return x || y;      // works due to contextual type "nunber"
+    if (a || b) {
+        assert(true);
+    }
+    else {
+        assert(false);
+    }
 }
-

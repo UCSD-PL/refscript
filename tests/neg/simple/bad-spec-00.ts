@@ -1,9 +1,9 @@
 class Blah {
   constructor() {}
 
-  /*@ foo : () : void */
+  /*@ foo() : void */
   foo() {}
 
-  /*@ foo : () : void */
+  /*@ foo() : void */
   bar() {}
 }

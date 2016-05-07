@@ -1,7 +1,6 @@
 
 /*@ baz :: () => {v: string | v = "cat"} */
-function baz():string{
-	var z :string= "cat";
-	return z;
+export function baz(): string {
+    let z: string = "cat";
+    return z;
 }
-

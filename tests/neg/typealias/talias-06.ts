@@ -1,15 +1,16 @@
 
-/*@ alias iArray[T]    = #Array[#Immutable, T]        */
+/*@ type iArray[T]    = #Array[#Immutable, T]        */
 
-// TODO: *******MUST****** report error locations for malformed type-aliases!!!! 
+// TODO: *******MUST****** report error locations for malformed type-aliases!!!!
 
-/*@ baz :: forall T. (#iArray) => {v:number | true} */
+/*@ baz :: forall T. (#iArray) => {v:number | 0 < 1} */
 function baz<T>(array: T[]): number {
 
-  var i = 0, 
-      n = array.length - 1, 
-      p0, p1 = array[0], 
-      pairs = new Array(n < 0 ? 0 : n);
- 
-  return i;
+    let i = 0;
+    let n = array.length - 1;
+    let p0 = array[0];
+    let p1 = array[0];
+    let pairs = new Array(n < 0 ? 0 : n);
+
+    return i;
 }

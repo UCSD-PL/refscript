@@ -1,4 +1,4 @@
-/*@ map :: forall A B. ((A) => B, #List[A]?) => #List[B]? */
+/*@ map :: <A,B,M extends ReadOnly> ((A) => B, LList<M,A>) => LList<M,B> */
 function map(f, xs){
   if (empty(xs)) {
     return nil();
@@ -14,21 +14,21 @@ function abs(x){
   return x;
 }
 
-/*@ listsum :: (#List[number]?) => number */
+/*@ listsum :: <A,B,M extends ReadOnly> (LList<M,number>) => number */
 function listsum(xs){
   if (empty(xs)) {
     return 0;
   }
-  var h = head(xs);
-  var t = tail(xs);
+  let h = head(xs);
+  let t = tail(xs);
   return h + listsum(t);
 }
 
 /*@ main :: (number) => {v:number | v >= 0} */
 function main(n){
-  var as = cons(n, cons(n+1, cons(n+2, nil())));
-  var bs = map(abs, as);
-  var r  = listsum(bs);
+  let as = cons(n, cons(n+1, cons(n+2, nil())));
+  let bs = map(abs, as);
+  let r  = listsum(bs);
   assert(r >= 0);
   return listsum(bs);
 }

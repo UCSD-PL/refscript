@@ -1,7 +1,6 @@
 
-
-class Animal {
-  /*@ kind : [Immutable] { v: string | [ ((v = "") || (v = "horse") || (v = "snake") || (v = "tiger"));
+class Animal<M extends ReadOnly> {
+  /*@ (Immutable) kind : { v: string | [ ((v = "") || (v = "horse") || (v = "snake") || (v = "tiger"));
                                          (v = "horse") => extends_class(this, "Horse");
                                          (v = "snake") => extends_class(this, "Snake");
                                          (v = "tiger") => extends_class(this, "Tiger")] } */
@@ -9,7 +8,7 @@ class Animal {
   constructor() {}
 }
 
-class Horse extends Animal { 
+class Horse<M extends ReadOnly> extends Animal<M> { 
   public gallop() {} 
   constructor() { 
     super(); 
@@ -17,7 +16,7 @@ class Horse extends Animal {
   }
 }
 
-class Snake extends Animal { 
+class Snake<M extends ReadOnly> extends Animal<M> { 
   public sneak() {}
   constructor() { 
     super(); 
@@ -26,15 +25,13 @@ class Snake extends Animal {
 }
 
 /*@ move :: (a: Animal<Mutable>) => { void | 0 < 1} */
-function move(a: Animal) {
+function move(a: Animal<Mutable>) {
 
   if (a.kind === "snake") {
-    var s = <Snake>a;
+    let s = <Snake<Mutable>>a;
     s.sneak();
   }
 
 }
 
 move(new Horse()); 
-
-

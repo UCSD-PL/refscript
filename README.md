@@ -7,16 +7,16 @@ Refinement Types for TypeScript
 ### Dependencies
 
 * [stack](https://github.com/commercialhaskell/stack) The Haskell Tool Stack
-* [Node.js](http://nodejs.org/) (tested version v4.2.1)
-* [Ocaml](http://caml.inria.fr/ocaml/release.en.html)
+* [Node.js](http://nodejs.org/)
 * [Z3 Binary](http://z3.codeplex.com/) version >= 4.3.2
 
-### Download and Build
+### Download
 
-    git clone https://github.com/UCSD-PL/refscript
+    git clone --recursive https://github.com/UCSD-PL/refscript
     cd refscript
-    git submodule init
-    git submodule update
+
+### Build
+
     stack setup
     stack build
 
@@ -29,7 +29,16 @@ Refinement Types for TypeScript
 
 ### Regression testing
 
-    cd tests; ./regrtest.py; cd -
+    stack test refscript:regression
+
+### Run Benchmarks
+
+    stack test refscript:bench
+
+### Fast load (using ghci)
+
+    stack ghci refscript:exe:rsc
+    *main> top "file.ts" False
 
 
 ## Advanced
@@ -115,13 +124,13 @@ Bundle 'panagosg7/vim-annotations'
 2. Copy the following files
 
 ~~~~~
-cp ext/vim/typescript/nanojs.vim  ~/.vim/bundle/syntastic/syntax_checkers/typescript/nanojs.vim
-cp ext/vim/typescript/nanojs.vim  ~/.vim/bundle/syntastic/syntax_checkers/typescript/nanojs.vim
+cp ext/vim/typescript/rsc.vim  ~/.vim/bundle/syntastic/syntax_checkers/typescript/rsc.vim
+cp ext/vim/typescript/rsc.vim  ~/.vim/bundle/syntastic/syntax_checkers/typescript/rsc.vim
 ~~~~~
 
 **Run**
 
-+ `:SyntasticCheck liquid` runs `nanojs` on the current buffer.
++ `:SyntasticCheck liquid` runs `rsc` on the current buffer.
 
 **View**
 
@@ -142,8 +151,13 @@ let g:syntastic_typescript_checkers += ['liquid']
 let g:syntastic_javascript_checkers += ['liquid']
 ~~~~~
 
-+ To pass extra options to `nanojs` add:
++ To pass extra options to `rsc` add:
 
 ~~~~~
 let g:syntastic_typescript_liquid_args = '...'
 ~~~~~
+
+
+### Notes
+
++ Using `export let a = ... ` brings in the inferred type from TypeScript.

@@ -1,12 +1,16 @@
 
-/*@ qualif Ineq(v : number ): (v <= 6) */
+/*@ qualif Poo(v: int, i: int): v = i - 1 */
+/*@ qualif Poo(v: int): v < 6 */
 
-/*@ loop :: () => { number | v = 6 } */
-function loop() : number{  
-  
-	for(var x = 1; x <= 5; x += 1) {
+
+/*@ loop :: () => { number | v = 5 } */
+function loop() : number{
+
+    let y = 0;
+
+	for(let x = 1 ;x <= 5; x ++) {
+        y = x;
 	}
 
-	return x;
+	return y;
 }
-

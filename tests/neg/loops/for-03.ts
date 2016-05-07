@@ -1,11 +1,11 @@
 
-/*@ foo :: () => { number | v = 10 } */ 
+/*@ foo :: () => { number | v = 10 } */
 
 function foo() {
 
-  var x = 1;
+  let x = 1;
 
-  for (var i = 0; i < 5; i ++) {
+  for (let i = 0; i < 5; i ++) {
      x = i;
   }
 

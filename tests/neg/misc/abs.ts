@@ -1,12 +1,12 @@
-/*@ abs :: ({ x:number | 0 < 1}) => number */ 
+
+/*@ abs :: (x:number) => {v:number | 0 < 1} */ 
 function abs(x){
-  var y = x;
+  let res = 0;
   if (x > 0) {
-    y = x;
+    res = x;
   } else {
-    y = 10 + x;
+    res = -x;
   };
-  assert(y > 10);
-  assert(y >= 100);
-  return y;
+  assert(res >= 10);
+  return res;
 }

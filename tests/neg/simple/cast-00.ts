@@ -1,22 +1,24 @@
 
-class HTMLElt { 
-
-  constructor() { }
+class HTMLElt<M extends ReadOnly> {
+    constructor() { }
 }
 
-class HTMLDivElt extends HTMLElt { 
-  constructor() { super(); }
+class HTMLDivElt<M extends ReadOnly> extends HTMLElt<M> {
+    constructor() {
+        super();
+    }
 }
 
-/*@ foo :: (elt: { HTMLElt<Immutable> | 0 < 1} ) => HTMLDivElt<Immutable> */
-function foo(elt: HTMLElt): HTMLDivElt {
-  if (elt instanceof HTMLCanvasElt) {
-    var div = <HTMLDivElt>elt;
-    return div;
-  }
-  throw new Error("");
+class HTMLCanvasElt<M extends ReadOnly> extends HTMLElt<M> {
+    constructor() {
+        super();
+    }
 }
 
-class HTMLCanvasElt extends HTMLElt { 
-  constructor() { super(); }
+export function foo(elt: HTMLElt<Immutable>): HTMLDivElt<Immutable> {
+    if (elt instanceof HTMLCanvasElt) {
+        let div = <HTMLDivElt<Immutable>>elt;
+        return div;
+    }
+    throw new Error("");
 }

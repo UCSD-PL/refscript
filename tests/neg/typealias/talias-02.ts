@@ -1,8 +1,8 @@
 /*@ predicate gt x y  = x < y            */
-/*@ alias gnat[A,x]   = {A | gt(v, x)}   */
-/*@ alias nat         = #gnat[number, 0] */
+/*@ type gnat[A,x]   = {A | gt(v, x)}   */
+/*@ type nat         = #gnat[number, 0] */
 
-// thus `#nat` is just an alias for: {number | gt(v, 0)} 
+// thus `nat` is just an alias for: {number | gt(v, 0)}
 
-/*@ z :: #nat */
-var z : number = 12;
+/*@ z :: nat */
+let z : number = 12;

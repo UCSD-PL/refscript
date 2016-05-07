@@ -1,9 +1,9 @@
-name:                refscript 
-version:             0.1.0.0
+name:                refscript
+version:             0.2.0
 Copyright:           2010-14 Regents of the University of California
 build-type:          Custom
-synopsis:            Refinement Types for Scripting Languages
-Description:         Refinement Types for Scripting Languages
+synopsis:            Refinement Types for TypeScript
+Description:         Refinement Types for TypeScript
 homepage:            https://github.com/UCSD-PL/refscript
 license:             BSD3
 license-file:        LICENSE
@@ -13,9 +13,8 @@ category:            Language
 cabal-version:       >=1.18
 
 data-files:          README.md,
-                     include/ambient/*.ts,
-                     include/rsc/*.ts,
-                     include/*.ts
+                     include/prelude.d.ts
+                     ext/tsc-bin/built/local/tsc-refscript.js
 
 Source-Repository this
   Tag:         0.1
@@ -31,6 +30,7 @@ Executable rsc
                     Haskell2010
 
   build-depends:    base
+                  , data-default
                   , containers
                   , pretty
                   , split
@@ -57,16 +57,76 @@ Executable rsc
                   , text-format
                   , array
                   , attoparsec
+                  , ascii-progress >= 0.3
                   , refscript
 
-  -- ghc-options:    -threaded -- -W -O2
-  Main-is:        Nano.hs
+--  ghc-options:    -W -O2
+  Main-is:        Rsc.hs
   hs-source-dirs: src
-
+  other-modules:    Language.Rsc.AST
+                  , Language.Rsc.AST.Annotations
+                  , Language.Rsc.AST.Check
+                  , Language.Rsc.AST.Syntax
+                  , Language.Rsc.Annotations
+                  , Language.Rsc.ClassHierarchy
+                  , Language.Rsc.CmdLine
+                  , Language.Rsc.Core.EitherIO
+                  , Language.Rsc.Core.Env
+                  , Language.Rsc.Core.Files
+                  , Language.Rsc.Environment
+                  , Language.Rsc.Errors
+                  , Language.Rsc.Liquid.Alias
+                  , Language.Rsc.Liquid.CGMonad
+                  , Language.Rsc.Liquid.Checker
+                  , Language.Rsc.Liquid.Constraints
+                  , Language.Rsc.Constraints
+                  , Language.Rsc.Liquid.Environment
+                  , Language.Rsc.Liquid.Qualifiers
+                  , Language.Rsc.Liquid.Types
+                  , Language.Rsc.Liquid.Refinements
+                  , Language.Rsc.Locations
+                  , Language.Rsc.Lookup
+                  , Language.Rsc.Misc
+                  , Language.Rsc.Names
+                  , Language.Rsc.Parser
+                  , Language.Rsc.Parser.Annotations
+                  , Language.Rsc.Parser.Common
+                  , Language.Rsc.Parser.Declarations
+                  , Language.Rsc.Parser.Lexer
+                  , Language.Rsc.Parser.Types
+                  , Language.Rsc.Pretty
+                  , Language.Rsc.Pretty.Annotations
+                  , Language.Rsc.Pretty.Common
+                  , Language.Rsc.Pretty.Errors
+                  , Language.Rsc.Pretty.ClassHierarchy
+                  , Language.Rsc.Pretty.Symbols
+                  , Language.Rsc.Pretty.Module
+                  , Language.Rsc.Pretty.Syntax
+                  , Language.Rsc.Pretty.Types
+                  , Language.Rsc.Program
+                  , Language.Rsc.Symbols
+                  , Language.Rsc.Module
+                  , Language.Rsc.SSA.SSA
+                  , Language.Rsc.SSA.SSAMonad
+                  , Language.Rsc.SystemUtils
+                  , Language.Rsc.Transformations
+                  , Language.Rsc.Traversals
+                  , Language.Rsc.TypeUtilities
+                  , Language.Rsc.Typecheck.Checker
+                  , Language.Rsc.Typecheck.Environment
+                  , Language.Rsc.Typecheck.Sub
+                  , Language.Rsc.Typecheck.Subst
+                  , Language.Rsc.Typecheck.TCMonad
+                  , Language.Rsc.Typecheck.Types
+                  , Language.Rsc.Typecheck.Unify
+                  , Language.Rsc.Types
+                  , Language.Rsc.Visitor
+                  , Paths_refscript
 
 Library
   Default-language: Haskell2010
   -- ghc-options:    -threaded -- -W -O2
+  -- ghc-options:   -threaded -Werror -W -fno-warn-missing-methods
   build-depends:    base
                   , containers
                   , pretty
@@ -94,31 +154,100 @@ Library
                   , text-format
                   , array
                   , attoparsec
+                  , ascii-progress >= 0.3
 
   hs-source-dirs:   src
   Exposed-Modules:  Paths_refscript,
-                    Language.Nano.Errors,
-                    Language.Nano.Files,
-                    Language.Nano.Types,
-                    Language.Nano.Env,
-                    Language.Nano.Misc,
-                    Language.Nano.Annots,
-                    Language.Nano.CmdLine,
-                    Language.Nano.SSA.SSAMonad,
-                    Language.Nano.SSA.SSA,
-                    Language.Nano.Typecheck.Unify,
-                    Language.Nano.Typecheck.Types,
-                    Language.Nano.Typecheck.Parse,
-                    Language.Nano.Typecheck.TCMonad,
-                    Language.Nano.Typecheck.Subst,
-                    Language.Nano.Typecheck.Lookup,
-                    Language.Nano.Typecheck.Typecheck,
-                    Language.Nano.Liquid.Liquid,
-                    Language.Nano.Liquid.Types,
-                    Language.Nano.Liquid.CGMonad,
-                    Language.Nano.Liquid.Qualifiers
+                    Language.Rsc.AST,
+                    Language.Rsc.AST.Annotations,
+                    Language.Rsc.AST.Check,
+                    Language.Rsc.AST.Syntax,
+                    Language.Rsc.ClassHierarchy,
+                    Language.Rsc.Core.EitherIO,
+                    Language.Rsc.Constraints,
+                    Language.Rsc.Environment,
+                    Language.Rsc.Liquid.Alias,
+                    Language.Rsc.Liquid.Constraints,
+                    Language.Rsc.Liquid.Environment,
+                    Language.Rsc.Locations,
+                    Language.Rsc.Names,
+                    Language.Rsc.Module,
+                    Language.Rsc.Symbols,
+                    Language.Rsc.Parser.Annotations,
+                    Language.Rsc.Parser.Common,
+                    Language.Rsc.Parser.Declarations,
+                    Language.Rsc.Parser.Lexer,
+                    Language.Rsc.Parser.Types,
+                    Language.Rsc.Pretty,
+                    Language.Rsc.Pretty.Annotations,
+                    Language.Rsc.Pretty.Module,
+                    Language.Rsc.Pretty.Symbols,
+                    Language.Rsc.Pretty.ClassHierarchy,
+                    Language.Rsc.Pretty.Common,
+                    Language.Rsc.Pretty.Errors,
+                    Language.Rsc.Errors,
+                    Language.Rsc.Core.Files,
+                    Language.Rsc.Types,
+                    Language.Rsc.Core.Env,
+                    Language.Rsc.Misc,
+                    Language.Rsc.Annotations,
+                    Language.Rsc.CmdLine,
+                    Language.Rsc.SSA.SSAMonad,
+                    Language.Rsc.SSA.SSA,
+                    Language.Rsc.Parser,
+                    Language.Rsc.Lookup,
+                    Language.Rsc.Typecheck.Unify,
+                    Language.Rsc.Typecheck.Types,
+                    Language.Rsc.Typecheck.TCMonad,
+                    Language.Rsc.Typecheck.Subst,
+                    Language.Rsc.Typecheck.Checker,
+                    Language.Rsc.Liquid.Checker,
+                    Language.Rsc.Liquid.Types,
+                    Language.Rsc.Liquid.Refinements,
+                    Language.Rsc.Liquid.CGMonad,
+                    Language.Rsc.Liquid.Qualifiers,
+                    Language.Rsc.Pretty.Syntax,
+                    Language.Rsc.Pretty.Types,
+                    Language.Rsc.Program,
+                    Language.Rsc.SystemUtils,
+                    Language.Rsc.Transformations,
+                    Language.Rsc.Traversals,
+                    Language.Rsc.TypeUtilities,
+                    Language.Rsc.Typecheck.Environment,
+                    Language.Rsc.Typecheck.Sub,
+                    Language.Rsc.Visitor
 
 test-suite test
+  default-language: Haskell98
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   tests
+  ghc-options:      -O2 -threaded
+  main-is:          test.hs
+  build-depends:    base,
+                    directory,
+                    filepath,
+                    process,
+                    tasty >= 0.10,
+                    tasty-hunit,
+                    tasty-rerun >= 1.1,
+                    text
+
+test-suite bench
+  default-language: Haskell98
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   tests
+  ghc-options:      -O2 -threaded
+  main-is:          bench.hs
+  build-depends:    base,
+                    directory,
+                    filepath,
+                    process,
+                    tasty >= 0.10,
+                    tasty-hunit,
+                    tasty-rerun >= 1.1,
+                    text
+
+test-suite regression
   default-language: Haskell98
   type:             exitcode-stdio-1.0
   hs-source-dirs:   tests

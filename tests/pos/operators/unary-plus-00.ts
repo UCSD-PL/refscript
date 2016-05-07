@@ -1,7 +1,6 @@
 
-/*@ foo :: () => {number | true} */
-function foo():number {
-	var x = 0;
-	var y = + x;
-	return y
+export function foo(): number {
+    let x = 0;
+    let y = + x;
+    return y
 }

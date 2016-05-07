@@ -3,44 +3,60 @@
 
 module Main where
 
-import Control.Applicative
-import System.Directory
-import System.Exit
-import System.FilePath
-import System.Environment
-import System.IO
-import System.IO.Error
-import System.Process
-import Test.Tasty
-import Test.Tasty.HUnit
-import Text.Printf
+import           Control.Applicative
+import           System.Directory
+import           System.Environment
+import           System.Exit
+import           System.FilePath
+import           System.IO
+import           System.IO.Error
+import           System.Process
+import           Test.Tasty
+import           Test.Tasty.HUnit
+import           Text.Printf
 
 main :: IO ()
 main = defaultMain =<< group "Tests" [unitTests]
 
+-- unitTests = group "Unit"
+--   [
+--     testGroup "pos-lists"       <$> dirTests rscCmd "tests/pos/lists"      [] ExitSuccess
+--   , testGroup "neg-lists"       <$> dirTests rscCmd "tests/neg/todo/lists"      [] (ExitFailure 1)
+--   ]
+
 unitTests = group "Unit"
-  [ testGroup "pos-object" <$> dirTests rscCmd "tests/pos/objects"    [] ExitSuccess
-  , testGroup "pos-array"  <$> dirTests rscCmd "tests/pos/arrays"     [] ExitSuccess
-  , testGroup "pos-class"  <$> dirTests rscCmd "tests/pos/classes"    [] ExitSuccess
-  , testGroup "pos-loop"   <$> dirTests rscCmd "tests/pos/loops"      [] ExitSuccess
-  , testGroup "pos-misc"   <$> dirTests rscCmd "tests/pos/misc"       [] ExitSuccess
-  , testGroup "pos-ops"    <$> dirTests rscCmd "tests/pos/operators"  [] ExitSuccess
-  , testGroup "pos-simple" <$> dirTests rscCmd "tests/pos/simple"     [] ExitSuccess
-  , testGroup "pos-union"  <$> dirTests rscCmd "tests/pos/unions"     [] ExitSuccess
-  , testGroup "pos-alias"  <$> dirTests rscCmd "tests/pos/typealias"  [] ExitSuccess
-  , testGroup "pos-fb"     <$> dirTests rscCmd "tests/pos/fb"         [] ExitSuccess
-  , testGroup "pos-incl"   <$> dirTests eCmd   "tests/pos/inclusion"  [] ExitSuccess
-  , testGroup "neg-object" <$> dirTests rscCmd "tests/neg/objects"    [] (ExitFailure 1)
-  , testGroup "neg-array"  <$> dirTests rscCmd "tests/neg/arrays"     [] (ExitFailure 1)
-  , testGroup "neg-class"  <$> dirTests rscCmd "tests/neg/classes"    [] (ExitFailure 1)
-  , testGroup "neg-loop"   <$> dirTests rscCmd "tests/neg/loops"      [] (ExitFailure 1)
-  , testGroup "neg-misc"   <$> dirTests rscCmd "tests/neg/misc"       [] (ExitFailure 1)
-  , testGroup "neg-ops"    <$> dirTests rscCmd "tests/neg/operators"  [] (ExitFailure 1)
-  , testGroup "neg-simple" <$> dirTests rscCmd "tests/neg/simple"     [] (ExitFailure 1)
-  , testGroup "neg-union"  <$> dirTests rscCmd "tests/neg/unions"     [] (ExitFailure 1)
-  , testGroup "neg-alias"  <$> dirTests rscCmd "tests/neg/typealias"  [] (ExitFailure 1)
-  , testGroup "neg-fb"     <$> dirTests rscCmd "tests/neg/fb"         [] (ExitFailure 1)
-  , testGroup "neg-incl"   <$> dirTests eCmd   "tests/neg/inclusion"  [] (ExitFailure 1)
+  [
+    testGroup "pos-object"       <$> dirTests rscCmd "tests/pos/objects"      [] ExitSuccess
+  , testGroup "pos-array"        <$> dirTests rscCmd "tests/pos/arrays"       [] ExitSuccess
+  , testGroup "pos-ops"          <$> dirTests rscCmd "tests/pos/operators"    [] ExitSuccess
+  , testGroup "pos-scope"        <$> dirTests rscCmd "tests/pos/scope"        [] ExitSuccess
+  , testGroup "pos-simple"       <$> dirTests rscCmd "tests/pos/simple"       [] ExitSuccess
+  , testGroup "pos-union"        <$> dirTests rscCmd "tests/pos/unions"       [] ExitSuccess
+  , testGroup "pos-class"        <$> dirTests rscCmd "tests/pos/classes"      [] ExitSuccess
+  , testGroup "pos-loop"         <$> dirTests rscCmd "tests/pos/loops"        [] ExitSuccess
+  , testGroup "pos-misc"         <$> dirTests rscCmd "tests/pos/misc"         [] ExitSuccess
+  , testGroup "pos-bounded-poly" <$> dirTests rscCmd "tests/pos/bounded-poly" [] ExitSuccess
+  , testGroup "pos-list"         <$> dirTests rscCmd "tests/pos/lists"        [] ExitSuccess
+  , testGroup "pos-inclusion"    <$> dirTests rscCmd "tests/pos/inclusion"    [] ExitSuccess
+  , testGroup "pos-alias"        <$> dirTests rscCmd "tests/pos/typealias"    [] ExitSuccess
+  , testGroup "pos-enum"         <$> dirTests rscCmd "tests/pos/enums"        [] ExitSuccess
+  , testGroup "pos-fb"           <$> dirTests rscCmd "tests/pos/fb"           [] ExitSuccess
+
+  , testGroup "neg-object"       <$> dirTests rscCmd "tests/neg/objects"      [] (ExitFailure 1)
+  , testGroup "neg-array"        <$> dirTests rscCmd "tests/neg/arrays"       [] (ExitFailure 1)
+  , testGroup "neg-ops"          <$> dirTests rscCmd "tests/neg/operators"    [] (ExitFailure 1)
+  , testGroup "neg-scope"        <$> dirTests rscCmd "tests/neg/scope"        [] (ExitFailure 1)
+  , testGroup "neg-simple"       <$> dirTests rscCmd "tests/neg/simple"       [] (ExitFailure 1)
+  , testGroup "neg-union"        <$> dirTests rscCmd "tests/neg/unions"       [] (ExitFailure 1)
+  , testGroup "neg-class"        <$> dirTests rscCmd "tests/neg/classes"      [] (ExitFailure 1)
+  , testGroup "neg-loop"         <$> dirTests rscCmd "tests/neg/loops"        [] (ExitFailure 1)
+  , testGroup "neg-misc"         <$> dirTests rscCmd "tests/neg/misc"         [] (ExitFailure 1)
+  , testGroup "neg-bounded-poly" <$> dirTests rscCmd "tests/neg/bounded-poly" [] (ExitFailure 1)
+  , testGroup "neg-list"         <$> dirTests rscCmd "tests/neg/lists"        [] (ExitFailure 1)
+  , testGroup "neg-inclusion"    <$> dirTests rscCmd "tests/neg/inclusion"    [] (ExitFailure 1)
+  , testGroup "neg-alias"        <$> dirTests rscCmd "tests/neg/typealias"    [] (ExitFailure 1)
+  , testGroup "neg-fb"           <$> dirTests rscCmd "tests/neg/fb"           [] (ExitFailure 1)
+  , testGroup "neg-enum"         <$> dirTests rscCmd "tests/neg/enums"        [] (ExitFailure 1)
   ]
 
 isTest   :: FilePath -> Bool

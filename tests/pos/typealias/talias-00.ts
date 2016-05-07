@@ -1,10 +1,11 @@
-/*@ alias Nat = {v: number | 0 <= v } */
+/*@ type Nat = {v: number | 0 <= v } */
+type Nat = number;
 
-/*@ z :: #Nat */
-var z = 12;
+/*@ z :: Nat */
+let z = 12;
 
-/*@ foo :: (#Nat) => void */
+/*@ foo :: (Nat) => void */
 function foo(a) { }
 
-/*@ bar :: (#Nat) => void */
+/*@ bar :: (Nat) => void */
 function bar(a) { }

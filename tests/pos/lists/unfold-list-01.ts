@@ -1,17 +1,22 @@
 
-interface NumList {
-  d: number;
-  /*@ n :: #NumList */
-  n: NumList;
+interface NumList<M extends ReadOnly> {
+    d: number;
+
+    /*@ n : NumList<M> + null */
+    n: NumList<M>;
 }
 
-/*@ foo :: () => number */
-function foo() {
-  /*@ a :: #NumList */
-  var a =  { d: 1, n: { d: 2, n: null } };
+export function foo() {
 
-  return a.n.d;
+    let inner: NumList<Mutable> = { d: 2, n: null }
 
+    /*@ a :: NumList<Mutable> */
+    let a =  { d: 1, n: inner };
+
+    let a_n = a.n;
+    if (a_n)
+        return a_n.d;
+    return 0;
 }
 
-var aa = foo();
+let aa = foo();

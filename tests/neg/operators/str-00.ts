@@ -1,7 +1,7 @@
 
 /*@ baz :: () => {v: string | v = "dog"} */
 function baz(){
-  var z = 'cat';
+  let z = 'cat';
   return z;
 }
 

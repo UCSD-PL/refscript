@@ -1,10 +1,17 @@
 
-/*@ foo :: (x:null, y: { number | v > 1}) => { number | v > 2 } */
-function foo(x,y) {
+/*@ foo :: (x:null, y:number, z: number) => posint */
+export function foo(x, y, z): number {
 
-    var r = <number> (x || y);      // no contextual type here -- hence using
-                                    // the explicit cast
+    let a = 1 || true;
 
-    return r; 
+
+    if (x || y || z) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
+
+
+
 }
-

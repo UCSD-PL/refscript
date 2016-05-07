@@ -1,6 +1,6 @@
 env:
  - SMT=z3
- 
+
 # Note: the distinction between `before_install` and `install` is not important.
 before_install:
  - travis_retry sudo add-apt-repository -y ppa:hvr/ghc
@@ -16,7 +16,7 @@ before_install:
  - chmod a+x "$HOME/.cabal/bin/$SMT"
 
 install:
- - cabal install --only-dependencies 
+ - cabal install --only-dependencies
 
 script:
  - cabal configure -fdevel -O2 --enable-tests -v2  # -v2 provides useful information for debugging

@@ -1,6 +1,5 @@
 
-/*@ opt :: { f?: [Mutable] {number | v > 0 } } */
-var opt: { f?: number } = { } ;
+/*@ opt :: (Mutable) { f?: posint } */
+let opt: { f?: number } = { } ;
 
 opt.f = -1;
-

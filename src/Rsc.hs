@@ -6,7 +6,7 @@
 
 import           Control.Exception              (catch)
 import           Control.Monad
-import           Data.Aeson                     (eitherDecode)
+import           Data.Aeson                     (eitherDecode, encode)
 import           Data.Aeson.Types               hiding (Error, Parser, parse)
 import qualified Data.ByteString.Lazy.Char8     as B
 import           Data.List                      (nub, sort)
@@ -25,7 +25,10 @@ import           Language.Rsc.Pretty
 import           Language.Rsc.SystemUtils
 import qualified Language.Rsc.Typecheck.Checker as TC
 import           System.Console.CmdArgs         hiding (Loud)
-import           System.Directory               (createDirectoryIfMissing, doesFileExist)
+import           System.Directory               (createDirectoryIfMissing,
+                                                 doesFileExist)
+import           System.IO                      (hPutStrLn, stderr)
+
 import           System.Exit
 import           System.FilePath.Posix
 import           System.Process
@@ -111,12 +114,26 @@ instance FromJSON (F.FixResult SError)
 instance ToJSON (F.FixResult SError) where
   toJSON = genericToJSON defaultOptions
 
+instance ToJSON F.Error where
+  toJSON = genericToJSON defaultOptions
+
+instance ToJSON F.Error1 where
+  toJSON = genericToJSON defaultOptions
+
+instance ToJSON Doc where
+  toJSON = genericToJSON defaultOptions . show
+
+-- instance ToJSON TextDetails where
+--   toJSON = genericToJSON defaultOptions
+
+
 
 run verifyFile cfg
   = do mapM_ (createDirectoryIfMissing False. tmpDir) (files cfg)
        rs   <- mapM (runOne cfg verifyFile) $ files cfg
        let r = mconcat rs
        writeResult r
+       when (dumpJson cfg) (writeJSONResult r)
        exitWith (resultExit r)
     where
        tmpDir    = tempDirectory
@@ -130,6 +147,8 @@ runOne cfg verifyFile f
        handler e = return (NoAnn, F.Unsafe [e])
        tmpDir    = tempDirectory f
 
+-- Write the JSON in the error stream
+writeJSONResult       = hPutStrLn stderr . B.unpack . encode
 
 -------------------------------------------------------------------------------
 writeResult :: (Ord a, PP a) => F.FixResult a -> IO ()

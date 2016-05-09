@@ -280,7 +280,7 @@ initCallableEnv l g f fty xs s = do
 
     tyBs     = [lsia α   | α <- αs]
     params   = [siw x t_ | (x, t_) <- safeZip "initCallableEnv" xs ts]
-    arg      = ltracePP l "arg si" $ mkArgumentsSI l ts
+    arg      = mkArgumentsSI l ts
     ts       = map b_type xts
     αs       = map btvToTV bs
     fnId     = fId l

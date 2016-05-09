@@ -26,12 +26,13 @@ data Config
            , real       :: Bool           -- ^ use real-valued SMT arithmetic
            , extSolver  :: Bool           -- ^ use external (Ocaml) fixpoint solver (deprecated)
            , dumpDebug  :: Bool           -- ^ emit .fq, .fqout, .out files
+           , dumpJson   :: Bool           -- ^ dump result in JSON form in error stream
            }
   deriving (Data, Typeable, Show, Eq)
 
 
 instance Default Config where
-  def = Liquid [] [] False False Nothing False False False
+  def = Liquid [] [] False False Nothing False False False False
 
 
 ---------------------------------------------------------------------------------
@@ -70,6 +71,8 @@ liquid = Liquid {
  , extSolver    = def  &= help "Use external (Ocaml) fixpoint solver (deprecated)"
 
  , dumpDebug    = def  &= help "Dump debug files (e.g. .fq, .fqout, .out)"
+
+ , dumpJson     = def  &= help "Dump result in JSON format in error stream"
 
  } &= help    "RefScript Refinement Type Checker"
 

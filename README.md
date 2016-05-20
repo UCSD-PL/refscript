@@ -2,6 +2,8 @@
 
 Refinement Types for TypeScript
 
+You can find an online demo of RefScript [here](http://goto.ucsd.edu/~pvekris/refscript).
+
 ## Install
 
 ### Dependencies

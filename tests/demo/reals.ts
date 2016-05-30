@@ -1,7 +1,8 @@
-// NB: run with "rsc --real", since by default, time-consuming
-// non-linear arithmetic is disabled
 
-var a = 0.5;
-var b = 0.5;
+/*@ option --real */
 
-assert(a * b === 0.25);
+let a = 10;
+
+let b = 20;
+
+assert(a * a + b * b > 499);

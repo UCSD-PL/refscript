@@ -1,13 +1,12 @@
 
-/*@ arr :: {IArray<number> | len v = 4} */
-var arr = [1,2,3,4];
+/*@ bar :: (x: string) => { string | v = x } */
+declare function bar(x: string): string;
 
-var a = 
-  (function () 
-  /*@ <anonymous> forall A . (this: A) => A */
-  {
-    return this;
+function foo<V,U,W>(x: V, f: (v: U) => W, a: U): W {
+    return f.call(x, a);
+}
 
-  }).call(arr);
 
-assert(a.length === 4);
+let a: IArray<string> = ["a"];
+
+assert(foo(a, bar, "b") === "b");

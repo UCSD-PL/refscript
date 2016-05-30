@@ -1,21 +1,21 @@
-/*@ qualif PLusOne(v:number, w: number): v = w + 1 */
-/*@ qualif Eq5(v:number): v = 5                    */
 
-/*@ inc :: (number) => number  */
-function inc(n) {
-  return n + 1;
-}
+/*@ qualif PLusOne(v: int, w: int): v = w + 1 */
+/*@ qualif Eq5(v: int): v = 5 */
 
-/*@ readonly gobj :: # */
-var gobj = {
-  a: 5,
-  b: "String",
-  f: inc
-};
+function inc(n: number): number { return n + 1; }
 
-// Try changing the refinement, e.g. to v < 0
-/*@ foo :: () => { number | v = 6 } */
-function foo () {
-  var ff = gobj.f;
-  return ff(gobj.a);
+/*@ readonly gg :: (Immutable) { a: number; f: (n: number) => number; } */
+let gg = { a: 5, f: inc };
+
+
+module A {
+
+    // Try changing the refinement, e.g. to v < 0
+
+    /*@ foo :: () => { number | v = 6 } */
+    function foo() {
+        let gf = gg.f;
+        return gf(gg.a);
+    }
+
 }

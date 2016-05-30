@@ -1,18 +1,12 @@
-/*@ negate :: /\ (x:number)  => number
-              /\ (x:boolean) => boolean */
-
-function negate(x):any {
-  if (typeof(x) === "number") {
-    return 0 - x;
-  } 
-  else {
-    return !x;
-  }
+/*@ negate :: (x: number)  => { number  | v > 0 <=> x < 0   } */
+/*@ negate :: (x: boolean) => { boolean | Prop v <=> not (Prop x) } */
+export function negate(x): any {
+    if (typeof(x) === "number") {
+        return 0 - x;
+    } else {
+        return !x;
+    }
 }
 
-
-/*@ a :: number */
-var a = negate(1);
-
-/*@ b :: boolean */
-var b = negate(true);
+let a: number = negate(10);
+let b: boolean = negate(true);

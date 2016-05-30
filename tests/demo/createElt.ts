@@ -1,46 +1,48 @@
 
-/*@ alias HTML = HTMLElt<Mutable> */
-
-class HTMLElt {
-  constructor() { }
+class HTMLElt<M extends ReadOnly> {
+    constructor() { }
 }
 
-class DivElt extends HTMLElt {  
-  public htmlDivElt__ = 0; 
-  constructor() {
-    super();
-  }
+class DivElt<M extends ReadOnly> extends HTMLElt<M> {
+    public htmlDivElt__ = 0;
+    constructor() {
+        super();
+    }
 }
 
-class SpanElt extends HTMLElt { 
-  public htmlSpanElt__ = 1; 
-  constructor() { super(); }
+class SpanElt<M extends ReadOnly> extends HTMLElt<M> {
+    public htmlSpanElt__ = 1;
+    constructor() {
+        super();
+    }
 }
 
-class CanvasElt extends HTMLElt { 
-  public htmlCanvasElt__ = 2; 
-  constructor() { super(); }
+class CanvasElt<M extends ReadOnly> extends HTMLElt<M> {
+    public htmlCanvasElt__ = 2;
+    constructor() {
+        super();
+    }
 }
 
 /*@ predicate TT v x n e = (x = n => extends_class(v, e)) */
 
-/*@ createElt :: (tagName: string) => {v: HTML |  TT(v, tagName, "div", "DivElt")
-                                               && TT(v, tagName, "span", "SpanElt")
-                                               && TT(v, tagName, "canvas", "CanvasElt") } */
+/*@ createElt :: (tagName: string) => {v: HTMLElt<ReadOnly> |
+    (TT v tagName "div" "DivElt") &&
+    (TT v tagName "span" "SpanElt") &&
+    (TT v tagName "canvas" "CanvasElt")
+} */
+export function createElt(tagName: string): HTMLElt<ReadOnly> {
 
-function createElt(tagName) {
- 
-    /*@ local res :: HTML + undefined */
-    var res;
-   
-    if (tagName === "div") res = <HTMLElt>new DivElt();
-    else if (tagName === "span") res = <HTMLElt>new SpanElt();
-    else if (tagName === "canvas") res = <HTMLElt>new CanvasElt();
-    else res = <HTMLElt> new HTMLElt();
-    return res;
-
+    if (tagName === "div")
+        return <HTMLElt<ReadOnly>>new DivElt();
+    else if (tagName === "span")
+        return <HTMLElt<ReadOnly>>new SpanElt();
+    else if (tagName === "canvas")
+        return <HTMLElt<ReadOnly>>new CanvasElt();
+    else
+        return <HTMLElt<ReadOnly>>new HTMLElt();
 }
 
-var elt = createElt("div"); // Try changing "div"
+let elt = createElt("div"); // Try changing "div"
 
 assert(elt instanceof DivElt);

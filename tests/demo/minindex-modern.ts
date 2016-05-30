@@ -1,29 +1,17 @@
-/*@ alias index<a> = {v:number | 0 <= v && v < len a} */
 
-/*@ reduce :: forall T A . (arr:IArray<T>, callback: (x: A, y: T, index<arr>) => A, init:A)
-           => A */
-function reduce(me, callback, init) {
-  var res = init;
-
-  for (var i = 0; i < me.length; i++){
-    res = callback(res, me[i], i);
-  }
-
-  return res;
+function reduce <T, A>(arr: IArray<T>, callback: (x: A, y: T, i: number) => A, init:A): A {
+    let res = init;
+    for (let i = 0; i < arr.length; i++) {
+        res = callback(res, arr[i], i);
+    }
+    return res;
 }
 
-
-/*@ minIndex :: (arrrr:IArray<number>) => {number | 0 < 1} */
-function minIndex(arrrr) {
-
-    /*@ readonly arr :: # */
-    var arr = arrrr;
-
-    if (arr.length <= 0) return -1; // Try removing this line
-
-    function body(acc: number, cur: number, i: number) {
-	    return cur < arr[acc] ? i : acc;
-    };
-
-    return reduce(arr, body, 0);
+export function minIndex(a: IArray<number>): number {
+    /*@ readonly */ let ro_a: IArray<number> = a;
+    if (ro_a.length <= 0) return -1;
+    let body: (acc: number, cur: number, i: number) => number = function(acc, cur, i) {
+        return cur < ro_a[acc] ? i : acc;
+    }
+    return reduce(ro_a, body, 0);
 }
